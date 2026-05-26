@@ -26,6 +26,13 @@ replay_pid*
 # Build output
 target/
 
+# Python build output
+python/dist/
+python/build/
+python/*.egg-info/
+**/__pycache__/
+**/.pytest_cache/
+
 # IDE files
 .idea/
 *.iml

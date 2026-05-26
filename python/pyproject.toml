@@ -8,17 +8,19 @@ version = "1.0.0a1"
 description = "Python bindings for the Agentic Flink framework (JPype thread-mode bridge)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Agentic Flink contributors" }]
 keywords = ["agentic", "flink", "llm", "rag", "jpype", "pyflink"]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: OS Independent",
 ]
 dependencies = [
     "JPype1>=1.5.0",
@@ -32,7 +34,10 @@ all = ["agentic-flink[pyflink,test]"]
 [project.urls]
 Homepage = "https://github.com/Ugbot/Agentic-Flink"
 Repository = "https://github.com/Ugbot/Agentic-Flink"
+Issues = "https://github.com/Ugbot/Agentic-Flink/issues"
+Documentation = "https://github.com/Ugbot/Agentic-Flink/blob/main/docs/python.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agentic_flink*"]
+exclude = ["tests*"]
