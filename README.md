@@ -1,5 +1,10 @@
 # Agentic Flink
 
+> **Heads up (2026-05-26):** The repo needed a sizeable cleanup pass with a big
+> module reshuffle, and its git history was reset to a fresh root commit. If
+> you cloned before this date your local copy will not fast-forward — please
+> **delete it and clone fresh**.
+
 A framework for building LLM-powered AI agents on Apache Flink. Memory lives in
 Flink keyed state by default; LLM providers, embedders, tools, and observability
 all sit behind small SPIs that ship with sane defaults and stay open for
