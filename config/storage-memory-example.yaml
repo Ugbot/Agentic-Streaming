@@ -1,0 +1,18 @@
+# Example storage configuration using in-memory storage (works immediately)
+# No external dependencies required
+
+storage:
+  hot:
+    backend: memory
+    config:
+      cache.max.size: "10000"
+      cache.ttl.seconds: "3600"  # 1 hour
+      cache.expire.after.access: "true"
+
+  # WARM tier can be added when Redis is available
+  # warm:
+  #   backend: redis
+  #   config:
+  #     redis.host: localhost
+  #     redis.port: 6379
+  #     redis.ttl.seconds: 86400  # 24 hours

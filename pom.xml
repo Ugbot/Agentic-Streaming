@@ -1,0 +1,522 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.agentic.flink</groupId>
+    <artifactId>agentic-flink</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <name>Agentic Flink</name>
+    <description>Standalone Agentic Framework for Apache Flink with LangChain4J Integration</description>
+
+    <properties>
+        <flink.version>1.20.1</flink.version>
+        <java.version>17</java.version>
+        <log4j.version>2.17.1</log4j.version>
+        <langchain4j.version>0.35.0</langchain4j.version>
+        <lombok.version>1.18.38</lombok.version>
+        <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
+        <junit.version>5.8.1</junit.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- Apache Flink Core -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Flink CEP for Complex Event Processing -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-cep</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+
+        <!--
+        Apache Flink Agents - OPTIONAL Plugin (Experimental)
+
+        NOTE: This is an OPTIONAL dependency for the Flink Agents plugin.
+        The core framework works WITHOUT these dependencies.
+
+        To enable Flink Agents plugin:
+        1. Build Flink Agents from source (still in SNAPSHOT):
+           git clone https://github.com/apache/flink-agents.git
+           cd flink-agents && ./tools/build.sh && mvn install -DskipTests
+
+        2. Build this project with the flink-agents profile:
+           mvn clean package -P flink-agents
+
+        See: src/main/java/org/agentic/flink/plugins/flintagents/README.md
+        -->
+
+        <!-- Flink Agents dependencies are in the 'flink-agents' profile below -->
+
+        <!-- LangChain4J Core -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- LangChain4J Ollama Integration -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- LangChain4J OpenAI Integration -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- LangChain4J Qdrant Vector Store -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-qdrant</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- Lombok for reduced boilerplate -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!--
+        Redis Client - OPTIONAL backend.
+
+        Flink keyed state is the canonical short-term memory. Redis is only used
+        if the user opts in to the RedisLongTermStore or RedisPubSubFeed backends.
+        Marked optional so consumers who don't need Redis don't pull it transitively.
+        -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.1.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Flink Kafka connector for KafkaMemoryFeed (optional at runtime). -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-connector-kafka</artifactId>
+            <version>3.2.0-1.19</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+        DJL (Deep Java Library) — OPTIONAL inference backend.
+
+        Provides a single API over PyTorch, TensorFlow, ONNX, MXNet, and HuggingFace tokenizers.
+        These artifacts are marked optional so consumers who don't use DL pay nothing
+        transitively. Native PyTorch shared libraries (`pytorch-native-cpu`, `pytorch-native-cu118`,
+        `pytorch-native-mps`, etc.) are NOT pulled here — downstream projects pick the right one
+        for their target platform.
+        -->
+        <dependency>
+            <groupId>ai.djl</groupId>
+            <artifactId>api</artifactId>
+            <version>0.30.0</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.huggingface</groupId>
+            <artifactId>tokenizers</artifactId>
+            <version>0.30.0</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.pytorch</groupId>
+            <artifactId>pytorch-engine</artifactId>
+            <version>0.30.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+        Web toolkit — OPTIONAL.
+
+        Jsoup for HTML parsing, crawler-commons for robots.txt + sitemap.xml, Apache Tika for
+        multi-format content extraction (PDF, DOC, PPT, EPUB, …). All marked optional so users
+        who don't run a crawler pay nothing transitively.
+        -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.1</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>com.github.crawler-commons</groupId>
+            <artifactId>crawler-commons</artifactId>
+            <version>1.4</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>2.9.2</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>2.9.2</version>
+            <optional>true</optional>
+        </dependency>
+        <!-- Tika needs commons-io 2.15+ for ChecksumInputStream; Flink pulls an older one. -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.16.1</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Jackson for JSON and YAML Support -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+
+        <!-- Jackson Parameter Names Module for constructor detection -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-parameter-names</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+
+        <!-- PostgreSQL JDBC Driver for Pluggable Storage -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.6.0</version>
+        </dependency>
+
+        <!-- HikariCP for JDBC Connection Pooling -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <version>5.0.1</version>
+        </dependency>
+
+        <!--
+        PEMJA — OPTIONAL. Embeds a Python interpreter inside the JVM so cloudpickled
+        Python callbacks shipped in an AgentPlan can run on the operator thread without
+        IPC. Marked optional — users who only run the Java side or the JPype standalone
+        path pay nothing.
+        -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>pemja</artifactId>
+            <version>0.4.1</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+        Razorvine pickle decoder — OPTIONAL. Standalone Java decoder for plain pickle
+        payloads (metadata, schema descriptors). Cloudpickle bytes themselves require
+        cloudpickle inside the embedded Python interpreter; this dep is the fallback
+        path for plain-pickle metadata that doesn't need a Python runtime.
+        -->
+        <dependency>
+            <groupId>net.razorvine</groupId>
+            <artifactId>pickle</artifactId>
+            <version>1.5</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Reflections for @Tool annotation scanning -->
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+            <version>0.10.2</version>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-test-utils</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- H2 Database for PostgreSQL tests (in-memory) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers for integration tests -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Exclude Flink Agents plugin by default -->
+                    <excludes>
+                        <exclude>**/plugins/flintagents/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Shade Plugin for Uber JAR -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven.plugin.shade.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <excludes>
+                                    <exclude>org.apache.flink:flink-shaded-force-shading</exclude>
+                                    <exclude>com.google.code.findbugs:jsr305</exclude>
+                                    <exclude>org.slf4j:*</exclude>
+                                    <exclude>org.apache.logging.log4j:*</exclude>
+                                </excludes>
+                            </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.agentic.flink.example.SimpleAgentExample</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Maven Surefire Plugin - exclude integration tests by default -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <excludedGroups>integration</excludedGroups>
+                </configuration>
+            </plugin>
+
+            <!-- Google Java Format Plugin -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>2.43.0</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat/>
+                        <removeUnusedImports/>
+                        <trimTrailingWhitespace/>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>apply</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Central Repository</name>
+            <url>https://repo1.maven.org/maven2/</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <!-- Apache Snapshot Repository (for Flink Agents snapshots) -->
+        <repository>
+            <id>apache.snapshots</id>
+            <name>Apache Snapshot Repository</name>
+            <url>https://repository.apache.org/snapshots</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <profiles>
+        <!-- Profile for running integration tests (requires Podman/Docker) -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <configuration>
+                            <excludedGroups>none</excludedGroups>
+                            <groups>integration</groups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Optional Flink Agents Plugin Profile -->
+        <profile>
+            <id>flink-agents</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <dependencies>
+                <!-- Flink Agents API - Built from source and installed locally -->
+                <dependency>
+                    <groupId>org.apache.flink</groupId>
+                    <artifactId>flink-agents-api</artifactId>
+                    <version>0.2-SNAPSHOT</version>
+                </dependency>
+
+                <!-- Flink Agents Plan - Workflow agent support -->
+                <dependency>
+                    <groupId>org.apache.flink</groupId>
+                    <artifactId>flink-agents-plan</artifactId>
+                    <version>0.2-SNAPSHOT</version>
+                </dependency>
+
+                <!-- Flink Agents Runtime - Agent execution runtime -->
+                <dependency>
+                    <groupId>org.apache.flink</groupId>
+                    <artifactId>flink-agents-runtime</artifactId>
+                    <version>0.2-SNAPSHOT</version>
+                </dependency>
+
+                <!-- Flink Agents Ollama Integration - LLM support -->
+                <dependency>
+                    <groupId>org.apache.flink</groupId>
+                    <artifactId>flink-agents-integrations-chat-models-ollama</artifactId>
+                    <version>0.2-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <version>3.11.0</version>
+                        <configuration>
+                            <source>${java.version}</source>
+                            <target>${java.version}</target>
+                            <compilerArgs>
+                                <arg>-parameters</arg>
+                            </compilerArgs>
+                            <!-- Include Flink Agents plugin when profile is active -->
+                            <excludes>
+                                <exclude>NOTHING_TO_EXCLUDE</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

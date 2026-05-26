@@ -1,0 +1,92 @@
+services:
+  # PostgreSQL - Durable storage for conversations
+  postgres:
+    image: postgres:15-alpine
+    container_name: agentic-flink-postgres
+    environment:
+      POSTGRES_DB: agentic_flink
+      POSTGRES_USER: flink_user
+      POSTGRES_PASSWORD: flink_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flink_user -d agentic_flink"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-flink-network
+
+  # Redis - Fast caching layer for active contexts
+  redis:
+    image: redis:7-alpine
+    container_name: agentic-flink-redis
+    command: redis-server --appendonly yes --requirepass flink_redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-flink-network
+
+  # Ollama - Local LLM inference
+  ollama:
+    image: ollama/ollama:latest
+    container_name: agentic-flink-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - agentic-flink-network
+    # Optional: Download a model on startup
+    # entrypoint: ["/bin/sh", "-c"]
+    # command: ["ollama serve & sleep 10 && ollama pull qwen2.5:3b && wait"]
+
+  # Optional: Qdrant vector database for RAG
+  # Uncomment if you need vector search capabilities
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   container_name: agentic-flink-qdrant
+  #   ports:
+  #     - "6333:6333"
+  #     - "6334:6334"
+  #   volumes:
+  #     - qdrant_data:/qdrant/storage
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - agentic-flink-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  ollama_data:
+    driver: local
+  # qdrant_data:
+  #   driver: local
+
+networks:
+  agentic-flink-network:
+    driver: bridge

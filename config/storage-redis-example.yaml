@@ -1,0 +1,32 @@
+# Example storage configuration using Redis for both HOT and WARM tiers
+# Requires adding Jedis dependency to pom.xml:
+#   <dependency>
+#     <groupId>redis.clients</groupId>
+#     <artifactId>jedis</artifactId>
+#     <version>5.1.0</version>
+#   </dependency>
+
+storage:
+  hot:
+    backend: redis
+    config:
+      redis.host: localhost
+      redis.port: 6379
+      redis.database: 0
+      redis.ttl.seconds: 3600  # 1 hour
+      redis.pool.max.total: 50
+      redis.pool.max.idle: 10
+      redis.timeout.ms: 2000
+      # redis.password: ${REDIS_PASSWORD}  # Optional, can use env var
+
+  warm:
+    backend: redis
+    config:
+      redis.host: localhost
+      redis.port: 6379
+      redis.database: 1  # Separate database for WARM tier
+      redis.ttl.seconds: 86400  # 24 hours
+      redis.pool.max.total: 50
+      redis.pool.max.idle: 10
+      redis.timeout.ms: 2000
+      # redis.password: ${REDIS_PASSWORD}  # Optional
