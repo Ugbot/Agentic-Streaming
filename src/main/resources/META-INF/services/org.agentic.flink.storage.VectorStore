@@ -1,1 +1,2 @@
+org.agentic.flink.storage.vector.InMemoryVectorStore
 org.agentic.flink.storage.vector.PgVectorStore
