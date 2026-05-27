@@ -5,7 +5,6 @@ import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsEventAdapter;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsToolAdapter;
-import org.agentic.flink.langchain.model.language.OpenAiLanguageModel;
 import org.agentic.flink.tools.ToolExecutor;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;

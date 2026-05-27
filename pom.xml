@@ -86,13 +86,6 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
-        <!-- LangChain4J Qdrant Vector Store -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-qdrant</artifactId>
-            <version>${langchain4j.version}</version>
-        </dependency>
-
         <!-- Native Qdrant gRPC client (backs QdrantVectorStore; optional) -->
         <dependency>
             <groupId>io.qdrant</groupId>
