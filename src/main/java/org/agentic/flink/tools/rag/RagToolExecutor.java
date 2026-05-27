@@ -1,56 +1,100 @@
 package org.agentic.flink.tools.rag;
 
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.embedding.EmbeddingClient;
+import org.agentic.flink.embedding.EmbeddingConnection;
+import org.agentic.flink.embedding.EmbeddingSetup;
+import org.agentic.flink.embedding.OllamaEmbeddingConnection;
+import org.agentic.flink.llm.ChatClient;
+import org.agentic.flink.llm.ChatConnection;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatSetup;
+import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
+import org.agentic.flink.storage.StorageFactory;
+import org.agentic.flink.storage.VectorStore;
+import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import org.agentic.flink.langchain.model.embedding.LangChainEmbeddingModel;
-import org.agentic.flink.langchain.model.embedding.OllamaEmbeddingModel;
-import org.agentic.flink.langchain.model.language.LangChainLanguageModel;
-import org.agentic.flink.langchain.model.language.OllamaLanguageModel;
-import org.agentic.flink.langchain.store.LangChainEmbeddingStore;
-import org.agentic.flink.langchain.store.QdrantEmbeddingStore;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
- * RAG (Retrieval-Augmented Generation) Tool Executor Performs: 1. Query embedding 2. Semantic
- * search in vector store 3. Context retrieval 4. LLM generation with retrieved context
+ * RAG (Retrieval-Augmented Generation) Tool Executor. Performs:
+ *
+ * <ol>
+ *   <li>Query embedding via an {@link EmbeddingConnection}.
+ *   <li>Semantic search in a {@link VectorStore}.
+ *   <li>Context assembly from retrieved chunk text.
+ *   <li>Answer generation through a {@link ChatConnection}.
+ * </ol>
+ *
+ * <p>Migrated off the legacy {@code langchain/model} + {@code langchain/store} packages onto the
+ * framework embedding/vector/chat SPIs.
  */
 public class RagToolExecutor extends AbstractToolExecutor {
 
-  private final LangChainEmbeddingModel embeddingModelProvider;
-  private final LangChainEmbeddingStore embeddingStoreProvider;
-  private final LangChainLanguageModel languageModelProvider;
+  private final EmbeddingConnection embeddingConnection;
+  private final VectorStore vectorStore;
+  private final ChatConnection chatConnection;
+  private final EmbeddingSetup embeddingSetup;
+  private final ChatSetup chatSetup;
   private final Map<String, String> config;
 
   public RagToolExecutor(Map<String, String> config) {
     super("rag", "Retrieval-Augmented Generation - searches knowledge base and generates answers");
     this.config = config != null ? config : new HashMap<>();
+    String baseUrl = this.config.getOrDefault("baseUrl", ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
+    String modelName = this.config.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(this.config.getOrDefault("dimension", "768"));
+    String chatModel = this.config.getOrDefault("chatModel", ConfigKeys.DEFAULT_OLLAMA_MODEL);
 
-    // Initialize providers
-    this.embeddingModelProvider = new OllamaEmbeddingModel();
-    this.embeddingStoreProvider = new QdrantEmbeddingStore();
-    this.languageModelProvider = new OllamaLanguageModel();
+    this.embeddingConnection = new OllamaEmbeddingConnection(baseUrl);
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
+    this.vectorStore = buildVectorStore(this.config);
+    this.chatConnection = LangChain4jChatConnection.ollama(baseUrl);
+    this.chatSetup = ChatSetup.builder().withModel(chatModel).withTemperature(0.4).build();
   }
 
-  public RagToolExecutor(Map<String, String> config,
-      LangChainEmbeddingModel embeddingModel, LangChainEmbeddingStore embeddingStore,
-      LangChainLanguageModel languageModel) {
+  public RagToolExecutor(
+      EmbeddingConnection embeddingConnection,
+      VectorStore vectorStore,
+      ChatConnection chatConnection) {
+    this(null, embeddingConnection, vectorStore, chatConnection);
+  }
+
+  public RagToolExecutor(
+      Map<String, String> config,
+      EmbeddingConnection embeddingConnection,
+      VectorStore vectorStore,
+      ChatConnection chatConnection) {
     super("rag", "Retrieval-Augmented Generation - searches knowledge base and generates answers");
     this.config = config != null ? config : new HashMap<>();
-    this.embeddingModelProvider = embeddingModel;
-    this.embeddingStoreProvider = embeddingStore;
-    this.languageModelProvider = languageModel;
+    String modelName = this.config.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(this.config.getOrDefault("dimension", "768"));
+    String chatModel = this.config.getOrDefault("chatModel", ConfigKeys.DEFAULT_OLLAMA_MODEL);
+
+    this.embeddingConnection = embeddingConnection;
+    this.vectorStore = vectorStore;
+    this.chatConnection = chatConnection;
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
+    this.chatSetup = ChatSetup.builder().withModel(chatModel).withTemperature(0.4).build();
+  }
+
+  private static VectorStore buildVectorStore(Map<String, String> config) {
+    String backend = config.get("vector.backend");
+    try {
+      if (backend != null && !backend.isBlank()) {
+        return StorageFactory.createVectorStore(backend, config);
+      }
+      InMemoryVectorStore store = new InMemoryVectorStore();
+      store.initialize(config);
+      return store;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create vector store: " + e.getMessage(), e);
+    }
   }
 
   @Override
@@ -60,46 +104,40 @@ public class RagToolExecutor extends AbstractToolExecutor {
     return CompletableFuture.supplyAsync(
         () -> {
           try {
-            // Extract parameters
             String query = getRequiredParameter(parameters, "query", String.class);
-            Integer maxResults =
-                getOptionalParameter(parameters, "max_results", Integer.class, 5);
+            Integer maxResults = getOptionalParameter(parameters, "max_results", Integer.class, 5);
             Double minScore = getOptionalParameter(parameters, "min_score", Double.class, 0.7);
 
-            // Step 1: Create embedding for the query
-            EmbeddingModel embeddingModel = embeddingModelProvider.getModel(config);
-            Response<Embedding> embeddingResponse = embeddingModel.embed(query);
-            Embedding queryEmbedding = embeddingResponse.content();
+            // Step 1: Embed the query.
+            EmbeddingClient embeddingClient = embeddingConnection.bind(null);
+            float[] queryEmbedding = embeddingClient.embed(query, embeddingSetup);
 
             LOG.info("Created embedding for query: {}", query);
 
-            // Step 2: Search vector store
-            dev.langchain4j.store.embedding.EmbeddingStore<TextSegment> embeddingStore =
-                embeddingStoreProvider.getStore(config);
+            // Step 2: Search the vector store.
+            List<VectorStore.VectorSearchResult> allMatches =
+                vectorStore.searchSimilar(queryEmbedding, maxResults);
+            List<VectorStore.VectorSearchResult> matches = new ArrayList<>();
+            for (VectorStore.VectorSearchResult m : allMatches) {
+              if (m.getScore() >= minScore) {
+                matches.add(m);
+              }
+            }
 
-            EmbeddingSearchRequest searchRequest =
-                EmbeddingSearchRequest.builder()
-                    .queryEmbedding(queryEmbedding)
-                    .maxResults(maxResults)
-                    .minScore(minScore)
-                    .build();
+            LOG.info("Found {} relevant documents", matches.size());
 
-            EmbeddingSearchResult<TextSegment> searchResult = embeddingStore.search(searchRequest);
-
-            LOG.info("Found {} relevant documents", searchResult.matches().size());
-
-            if (searchResult.matches().isEmpty()) {
+            if (matches.isEmpty()) {
               return createResponse(
                   query, "No relevant information found in the knowledge base.", null);
             }
 
-            // Step 3: Build context from retrieved documents
-            String context = buildContext(searchResult.matches());
+            // Step 3: Build context from retrieved documents.
+            String context = buildContext(matches);
 
-            // Step 4: Generate answer with LLM using context
+            // Step 4: Generate answer with the LLM using the retrieved context.
             String answer = generateAnswer(query, context);
 
-            return createResponse(query, answer, searchResult.matches());
+            return createResponse(query, answer, matches);
 
           } catch (Exception e) {
             LOG.error("RAG execution failed", e);
@@ -108,61 +146,65 @@ public class RagToolExecutor extends AbstractToolExecutor {
         });
   }
 
-  private String buildContext(List<EmbeddingMatch<TextSegment>> matches) {
-    return matches.stream()
-        .map(
-            match -> {
-              TextSegment segment = match.embedded();
-              return "Score: "
-                  + String.format("%.2f", match.score())
-                  + "\n"
-                  + segment.text()
-                  + "\n";
-            })
-        .collect(Collectors.joining("\n---\n"));
+  private String buildContext(List<VectorStore.VectorSearchResult> matches) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < matches.size(); i++) {
+      VectorStore.VectorSearchResult match = matches.get(i);
+      if (i > 0) {
+        sb.append("\n---\n");
+      }
+      sb.append("Score: ")
+          .append(String.format("%.2f", match.getScore()))
+          .append("\n")
+          .append(textOf(match))
+          .append("\n");
+    }
+    return sb.toString();
   }
 
-  private String generateAnswer(String query, String context) {
+  private String generateAnswer(String query, String context) throws Exception {
     String prompt =
-        buildPrompt(
-            "Answer the following question based on the provided context:\n\n"
-                + "Context:\n"
-                + context
-                + "\n\n"
-                + "Question: "
-                + query
-                + "\n\n"
-                + "Answer:");
+        "Answer the following question based on the provided context:\n\n"
+            + "Context:\n"
+            + context
+            + "\n\n"
+            + "Question: "
+            + query
+            + "\n\n"
+            + "Answer:";
 
-    dev.langchain4j.model.chat.ChatLanguageModel languageModel =
-        languageModelProvider.getModel(config);
+    ChatClient chatClient = chatConnection.bind(null);
+    ChatResponse response =
+        chatClient.chat(
+            List.of(
+                ChatMessage.system(
+                    "You are a helpful assistant that answers questions strictly from the "
+                        + "provided context."),
+                ChatMessage.user(prompt)),
+            chatSetup);
 
-    Response<AiMessage> response = languageModel.generate(new UserMessage(prompt));
-
-    return response.content().text();
+    return response.getText();
   }
 
-  private String buildPrompt(String template) {
-    return template;
+  private static String textOf(VectorStore.VectorSearchResult match) {
+    Object text = match.getMetadata() != null ? match.getMetadata().get("text") : null;
+    return text != null ? text.toString() : "";
   }
 
   private Map<String, Object> createResponse(
-      String query, String answer, List<EmbeddingMatch<TextSegment>> sources) {
+      String query, String answer, List<VectorStore.VectorSearchResult> sources) {
     Map<String, Object> response = new HashMap<>();
     response.put("query", query);
     response.put("answer", answer);
 
     if (sources != null && !sources.isEmpty()) {
-      List<Map<String, Object>> sourcesList =
-          sources.stream()
-              .map(
-                  match -> {
-                    Map<String, Object> source = new HashMap<>();
-                    source.put("text", match.embedded().text());
-                    source.put("score", match.score());
-                    return source;
-                  })
-              .collect(Collectors.toList());
+      List<Map<String, Object>> sourcesList = new ArrayList<>();
+      for (VectorStore.VectorSearchResult match : sources) {
+        Map<String, Object> source = new HashMap<>();
+        source.put("text", textOf(match));
+        source.put("score", (double) match.getScore());
+        sourcesList.add(source);
+      }
       response.put("sources", sourcesList);
       response.put("source_count", sourcesList.size());
     }

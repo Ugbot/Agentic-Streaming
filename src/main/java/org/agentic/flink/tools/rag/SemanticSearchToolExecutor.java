@@ -1,45 +1,74 @@
 package org.agentic.flink.tools.rag;
 
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.embedding.EmbeddingClient;
+import org.agentic.flink.embedding.EmbeddingConnection;
+import org.agentic.flink.embedding.EmbeddingSetup;
+import org.agentic.flink.embedding.OllamaEmbeddingConnection;
+import org.agentic.flink.storage.StorageFactory;
+import org.agentic.flink.storage.VectorStore;
+import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import org.agentic.flink.langchain.model.embedding.LangChainEmbeddingModel;
-import org.agentic.flink.langchain.model.embedding.OllamaEmbeddingModel;
-import org.agentic.flink.langchain.store.LangChainEmbeddingStore;
-import org.agentic.flink.langchain.store.QdrantEmbeddingStore;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
- * Semantic Search Tool Executor Searches vector store for semantically similar documents
+ * Semantic Search Tool Executor. Searches the vector store for semantically similar documents.
+ *
+ * <p>Migrated off the legacy {@code langchain/model} + {@code langchain/store} packages onto the
+ * framework embedding/vector SPIs.
  */
 public class SemanticSearchToolExecutor extends AbstractToolExecutor {
 
-  private final LangChainEmbeddingModel embeddingModelProvider;
-  private final LangChainEmbeddingStore embeddingStoreProvider;
+  private final EmbeddingConnection embeddingConnection;
+  private final VectorStore vectorStore;
+  private final EmbeddingSetup embeddingSetup;
   private final Map<String, String> config;
 
   public SemanticSearchToolExecutor(Map<String, String> config) {
     super("semantic_search", "Search knowledge base using semantic similarity");
     this.config = config != null ? config : new HashMap<>();
-    this.embeddingModelProvider = new OllamaEmbeddingModel();
-    this.embeddingStoreProvider = new QdrantEmbeddingStore();
+    String baseUrl = this.config.getOrDefault("baseUrl", ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
+    String modelName = this.config.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(this.config.getOrDefault("dimension", "768"));
+    this.embeddingConnection = new OllamaEmbeddingConnection(baseUrl);
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
+    this.vectorStore = buildVectorStore(this.config);
   }
 
-  public SemanticSearchToolExecutor(Map<String, String> config,
-      LangChainEmbeddingModel embeddingModel, LangChainEmbeddingStore embeddingStore) {
+  public SemanticSearchToolExecutor(
+      EmbeddingConnection embeddingConnection, VectorStore vectorStore) {
+    this(null, embeddingConnection, vectorStore);
+  }
+
+  public SemanticSearchToolExecutor(
+      Map<String, String> config,
+      EmbeddingConnection embeddingConnection,
+      VectorStore vectorStore) {
     super("semantic_search", "Search knowledge base using semantic similarity");
     this.config = config != null ? config : new HashMap<>();
-    this.embeddingModelProvider = embeddingModel;
-    this.embeddingStoreProvider = embeddingStore;
+    String modelName = this.config.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(this.config.getOrDefault("dimension", "768"));
+    this.embeddingConnection = embeddingConnection;
+    this.vectorStore = vectorStore;
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
+  }
+
+  private static VectorStore buildVectorStore(Map<String, String> config) {
+    String backend = config.get("vector.backend");
+    try {
+      if (backend != null && !backend.isBlank()) {
+        return StorageFactory.createVectorStore(backend, config);
+      }
+      InMemoryVectorStore store = new InMemoryVectorStore();
+      store.initialize(config);
+      return store;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create vector store: " + e.getMessage(), e);
+    }
   }
 
   @Override
@@ -54,31 +83,23 @@ public class SemanticSearchToolExecutor extends AbstractToolExecutor {
                 getOptionalParameter(parameters, "max_results", Integer.class, 10);
             Double minScore = getOptionalParameter(parameters, "min_score", Double.class, 0.7);
 
-            // Create query embedding
-            EmbeddingModel embeddingModel = embeddingModelProvider.getModel(config);
-            Response<Embedding> embeddingResponse = embeddingModel.embed(query);
-            Embedding queryEmbedding = embeddingResponse.content();
+            // Create query embedding.
+            EmbeddingClient client = embeddingConnection.bind(null);
+            float[] queryEmbedding = client.embed(query, embeddingSetup);
 
-            // Search vector store
-            dev.langchain4j.store.embedding.EmbeddingStore<TextSegment> embeddingStore =
-                embeddingStoreProvider.getStore(config);
+            // Search the vector store.
+            List<VectorStore.VectorSearchResult> matches =
+                vectorStore.searchSimilar(queryEmbedding, maxResults);
 
-            EmbeddingSearchRequest searchRequest =
-                EmbeddingSearchRequest.builder()
-                    .queryEmbedding(queryEmbedding)
-                    .maxResults(maxResults)
-                    .minScore(minScore)
-                    .build();
-
-            EmbeddingSearchResult<TextSegment> searchResult = embeddingStore.search(searchRequest);
+            List<Map<String, Object>> formatted = formatResults(matches, minScore);
 
             LOG.info(
-                "Semantic search found {} results for query: {}", searchResult.matches().size(), query);
+                "Semantic search found {} results for query: {}", formatted.size(), query);
 
             Map<String, Object> result = new HashMap<>();
             result.put("query", query);
-            result.put("result_count", searchResult.matches().size());
-            result.put("results", formatResults(searchResult.matches()));
+            result.put("result_count", formatted.size());
+            result.put("results", formatted);
 
             return result;
 
@@ -89,17 +110,21 @@ public class SemanticSearchToolExecutor extends AbstractToolExecutor {
         });
   }
 
-  private List<Map<String, Object>> formatResults(List<EmbeddingMatch<TextSegment>> matches) {
-    return matches.stream()
-        .map(
-            match -> {
-              Map<String, Object> resultItem = new HashMap<>();
-              resultItem.put("text", match.embedded().text());
-              resultItem.put("score", match.score());
-              resultItem.put("embedding_id", match.embeddingId());
-              return resultItem;
-            })
-        .collect(Collectors.toList());
+  private List<Map<String, Object>> formatResults(
+      List<VectorStore.VectorSearchResult> matches, double minScore) {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (VectorStore.VectorSearchResult match : matches) {
+      if (match.getScore() < minScore) {
+        continue;
+      }
+      Map<String, Object> resultItem = new HashMap<>();
+      Object text = match.getMetadata() != null ? match.getMetadata().get("text") : null;
+      resultItem.put("text", text != null ? text : "");
+      resultItem.put("score", (double) match.getScore());
+      resultItem.put("embedding_id", match.getId());
+      out.add(resultItem);
+    }
+    return out;
   }
 
   @Override

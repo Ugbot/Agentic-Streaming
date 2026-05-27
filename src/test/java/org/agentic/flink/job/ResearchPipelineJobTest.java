@@ -8,12 +8,17 @@ import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.Agent.AgentType;
+import org.agentic.flink.embedding.HashEmbeddingConnection;
 import org.agentic.flink.function.DocumentIngestionFunction;
 import org.agentic.flink.function.SemanticSearchFunction;
-import org.agentic.flink.langchain.model.embedding.DefaultEmbeddingModel;
-import org.agentic.flink.langchain.store.DefaultEmbeddingStore;
-import org.agentic.flink.langchain.model.language.DefaultLanguageModel;
+import org.agentic.flink.llm.ChatClient;
+import org.agentic.flink.llm.ChatConnection;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatSetup;
+import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tool.ToolRegistry;
+import org.apache.flink.api.common.functions.RuntimeContext;
 import org.agentic.flink.tools.rag.DocumentIngestionToolExecutor;
 import org.agentic.flink.tools.rag.RagToolExecutor;
 import org.agentic.flink.tools.rag.SemanticSearchToolExecutor;
@@ -41,8 +46,10 @@ import org.junit.jupiter.api.*;
  * </ul>
  *
  * <p>All test data uses randomized identifiers via {@link UUID#randomUUID()} and
- * {@link ThreadLocalRandom}. The {@link DefaultEmbeddingStore} uses a static
- * in-memory store, which is intentional for these integration-style tests.
+ * {@link ThreadLocalRandom}. The injectable tool executors are wired with a deterministic
+ * {@link HashEmbeddingConnection} and a per-test {@link InMemoryVectorStore} so the suite runs
+ * with no external embedding/vector server. The RAG generation step uses an in-test offline
+ * {@link ChatConnection} (see {@code EchoChatConnection}) so it never reaches a live LLM.
  *
  * @author Agentic Flink Team
  * @see DocumentIngestionFunction
@@ -128,6 +135,48 @@ class ResearchPipelineJobTest {
       @SuppressWarnings("unchecked")
       T result = (T) ois.readObject();
       return result;
+    }
+  }
+
+  /** Builds a fresh, initialized in-JVM vector store for a single test. */
+  private static InMemoryVectorStore newVectorStore() {
+    InMemoryVectorStore store = new InMemoryVectorStore();
+    store.initialize(new HashMap<>());
+    return store;
+  }
+
+  /**
+   * Offline {@link ChatConnection} that echoes the last user message. Mirrors the deterministic,
+   * server-free behaviour the legacy {@code DefaultLanguageModel} provided, so the RAG generation
+   * step can be exercised without a live LLM.
+   */
+  private static final class EchoChatConnection implements ChatConnection {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public ChatClient bind(RuntimeContext runtimeContext) {
+      return new ChatClient() {
+        @Override
+        public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
+          String last = messages.isEmpty() ? "" : messages.get(messages.size() - 1).getContent();
+          return new ChatResponse(
+              "You shared this message with the AI model: " + last,
+              setup.getModelName(),
+              List.of(),
+              null,
+              ChatResponse.FinishReason.STOP);
+        }
+
+        @Override
+        public String providerName() {
+          return "echo";
+        }
+      };
+    }
+
+    @Override
+    public String providerName() {
+      return "echo";
     }
   }
 
@@ -500,10 +549,8 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("DocumentIngestionToolExecutor should accept custom providers")
     void documentIngestionAcceptsCustomProviders() {
-      DefaultEmbeddingModel model = new DefaultEmbeddingModel();
-      DefaultEmbeddingStore store = new DefaultEmbeddingStore();
       DocumentIngestionToolExecutor executor = new DocumentIngestionToolExecutor(
-          new HashMap<>(), model, store);
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
       assertNotNull(executor);
       assertEquals("document_ingestion", executor.getToolId());
     }
@@ -511,10 +558,8 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("SemanticSearchToolExecutor should accept custom providers")
     void semanticSearchAcceptsCustomProviders() {
-      DefaultEmbeddingModel model = new DefaultEmbeddingModel();
-      DefaultEmbeddingStore store = new DefaultEmbeddingStore();
       SemanticSearchToolExecutor executor = new SemanticSearchToolExecutor(
-          new HashMap<>(), model, store);
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
       assertNotNull(executor);
       assertEquals("semantic_search", executor.getToolId());
     }
@@ -522,11 +567,8 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("RagToolExecutor should accept custom providers")
     void ragAcceptsCustomProviders() {
-      DefaultEmbeddingModel model = new DefaultEmbeddingModel();
-      DefaultEmbeddingStore store = new DefaultEmbeddingStore();
-      DefaultLanguageModel languageModel = new DefaultLanguageModel();
       RagToolExecutor executor = new RagToolExecutor(
-          new HashMap<>(), model, store, languageModel);
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore(), new EchoChatConnection());
       assertNotNull(executor);
       assertEquals("rag", executor.getToolId());
     }
@@ -535,7 +577,7 @@ class ResearchPipelineJobTest {
     @DisplayName("DocumentIngestionToolExecutor with defaults should ingest a document")
     void documentIngestionWithDefaultsCanIngest() throws Exception {
       DocumentIngestionToolExecutor executor = new DocumentIngestionToolExecutor(
-          new HashMap<>(), new DefaultEmbeddingModel(), new DefaultEmbeddingStore());
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
 
       Map<String, Object> params = new HashMap<>();
       params.put("content", "Apache Flink is a stream processing framework. " + UUID.randomUUID());
@@ -558,13 +600,14 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("SemanticSearchToolExecutor with defaults should search after ingestion")
     void semanticSearchWithDefaultsCanSearch() throws Exception {
-      DefaultEmbeddingModel model = new DefaultEmbeddingModel();
-      DefaultEmbeddingStore store = new DefaultEmbeddingStore();
+      HashEmbeddingConnection embedding = new HashEmbeddingConnection();
+      InMemoryVectorStore store = newVectorStore();
 
-      // Ingest a document first
+      // Ingest a document first. Keep it short so the chunker produces a single chunk whose text
+      // matches the query exactly, which the deterministic hash embedder ranks first.
       DocumentIngestionToolExecutor ingester = new DocumentIngestionToolExecutor(
-          new HashMap<>(), model, store);
-      String uniqueContent = "Unique test content about streaming data pipelines " + UUID.randomUUID();
+          new HashMap<>(), embedding, store);
+      String uniqueContent = "streaming data pipelines " + UUID.randomUUID();
       Map<String, Object> ingestParams = new HashMap<>();
       ingestParams.put("content", uniqueContent);
       ingestParams.put("chunk_size", 200);
@@ -572,11 +615,12 @@ class ResearchPipelineJobTest {
       Object ingestResult = ingester.execute(ingestParams).join();
       assertNotNull(ingestResult, "Ingestion should succeed before search");
 
-      // Search for it
+      // Search for it. The exact ingested text round-trips to the same hash vector, so it is the
+      // top hit with score ~1.0.
       SemanticSearchToolExecutor searcher = new SemanticSearchToolExecutor(
-          new HashMap<>(), model, store);
+          new HashMap<>(), embedding, store);
       Map<String, Object> searchParams = new HashMap<>();
-      searchParams.put("query", "streaming");
+      searchParams.put("query", uniqueContent);
       searchParams.put("max_results", 5);
       searchParams.put("min_score", 0.0);
       Object result = searcher.execute(searchParams).join();
@@ -587,30 +631,36 @@ class ResearchPipelineJobTest {
       Map<String, Object> resultMap = (Map<String, Object>) result;
       assertNotNull(resultMap.get("results"), "Should return results list");
       assertNotNull(resultMap.get("result_count"), "Should return result count");
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> results = (List<Map<String, Object>>) resultMap.get("results");
+      assertFalse(results.isEmpty(), "Round-trip search should return the ingested chunk");
+      assertEquals(uniqueContent, results.get(0).get("text"),
+          "Exact-text match should rank first under the deterministic hash embedder");
     }
 
     @Test
     @DisplayName("RagToolExecutor with defaults should perform retrieval-augmented generation")
     void ragWithDefaultsCanGenerate() throws Exception {
-      DefaultEmbeddingModel model = new DefaultEmbeddingModel();
-      DefaultEmbeddingStore store = new DefaultEmbeddingStore();
-      DefaultLanguageModel languageModel = new DefaultLanguageModel();
+      HashEmbeddingConnection embedding = new HashEmbeddingConnection();
+      InMemoryVectorStore store = newVectorStore();
+      EchoChatConnection chat = new EchoChatConnection();
 
-      // Ingest a document first
+      // Ingest a document first.
       DocumentIngestionToolExecutor ingester = new DocumentIngestionToolExecutor(
-          new HashMap<>(), model, store);
-      String uniqueContent = "Apache Flink supports exactly-once processing semantics " + UUID.randomUUID();
+          new HashMap<>(), embedding, store);
+      String uniqueContent = "exactly-once processing semantics " + UUID.randomUUID();
       Map<String, Object> ingestParams = new HashMap<>();
       ingestParams.put("content", uniqueContent);
       ingestParams.put("chunk_size", 200);
       ingestParams.put("chunk_overlap", 20);
       ingester.execute(ingestParams).join();
 
-      // Run RAG query
+      // Run RAG query. The exact ingested text retrieves its own chunk, and the offline echo chat
+      // connection produces a deterministic answer with no live LLM.
       RagToolExecutor rag = new RagToolExecutor(
-          new HashMap<>(), model, store, languageModel);
+          new HashMap<>(), embedding, store, chat);
       Map<String, Object> ragParams = new HashMap<>();
-      ragParams.put("query", "exactly-once processing");
+      ragParams.put("query", uniqueContent);
       ragParams.put("max_results", 5);
       ragParams.put("min_score", 0.0);
       Object result = rag.execute(ragParams).join();
@@ -621,13 +671,14 @@ class ResearchPipelineJobTest {
       Map<String, Object> resultMap = (Map<String, Object>) result;
       assertNotNull(resultMap.get("query"), "Should echo the query");
       assertNotNull(resultMap.get("answer"), "Should produce an answer");
+      assertNotNull(resultMap.get("sources"), "Should cite retrieved sources");
     }
 
     @Test
     @DisplayName("DocumentIngestionToolExecutor should validate parameters correctly")
     void documentIngestionValidatesParameters() {
       DocumentIngestionToolExecutor executor = new DocumentIngestionToolExecutor(
-          new HashMap<>(), new DefaultEmbeddingModel(), new DefaultEmbeddingStore());
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
 
       // Valid parameters
       Map<String, Object> validParams = new HashMap<>();
@@ -647,7 +698,7 @@ class ResearchPipelineJobTest {
     @DisplayName("SemanticSearchToolExecutor should validate parameters correctly")
     void semanticSearchValidatesParameters() {
       SemanticSearchToolExecutor executor = new SemanticSearchToolExecutor(
-          new HashMap<>(), new DefaultEmbeddingModel(), new DefaultEmbeddingStore());
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
 
       // Valid parameters
       Map<String, Object> validParams = new HashMap<>();
@@ -669,8 +720,8 @@ class ResearchPipelineJobTest {
     @DisplayName("RagToolExecutor should validate parameters correctly")
     void ragValidatesParameters() {
       RagToolExecutor executor = new RagToolExecutor(
-          new HashMap<>(), new DefaultEmbeddingModel(), new DefaultEmbeddingStore(),
-          new DefaultLanguageModel());
+          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore(),
+          new EchoChatConnection());
 
       // Valid parameters
       Map<String, Object> validParams = new HashMap<>();

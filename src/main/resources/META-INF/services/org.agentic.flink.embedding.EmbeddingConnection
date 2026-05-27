@@ -1,1 +1,2 @@
 org.agentic.flink.embedding.OllamaEmbeddingConnection
+org.agentic.flink.embedding.HashEmbeddingConnection

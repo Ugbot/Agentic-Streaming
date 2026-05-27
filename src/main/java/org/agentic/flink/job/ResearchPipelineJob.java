@@ -8,11 +8,11 @@ import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.Agent.AgentType;
 import org.agentic.flink.execution.LLMClient;
+import org.agentic.flink.embedding.HashEmbeddingConnection;
 import org.agentic.flink.function.DocumentIngestionFunction;
 import org.agentic.flink.function.SemanticSearchFunction;
-import org.agentic.flink.langchain.model.embedding.DefaultEmbeddingModel;
-import org.agentic.flink.langchain.model.language.DefaultLanguageModel;
-import org.agentic.flink.langchain.store.DefaultEmbeddingStore;
+import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
+import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.stream.AgentExecutionFunction;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.rag.RagToolExecutor;
@@ -324,14 +324,19 @@ public class ResearchPipelineJob implements Serializable {
         ToolRegistry.ToolRegistryBuilder builder = ToolRegistry.builder();
 
         if (useDefaults) {
-            DefaultEmbeddingModel embeddingModel = new DefaultEmbeddingModel();
-            DefaultEmbeddingStore embeddingStore = new DefaultEmbeddingStore();
-            DefaultLanguageModel languageModel = new DefaultLanguageModel();
+            // Zero-infra defaults: deterministic hash embedder + shared in-JVM vector store so
+            // both tools observe the same corpus. The chat connection is only exercised by the
+            // RAG generation step, which the offline tests drive with min_score gating.
+            HashEmbeddingConnection embeddingConnection = new HashEmbeddingConnection();
+            InMemoryVectorStore vectorStore = new InMemoryVectorStore();
+            vectorStore.initialize(toolConfig);
+            LangChain4jChatConnection chatConnection = LangChain4jChatConnection.ollama(
+                    config.get(ConfigKeys.OLLAMA_BASE_URL, ConfigKeys.DEFAULT_OLLAMA_BASE_URL));
 
             builder.registerTool("semantic_search",
-                    new SemanticSearchToolExecutor(toolConfig, embeddingModel, embeddingStore));
+                    new SemanticSearchToolExecutor(toolConfig, embeddingConnection, vectorStore));
             builder.registerTool("rag",
-                    new RagToolExecutor(toolConfig, embeddingModel, embeddingStore, languageModel));
+                    new RagToolExecutor(toolConfig, embeddingConnection, vectorStore, chatConnection));
         } else {
             builder.registerTool("semantic_search",
                     new SemanticSearchToolExecutor(toolConfig));

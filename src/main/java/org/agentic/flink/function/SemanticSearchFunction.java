@@ -1,9 +1,12 @@
 package org.agentic.flink.function;
 
+import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
-import org.agentic.flink.langchain.model.embedding.DefaultEmbeddingModel;
-import org.agentic.flink.langchain.store.DefaultEmbeddingStore;
+import org.agentic.flink.embedding.HashEmbeddingConnection;
+import org.agentic.flink.embedding.OllamaEmbeddingConnection;
+import org.agentic.flink.storage.StorageFactory;
+import org.agentic.flink.storage.VectorStore;
 import org.agentic.flink.tools.rag.SemanticSearchToolExecutor;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,8 +46,9 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
    * Creates a SemanticSearchFunction.
    *
    * @param config Configuration map for the embedding model and store
-   * @param useDefaults If true, uses DefaultEmbeddingModel (hash-based) and DefaultEmbeddingStore
-   *     (in-memory). If false, uses the default Ollama + Qdrant providers.
+   * @param useDefaults If true, uses a deterministic {@link HashEmbeddingConnection} and a shared
+   *     in-memory {@link VectorStore} (zero infrastructure). If false, uses an
+   *     {@link OllamaEmbeddingConnection} plus a {@code StorageFactory}-selected vector store.
    */
   public SemanticSearchFunction(Map<String, String> config, boolean useDefaults) {
     this.config = config != null ? config : new HashMap<>();
@@ -57,9 +61,14 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
 
     if (useDefaults) {
       this.executor = new SemanticSearchToolExecutor(
-          config, new DefaultEmbeddingModel(), new DefaultEmbeddingStore());
+          config, new HashEmbeddingConnection(), DefaultRagComponents.sharedVectorStore());
     } else {
-      this.executor = new SemanticSearchToolExecutor(config);
+      String baseUrl = config.getOrDefault("baseUrl", ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
+      VectorStore vectorStore =
+          StorageFactory.createVectorStore(
+              config.getOrDefault("vector.backend", "in-memory"), config);
+      this.executor = new SemanticSearchToolExecutor(
+          config, new OllamaEmbeddingConnection(baseUrl), vectorStore);
     }
 
     LOG.info("SemanticSearchFunction initialized: useDefaults={}, config={}", useDefaults, config);

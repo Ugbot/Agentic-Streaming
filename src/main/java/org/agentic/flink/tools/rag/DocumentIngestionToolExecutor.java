@@ -1,46 +1,85 @@
 package org.agentic.flink.tools.rag;
 
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.embedding.EmbeddingClient;
+import org.agentic.flink.embedding.EmbeddingConnection;
+import org.agentic.flink.embedding.EmbeddingSetup;
+import org.agentic.flink.embedding.OllamaEmbeddingConnection;
+import org.agentic.flink.ingest.Chunk;
+import org.agentic.flink.ingest.RecursiveTextChunker;
+import org.agentic.flink.storage.StorageFactory;
+import org.agentic.flink.storage.VectorStore;
+import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import org.agentic.flink.langchain.model.embedding.LangChainEmbeddingModel;
-import org.agentic.flink.langchain.model.embedding.OllamaEmbeddingModel;
-import org.agentic.flink.langchain.store.LangChainEmbeddingStore;
-import org.agentic.flink.langchain.store.QdrantEmbeddingStore;
-import dev.langchain4j.data.document.Document;
-import dev.langchain4j.data.document.DocumentSplitter;
-import dev.langchain4j.data.document.splitter.DocumentSplitters;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Document Ingestion Tool Executor Ingests documents into the vector store: 1. Splits document
- * into chunks 2. Creates embeddings for each chunk 3. Stores in vector database
+ * Document Ingestion Tool Executor. Ingests documents into the vector store:
+ *
+ * <ol>
+ *   <li>Splits the document into chunks ({@link RecursiveTextChunker}).
+ *   <li>Creates an embedding for each chunk via an {@link EmbeddingConnection}.
+ *   <li>Stores each embedding in a {@link VectorStore}, with the chunk text and incoming metadata.
+ * </ol>
+ *
+ * <p>Migrated off the legacy {@code langchain/model} + {@code langchain/store} packages onto the
+ * framework embedding/vector SPIs. The default constructor builds an
+ * {@link OllamaEmbeddingConnection} and a {@link VectorStore} selected by the {@code vector.backend}
+ * config key (defaulting to the zero-infra {@link InMemoryVectorStore}).
  */
 public class DocumentIngestionToolExecutor extends AbstractToolExecutor {
 
-  private final LangChainEmbeddingModel embeddingModelProvider;
-  private final LangChainEmbeddingStore embeddingStoreProvider;
+  private final EmbeddingConnection embeddingConnection;
+  private final VectorStore vectorStore;
+  private final EmbeddingSetup embeddingSetup;
   private final Map<String, String> config;
 
   public DocumentIngestionToolExecutor(Map<String, String> config) {
     super("document_ingestion", "Ingest documents into the knowledge base");
     this.config = config != null ? config : new HashMap<>();
-    this.embeddingModelProvider = new OllamaEmbeddingModel();
-    this.embeddingStoreProvider = new QdrantEmbeddingStore();
+    String baseUrl = this.config.getOrDefault("baseUrl", ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
+    String modelName = this.config.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(this.config.getOrDefault("dimension", "768"));
+    this.embeddingConnection = new OllamaEmbeddingConnection(baseUrl);
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
+    this.vectorStore = buildVectorStore(this.config);
   }
 
-  public DocumentIngestionToolExecutor(Map<String, String> config,
-      LangChainEmbeddingModel embeddingModel, LangChainEmbeddingStore embeddingStore) {
+  public DocumentIngestionToolExecutor(
+      EmbeddingConnection embeddingConnection, VectorStore vectorStore) {
+    this(null, embeddingConnection, vectorStore);
+  }
+
+  public DocumentIngestionToolExecutor(
+      Map<String, String> config,
+      EmbeddingConnection embeddingConnection,
+      VectorStore vectorStore) {
     super("document_ingestion", "Ingest documents into the knowledge base");
     this.config = config != null ? config : new HashMap<>();
-    this.embeddingModelProvider = embeddingModel;
-    this.embeddingStoreProvider = embeddingStore;
+    String modelName = this.config.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(this.config.getOrDefault("dimension", "768"));
+    this.embeddingConnection = embeddingConnection;
+    this.vectorStore = vectorStore;
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
+  }
+
+  private static VectorStore buildVectorStore(Map<String, String> config) {
+    String backend = config.get("vector.backend");
+    try {
+      if (backend != null && !backend.isBlank()) {
+        return StorageFactory.createVectorStore(backend, config);
+      }
+      InMemoryVectorStore store = new InMemoryVectorStore();
+      store.initialize(config);
+      return store;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create vector store: " + e.getMessage(), e);
+    }
   }
 
   @Override
@@ -58,39 +97,41 @@ public class DocumentIngestionToolExecutor extends AbstractToolExecutor {
             Map<String, String> metadata =
                 getOptionalParameter(parameters, "metadata", Map.class, new HashMap<>());
 
-            // Step 1: Create document
-            Document document = Document.from(content, new dev.langchain4j.data.document.Metadata(metadata));
+            // Step 1: Split document into chunks.
+            String sourceId =
+                metadata.getOrDefault("document_id", UUID.randomUUID().toString());
+            RecursiveTextChunker chunker = new RecursiveTextChunker(chunkSize, chunkOverlap);
+            List<Chunk> chunks = chunker.chunk(sourceId, content);
 
-            // Step 2: Split document into chunks
-            DocumentSplitter splitter =
-                DocumentSplitters.recursive(chunkSize, chunkOverlap);
-            List<TextSegment> segments = splitter.split(document);
+            LOG.info("Split document into {} chunks", chunks.size());
 
-            LOG.info("Split document into {} segments", segments.size());
+            // Step 2 + 3: Embed each chunk and store it.
+            EmbeddingClient client = embeddingConnection.bind(null);
+            List<String> storedIds = new ArrayList<>(chunks.size());
 
-            // Step 3: Create embeddings for all segments
-            EmbeddingModel embeddingModel = embeddingModelProvider.getModel(config);
-            List<Embedding> embeddings = new ArrayList<>();
+            for (Chunk chunk : chunks) {
+              float[] vector = client.embed(chunk.getText(), embeddingSetup);
 
-            for (TextSegment segment : segments) {
-              Response<Embedding> response = embeddingModel.embed(segment.text());
-              embeddings.add(response.content());
+              Map<String, Object> chunkMetadata = new HashMap<>();
+              chunkMetadata.putAll(metadata);
+              chunkMetadata.put("text", chunk.getText());
+              chunkMetadata.put("position", chunk.getPosition());
+              chunkMetadata.put("sourceId", chunk.getSourceId());
+              String flowId = metadata.get("flow_id");
+              if (flowId != null) {
+                chunkMetadata.put("flowId", flowId);
+              }
+
+              vectorStore.storeEmbedding(chunk.getId(), vector, chunkMetadata);
+              storedIds.add(chunk.getId());
             }
 
-            LOG.info("Created {} embeddings", embeddings.size());
-
-            // Step 4: Store in vector database
-            dev.langchain4j.store.embedding.EmbeddingStore<TextSegment> embeddingStore =
-                embeddingStoreProvider.getStore(config);
-
-            List<String> ids = embeddingStore.addAll(embeddings, segments);
-
-            LOG.info("Stored {} embeddings in vector store", ids.size());
+            LOG.info("Stored {} embeddings in vector store", storedIds.size());
 
             Map<String, Object> result = new HashMap<>();
-            result.put("segments_created", segments.size());
-            result.put("embeddings_created", embeddings.size());
-            result.put("stored_ids", ids);
+            result.put("segments_created", chunks.size());
+            result.put("embeddings_created", storedIds.size());
+            result.put("stored_ids", storedIds);
             result.put("chunk_size", chunkSize);
             result.put("chunk_overlap", chunkOverlap);
 
