@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -64,8 +65,7 @@ public class ToolExecutionExample {
             "When the user asks you to perform calculations, use the appropriate tools. " +
             "Call tools by outputting: TOOL_CALL: <tool_name> {\"a\": <number>, \"b\": <number>}\n\n" +
             "Example: To add 5 and 3, output: TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.3)
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.3).build())
         .withMaxIterations(5)
         .build();
 

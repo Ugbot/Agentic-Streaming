@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -60,8 +61,7 @@ public class QuickStartExample {
         .withSystemPrompt(
             "You are a helpful AI assistant. Answer questions clearly and concisely. " +
             "If you don't know something, say so.")
-        .withLlmModel("qwen2.5:latest")
-        .withTemperature(0.7)
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:latest").withTemperature(0.7).build())
         .withMaxIterations(3)
         .build();
 

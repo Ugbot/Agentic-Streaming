@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -70,8 +71,7 @@ public class StreamingAgentExample {
             "2. Use TOOL_CALL: calculator-multiply {\"a\": X, \"b\": Y} to multiply\n" +
             "3. Show your work step by step\n" +
             "4. Provide the final answer clearly")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.3)
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.3).build())
         .withMaxIterations(5)
         .build();
 

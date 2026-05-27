@@ -73,10 +73,7 @@ public class Agent implements Serializable {
   // ==================== LLM Configuration ====================
 
   private final String systemPrompt;
-  private final String llmModel;
-  private final double temperature;
   private final int maxTokens;
-  private final int maxResponseTokens;
 
   // ==================== Tool Configuration ====================
 
@@ -163,10 +160,7 @@ public class Agent implements Serializable {
 
     // LLM configuration
     this.systemPrompt = builder.systemPrompt;
-    this.llmModel = builder.llmModel;
-    this.temperature = builder.temperature;
     this.maxTokens = builder.maxTokens;
-    this.maxResponseTokens = builder.maxResponseTokens;
 
     // Tool configuration
     this.allowedTools = Collections.unmodifiableSet(new HashSet<>(builder.allowedTools));
@@ -253,10 +247,10 @@ public class Agent implements Serializable {
   public AgentType getAgentType() { return agentType; }
 
   public String getSystemPrompt() { return systemPrompt; }
-  public String getLlmModel() { return llmModel; }
-  public double getTemperature() { return temperature; }
+  public String getLlmModel() { return chatSetup.getModelName(); }
+  public double getTemperature() { return chatSetup.getTemperature(); }
   public int getMaxTokens() { return maxTokens; }
-  public int getMaxResponseTokens() { return maxResponseTokens; }
+  public int getMaxResponseTokens() { return chatSetup.getMaxResponseTokens(); }
 
   public Set<String> getAllowedTools() { return allowedTools; }
   public Set<String> getRequiredTools() { return requiredTools; }
@@ -357,10 +351,8 @@ public class Agent implements Serializable {
         .withDescription(this.description)
         .withType(this.agentType)
         .withSystemPrompt(this.systemPrompt)
-        .withLlmModel(this.llmModel)
-        .withTemperature(this.temperature)
+        .withChatSetup(this.chatSetup)
         .withMaxTokens(this.maxTokens)
-        .withMaxResponseTokens(this.maxResponseTokens)
         .withTools(this.allowedTools.toArray(new String[0]))
         .withMaxIterations(this.maxIterations)
         .withTimeout(this.timeout)
@@ -383,7 +375,7 @@ public class Agent implements Serializable {
   public String toString() {
     return String.format(
         "Agent[id=%s, name=%s, type=%s, model=%s, tools=%d, supervisor=%s]",
-        agentId, agentName, agentType, llmModel, allowedTools.size(),
+        agentId, agentName, agentType, chatSetup.getModelName(), allowedTools.size(),
         hasSupervisor() ? supervisorId : "none");
   }
 

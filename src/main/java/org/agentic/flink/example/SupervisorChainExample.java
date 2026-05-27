@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -77,8 +78,7 @@ public class SupervisorChainExample {
         .withSystemPrompt(
             "You are a task executor. Execute tasks efficiently using available tools.\n" +
             "Focus on correctness and completeness.")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.7)
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.7).build())
         .withTools("database-query", "api-call", "file-processor")
         .withMaxIterations(5)
         .build();
@@ -95,8 +95,7 @@ public class SupervisorChainExample {
             "- Code quality\n" +
             "- Test coverage\n" +
             "Reject if quality score < 0.8")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.2)  // More deterministic for reviews
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.2).build())
         .withValidationEnabled(true)
         .build();
 
@@ -112,8 +111,7 @@ public class SupervisorChainExample {
             "- Authentication issues\n" +
             "- Data exposure risks\n" +
             "Reject if security concerns found.")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.1)  // Very deterministic for security
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.1).build())
         .build();
 
     // Tier 3: Final Approver - Human approval
@@ -126,8 +124,7 @@ public class SupervisorChainExample {
             "- Verify all checks passed\n" +
             "- Ensure business requirements met\n" +
             "- Give final sign-off")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.1)
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.1).build())
         .build();
 
     System.out.println("✅ 4 tier agents defined:");

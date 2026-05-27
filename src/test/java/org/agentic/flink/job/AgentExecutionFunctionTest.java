@@ -1,5 +1,6 @@
 package org.agentic.flink.job;
 
+import org.agentic.flink.llm.ChatSetup;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.agentic.flink.core.AgentEvent;
@@ -175,8 +176,11 @@ class AgentExecutionFunctionTest {
         .withId(id)
         .withName("Test Agent " + ThreadLocalRandom.current().nextInt(1000))
         .withSystemPrompt("You are a test agent. Respond concisely.")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.1 + ThreadLocalRandom.current().nextDouble(0.8))
+        .withChatSetup(
+            ChatSetup.builder()
+                .withModel("qwen2.5:3b")
+                .withTemperature(0.1 + ThreadLocalRandom.current().nextDouble(0.8))
+                .build())
         .withMaxIterations(ThreadLocalRandom.current().nextInt(1, 20))
         .withTimeout(Duration.ofSeconds(timeout))
         .withStateMachine(buildValidStateMachine(id + "-sm", timeout, false))

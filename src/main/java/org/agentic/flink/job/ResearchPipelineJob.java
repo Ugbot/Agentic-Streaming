@@ -1,5 +1,6 @@
 package org.agentic.flink.job;
 
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
@@ -203,8 +204,7 @@ public class ResearchPipelineJob implements Serializable {
                         + "use TOOL_CALL: rag {\"query\": \"<your question>\"}.\n"
                         + "4. Always cite the source documents and their relevance scores.\n"
                         + "5. If no relevant documents are found, state that clearly.")
-                .withLlmModel(config.get(ConfigKeys.OLLAMA_MODEL, ConfigKeys.DEFAULT_OLLAMA_MODEL))
-                .withTemperature(0.4)
+                .withChatSetup(ChatSetup.builder().withModel(config.get(ConfigKeys.OLLAMA_MODEL, ConfigKeys.DEFAULT_OLLAMA_MODEL)).withTemperature(0.4).build())
                 .withMaxIterations(10)
                 .withTimeout(Duration.ofMinutes(3))
                 .withTools("semantic_search", "rag")

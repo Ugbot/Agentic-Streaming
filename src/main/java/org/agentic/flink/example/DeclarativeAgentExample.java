@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -73,8 +74,7 @@ public class DeclarativeAgentExample {
             "2. Use document-analysis tool to extract key insights\n" +
             "3. Use synthesis tool to create a comprehensive summary\n\n" +
             "Be thorough and cite sources.")
-        .withLlmModel("qwen2.5:3b")
-        .withTemperature(0.3)
+        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.3).build())
         .withTools("web-search", "document-analysis", "synthesis")
         .withMaxIterations(10)
         .withTimeout(Duration.ofMinutes(5))

@@ -78,10 +78,9 @@ public class AgentBuilder {
 
   // LLM configuration
   String systemPrompt;
-  String llmModel = ConfigKeys.DEFAULT_OLLAMA_MODEL;  // Default model
+  // Type-default temperature, folded into the implicit ChatSetup when none is set explicitly.
   double temperature = 0.7;
   int maxTokens = 4000;
-  int maxResponseTokens = 1000;
 
   // Tool configuration
   Set<String> allowedTools = new HashSet<>();
@@ -234,19 +233,13 @@ public class AgentBuilder {
    * Sets the per-agent chat configuration (model name, temperature, max response tokens,
    * structured output, etc.).
    *
-   * <p>If unset, an implicit {@link ChatSetup} is built from {@link #withLlmModel(String)},
-   * {@link #withTemperature(double)} and {@link #withMaxResponseTokens(int)} for backwards
-   * compatibility.
+   * <p>If unset, an implicit {@link ChatSetup} is built at {@link #build()} time using the
+   * default model and the agent-type temperature default.
    *
    * @return this builder
    */
   public AgentBuilder withChatSetup(ChatSetup chatSetup) {
     this.chatSetup = chatSetup;
-    if (chatSetup != null) {
-      this.llmModel = chatSetup.getModelName();
-      this.temperature = chatSetup.getTemperature();
-      this.maxResponseTokens = chatSetup.getMaxResponseTokens();
-    }
     return this;
   }
 
@@ -264,33 +257,6 @@ public class AgentBuilder {
   }
 
   /**
-   * Sets the LLM model to use (default: qwen2.5:3b).
-   *
-   * @param llmModel The model name (e.g., "qwen2.5:7b", "gpt-4o-mini")
-   * @return this builder
-   * @deprecated Prefer {@link #withChatSetup(ChatSetup)}; this method only sets the model name on
-   *     an implicit setup constructed at {@link #build()} time.
-   */
-  @Deprecated
-  public AgentBuilder withLlmModel(String llmModel) {
-    this.llmModel = llmModel;
-    return this;
-  }
-
-  /**
-   * Sets the temperature for LLM generation (0.0 = deterministic, 1.0 = creative).
-   *
-   * @param temperature The temperature (default: 0.7)
-   * @return this builder
-   * @deprecated Prefer {@link #withChatSetup(ChatSetup)}.
-   */
-  @Deprecated
-  public AgentBuilder withTemperature(double temperature) {
-    this.temperature = temperature;
-    return this;
-  }
-
-  /**
    * Sets the maximum total tokens (context + response).
    *
    * @param maxTokens Maximum tokens (default: 4000)
@@ -298,19 +264,6 @@ public class AgentBuilder {
    */
   public AgentBuilder withMaxTokens(int maxTokens) {
     this.maxTokens = maxTokens;
-    return this;
-  }
-
-  /**
-   * Sets the maximum response tokens (LLM output).
-   *
-   * @param maxResponseTokens Maximum response tokens (default: 1000)
-   * @return this builder
-   * @deprecated Prefer {@link #withChatSetup(ChatSetup)}.
-   */
-  @Deprecated
-  public AgentBuilder withMaxResponseTokens(int maxResponseTokens) {
-    this.maxResponseTokens = maxResponseTokens;
     return this;
   }
 
@@ -786,13 +739,12 @@ public class AgentBuilder {
       systemPrompt = sb.toString();
     }
 
-    // Materialize implicit ChatSetup from the (deprecated) string-based fields if needed.
+    // Materialize an implicit ChatSetup (default model + agent-type temperature) if none was set.
     if (chatSetup == null) {
       ChatSetup.Builder b =
           ChatSetup.builder()
-              .withModel(llmModel)
-              .withTemperature(temperature)
-              .withMaxResponseTokens(maxResponseTokens);
+              .withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL)
+              .withTemperature(temperature);
       if (outputSchema != null) {
         b.withOutputSchema(outputSchema);
       }
