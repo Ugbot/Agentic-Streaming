@@ -1,11 +1,11 @@
 package org.agentic.flink.tools.rag;
 
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.embedding.EmbeddingClient;
+import org.agentic.flink.embedding.EmbeddingConnection;
+import org.agentic.flink.embedding.EmbeddingSetup;
+import org.agentic.flink.embedding.OllamaEmbeddingConnection;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import org.agentic.flink.langchain.model.embedding.LangChainEmbeddingModel;
-import org.agentic.flink.langchain.model.embedding.OllamaEmbeddingModel;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -15,13 +15,17 @@ import java.util.concurrent.CompletableFuture;
  */
 public class EmbeddingToolExecutor extends AbstractToolExecutor {
 
-  private final LangChainEmbeddingModel embeddingModelProvider;
-  private final Map<String, String> config;
+  private final EmbeddingConnection embeddingConnection;
+  private final EmbeddingSetup embeddingSetup;
 
   public EmbeddingToolExecutor(Map<String, String> config) {
     super("embedding", "Convert text to vector embeddings");
-    this.config = config != null ? config : new HashMap<>();
-    this.embeddingModelProvider = new OllamaEmbeddingModel();
+    Map<String, String> cfg = config != null ? config : new HashMap<>();
+    String baseUrl = cfg.getOrDefault("baseUrl", ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
+    String modelName = cfg.getOrDefault("modelName", "nomic-embed-text");
+    int dimension = Integer.parseInt(cfg.getOrDefault("dimension", "768"));
+    this.embeddingConnection = new OllamaEmbeddingConnection(baseUrl);
+    this.embeddingSetup = EmbeddingSetup.of(modelName, dimension);
   }
 
   @Override
@@ -35,18 +39,17 @@ public class EmbeddingToolExecutor extends AbstractToolExecutor {
             Boolean returnVector =
                 getOptionalParameter(parameters, "return_vector", Boolean.class, false);
 
-            EmbeddingModel embeddingModel = embeddingModelProvider.getModel(config);
-            Response<Embedding> response = embeddingModel.embed(text);
-            Embedding embedding = response.content();
+            EmbeddingClient client = embeddingConnection.bind(null);
+            float[] vector = client.embed(text, embeddingSetup);
 
             LOG.info("Created embedding for text of length: {}", text.length());
 
             Map<String, Object> result = new HashMap<>();
             result.put("text", text);
-            result.put("dimension", embedding.dimension());
+            result.put("dimension", vector.length);
 
             if (returnVector) {
-              result.put("vector", embedding.vector());
+              result.put("vector", vector);
             }
 
             return result;
