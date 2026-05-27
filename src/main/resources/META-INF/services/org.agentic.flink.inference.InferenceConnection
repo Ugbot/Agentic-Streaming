@@ -1,4 +1,4 @@
-# InferenceConnection providers are registered by backends.
-# - DJL backend registers org.agentic.flink.inference.djl.DjlInferenceConnection
-# - ONNX, DL4J, etc. would register here too.
-# This file is intentionally empty in the base build; the DJL deps are optional.
+# InferenceConnection providers (ServiceLoader).
+# Zero-infra lexicon classifier for dev/test/cascades:
+org.agentic.flink.inference.LexiconInferenceConnection
+# DJL backend (org.agentic.flink.inference.djl.DjlInferenceConnection) registers when on classpath.
