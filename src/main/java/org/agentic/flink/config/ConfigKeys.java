@@ -20,6 +20,13 @@ public final class ConfigKeys {
   public static final String OLLAMA_MODEL = "ollama.model";
   public static final String DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
   public static final String DEFAULT_OLLAMA_MODEL = "qwen2.5:3b";
+  public static final String DEFAULT_OLLAMA_EMBED_MODEL = "nomic-embed-text";
+  public static final int DEFAULT_OLLAMA_EMBED_DIMENSION = 768;
+
+  // Anthropic (Claude)
+  public static final String ANTHROPIC_API_KEY = "anthropic.api.key";
+  public static final String ANTHROPIC_MODEL = "anthropic.model";
+  public static final String DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
   // Redis
   public static final String REDIS_HOST = "redis.host";

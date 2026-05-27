@@ -57,4 +57,17 @@ class ChatClientContractTest {
     assertNotNull(model);
     assertTrue(model.getClass().getName().startsWith("dev.langchain4j"));
   }
+
+  @Test
+  @DisplayName("Anthropic provider builds a Claude model without making an API call")
+  void anthropicProviderBuildsModel() {
+    LangChain4jChatConnection connection = LangChain4jChatConnection.anthropic("test-key");
+    assertEquals(
+        LangChain4jChatConnection.Provider.ANTHROPIC, connection.getProvider());
+    assertEquals("langchain4j:anthropic", connection.providerName());
+    // Construction is offline; no network call until chat().
+    Object model = connection.buildModel("claude-sonnet-4-6", 0.3, 2048);
+    assertNotNull(model);
+    assertTrue(model.getClass().getName().contains("anthropic"));
+  }
 }

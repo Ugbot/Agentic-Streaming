@@ -6,6 +6,7 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.output.Response;
@@ -34,7 +35,8 @@ public final class LangChain4jChatConnection implements ChatConnection {
   /** Provider tag for LangChain4J routing. */
   public enum Provider {
     OLLAMA,
-    OPENAI
+    OPENAI,
+    ANTHROPIC
   }
 
   private final Provider provider;
@@ -61,6 +63,15 @@ public final class LangChain4jChatConnection implements ChatConnection {
 
   public static LangChain4jChatConnection openai(String apiKey) {
     return new LangChain4jChatConnection(Provider.OPENAI, null, apiKey, Duration.ofSeconds(60));
+  }
+
+  /**
+   * Claude via the Anthropic API. The model name (e.g. {@code claude-sonnet-4-6}) is supplied
+   * per call through {@link org.agentic.flink.llm.ChatSetup}.
+   */
+  public static LangChain4jChatConnection anthropic(String apiKey) {
+    return new LangChain4jChatConnection(
+        Provider.ANTHROPIC, null, apiKey, Duration.ofSeconds(120));
   }
 
   public Provider getProvider() {
@@ -116,6 +127,14 @@ public final class LangChain4jChatConnection implements ChatConnection {
           b.baseUrl(baseUrl);
         }
         return b.build();
+      case ANTHROPIC:
+        return AnthropicChatModel.builder()
+            .apiKey(apiKey)
+            .modelName(modelName)
+            .temperature(temperature)
+            .maxTokens(maxTokens)
+            .timeout(timeout)
+            .build();
       default:
         throw new IllegalStateException("Unknown provider: " + provider);
     }

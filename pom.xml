@@ -86,6 +86,13 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
+        <!-- LangChain4J Anthropic (Claude) Integration -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-anthropic</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
         <!-- Native Qdrant gRPC client (backs QdrantVectorStore; optional) -->
         <dependency>
             <groupId>io.qdrant</groupId>
