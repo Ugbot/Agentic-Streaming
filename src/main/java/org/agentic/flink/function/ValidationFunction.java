@@ -1,23 +1,21 @@
 package org.agentic.flink.function;
 
+import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.langchain.PromptTemplateManager;
+import org.agentic.flink.llm.ChatClient;
+import org.agentic.flink.llm.ChatConnection;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.serde.ValidationResult;
-import org.agentic.flink.langchain.client.LangChainAsyncClient;
-import org.agentic.flink.langchain.model.AiModel;
-import org.agentic.flink.langchain.model.language.LangChainLanguageModel;
-import org.agentic.flink.langchain.model.language.OllamaLanguageModel;
-import org.agentic.flink.langchain.model.language.OpenAiLanguageModel;
-import org.agentic.flink.langchain.config.LLMConfig;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.input.Prompt;
-import dev.langchain4j.model.output.Response;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
@@ -30,8 +28,13 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   private static final Logger LOG = LoggerFactory.getLogger(ValidationFunction.class);
   public static final String UID = ValidationFunction.class.getSimpleName();
 
-  private transient LangChainAsyncClient langChainAsyncClient;
+  private static final String SYSTEM_MESSAGE =
+      "You are a validation assistant. Evaluate tool execution results for correctness "
+          + "and completeness.";
+
+  private transient ChatClient chatClient;
   private transient PromptTemplateManager promptManager;
+  private transient ChatSetup chatSetup;
   private final String customTemplateId;
 
   /**
@@ -53,13 +56,20 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   @Override
   public void open(OpenContext openContext) throws Exception {
     super.open(openContext);
-    this.langChainAsyncClient =
-        new LangChainAsyncClient(
-            List.of(
-                LangChainLanguageModel.DEFAULT_MODEL,
-                new OllamaLanguageModel(),
-                new OpenAiLanguageModel()));
+    ServiceLoader<ChatConnection> loader = ServiceLoader.load(ChatConnection.class);
+    Iterator<ChatConnection> it = loader.iterator();
+    if (!it.hasNext()) {
+      throw new IllegalStateException(
+          "ValidationFunction requires a ChatConnection registered via ServiceLoader");
+    }
+    this.chatClient = it.next().bind(getRuntimeContext());
     this.promptManager = PromptTemplateManager.getInstance();
+    // Validation should be deterministic.
+    this.chatSetup =
+        ChatSetup.builder()
+            .withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL)
+            .withTemperature(0.1)
+            .build();
   }
 
   @Override
@@ -82,14 +92,11 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     Prompt validationPrompt = promptManager.renderTemplate(templateId, "result", toolResult);
 
     List<ChatMessage> messages = new ArrayList<>();
-    messages.add(new UserMessage(validationPrompt.text()));
-
-    // Create LLM config
-    LLMConfig llmConfig = createLLMConfig(event);
+    messages.add(ChatMessage.system(SYSTEM_MESSAGE));
+    messages.add(ChatMessage.user(validationPrompt.text()));
 
     // Execute validation async
-    CompletableFuture<Response<AiMessage>> asyncResponse =
-        langChainAsyncClient.generate(messages, llmConfig);
+    CompletableFuture<ChatResponse> asyncResponse = chatClient.chatAsync(messages, chatSetup);
 
     processValidationResponse(event, resultFuture, asyncResponse);
   }
@@ -103,19 +110,10 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     resultFuture.complete(Collections.singleton(validationEvent));
   }
 
-  private LLMConfig createLLMConfig(AgentEvent event) {
-    LLMConfig config = new LLMConfig();
-    config.setUserId(Long.valueOf(event.getUserId().hashCode()));
-    config.setAiModel(AiModel.OLLAMA);
-    config.setSystemMessage(
-        "You are a validation assistant. Evaluate tool execution results for correctness and completeness.");
-    return config;
-  }
-
   private void processValidationResponse(
       AgentEvent event,
       ResultFuture<AgentEvent> resultFuture,
-      CompletableFuture<Response<AiMessage>> asyncResponse) {
+      CompletableFuture<ChatResponse> asyncResponse) {
 
     asyncResponse.whenComplete(
         (result, throwable) -> {
@@ -128,7 +126,7 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
           }
 
           // Parse validation result
-          String validationResponse = result.content().text();
+          String validationResponse = result.getText();
           boolean isValid = validationResponse.toUpperCase().contains("VALID");
           double score = isValid ? 1.0 : 0.0;
 

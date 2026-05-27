@@ -3,6 +3,7 @@ package org.agentic.flink.example;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.*;
 import org.agentic.flink.stream.AgentExecutionStream;
+import org.agentic.flink.tools.ToolExecutorRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.flink.configuration.Configuration;
@@ -33,7 +34,9 @@ public class SimpleAgentExample {
     AgentConfig agentConfig = createAgentConfig();
 
     // Step 3: Create agent execution stream
-    AgentExecutionStream agentStream = new AgentExecutionStream(env, agentConfig, toolRegistry);
+    ToolExecutorRegistry executorRegistry = new ToolExecutorRegistry();
+    AgentExecutionStream agentStream =
+        new AgentExecutionStream(env, agentConfig, toolRegistry, executorRegistry);
 
     // Step 4: Create input event stream (in real app, this would come from Kafka)
     DataStream<AgentEvent> inputEvents = createSampleEventStream(env);

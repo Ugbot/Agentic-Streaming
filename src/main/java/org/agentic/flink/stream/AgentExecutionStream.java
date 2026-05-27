@@ -7,6 +7,7 @@ import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.function.*;
 import org.agentic.flink.serde.ToolCallRequest;
 import org.agentic.flink.serde.ToolCallResponse;
+import org.agentic.flink.tools.ToolExecutorRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -27,14 +28,17 @@ public class AgentExecutionStream {
   private final StreamExecutionEnvironment env;
   private final AgentConfig config;
   private final Map<String, ToolDefinition> toolRegistry;
+  private final ToolExecutorRegistry executorRegistry;
 
   public AgentExecutionStream(
       StreamExecutionEnvironment env,
       AgentConfig config,
-      Map<String, ToolDefinition> toolRegistry) {
+      Map<String, ToolDefinition> toolRegistry,
+      ToolExecutorRegistry executorRegistry) {
     this.env = env;
     this.config = config;
     this.toolRegistry = toolRegistry != null ? toolRegistry : new HashMap<>();
+    this.executorRegistry = executorRegistry != null ? executorRegistry : new ToolExecutorRegistry();
   }
 
   /**
@@ -60,18 +64,18 @@ public class AgentExecutionStream {
     DataStream<ToolCallResponse> toolCallResponses =
         AsyncDataStream.orderedWaitWithRetry(
                 toolCallRequests,
-                new ToolCallAsyncFunction(toolRegistry),
+                new ToolCallAsyncFunctionV2(toolRegistry, executorRegistry),
                 30000,
                 TimeUnit.MILLISECONDS,
                 100,
                 asyncRetryStrategy)
-            .uid(ToolCallAsyncFunction.UID)
-            .name(ToolCallAsyncFunction.UID);
+            .uid(ToolCallAsyncFunctionV2.UID)
+            .name(ToolCallAsyncFunctionV2.UID);
 
     // Step 3: Convert responses back to events
     DataStream<AgentEvent> toolCallEvents =
         toolCallResponses
-            .map(ToolCallAsyncFunction::responseToEvent)
+            .map(ToolCallAsyncFunctionV2::responseToEvent)
             .name("tool-call-response-to-event");
 
     // Step 4: Validation

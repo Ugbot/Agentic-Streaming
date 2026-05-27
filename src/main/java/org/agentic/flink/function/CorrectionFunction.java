@@ -1,25 +1,23 @@
 package org.agentic.flink.function;
 
+import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.langchain.PromptTemplateManager;
+import org.agentic.flink.llm.ChatClient;
+import org.agentic.flink.llm.ChatConnection;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.serde.ValidationResult;
-import org.agentic.flink.langchain.client.LangChainAsyncClient;
-import org.agentic.flink.langchain.model.AiModel;
-import org.agentic.flink.langchain.model.language.LangChainLanguageModel;
-import org.agentic.flink.langchain.model.language.OllamaLanguageModel;
-import org.agentic.flink.langchain.model.language.OpenAiLanguageModel;
-import org.agentic.flink.langchain.config.LLMConfig;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.input.Prompt;
-import dev.langchain4j.model.output.Response;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
@@ -32,8 +30,13 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   private static final Logger LOG = LoggerFactory.getLogger(CorrectionFunction.class);
   public static final String UID = CorrectionFunction.class.getSimpleName();
 
-  private transient LangChainAsyncClient langChainAsyncClient;
+  private static final String SYSTEM_MESSAGE =
+      "You are a correction assistant. Fix errors in tool execution results based on "
+          + "validation feedback.";
+
+  private transient ChatClient chatClient;
   private transient PromptTemplateManager promptManager;
+  private transient ChatSetup chatSetup;
   private final String customTemplateId;
   private final int maxCorrectionAttempts;
 
@@ -60,13 +63,20 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   @Override
   public void open(OpenContext openContext) throws Exception {
     super.open(openContext);
-    this.langChainAsyncClient =
-        new LangChainAsyncClient(
-            List.of(
-                LangChainLanguageModel.DEFAULT_MODEL,
-                new OllamaLanguageModel(),
-                new OpenAiLanguageModel()));
+    ServiceLoader<ChatConnection> loader = ServiceLoader.load(ChatConnection.class);
+    Iterator<ChatConnection> it = loader.iterator();
+    if (!it.hasNext()) {
+      throw new IllegalStateException(
+          "CorrectionFunction requires a ChatConnection registered via ServiceLoader");
+    }
+    this.chatClient = it.next().bind(getRuntimeContext());
     this.promptManager = PromptTemplateManager.getInstance();
+    // Moderate creativity for corrections.
+    this.chatSetup =
+        ChatSetup.builder()
+            .withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL)
+            .withTemperature(0.5)
+            .build();
   }
 
   @Override
@@ -102,14 +112,11 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     Prompt correctionPrompt = promptManager.renderTemplate(templateId, variables);
 
     List<ChatMessage> messages = new ArrayList<>();
-    messages.add(new UserMessage(correctionPrompt.text()));
-
-    // Create LLM config
-    LLMConfig llmConfig = createLLMConfig(event);
+    messages.add(ChatMessage.system(SYSTEM_MESSAGE));
+    messages.add(ChatMessage.user(correctionPrompt.text()));
 
     // Execute correction async
-    CompletableFuture<Response<AiMessage>> asyncResponse =
-        langChainAsyncClient.generate(messages, llmConfig);
+    CompletableFuture<ChatResponse> asyncResponse = chatClient.chatAsync(messages, chatSetup);
 
     processCorrectionResponse(event, attemptCount + 1, resultFuture, asyncResponse);
   }
@@ -123,20 +130,11 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     resultFuture.complete(Collections.singleton(supervisorEvent));
   }
 
-  private LLMConfig createLLMConfig(AgentEvent event) {
-    LLMConfig config = new LLMConfig();
-    config.setUserId(Long.valueOf(event.getUserId().hashCode()));
-    config.setAiModel(AiModel.OLLAMA);
-    config.setSystemMessage(
-        "You are a correction assistant. Fix errors in tool execution results based on validation feedback.");
-    return config;
-  }
-
   private void processCorrectionResponse(
       AgentEvent event,
       int attemptCount,
       ResultFuture<AgentEvent> resultFuture,
-      CompletableFuture<Response<AiMessage>> asyncResponse) {
+      CompletableFuture<ChatResponse> asyncResponse) {
 
     asyncResponse.whenComplete(
         (result, throwable) -> {
@@ -147,7 +145,7 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
             return;
           }
 
-          String correctedResult = result.content().text();
+          String correctedResult = result.getText();
           LOG.info(
               "Correction attempt {} completed for flow: {}", attemptCount, event.getFlowId());
 
