@@ -93,6 +93,22 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
+        <!-- Native Qdrant gRPC client (backs QdrantVectorStore; optional) -->
+        <dependency>
+            <groupId>io.qdrant</groupId>
+            <artifactId>client</artifactId>
+            <version>1.11.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Milvus SDK (backs MilvusVectorStore; optional) -->
+        <dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>2.4.8</version>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Lombok for reduced boilerplate -->
         <dependency>
             <groupId>org.projectlombok</groupId>
