@@ -2,3 +2,4 @@ org.agentic.flink.storage.vector.InMemoryVectorStore
 org.agentic.flink.storage.vector.PgVectorStore
 org.agentic.flink.storage.vector.QdrantVectorStore
 org.agentic.flink.storage.vector.MilvusVectorStore
+org.agentic.flink.storage.vector.FlussVectorStore

@@ -93,6 +93,14 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
+        <!-- Apache Fluss streaming storage client (backs FlussVectorStore; optional) -->
+        <dependency>
+            <groupId>com.alibaba.fluss</groupId>
+            <artifactId>fluss-client</artifactId>
+            <version>0.7.0</version>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Native Qdrant gRPC client (backs QdrantVectorStore; optional) -->
         <dependency>
             <groupId>io.qdrant</groupId>

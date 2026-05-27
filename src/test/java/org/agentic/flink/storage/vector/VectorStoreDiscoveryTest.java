@@ -24,5 +24,6 @@ class VectorStoreDiscoveryTest {
     assertTrue(providers.contains("pgvector"), "pgvector store missing: " + providers);
     assertTrue(providers.contains("qdrant"), "qdrant store missing: " + providers);
     assertTrue(providers.contains("milvus"), "milvus store missing: " + providers);
+    assertTrue(providers.contains("fluss"), "fluss store missing: " + providers);
   }
 }

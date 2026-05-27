@@ -1,0 +1,63 @@
+# Apache Fluss single-node cluster for local development.
+#
+#   podman network create agentic-flink-network   # once
+#   podman compose -f docker-compose-fluss.yml up -d
+#
+# Coordinator + one tablet server backed by ZooKeeper. Each server exposes two
+# named listeners: INTERNAL (container hostnames, for server<->server traffic
+# inside the podman network) and CLIENT (advertised as localhost:<published
+# port>, so a Fluss client on the host can reconnect after bootstrap).
+#
+# Client bootstrap.servers = localhost:9123 (the coordinator's CLIENT listener).
+
+services:
+  fluss-zookeeper:
+    image: zookeeper:3.9.2
+    container_name: agentic-flink-fluss-zk
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "*"
+    networks:
+      - agentic-flink-network
+
+  fluss-coordinator:
+    image: fluss/fluss:0.7.0
+    container_name: agentic-flink-fluss-coordinator
+    command: coordinatorServer
+    depends_on:
+      - fluss-zookeeper
+    ports:
+      - "9123:9123"
+    environment:
+      FLUSS_PROPERTIES: |
+        zookeeper.address: agentic-flink-fluss-zk:2181
+        bind.listeners: INTERNAL://0.0.0.0:9120,CLIENT://0.0.0.0:9123
+        advertised.listeners: INTERNAL://agentic-flink-fluss-coordinator:9120,CLIENT://localhost:9123
+        internal.listener.name: INTERNAL
+        default.replication.factor: 1
+    networks:
+      - agentic-flink-network
+
+  fluss-tablet:
+    image: fluss/fluss:0.7.0
+    container_name: agentic-flink-fluss-tablet
+    command: tabletServer
+    depends_on:
+      - fluss-coordinator
+    ports:
+      - "9124:9124"
+    environment:
+      FLUSS_PROPERTIES: |
+        zookeeper.address: agentic-flink-fluss-zk:2181
+        bind.listeners: INTERNAL://0.0.0.0:9121,CLIENT://0.0.0.0:9124
+        advertised.listeners: INTERNAL://agentic-flink-fluss-tablet:9121,CLIENT://localhost:9124
+        internal.listener.name: INTERNAL
+        tablet-server.id: 1
+        data.dir: /tmp/fluss/data
+        remote.data.dir: /tmp/fluss/remote-data
+        default.replication.factor: 1
+    networks:
+      - agentic-flink-network
+
+networks:
+  agentic-flink-network:
+    external: true

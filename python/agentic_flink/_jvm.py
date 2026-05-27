@@ -31,6 +31,8 @@ _DEFAULT_JVM_ARGS = (
     "-Xms256m",
     "-Xmx2g",
     "-XX:+UseG1GC",
+    # Apache Arrow (used by Fluss's columnar log format) needs nio internals on JDK 17+.
+    "--add-opens=java.base/java.nio=ALL-UNNAMED",
 )
 
 
