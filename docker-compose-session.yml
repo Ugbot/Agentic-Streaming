@@ -1,0 +1,91 @@
+# Flink 1.20.1 session cluster for local development. Sits on the same podman network as
+# `docker-compose-fluss.yml` so submitted jobs can reach `fluss-coordinator:9120` by service
+# name (use `FLUSS_BOOTSTRAP=fluss-coordinator:9120` for inter-container jobs, or
+# `localhost:9123` for clients running on the host).
+#
+#   podman network create agentic-flink-network        # once, shared with fluss compose
+#   podman compose -f docker-compose-fluss.yml -f docker-compose-session.yml up -d
+#
+# JM REST API at http://localhost:8081 ; submit jars + run jobs via /jars/upload + /jars/{id}/run.
+# Inter-container ZeroMQ endpoints should bind on 0.0.0.0 and use container-local ports.
+
+services:
+  flink-jobmanager:
+    image: flink:1.20.1-scala_2.12-java17
+    container_name: agentic-flink-jm
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        parallelism.default: 1
+        rest.address: 0.0.0.0
+        rest.bind-address: 0.0.0.0
+        rest.bind-port: 8081
+        rest.port: 8081
+        taskmanager.numberOfTaskSlots: 4
+        # JDK 17 reflective access opens (mirrors surefire's argLine).
+        env.java.opts.all: >-
+          --add-opens=java.base/java.util=ALL-UNNAMED
+          --add-opens=java.base/java.lang=ALL-UNNAMED
+          --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+          --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+          --add-opens=java.base/java.io=ALL-UNNAMED
+          --add-opens=java.base/java.net=ALL-UNNAMED
+          --add-opens=java.base/java.nio=ALL-UNNAMED
+          --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+          --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
+          --add-opens=java.base/sun.security.action=ALL-UNNAMED
+          --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+          --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+    volumes:
+      # Make the project's built jars reachable from inside the cluster (read-only is fine —
+      # uploads happen via REST).
+      - ./target:/host-target:ro
+    networks:
+      - agentic-flink-network
+
+  flink-taskmanager:
+    image: flink:1.20.1-scala_2.12-java17
+    container_name: agentic-flink-tm
+    command: taskmanager
+    depends_on:
+      - flink-jobmanager
+    # Expose the ZMQ ports used by the L0..L5 chain so jobs can pull/push between containers
+    # *and* publishers on the host can connect. Ports below match the notebook defaults; adjust
+    # if you change the chain layout.
+    ports:
+      - "5560:5560"
+      - "5561:5561"
+      - "5562:5562"
+      - "5563:5563"
+      - "5564:5564"
+      - "5559:5559" # control plane (PULL into L5)
+      - "5558:5558" # debug PUB out of L5
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 1
+        env.java.opts.all: >-
+          --add-opens=java.base/java.util=ALL-UNNAMED
+          --add-opens=java.base/java.lang=ALL-UNNAMED
+          --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+          --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+          --add-opens=java.base/java.io=ALL-UNNAMED
+          --add-opens=java.base/java.net=ALL-UNNAMED
+          --add-opens=java.base/java.nio=ALL-UNNAMED
+          --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+          --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
+          --add-opens=java.base/sun.security.action=ALL-UNNAMED
+          --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+          --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+    volumes:
+      - ./target:/host-target:ro
+    networks:
+      - agentic-flink-network
+
+networks:
+  agentic-flink-network:
+    external: true

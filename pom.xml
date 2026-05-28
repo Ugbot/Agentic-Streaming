@@ -170,6 +170,18 @@
         </dependency>
 
         <!--
+        JeroMQ — pure-Java ZeroMQ. Backs ZeroMqChannel / ZeroMqSink for in-JVM /
+        localhost job-to-job chaining without burning a Kafka or Fluss topic. Optional
+        so consumers who don't use ZMQ pay nothing transitively.
+        -->
+        <dependency>
+            <groupId>org.zeromq</groupId>
+            <artifactId>jeromq</artifactId>
+            <version>0.6.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
         DJL (Deep Java Library) — OPTIONAL inference backend.
 
         Provides a single API over PyTorch, TensorFlow, ONNX, MXNet, and HuggingFace tokenizers.
@@ -417,6 +429,26 @@
                 <version>3.2.5</version>
                 <configuration>
                     <excludedGroups>integration</excludedGroups>
+                    <!--
+                    Flink 1.20 on Java 17: Kryo / Twitter Chill reflective access into JDK
+                    internals is blocked by the module system without these opens. Mirrors
+                    Flink's own recommended JVM args.
+                    -->
+                    <argLine>
+                        --add-opens=java.base/java.util=ALL-UNNAMED
+                        --add-opens=java.base/java.lang=ALL-UNNAMED
+                        --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+                        --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+                        --add-opens=java.base/java.io=ALL-UNNAMED
+                        --add-opens=java.base/java.net=ALL-UNNAMED
+                        --add-opens=java.base/java.nio=ALL-UNNAMED
+                        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+                        --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
+                        --add-opens=java.base/sun.security.action=ALL-UNNAMED
+                        --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+                        --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+                        --add-opens=java.base/java.text=ALL-UNNAMED
+                    </argLine>
                 </configuration>
             </plugin>
 
