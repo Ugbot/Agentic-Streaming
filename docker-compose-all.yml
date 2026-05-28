@@ -1,0 +1,24 @@
+# Full-stack development compose: every service the framework can talk to.
+#
+# Brings up:
+#   - Postgres, Redis, Ollama        (base infra)
+#   - Kafka + ZooKeeper              (one ZK serves both Kafka and Fluss in a normal deploy,
+#                                      but we keep them isolated locally for clarity)
+#   - Fluss coordinator + tablet     (durable streaming storage)
+#   - Flink session cluster (JM+TM)  (long-running job slots)
+#
+# Useful when you want to run any notebook without thinking about which sub-stack it needs.
+# Heavier than the scenario-specific umbrellas — pulls ~5GB of images on first run.
+#
+# Bring up:
+#   bash examples-bin/setup-network.sh             # once
+#   podman compose -f docker-compose-all.yml up -d
+#
+# Tear down:
+#   bash examples-bin/down-all.sh
+
+include:
+  - docker-compose.yml
+  - docker-compose-kafka.yml
+  - docker-compose-fluss.yml
+  - docker-compose-session.yml

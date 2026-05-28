@@ -1,0 +1,16 @@
+# Compose umbrella for the session-cluster scenarios — notebooks/09_session_cluster_levels.ipynb.
+#
+# Brings up:
+#   - Fluss          (durable boundaries: raw ingest + final alerts)
+#   - Flink session  (JM + TM; submitted jobs land here)
+#
+# Bring up:
+#   podman network create agentic-flink-network    # once
+#   podman compose -f docker-compose-cluster.yml up -d
+#
+# Or use the wrapper:
+#   bash examples-bin/run-session-cluster.sh
+
+include:
+  - docker-compose-fluss.yml
+  - docker-compose-session.yml

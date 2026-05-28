@@ -1,0 +1,19 @@
+# Compose umbrella for the RAG + Fluss scenarios — notebooks/03_scraper_researcher_fluss.ipynb,
+# notebooks/02_live_scrape_rag.ipynb, and examples-bin/run-rag.sh.
+#
+# Brings up:
+#   - Ollama  (local LLM + embeddings; from docker-compose.yml)
+#   - Postgres (long-term conversation store; from docker-compose.yml)
+#   - Redis    (optional caching; from docker-compose.yml)
+#   - Fluss    (vector-store durability; from docker-compose-fluss.yml)
+#
+# Bring up:
+#   podman network create agentic-flink-network    # once
+#   podman compose -f docker-compose-rag.yml up -d
+#
+# Or use the wrapper:
+#   bash examples-bin/run-rag-stack.sh
+
+include:
+  - docker-compose.yml
+  - docker-compose-fluss.yml

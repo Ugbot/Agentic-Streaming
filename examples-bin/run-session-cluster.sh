@@ -1,35 +1,23 @@
 #!/usr/bin/env bash
-# Brings up the Fluss compose + the Flink session cluster compose on the same podman network
-# and polls until both are ready. Prints next-step hints when both are reachable.
+# Brings up the Fluss + Flink session cluster (notebooks/09_session_cluster_levels.ipynb).
+# Uses the docker-compose-cluster.yml umbrella so the per-service files stay the source of
+# truth. Polls until both stacks answer, prints next-step hints.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 
-NETWORK="agentic-flink-network"
 FLUSS_BOOTSTRAP="${FLUSS_BOOTSTRAP:-localhost:9123}"
 FLINK_REST="${FLINK_REST:-http://localhost:8081}"
 
-err() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; }
 ok()  { printf '\033[32m✓\033[0m %s\n' "$*"; }
 info(){ printf '\033[34m→\033[0m %s\n' "$*"; }
+err() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; }
 
-if ! command -v podman >/dev/null 2>&1; then
-  err "podman not on PATH. Install with: brew install podman"
-  exit 1
-fi
+bash "$HERE/setup-network.sh"
 
-if ! podman network exists "$NETWORK" >/dev/null 2>&1; then
-  info "creating podman network $NETWORK"
-  podman network create "$NETWORK" >/dev/null
-fi
-ok "network $NETWORK present"
-
-info "starting Fluss + Flink session cluster"
-podman compose \
-  -f "$REPO/docker-compose-fluss.yml" \
-  -f "$REPO/docker-compose-session.yml" \
-  up -d
+info "starting Fluss + Flink session cluster (docker-compose-cluster.yml)"
+podman compose -f "$REPO/docker-compose-cluster.yml" up -d
 
 info "waiting for Fluss coordinator on $FLUSS_BOOTSTRAP"
 for _ in {1..60}; do
@@ -41,7 +29,7 @@ for _ in {1..60}; do
 done
 
 info "waiting for Flink REST on $FLINK_REST"
-for _ in {1..60}; do
+for _ in {1..120}; do
   if curl -fsS "$FLINK_REST/overview" >/dev/null 2>&1; then
     ok "Flink REST reachable"
     break
