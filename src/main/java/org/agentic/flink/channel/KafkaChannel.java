@@ -1,5 +1,6 @@
 package org.agentic.flink.channel;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.io.IOException;
@@ -104,7 +105,13 @@ public final class KafkaChannel<T> implements Channel<T> {
 
     private ObjectMapper mapper() {
       if (mapper == null) {
-        mapper = new ObjectMapper().registerModule(new ParameterNamesModule());
+        mapper =
+            new ObjectMapper()
+                .registerModule(new ParameterNamesModule())
+                // Be lenient about producer-side extras (e.g. a Python producer carrying fields
+                // the consuming Java record doesn't model) — don't fail the whole job over a
+                // stray field.
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
       }
       return mapper;
     }

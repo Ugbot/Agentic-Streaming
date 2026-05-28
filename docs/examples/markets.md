@@ -46,6 +46,9 @@ pipeline and a **live Coinbase crypto** pipeline.
   - `stage/FeatureAggregatorFn.java` — windowed aggregation
   - `stage/MarketSignals.java` — pure-function math
   - `stage/MarketAgentFn.java` — inline agentic operator
+  - `producer/` — Java producers (same wire format as the Python flavour):
+    `BondInventoryProducer`, `BondSecuritiesProducer`, `BondTradesProducer`, `CoinbaseProducer`
+    (built-in JDK 17 WebSocket — no extra deps), plus `MarketProducerSupport`
 - `examples-bin/markets/` — Python producers (anonymised + Coinbase)
 - `examples-bin/run-bond-market.sh`, `examples-bin/run-crypto-market.sh`
 - `notebooks/07_market_depth_agents.ipynb` — drives the agentic operator on a deterministic

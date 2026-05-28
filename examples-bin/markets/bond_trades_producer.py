@@ -25,45 +25,35 @@ rng = np.random.default_rng(123)
 FIRMS = ["NORTH", "OMNI", "KAPI", "ZENI", "AXIS", "HALO", "VERT", "QORE"]
 FIRM_ROLES = ["BRKR-DLR", "BUY-SIDE", "BANK", "IDB"]
 DENOMS = ["USD", "EUR", "GBP"]
-SIDES = ["BUYR", "SELL"]
+SIDES = ["BUY", "SELL"]
 PLATFORMS = ["VXOF", "VSNT", "VOFF"]   # "VertexFi" venue codes (replacing TRAX)
 TRADE_QUALITY = ["NPM", "PMT", "APA-NON-PUB"]
 SECTORS = ["CORP", "SOVN", "COVER", "AGCY"]
 
 
 def gen_trade(seed_id: int) -> dict:
+    """Field names mirror the Java Trade record so the Flink job deserializes both producers."""
     qty = float(rng.choice([1_000, 25_000, 100_000, 500_000, 1_000_000, 2_500_000],
                            p=[0.30, 0.30, 0.20, 0.12, 0.06, 0.02]))
     price = float(np.clip(rng.normal(99.5, 5.0), 60.0, 130.0))
     yld = float(np.clip(rng.normal(4.25, 1.5), 0.5, 9.5))
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    ts_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
     instr = rng.integers(10_000_000, 40_000_000)
     return dict(
         id=int(2_100_000_000 + seed_id),
-        icmainstrumentidentifierisin=f"FN{instr:010d}",
-        tradedateandtime=now,
-        reporteddatetime=now,
-        purchasesellindicator=str(rng.choice(SIDES)),
-        dealprice=round(price, 3),
-        quantityoffinancialinstrument=qty,
-        quantityineuro=round(qty * 0.98, 2),
-        quantityinusd=round(qty * 1.07, 2),
-        denomination=str(rng.choice(DENOMS)),
-        yield_=round(yld, 4),
-        ispread=round(float(rng.normal(150.0, 40.0)), 2),
-        zspread=round(float(rng.normal(145.0, 40.0)), 2),
-        marketspread=round(float(rng.normal(155.0, 40.0)), 2),
-        counterpartycode=f"LEI_{rng.integers(10**18, 10**19)}",
-        firm_id_principal=str(rng.choice(FIRMS)),
-        firm_role_principal=str(rng.choice(FIRM_ROLES)),
-        firm_id_cpty=str(rng.choice(FIRMS)),
-        firm_role_cpty=str(rng.choice(FIRM_ROLES)),
-        placeoftrade=str(rng.choice(PLATFORMS)),
-        trade_quality=str(rng.choice(TRADE_QUALITY)),
+        isin=f"FN{instr:010d}",
+        tradeTs=ts_ms,
+        side=str(rng.choice(SIDES)),
+        dealPrice=round(price, 3),
+        quantity=qty,
+        yieldVal=round(yld, 4),
+        iSpread=round(float(rng.normal(150.0, 40.0)), 2),
+        zSpread=round(float(rng.normal(145.0, 40.0)), 2),
+        marketSpread=round(float(rng.normal(155.0, 40.0)), 2),
         sector=str(rng.choice(SECTORS)),
-        trade_pair_id=int(rng.integers(100_000_000_000, 999_999_999_999)),
-        ccyeurfxrate=0.98,
-        ccyusdfxrate=1.07,
+        firmPrincipal=str(rng.choice(FIRMS)),
+        firmCpty=str(rng.choice(FIRMS)),
+        placeOfTrade=str(rng.choice(PLATFORMS)),
     )
 
 

@@ -95,35 +95,30 @@ def _l2_change_to_inventory(product: str, change: list, ts_ms: int) -> dict:
 
 
 def _match_to_trade(msg: dict) -> dict:
+    """Field names mirror the Java Trade record so the Flink job deserializes consistently."""
     product = msg.get("product_id", "")
     price = float(msg.get("price", 0.0))
     size = float(msg.get("size", 0.0))
+    ts_iso = msg.get("time", "")
+    try:
+        ts_ms = int(datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp() * 1000)
+    except Exception:
+        ts_ms = int(time.time() * 1000)
     return dict(
         id=int(msg.get("trade_id", 0)),
-        icmainstrumentidentifierisin=product,
-        tradedateandtime=msg.get("time", ""),
-        reporteddatetime=msg.get("time", ""),
-        purchasesellindicator="BUYR" if msg.get("side") == "buy" else "SELL",
-        dealprice=price,
-        quantityoffinancialinstrument=size,
-        quantityineuro=size * price * 0.92,
-        quantityinusd=size * price,
-        denomination="USD",
-        yield_=0.0,
-        ispread=0.0,
-        zspread=0.0,
-        marketspread=0.0,
-        counterpartycode="CB",
-        firm_id_principal=msg.get("maker_order_id", "")[:8] or "CBMAKER",
-        firm_role_principal="EXCHG",
-        firm_id_cpty=msg.get("taker_order_id", "")[:8] or "CBTAKER",
-        firm_role_cpty="EXCHG",
-        placeoftrade="COINBASE",
-        trade_quality="PMT",
+        isin=product,
+        tradeTs=ts_ms,
+        side="BUY" if msg.get("side") == "buy" else "SELL",
+        dealPrice=price,
+        quantity=size,
+        yieldVal=0.0,
+        iSpread=0.0,
+        zSpread=0.0,
+        marketSpread=0.0,
         sector="CRYPTO",
-        trade_pair_id=int(msg.get("trade_id", 0)),
-        ccyeurfxrate=0.92,
-        ccyusdfxrate=1.0,
+        firmPrincipal=msg.get("maker_order_id", "")[:8] or "CBMAKER",
+        firmCpty=msg.get("taker_order_id", "")[:8] or "CBTAKER",
+        placeOfTrade="COINBASE",
     )
 
 

@@ -74,8 +74,8 @@ def gen_prices(n: int, segs: np.ndarray, sides: np.ndarray) -> np.ndarray:
 
 
 def gen_batch(batch: int) -> list[dict]:
-    now = datetime.now(timezone.utc)
-    iso = now.isoformat().replace("+00:00", "Z")
+    # processedTs is epoch millis — matches the Java Inventory record (long).
+    ts_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
     companies = rng.choice(DEALER_POOL, size=batch)
     sides = rng.choice(SIDES, size=batch)
     segs = rng.choice(MARKET_SEGMENTS, size=batch)
@@ -105,7 +105,7 @@ def gen_batch(batch: int) -> list[dict]:
                 productCD=str(products[i]),
                 quoteType=str(quote_types[i]),
                 action=str(actions[i]),
-                processedTs=iso,
+                processedTs=ts_ms,
             )
         )
     return rows
