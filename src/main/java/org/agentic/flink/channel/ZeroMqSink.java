@@ -105,6 +105,28 @@ public final class ZeroMqSink<T> extends RichSinkFunction<T> {
     return new Builder<>(pattern, endpoint);
   }
 
+  /**
+   * Variant of {@link #pub} that sends already-encoded {@code String} payloads as raw UTF-8
+   * bytes (no extra JSON wrapping). Use when upstream operators already emit JSON envelopes —
+   * the default Jackson serializer would otherwise double-encode the string.
+   */
+  public static ZeroMqSink<String> pubRaw(String endpoint, String topic) {
+    return new Builder<String>(Pattern.PUB, endpoint)
+        .topic(topic)
+        .serializer(new RawStringSerializer())
+        .build();
+  }
+
+  /** {@link SerializationSchema} that writes a {@code String} as raw UTF-8 bytes. */
+  public static final class RawStringSerializer implements SerializationSchema<String> {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public byte[] serialize(String element) {
+      return element == null ? new byte[0] : element.getBytes(StandardCharsets.UTF_8);
+    }
+  }
+
   @Override
   public void open(Configuration parameters) {
     this.zc = new ZContext();

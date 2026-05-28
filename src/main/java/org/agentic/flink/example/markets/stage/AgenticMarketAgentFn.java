@@ -1,6 +1,10 @@
 package org.agentic.flink.example.markets.stage;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
@@ -24,7 +28,7 @@ import org.apache.flink.util.Collector;
  * control plane.
  */
 public final class AgenticMarketAgentFn
-    extends AgenticKeyedProcessFunction<String, MarketFeatures, AlertEvent> {
+    extends AgenticKeyedProcessFunction<String, MarketFeatures, String> {
   private static final long serialVersionUID = 1L;
 
   private final String apiKey; // nullable
@@ -33,6 +37,7 @@ public final class AgenticMarketAgentFn
   private final double zThreshold;
   private final int warmup;
   private transient ScreeningPipeline pipeline;
+  private transient ObjectMapper mapper;
 
   public AgenticMarketAgentFn(String operatorId, String apiKey) {
     this(operatorId, apiKey, 0.0, 50.0, 3.0, 5);
@@ -70,10 +75,11 @@ public final class AgenticMarketAgentFn
       b = b.withClaude(apiKey);
     }
     this.pipeline = b.build();
+    this.mapper = new ObjectMapper().registerModule(new ParameterNamesModule());
   }
 
   @Override
-  protected void onElement(MarketFeatures features, ReadOnlyContext ctx, Collector<AlertEvent> out)
+  protected void onElement(MarketFeatures features, ReadOnlyContext ctx, Collector<String> out)
       throws Exception {
     if (Double.isNaN(features.bidOfferSpread())) {
       return; // not enough data this window
@@ -97,6 +103,39 @@ public final class AgenticMarketAgentFn
       payload.put("combinedRisk", r.combinedRisk);
       emitDebug(ctx, "screen", payload);
     }
-    out.collect(new AlertEvent(features, r));
+
+    // Emit a JSON envelope (rather than a typed AlertEvent record) so the chain serializer
+    // stays on Flink's built-in StringSerializer — record types in the screening + markets
+    // packages would otherwise force a Kryo fallback that can't handle their final fields.
+    out.collect(toJson(features, r));
   }
+
+  private String toJson(MarketFeatures features, ScreeningResult r) throws Exception {
+    Map<String, Object> alert = new LinkedHashMap<>();
+    alert.put("instrumentId", features.instrumentId());
+    alert.put("isin", features.isin());
+    alert.put("securityName", features.securityName());
+    alert.put("sector", features.sector());
+    alert.put("windowEnd", features.windowEnd());
+    alert.put("bidOfferSpread", features.bidOfferSpread());
+    alert.put("totalBidVolume", features.totalBidVolume());
+    alert.put("totalOfferVolume", features.totalOfferVolume());
+    Map<String, Object> decision = new LinkedHashMap<>();
+    decision.put("verdict", String.valueOf(r.verdict));
+    decision.put("decidedBy", String.valueOf(r.decidedBy));
+    decision.put("combinedRisk", r.combinedRisk);
+    decision.put(
+        "firedPhases",
+        r.fired.stream().map(s -> s.phase().name()).distinct().toList());
+    if (r.llmRationale != null) {
+      decision.put("llmRationale", r.llmRationale);
+    }
+    alert.put("result", decision);
+    return mapper.writeValueAsString(alert);
+  }
+
+  // Suppresses "unused" — these types are referenced through factories above but the
+  // compiler can lose track of them when the imports get touched.
+  @SuppressWarnings("unused")
+  private static final Class<?>[] PIN = {AlertEvent.class, List.class};
 }

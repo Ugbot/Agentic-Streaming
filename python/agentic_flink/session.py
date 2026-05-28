@@ -131,6 +131,7 @@ class SessionClient:
         out_endpoint: Optional[str] = None,
         control_endpoint: Optional[str] = None,
         debug_sink_endpoint: Optional[str] = None,
+        alerts_pub_endpoint: Optional[str] = None,
         anthropic_key: Optional[str] = None,
         products: Optional[Iterable[str]] = None,
         window_ms: Optional[int] = None,
@@ -148,6 +149,8 @@ class SessionClient:
             args += ["--control", control_endpoint]
         if debug_sink_endpoint:
             args += ["--debug-sink", debug_sink_endpoint]
+        if alerts_pub_endpoint:
+            args += ["--alerts-pub", alerts_pub_endpoint]
         if anthropic_key:
             args += ["--anthropic-key", anthropic_key]
         if products:

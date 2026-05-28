@@ -24,21 +24,11 @@ services:
         rest.bind-address: 0.0.0.0
         rest.bind-port: 8081
         rest.port: 8081
-        taskmanager.numberOfTaskSlots: 4
-        # JDK 17 reflective access opens (mirrors surefire's argLine).
-        env.java.opts.all: >-
-          --add-opens=java.base/java.util=ALL-UNNAMED
-          --add-opens=java.base/java.lang=ALL-UNNAMED
-          --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
-          --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-          --add-opens=java.base/java.io=ALL-UNNAMED
-          --add-opens=java.base/java.net=ALL-UNNAMED
-          --add-opens=java.base/java.nio=ALL-UNNAMED
-          --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
-          --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
-          --add-opens=java.base/sun.security.action=ALL-UNNAMED
-          --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
-          --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+        taskmanager.numberOfTaskSlots: 16
+      # JDK 17 reflective access opens (mirrors surefire's argLine). Use JAVA_TOOL_OPTIONS so
+      # the JVM picks it up unconditionally — env.java.opts.all in flink-conf.yaml isn't
+      # always wired into the JM process that runs JarRunHandler.
+      JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED"
     volumes:
       # Make the project's built jars reachable from inside the cluster (read-only is fine —
       # uploads happen via REST).
@@ -63,24 +53,13 @@ services:
       - "5564:5564"
       - "5559:5559" # control plane (PULL into L5)
       - "5558:5558" # debug PUB out of L5
+      - "5557:5557" # alerts PUB out of L5 (live notebook tail)
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        taskmanager.numberOfTaskSlots: 4
+        taskmanager.numberOfTaskSlots: 16
         parallelism.default: 1
-        env.java.opts.all: >-
-          --add-opens=java.base/java.util=ALL-UNNAMED
-          --add-opens=java.base/java.lang=ALL-UNNAMED
-          --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
-          --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-          --add-opens=java.base/java.io=ALL-UNNAMED
-          --add-opens=java.base/java.net=ALL-UNNAMED
-          --add-opens=java.base/java.nio=ALL-UNNAMED
-          --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
-          --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
-          --add-opens=java.base/sun.security.action=ALL-UNNAMED
-          --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
-          --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+      JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED"
     volumes:
       - ./target:/host-target:ro
     networks:

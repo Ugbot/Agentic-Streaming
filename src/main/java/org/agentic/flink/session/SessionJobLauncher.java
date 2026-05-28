@@ -11,7 +11,6 @@ import org.agentic.flink.channel.ZeroMqChannel;
 import org.agentic.flink.channel.ZeroMqSink;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.ControlState;
-import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
@@ -176,14 +175,25 @@ public final class SessionJobLauncher {
             Double.parseDouble(a.opt("z-threshold").orElse("2.5")),
             Integer.parseInt(a.opt("warmup").orElse("5")));
 
-    SingleOutputStreamOperator<AlertEvent> alerts =
+    SingleOutputStreamOperator<String> alerts =
         AgenticPipeline.wire(
             in.keyBy(f -> Long.toString(f.instrumentId())), control, fn);
 
     alerts
-        .addSink(sinkFor(a.require("out"), a, AlertEvent.class))
+        .addSink(sinkFor(a.require("out"), a, String.class))
         .name("L5.sink")
         .setParallelism(1);
+
+    // Optional live-observation tee: PUB out the same alert JSON so a notebook (or any
+    // ZeroMQ SUB) can tail adjudicated alerts independently of the durable Fluss sink. Off
+    // by default — pass --alerts-pub tcp://... to enable. Uses pubRaw so the already-JSON
+    // String isn't double-encoded by the default Jackson serializer.
+    if (a.opt("alerts-pub").isPresent()) {
+      alerts
+          .addSink(ZeroMqSink.pubRaw(a.require("alerts-pub"), ""))
+          .name("L5.alerts-pub")
+          .setParallelism(1);
+    }
 
     // Tap the debug side-output if a sink was configured. Always use PUB on the debug path —
     // broadcast-friendly so multiple notebooks / observer tools can subscribe without socket
