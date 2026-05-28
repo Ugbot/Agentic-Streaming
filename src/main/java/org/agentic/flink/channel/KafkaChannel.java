@@ -89,15 +89,15 @@ public final class KafkaChannel<T> implements Channel<T> {
     return bootstrapServers;
   }
 
-  /** JSON-from-bytes deserializer driven by a Class&lt;T&gt;. */
-  static final class JsonSchema<T> implements DeserializationSchema<T> {
+  /** JSON-from-bytes deserializer driven by a Class&lt;T&gt;. Public so other Flink jobs can reuse it. */
+  public static final class JsonSchema<T> implements DeserializationSchema<T> {
     private static final long serialVersionUID = 1L;
 
     private final Class<T> type;
     private final TypeInformation<T> typeInfo;
     private transient ObjectMapper mapper;
 
-    JsonSchema(Class<T> type, TypeInformation<T> typeInfo) {
+    public JsonSchema(Class<T> type, TypeInformation<T> typeInfo) {
       this.type = type;
       this.typeInfo = typeInfo;
     }
