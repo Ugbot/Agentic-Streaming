@@ -23,6 +23,19 @@ from ._jvm import (
     shutdown_jvm,
     start_jvm,
 )
+from .runtime import (
+    EmbeddedClusterRuntime,
+    EmbeddedJobHandle,
+    InProcRuntime,
+    Runtime,
+    RuntimeModeError,
+    SessionRuntime,
+    bootstrap,
+    embedded,
+    from_env,
+    inproc,
+    session_cluster,
+)
 
 # Lazy attribute resolution (PEP 562). Importing this package must not
 # require a running JVM; wrappers resolve their Java classes only when used.
@@ -53,6 +66,20 @@ __all__ = [
     "jclass",
     "shutdown_jvm",
     "start_jvm",
+    # Runtime selector — picks between in-JVM, remote session cluster, and
+    # embedded MiniCluster modes.
+    "Runtime",
+    "InProcRuntime",
+    "SessionRuntime",
+    "EmbeddedClusterRuntime",
+    "EmbeddedJobHandle",
+    "RuntimeModeError",
+    "bootstrap",
+    "from_env",
+    "inproc",
+    "session_cluster",
+    "embedded",
+    # Agent surface.
     "Agent",
     "AgentBuilder",
     "ChatSetup",

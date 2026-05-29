@@ -1,0 +1,61 @@
+# Jupyter Lab in a container, alongside the Fluss + Flink session cluster.
+# Lets you run the notebooks with zero host-side Python setup — the container
+# already has JPype, requests, pyzmq, websockets, nest_asyncio, python-dotenv
+# preinstalled (built on top of the agentic-flink venv requirements).
+#
+# Bring up:
+#   bash examples-bin/setup-network.sh             # once
+#   podman compose -f docker-compose-notebook.yml up -d
+#   # then open  http://localhost:8888/?token=agentic
+#
+# The container reads .env in the repo root — `AGENTIC_FLINK_MODE` and
+# `FLINK_REST_URL` decide where its bootstrap() will submit jobs. Default
+# wiring is `session` mode against the bundled cluster.
+#
+# To point at a REMOTE cluster instead, copy .env.cluster.remote.example to
+# .env and drop the `include:` line below so the local cluster isn't started.
+
+include:
+  - docker-compose-cluster.yml
+
+services:
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:python-3.13
+    container_name: agentic-flink-notebook
+    user: root
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/home/jovyan/work:rw
+    working_dir: /home/jovyan/work
+    environment:
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-agentic}
+      JUPYTER_ENABLE_LAB: "yes"
+      # Runtime selector — override in .env at the repo root.
+      AGENTIC_FLINK_MODE: ${AGENTIC_FLINK_MODE:-session}
+      # Inside this network the JM is reachable by service name.
+      FLINK_REST_URL: ${FLINK_REST_URL:-http://flink-jobmanager:8081}
+      FLUSS_BOOTSTRAP: ${FLUSS_BOOTSTRAP:-fluss-coordinator:9120}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    # The Jupyter image starts as `jovyan`; we need root briefly to pip-install
+    # extras into the container's site-packages. After the install we drop
+    # back to jovyan for the actual server.
+    command: >-
+      bash -lc "
+        pip install --quiet jpype1>=1.5 requests>=2.31 pyzmq>=25 websockets>=12
+                            python-dotenv>=1 nest_asyncio &&
+        su jovyan -c 'start-notebook.py
+            --NotebookApp.token=$$JUPYTER_TOKEN
+            --NotebookApp.notebook_dir=/home/jovyan/work
+            --NotebookApp.ip=0.0.0.0
+            --NotebookApp.port=8888'
+      "
+    depends_on:
+      flink-jobmanager:
+        condition: service_started
+    networks:
+      - agentic-flink-network
+
+networks:
+  agentic-flink-network:
+    external: true

@@ -11,6 +11,7 @@ Deps: ``requests`` (HTTP client) and ``pyzmq`` (ZMQ publisher). Both pure-Python
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import time
 from dataclasses import dataclass, field
@@ -58,8 +59,13 @@ class SessionClient:
         Per-request HTTP timeout in seconds.
     """
 
-    def __init__(self, base_url: str = "http://localhost:8081", *, timeout: float = 30.0):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: Optional[str] = None, *, timeout: float = 30.0):
+        # Resolve order: explicit arg > FLINK_REST_URL env var > sensible default.
+        # Keeps callers that pass `SessionClient('http://...')` working while
+        # letting `SessionClient()` pick up the env-var-driven configuration
+        # the runtime selector (and `.env.cluster.*.example` files) write.
+        resolved = base_url or os.environ.get("FLINK_REST_URL", "http://localhost:8081")
+        self.base_url = resolved.rstrip("/")
         self.timeout = timeout
 
     # ---- jar management ----

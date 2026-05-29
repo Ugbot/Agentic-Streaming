@@ -1,17 +1,49 @@
 # Python API
 
-Agentic Flink offers **two Python paths**, each suited to a different use
-case. Pick one — they don't compose, and mixing them in one process is
-not supported.
+Agentic Flink offers two Python paths and, within the top-level facade, three
+**runtime modes** for notebooks. Pick the path first, then (for top-level) the
+mode.
+
+## Paths
 
 | Path | Module | Use when | Mechanism |
 |------|--------|----------|-----------|
 | **PyFlink-native** *(recommended for streaming)* | `agentic_flink.pyflink` | You're shipping a real PyFlink job (`flink run -py …`) | Python builds an `AgentPlan` (JSON) → Java `CompileUtils.attachAgent` wires the agent operator into the job graph → PEMJA invokes Python callbacks on the operator thread |
-| **JPype standalone** | `agentic_flink` (top-level) | Notebooks, scripts, services with no PyFlink dep | Boots a JVM in the Python process; calls Java through JNI |
+| **JPype standalone** | `agentic_flink` (top-level) | Notebooks, scripts, services with no PyFlink dep | One of three runtime modes — see below |
 
-The Java framework is the single source of truth for both paths. The
-sections below cover the JPype path; for PyFlink-native, see
-[`pyflink-integration.md`](pyflink-integration.md).
+The two paths don't compose; pick one. The sections below cover the JPype path;
+for PyFlink-native, see [`pyflink-integration.md`](pyflink-integration.md).
+
+## Runtime modes (JPype path)
+
+`af.bootstrap()` picks a mode from the `AGENTIC_FLINK_MODE` env var. Same
+notebook code, three execution targets:
+
+| Mode       | What runs the work                                    | Cluster needed?                      |
+|------------|-------------------------------------------------------|--------------------------------------|
+| `inproc`   | JPype-managed JVM inside this Python process. No Flink job; operators are called directly via `rt.jclass(...)`. | No |
+| `session`  | A long-running Flink session cluster, reached over REST at `FLINK_REST_URL`. Job submission via `rt.submit_level(...)`. | Yes (local podman or remote host) |
+| `embedded` | JPype JVM **plus** a transient in-process Flink MiniCluster per `submit_level()`. Same Java code path as `session` but no cluster to bring up. | No |
+
+Notebook bootstrap collapses to three lines regardless of mode:
+
+```python
+import agentic_flink as af
+rt = af.bootstrap()                # picks mode from AGENTIC_FLINK_MODE in .env
+print(rt.info)
+```
+
+Ready-to-use `.env` files at the repo root:
+
+```bash
+cp .env.inproc.example          .env   # default; in-process JVM, no cluster
+cp .env.cluster.local.example   .env   # session mode; bring cluster up via run-session-cluster.sh
+cp .env.cluster.remote.example  .env   # session mode; remote host (set FLINK_REST_URL)
+cp .env.embedded.example        .env   # MiniCluster in-process
+```
+
+See [`compose.md`](compose.md) for the Docker side and a dockerised-notebook
+option (`docker-compose-notebook.yml`).
 
 ---
 
