@@ -19,11 +19,14 @@ class SdkA2AClientTest {
   }
 
   @Test
-  @DisplayName("discovering() resolves the SDK factory and builds an SdkA2AClient")
+  @DisplayName("discovering() resolves the SDK factory and builds a resilient-wrapped SdkA2AClient")
   void discoveryResolvesSdkFactory() {
     A2AClient client = A2AClientFactory.discovering().create(pinned(A2ATransport.JSONRPC));
     try {
-      assertInstanceOf(SdkA2AClient.class, client);
+      // discovering() now decorates every client with retry/breaker resilience; the wrapped
+      // delegate must still be the ServiceLoader-resolved SDK client.
+      assertInstanceOf(ResilientA2AClient.class, client);
+      assertInstanceOf(SdkA2AClient.class, ((ResilientA2AClient) client).delegate());
       // Pinned endpoint -> card is synthesized offline; no network required.
       A2AAgentCard card = client.fetchCard();
       assertEquals("peer", card.getName());

@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.agentic.flink.tools.ToolExecutor;
@@ -40,6 +40,11 @@ import org.slf4j.LoggerFactory;
 public final class A2AToolExecutor implements ToolExecutor {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(A2AToolExecutor.class);
+
+  /** Upper bound on concurrent blocking A2A calls per operator subtask. */
+  private static final int MAX_BLOCKING_THREADS = 8;
+  /** Bounded backlog before saturation degrades to running on the caller thread. */
+  private static final int QUEUE_CAPACITY = 64;
 
   private final RemoteAgentSpec spec;
   private final A2AClientFactory clientFactory;
@@ -188,21 +193,25 @@ public final class A2AToolExecutor implements ToolExecutor {
     if (p == null) {
       synchronized (this) {
         if (blockingPool == null) {
-          // Cached pool of daemon threads: A2A await/poll calls block, so they must not run on
-          // the operator's async-IO callback thread. Idle threads are reaped after 60s; daemon
-          // status lets the JVM exit cleanly.
+          // Bounded pool of daemon threads: A2A await/poll calls block, so they must not run on the
+          // operator's async-IO callback thread. Threads are capped at MAX_BLOCKING_THREADS with a
+          // bounded backlog; on saturation CallerRunsPolicy runs the call on the submitting thread
+          // (backpressure) rather than spawning unbounded threads or silently dropping a tool call.
+          // Idle threads are reaped after 60s; daemon status lets the JVM exit cleanly.
           ThreadPoolExecutor tp =
               new ThreadPoolExecutor(
-                  0,
-                  Integer.MAX_VALUE,
+                  1,
+                  MAX_BLOCKING_THREADS,
                   60L,
                   TimeUnit.SECONDS,
-                  new SynchronousQueue<>(),
+                  new LinkedBlockingQueue<>(QUEUE_CAPACITY),
                   r -> {
                     Thread t = new Thread(r, "a2a-tool-" + spec.name());
                     t.setDaemon(true);
                     return t;
-                  });
+                  },
+                  new ThreadPoolExecutor.CallerRunsPolicy());
+          tp.allowCoreThreadTimeOut(true);
           blockingPool = tp;
         }
         p = blockingPool;

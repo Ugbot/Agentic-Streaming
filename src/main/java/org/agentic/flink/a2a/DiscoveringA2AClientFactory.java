@@ -37,7 +37,10 @@ final class DiscoveringA2AClientFactory implements A2AClientFactory {
         resolved = delegate;
       }
     }
-    return resolved.create(spec);
+    A2AClient client = resolved.create(spec);
+    // Harden every production client with retry + backoff + circuit breaker. Idempotent: a provider
+    // that already returns a ResilientA2AClient is left untouched.
+    return (client instanceof ResilientA2AClient) ? client : new ResilientA2AClient(client, spec);
   }
 
   private static A2AClientFactory resolve() {

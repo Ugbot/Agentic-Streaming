@@ -26,4 +26,17 @@ public interface A2AClientFactory extends Serializable {
   static A2AClientFactory discovering() {
     return DiscoveringA2AClientFactory.INSTANCE;
   }
+
+  /**
+   * Wrap a factory so every client it builds is decorated with {@link ResilientA2AClient} (retry +
+   * backoff + circuit breaker, per the peer's {@link RemoteAgentSpec}). Already-resilient clients are
+   * returned unwrapped, so this is idempotent. The default {@link #discovering()} factory applies
+   * this automatically; use it explicitly to harden a custom (e.g. test) factory.
+   */
+  static A2AClientFactory resilient(A2AClientFactory delegate) {
+    return spec -> {
+      A2AClient c = delegate.create(spec);
+      return (c instanceof ResilientA2AClient) ? c : new ResilientA2AClient(c, spec);
+    };
+  }
 }

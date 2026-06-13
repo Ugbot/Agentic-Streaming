@@ -36,6 +36,11 @@ public final class RemoteAgentSpec implements Serializable {
   private final long requestTimeoutMs;
   private final long pollIntervalMs;
   private final String description;
+  private final int maxRetries;
+  private final long retryBaseBackoffMs;
+  private final long retryMaxBackoffMs;
+  private final int circuitBreakerThreshold;
+  private final long circuitBreakerOpenMs;
 
   private RemoteAgentSpec(Builder b) {
     this.name = Objects.requireNonNull(b.name, "name");
@@ -48,6 +53,11 @@ public final class RemoteAgentSpec implements Serializable {
     this.requestTimeoutMs = b.requestTimeoutMs;
     this.pollIntervalMs = b.pollIntervalMs;
     this.description = b.description;
+    this.maxRetries = b.maxRetries;
+    this.retryBaseBackoffMs = b.retryBaseBackoffMs;
+    this.retryMaxBackoffMs = b.retryMaxBackoffMs;
+    this.circuitBreakerThreshold = b.circuitBreakerThreshold;
+    this.circuitBreakerOpenMs = b.circuitBreakerOpenMs;
     if (agentCardUrl == null && endpointUrl == null) {
       throw new IllegalArgumentException(
           "RemoteAgentSpec requires either an agentCardUrl (discovery) or an endpointUrl (pinned)");
@@ -104,6 +114,31 @@ public final class RemoteAgentSpec implements Serializable {
     return description;
   }
 
+  /** Max retry attempts for a transient remote failure (in addition to the initial try). Default 2. */
+  public int maxRetries() {
+    return maxRetries;
+  }
+
+  /** Base delay for exponential backoff between retries, in ms. Default 100. */
+  public long retryBaseBackoffMs() {
+    return retryBaseBackoffMs;
+  }
+
+  /** Cap on the exponential backoff delay, in ms. Default 2000. */
+  public long retryMaxBackoffMs() {
+    return retryMaxBackoffMs;
+  }
+
+  /** Consecutive failures (per peer) that trip the circuit breaker open. Default 5. */
+  public int circuitBreakerThreshold() {
+    return circuitBreakerThreshold;
+  }
+
+  /** How long the breaker stays open before allowing a half-open trial call, in ms. Default 30s. */
+  public long circuitBreakerOpenMs() {
+    return circuitBreakerOpenMs;
+  }
+
   /** The synthetic tool id this peer is registered under: {@code "a2a:" + name}. */
   public String toolId() {
     return "a2a:" + name;
@@ -129,6 +164,11 @@ public final class RemoteAgentSpec implements Serializable {
     private long requestTimeoutMs = Duration.ofSeconds(60).toMillis();
     private long pollIntervalMs = Duration.ofMillis(500).toMillis();
     private String description;
+    private int maxRetries = 2;
+    private long retryBaseBackoffMs = 100;
+    private long retryMaxBackoffMs = 2000;
+    private int circuitBreakerThreshold = 5;
+    private long circuitBreakerOpenMs = Duration.ofSeconds(30).toMillis();
 
     public Builder withName(String name) {
       this.name = name;
@@ -177,6 +217,31 @@ public final class RemoteAgentSpec implements Serializable {
 
     public Builder withDescription(String description) {
       this.description = description;
+      return this;
+    }
+
+    /** Max retry attempts on transient failure (0 disables retry). */
+    public Builder withMaxRetries(int maxRetries) {
+      this.maxRetries = Math.max(0, maxRetries);
+      return this;
+    }
+
+    /** Exponential-backoff base and cap between retries. */
+    public Builder withRetryBackoff(Duration base, Duration max) {
+      this.retryBaseBackoffMs = Math.max(0, base.toMillis());
+      this.retryMaxBackoffMs = Math.max(this.retryBaseBackoffMs, max.toMillis());
+      return this;
+    }
+
+    /** Consecutive-failure count that trips the breaker open (≤0 disables the breaker). */
+    public Builder withCircuitBreakerThreshold(int threshold) {
+      this.circuitBreakerThreshold = threshold;
+      return this;
+    }
+
+    /** How long the breaker stays open before a half-open trial. */
+    public Builder withCircuitBreakerOpen(Duration open) {
+      this.circuitBreakerOpenMs = Math.max(0, open.toMillis());
       return this;
     }
 
