@@ -139,6 +139,97 @@ class ReActProcessFunctionTest {
     assertNotNull(fn);
   }
 
+  /** Counts tool calls across operator (de)serialization in the MiniCluster. */
+  static final AtomicInteger STALL_ADDER_CALLS = new AtomicInteger();
+
+  /** Turn 1 = a stall final ("I need to inspect the tools first"), turn 2 = action, turn 3 = final. */
+  static final class StallThenActConnection implements ChatConnection {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public ChatClient bind(RuntimeContext rc) {
+      return new ChatClient() {
+        int turn = 0;
+
+        @Override
+        public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
+          turn++;
+          String text;
+          if (turn == 1) {
+            text =
+                "{\"type\":\"final\",\"thought\":\"\",\"tool\":null,\"arguments\":{},"
+                    + "\"answer\":\"I can't proceed yet — I need to inspect the available tools first.\"}";
+          } else if (turn == 2) {
+            text =
+                "{\"type\":\"action\",\"thought\":\"add\",\"tool\":\"adder\","
+                    + "\"arguments\":{\"a\":2,\"b\":3},\"answer\":null}";
+          } else {
+            text = "{\"type\":\"final\",\"thought\":\"done\",\"tool\":null,\"arguments\":{},\"answer\":\"5\"}";
+          }
+          return new ChatResponse(
+              text, setup.getModelName(), List.of(), 0L, ChatResponse.FinishReason.STOP);
+        }
+
+        @Override
+        public String providerName() {
+          return "stall-then-act";
+        }
+      };
+    }
+  }
+
+  static final class CountingAdder implements ToolExecutor {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public CompletableFuture<Object> execute(Map<String, Object> parameters) {
+      STALL_ADDER_CALLS.incrementAndGet();
+      int a = ((Number) parameters.get("a")).intValue();
+      int b = ((Number) parameters.get("b")).intValue();
+      return CompletableFuture.completedFuture(a + b);
+    }
+
+    @Override
+    public String getToolId() {
+      return "adder";
+    }
+
+    @Override
+    public String getDescription() {
+      return "adds two numbers";
+    }
+  }
+
+  @Test
+  @DisplayName("core operator: a tool-stall final is rejected and the loop is forced to call the tool")
+  void stallFinalForcesActionInOperator() throws Exception {
+    STALL_ADDER_CALLS.set(0);
+    ToolRegistry registry = ToolRegistry.builder().registerTool("adder", new CountingAdder()).build();
+    Agent agent =
+        Agent.builder()
+            .withId("a-" + UUID.randomUUID())
+            .withSystemPrompt("solve math problems")
+            .withChatConnection(new StallThenActConnection())
+            .withMaxIterations(8)
+            .withToolTimeout(Duration.ofSeconds(5))
+            .withStateMachine(twoStepStateMachine())
+            .build();
+
+    org.apache.flink.streaming.api.environment.StreamExecutionEnvironment env =
+        org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.createLocalEnvironment(
+            1, new org.apache.flink.configuration.Configuration());
+    env.fromElements("what is 2+3?")
+        .keyBy((org.apache.flink.api.java.functions.KeySelector<String, String>) s -> "k")
+        .process(new ReActProcessFunction<>(agent, registry))
+        .returns(String.class)
+        .addSink(new org.apache.flink.streaming.api.functions.sink.DiscardingSink<>());
+    env.execute("react-stall-guard");
+
+    // Without the guard, turn-1's stall final would end the loop with 0 tool calls. With it, the
+    // loop pushes back and the model emits the action on turn 2 → the tool runs exactly once.
+    assertEquals(1, STALL_ADDER_CALLS.get(), "stall guard must force the tool call");
+  }
+
   @Test
   @DisplayName("REACT agent type is wired through the builder")
   void reactAgentTypeWired() {

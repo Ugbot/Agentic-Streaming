@@ -118,10 +118,10 @@ public final class ReActTurnBrain implements TurnBrain {
         // emitting the action step — so the action never happens and the task fails. If the model
         // can call tools, hasn't called any yet, and its "final" reads like that stall, push back
         // and make it act (bounded, so a genuine final still gets through).
-        if (toolCalls == 0 && hasTools() && stallNudges < MAX_STALL_NUDGES && looksLikeToolStall(answer)) {
+        if (org.agentic.flink.llm.ReActGuard.shouldNudge(answer, hasTools(), toolCalls, stallNudges)) {
           stallNudges++;
           messages.add(ChatMessage.assistant(lastText));
-          messages.add(ChatMessage.user(stallNudge()));
+          messages.add(ChatMessage.user(org.agentic.flink.llm.ReActGuard.stallNudge(toolNameSet())));
           continue;
         }
         return answer;
@@ -188,54 +188,18 @@ public final class ReActTurnBrain implements TurnBrain {
     return offerAskCs;
   }
 
-  /** Max times we push back on a "I need to use a tool" final before accepting it. */
-  private static final int MAX_STALL_NUDGES = 3;
-
   /** Whether this brain can call any tool this turn (real tools or the CS round-trip). */
   private boolean hasTools() {
     return !tools.isEmpty() || offerAskCs;
   }
 
   /** The tool names offered to the model (mirrors {@link #composeSystemPrompt}). */
-  private String toolNames() {
+  private List<String> toolNameSet() {
     List<String> names = new ArrayList<>(tools.keySet());
     if (!names.contains(ASK_CS) && hasCsTool()) {
       names.add(ASK_CS);
     }
-    return String.join(", ", names);
-  }
-
-  /**
-   * Heuristic: does a {@code final} answer read like the model stalling — narrating that it needs
-   * to inspect/access tools it actually has, instead of emitting the action step? Deliberately
-   * conservative so a genuine answer (or a plain knowledge reply) is never mistaken for a stall.
-   */
-  private static boolean looksLikeToolStall(String answer) {
-    if (answer == null) {
-      return false;
-    }
-    String t = answer.toLowerCase(Locale.ROOT);
-    return t.contains("inspect the available tool")
-        || t.contains("inspect the tool")
-        || t.contains("inspect available tool")
-        || t.contains("need to inspect")
-        || t.contains("don't have access to")
-        || t.contains("do not have access to")
-        || t.contains("no access to")
-        || t.contains("need access to")
-        || t.contains("tool access")
-        || t.contains("once i have access")
-        || t.contains("until i have access")
-        || (t.contains("unable to") && t.contains("tool"));
-  }
-
-  private String stallNudge() {
-    return "You DO have these tools available and can call them right now this turn: "
-        + toolNames()
-        + ". Do not say you need to inspect them or that you lack access. Emit an ACTION step now —"
-        + " e.g. {\"type\":\"action\",\"tool\":\"list_env_tools\",\"arguments\":{}} to read a tool's"
-        + " exact parameters, then call the tool with call_env_tool. Do not return a final answer"
-        + " until you have actually performed the action.";
+    return names;
   }
 
   private ChatClient client() {
