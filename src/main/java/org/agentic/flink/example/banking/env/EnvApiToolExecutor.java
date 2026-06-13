@@ -86,7 +86,9 @@ public final class EnvApiToolExecutor implements ToolExecutor {
     // Run synchronously on the calling (operator) thread so the EnvSession ThreadLocal is valid;
     // env calls are quick and bounded by the client timeout + the turn's routing budget.
     Map<String, Object> result = client.callTool(contextId, name, arguments);
-    LOG.debug("env tool {} (ctx {}) -> error={}", name, contextId, result.get("error"));
+    boolean error = Boolean.TRUE.equals(result.get("error"));
+    LOG.debug("env tool {} (ctx {}) -> error={}", name, contextId, error);
+    TurnSignals.recordEnvToolCall(name, error); // lets the verifier detect a performed action
     return CompletableFuture.completedFuture(result);
   }
 

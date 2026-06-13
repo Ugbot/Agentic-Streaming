@@ -13,6 +13,7 @@ import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.KeyedContextItem;
 import org.agentic.flink.memory.ShortTermMemorySpec;
+import org.agentic.flink.memory.conversation.ConversationStore;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.agentic.flink.skill.Skill;
 import org.agentic.flink.skill.SkillRegistry;
@@ -129,6 +130,7 @@ public class Agent implements Serializable {
   private final LongTermMemoryStore longTermStore;
   private final List<Channel<KeyedContextItem>> memoryChannels;
   private final VectorMemorySpec vectorMemorySpec;
+  private final ConversationStore conversationStore;
 
   // Chat
   private final ChatConnection chatConnection;
@@ -212,6 +214,7 @@ public class Agent implements Serializable {
     this.memoryChannels =
         Collections.unmodifiableList(new ArrayList<>(builder.memoryChannels));
     this.vectorMemorySpec = builder.vectorMemorySpec;
+    this.conversationStore = builder.conversationStore;
 
     // Chat
     this.chatConnection = builder.chatConnection;
@@ -299,6 +302,7 @@ public class Agent implements Serializable {
   public List<Channel<KeyedContextItem>> getMemoryChannels() { return memoryChannels; }
   public VectorMemorySpec getVectorMemorySpec() { return vectorMemorySpec; }
   public boolean hasVectorMemory() { return vectorMemorySpec != null; }
+  public ConversationStore getConversationStore() { return conversationStore; }
   public boolean hasLongTermStore() { return longTermStore != null; }
 
   public ChatConnection getChatConnection() { return chatConnection; }

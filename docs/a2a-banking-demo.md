@@ -76,7 +76,7 @@ rewrite — the bounded-loop guarantee is proven in `BankingTurnFunctionTest` on
 |---|---|---|
 | `LLM_PROVIDER` | `openai` | `openai` / `gemini` / `ollama` |
 | `OPENAI_API_KEY` / `GOOGLE_API_KEY` | — | model credential |
-| `MODEL` | per-provider | chat model id |
+| `MODEL` | per-provider (`openai`→`gpt-5.4-nano` for local testing, `gemini`→`gemini-3.5-flash`) | chat model id |
 | `A2A_BANKING_ROLE` | `personal` | `personal` / `cs` |
 | `CS_AGENT_URL` | — | personal agent's CS endpoint (the harness `/cs-agent` gateway in marked runs) |
 | `ENV_API_URL` / `ENV_API_TOKEN` | — | harness env-tools API (optional; chat/RAG only without it) |

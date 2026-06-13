@@ -17,6 +17,8 @@ import org.agentic.flink.memory.FlinkStateShortTermMemory;
 import org.agentic.flink.memory.ShortTermMemorySpec;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.KeyedContextItem;
+import org.agentic.flink.memory.conversation.ConversationStore;
+import org.agentic.flink.memory.conversation.ConversationStores;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.agentic.flink.skill.Skill;
 import org.agentic.flink.a2a.A2AClientFactory;
@@ -130,6 +132,7 @@ public class AgentBuilder {
   LongTermMemoryStore longTermStore;
   List<Channel<KeyedContextItem>> memoryChannels = new ArrayList<>();
   VectorMemorySpec vectorMemorySpec;
+  ConversationStore conversationStore;
 
   // Chat model (LangChain4J wrapped behind the ChatConnection SPI)
   ChatConnection chatConnection;
@@ -598,6 +601,22 @@ public class AgentBuilder {
     return this;
   }
 
+  /**
+   * Configure the per-conversation memory store — the multi-turn transcript (and small workflow
+   * attributes) shared <b>across operators</b>, keyed by conversation id. This is the layer between
+   * per-operator short-term Flink state and the long-term store: a conversation split across a
+   * routed graph (router → path → verifier) reads and appends the same dialogue here so it
+   * progresses across turns.
+   *
+   * <p>When not set, the framework discovers one via {@link ConversationStores#discover()} — the
+   * process-wide in-JVM store for the embedded deployment, or a ServiceLoader-registered
+   * Redis/Postgres-backed store for a distributed cluster.
+   */
+  public AgentBuilder withConversationStore(ConversationStore store) {
+    this.conversationStore = store;
+    return this;
+  }
+
   /** Sets the embedding transport. ServiceLoader-discovered Ollama is used by default. */
   public AgentBuilder withEmbeddingConnection(EmbeddingConnection connection) {
     this.embeddingConnection = connection;
@@ -764,6 +783,11 @@ public class AgentBuilder {
     // Default short-term memory: Flink keyed state with the configured TTL.
     if (shortTermMemorySpec == null) {
       shortTermMemorySpec = FlinkStateShortTermMemory.spec(shortTermTtl);
+    }
+
+    // Default per-conversation memory: ServiceLoader-discovered, else the shared in-JVM store.
+    if (conversationStore == null) {
+      conversationStore = ConversationStores.discover();
     }
 
     // Concatenate skill prompt fragments onto the system prompt.

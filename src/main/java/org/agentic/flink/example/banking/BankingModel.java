@@ -9,7 +9,8 @@ import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 /**
  * Chooses the chat model for the banking agents from the environment, so the same job runs on a
  * local OpenAI key during development and swaps to the hackathon-mandated {@code gemini-3.5-flash}
- * for marked runs with no code change.
+ * for marked runs with no code change. Local testing defaults to {@code gpt-5.4-nano} (never the
+ * {@code gpt-4.1} family).
  *
  * <ul>
  *   <li>{@code LLM_PROVIDER} — {@code openai} (default, for local testing) | {@code gemini} |
@@ -66,7 +67,8 @@ public final class BankingModel implements Serializable {
       case "openai":
       default: {
         ChatConnection c = LangChain4jChatConnection.openai(require("OPENAI_API_KEY"));
-        return new BankingModel(c, setup(model == null ? "gpt-4o-mini" : model, temperature, maxTokens));
+        // Local testing default: GPT-5.4 nano (cheap + fast). Never default to gpt-4.1.
+        return new BankingModel(c, setup(model == null ? "gpt-5.4-nano" : model, temperature, maxTokens));
       }
     }
   }

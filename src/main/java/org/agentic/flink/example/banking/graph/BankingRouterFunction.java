@@ -3,8 +3,6 @@ package org.agentic.flink.example.banking.graph;
 import org.agentic.flink.a2a.bridge.A2ARequest;
 import org.agentic.flink.example.banking.safety.BankingScreening;
 import org.agentic.flink.screening.ScreeningResult;
-import org.apache.flink.api.common.state.ValueState;
-import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
@@ -13,14 +11,14 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The triage router: the first operator of a banking agent graph. Keyed by A2A {@code contextId},
- * it screens the inbound message, reads the conversation {@link BankingPhase} from keyed state, and
- * uses the LLM-free {@link BankingClassifier} to label the turn with a {@link BankingPath}. The
- * labelled {@link BankingTurn} is fanned out to the matching path operator by {@link
- * org.agentic.flink.graph.RoutedAgentGraph}.
+ * it screens the inbound message, reads the conversation {@link BankingPhase} from the shared {@link
+ * PhaseStore}, and uses the LLM-free {@link BankingClassifier} to label the turn with a {@link
+ * BankingPath}. The labelled {@link BankingTurn} is fanned out to the matching path operator by
+ * {@link org.agentic.flink.graph.RoutedAgentGraph}.
  *
  * <p>Screening {@code BLOCK} short-circuits to the {@code REFUSE} path with a safe message — the
  * threat never reaches a path brain. The router does not advance the phase (that's the verifier's
- * job); it only reads it.
+ * job); it only reads it from the {@link PhaseStore} the verifier writes.
  */
 public final class BankingRouterFunction
     extends KeyedProcessFunction<String, A2ARequest, BankingTurn> {
@@ -30,7 +28,6 @@ public final class BankingRouterFunction
   private final String agentId;
   private final boolean personal;
 
-  private transient ValueState<String> phaseState;
   private transient BankingScreening screening;
 
   public BankingRouterFunction(String agentId, boolean personal) {
@@ -40,8 +37,6 @@ public final class BankingRouterFunction
 
   @Override
   public void open(Configuration parameters) {
-    phaseState =
-        getRuntimeContext().getState(new ValueStateDescriptor<>("banking-phase", String.class));
     screening = BankingScreening.defaults();
   }
 
@@ -54,6 +49,10 @@ public final class BankingRouterFunction
 
     BankingTurn turn = BankingTurn.of(req.getTaskId(), contextId, agentId, userText);
 
+    // Record the user's turn in the shared transcript before routing, so whichever path runs sees
+    // the full multi-turn dialogue.
+    ConversationMemory.append(contextId, org.agentic.flink.llm.ChatMessage.user(userText));
+
     ScreeningResult screen = screening.screen(contextId, userText, now);
     if ("BLOCK".equals(screen.verdict)) {
       LOG.info("Screening BLOCK ctx {}: {}", contextId, screen.reason);
@@ -65,23 +64,11 @@ public final class BankingRouterFunction
       return;
     }
 
-    BankingPhase phase = phase();
+    BankingPhase phase = PhaseStore.get(contextId);
     BankingPath path = BankingClassifier.classify(personal, phase, userText);
     turn.setPath(path);
     turn.setRouteReason("phase=" + phase + " -> " + path);
     LOG.debug("Router ctx {} phase {} -> path {}", contextId, phase, path);
     out.collect(turn);
-  }
-
-  private BankingPhase phase() throws Exception {
-    String s = phaseState.value();
-    if (s == null) {
-      return BankingPhase.NEW;
-    }
-    try {
-      return BankingPhase.valueOf(s);
-    } catch (IllegalArgumentException e) {
-      return BankingPhase.NEW;
-    }
   }
 }

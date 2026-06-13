@@ -60,9 +60,20 @@ public final class ReActTurnBrain implements TurnBrain {
 
   @Override
   public String respond(String userText, BankingTurnContext ctx) {
+    return converse(List.of(ChatMessage.user(userText == null ? "" : userText)), ctx);
+  }
+
+  /**
+   * Run the bounded ReAct loop over a pre-seeded conversation (prior dialogue ending with the
+   * current user turn) — used by the routed graph so each path brain sees the multi-turn history
+   * from {@link org.agentic.flink.example.banking.graph.ConversationMemory}.
+   */
+  public String converse(List<ChatMessage> conversation, BankingTurnContext ctx) {
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(ChatMessage.system(composeSystemPrompt()));
-    messages.add(ChatMessage.user(userText == null ? "" : userText));
+    if (conversation != null) {
+      messages.addAll(conversation);
+    }
 
     ChatSetup turnSetup =
         setup.hasOutputSchema() ? setup : setup.toBuilder().withOutputSchema(schema()).build();

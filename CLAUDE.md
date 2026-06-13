@@ -13,6 +13,7 @@ Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
   - `tool/` -- ToolRegistry (central tool registry with builder)
   - `langchain/` -- ToolAnnotationRegistry, LangChainToolAdapter (@Tool bridge)
   - `memory/` -- Flink-state-first short-term memory (ShortTermMemory, FlinkStateShortTermMemory) — the **default** for in-job memory
+  - `memory/conversation/` -- **Per-conversation memory shared across operators**: `ConversationStore` SPI (multi-turn ChatMessage transcript + scalar workflow attributes, keyed by conversationId, also indexable by userId). `InMemoryConversationStore` (default, process-wide `shared()` singleton for embedded single-JVM; bounded transcript); `ConversationStores.discover()` (ServiceLoader → else shared in-JVM). This is the layer between per-operator short-term Flink state and the long-term store — what a routed graph (router→path→verifier) needs to progress across turns. Wired via `AgentBuilder.withConversationStore(...)`.
   - `memory/vector/` -- In-JVM vector memory backed by Flink state (FlinkStateVectorMemory, brute-force KNN); external VectorStore SPI for HNSW backends
   - (memory feeds moved to `channel/` — see below; `Channel<KeyedContextItem>` replaces the old MemoryFeed)
   - `storage/` -- Long-term store SPI (LongTermMemoryStore) for resumption + archival; ServiceLoader-based discovery
