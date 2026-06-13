@@ -35,6 +35,15 @@ public final class ConfigKeys {
   public static final String DEFAULT_REDIS_HOST = "localhost";
   public static final String DEFAULT_REDIS_PORT = "6379";
 
+  // Per-conversation memory (ConversationStore) backend selection.
+  // "memory" (default) = in-JVM; "redis" = RedisConversationStore (cross-process state spine).
+  public static final String CONVERSATION_STORE = "conversation.store";
+  public static final String DEFAULT_CONVERSATION_STORE = "memory";
+  public static final String CONVERSATION_STORE_TTL_SECONDS = "conversation.store.ttl.seconds";
+  public static final String DEFAULT_CONVERSATION_STORE_TTL_SECONDS = "86400"; // 24h
+  public static final String CONVERSATION_STORE_MAX_MESSAGES = "conversation.store.max.messages";
+  public static final String DEFAULT_CONVERSATION_STORE_MAX_MESSAGES = "200";
+
   // PostgreSQL
   public static final String POSTGRES_URL = "postgres.url";
   public static final String POSTGRES_USER = "postgres.user";
