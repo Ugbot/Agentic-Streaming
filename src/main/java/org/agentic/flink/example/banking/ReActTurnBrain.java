@@ -41,6 +41,7 @@ public final class ReActTurnBrain implements TurnBrain {
   private final String systemPrompt;
   private final Map<String, ToolExecutor> tools;
   private final long toolTimeoutMs;
+  private final boolean offerAskCs;
 
   private transient volatile ChatClient client;
   private transient volatile OutputSchema<ReActStep> schema;
@@ -51,11 +52,27 @@ public final class ReActTurnBrain implements TurnBrain {
       String systemPrompt,
       Map<String, ToolExecutor> tools,
       long toolTimeoutMs) {
+    this(connection, setup, systemPrompt, tools, toolTimeoutMs, true);
+  }
+
+  /**
+   * @param offerAskCs whether to advertise the {@link #ASK_CS} pseudo-tool to the model. The
+   *     monolith and the DELEGATE path want it; focused paths (gather/action/knowledge/…) don't, so
+   *     they aren't tempted to round-trip to customer service.
+   */
+  public ReActTurnBrain(
+      ChatConnection connection,
+      ChatSetup setup,
+      String systemPrompt,
+      Map<String, ToolExecutor> tools,
+      long toolTimeoutMs,
+      boolean offerAskCs) {
     this.connection = java.util.Objects.requireNonNull(connection, "connection");
     this.setup = java.util.Objects.requireNonNull(setup, "setup");
     this.systemPrompt = systemPrompt == null ? "" : systemPrompt;
     this.tools = tools == null ? Map.of() : Map.copyOf(tools);
     this.toolTimeoutMs = toolTimeoutMs <= 0 ? 30_000 : toolTimeoutMs;
+    this.offerAskCs = offerAskCs;
   }
 
   @Override
@@ -153,7 +170,7 @@ public final class ReActTurnBrain implements TurnBrain {
   }
 
   private boolean hasCsTool() {
-    return true; // ask_customer_service is always offered; the context refuses it if no peer.
+    return offerAskCs;
   }
 
   private ChatClient client() {

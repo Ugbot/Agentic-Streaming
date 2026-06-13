@@ -1,7 +1,7 @@
 package org.agentic.flink.example.banking.graph;
 
 import org.agentic.flink.example.banking.BankingTurnContext;
-import org.agentic.flink.example.banking.ReActTurnBrain;
+import org.agentic.flink.example.banking.TurnBrain;
 import org.agentic.flink.example.banking.env.EnvSession;
 import org.agentic.flink.example.banking.env.TurnSignals;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
@@ -27,7 +27,7 @@ public final class BankingPathFunction
   private static final long serialVersionUID = 1L;
 
   private final BankingPath path;
-  private final ReActTurnBrain brain; // nullable
+  private final TurnBrain brain; // nullable (REFUSE pass-through)
   private final BankingTurnContext.CustomerServiceClient cs; // nullable
   private final int maxRoundTrips;
   private final int maxIterations;
@@ -38,7 +38,7 @@ public final class BankingPathFunction
 
   public BankingPathFunction(
       BankingPath path,
-      ReActTurnBrain brain,
+      TurnBrain brain,
       BankingTurnContext.CustomerServiceClient cs,
       int maxRoundTrips,
       int maxIterations,

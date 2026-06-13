@@ -49,6 +49,14 @@ public final class BankingAgentSetup {
   private final int maxRoundTrips;
   private final int maxIterations;
 
+  // Building blocks retained so the routed graph can mint focused per-path brains.
+  private final BankingModel model;
+  private final Map<String, ToolExecutor> tools;
+  private final String basePrompt;
+  private final long toolTimeoutMs;
+  private final Map<org.agentic.flink.example.banking.graph.BankingPath, ReActTurnBrain> pathBrains =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
   private BankingAgentSetup(
       Role role,
       ReActTurnBrain brain,
@@ -56,7 +64,11 @@ public final class BankingAgentSetup {
       BankingTurnContext.CustomerServiceClient cs,
       long turnDeadlineMs,
       int maxRoundTrips,
-      int maxIterations) {
+      int maxIterations,
+      BankingModel model,
+      Map<String, ToolExecutor> tools,
+      String basePrompt,
+      long toolTimeoutMs) {
     this.role = role;
     this.brain = brain;
     this.screening = screening;
@@ -64,6 +76,10 @@ public final class BankingAgentSetup {
     this.turnDeadlineMs = turnDeadlineMs;
     this.maxRoundTrips = maxRoundTrips;
     this.maxIterations = maxIterations;
+    this.model = model;
+    this.tools = tools;
+    this.basePrompt = basePrompt;
+    this.toolTimeoutMs = toolTimeoutMs;
   }
 
   public Role role() {
@@ -152,7 +168,81 @@ public final class BankingAgentSetup {
     LOG.info(
         "Banking agent [{}] ready: tools={}, model={}", role, tools.keySet(), model.setup().getModelName());
     return new BankingAgentSetup(
-        role, brain, BankingScreening.defaults(), cs, turnDeadlineMs, maxRoundTrips, maxIterations);
+        role, brain, BankingScreening.defaults(), cs, turnDeadlineMs, maxRoundTrips, maxIterations,
+        model, tools, systemPrompt, toolTimeoutMs);
+  }
+
+  /**
+   * A focused {@link ReActTurnBrain} for one routed-graph {@link
+   * org.agentic.flink.example.banking.graph.BankingPath}: the role's base prompt + a path-specific
+   * directive, scoped to just the tools that path needs (smaller, more reliable than the monolith).
+   * Returns {@code null} for {@code REFUSE} (the router already produced the safe reply). Cached per
+   * path. Used by {@link org.agentic.flink.example.banking.graph.BankingAgentGraph}.
+   */
+  public ReActTurnBrain brainFor(org.agentic.flink.example.banking.graph.BankingPath path) {
+    if (path == null || path == org.agentic.flink.example.banking.graph.BankingPath.REFUSE) {
+      return null;
+    }
+    return pathBrains.computeIfAbsent(path, this::buildPathBrain);
+  }
+
+  private ReActTurnBrain buildPathBrain(org.agentic.flink.example.banking.graph.BankingPath path) {
+    Map<String, ToolExecutor> subset = new LinkedHashMap<>();
+    boolean offerCs = false;
+    String directive;
+    switch (path) {
+      case KNOWLEDGE:
+        keep(subset, "kb_search");
+        directive =
+            "Answer the caller's knowledge/policy question. Call kb_search(query) to ground every"
+                + " claim; never invent policy. Return the complete answer in one reply.";
+        break;
+      case GATHER:
+        directive =
+            "You are missing required details from the user. Ask a concise question for exactly the"
+                + " detail(s) still needed to proceed, then stop. Do not call tools.";
+        break;
+      case DELEGATE:
+        offerCs = true;
+        directive =
+            "Get the bank-side facts you need by calling ask_customer_service ONCE with the full"
+                + " question (product details, rates, fees, eligibility, how a subscription changes"
+                + " them), then relay the answer to the user. Never ask the same question twice.";
+        break;
+      case ACTION:
+        keep(subset, "list_env_tools");
+        keep(subset, "call_env_tool");
+        directive =
+            "Perform the user's requested action now with your environment tools. Discover the tool"
+                + " (list_env_tools) if unsure, then call_env_tool with the real argument values you"
+                + " already gathered — never placeholders. Confirm the outcome.";
+        break;
+      case DISPUTE:
+        keep(subset, "kb_search");
+        keep(subset, "list_env_tools");
+        keep(subset, "call_env_tool");
+        directive =
+            "Handle the dispute/chargeback per policy. Use kb_search to confirm the procedure, then"
+                + " perform the bank-side action with call_env_tool if one is required.";
+        break;
+      case ESCALATE:
+        directive =
+            "This needs a human or is out of scope. Produce a brief, safe hand-off message to the"
+                + " user explaining you're transferring/escalating. Do not call tools.";
+        break;
+      default:
+        directive = "";
+    }
+    String prompt =
+        basePrompt + "\n\n## This turn\n" + directive;
+    return new ReActTurnBrain(model.connection(), model.setup(), prompt, subset, toolTimeoutMs, offerCs);
+  }
+
+  private void keep(Map<String, ToolExecutor> subset, String name) {
+    ToolExecutor t = tools.get(name);
+    if (t != null) {
+      subset.put(name, t);
+    }
   }
 
   /** Personal→CS round-trip over A2A, propagating the session contextId (a hard harness rule). */
