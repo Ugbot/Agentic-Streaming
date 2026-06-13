@@ -15,6 +15,13 @@
         <java.version>17</java.version>
         <log4j.version>2.17.1</log4j.version>
         <langchain4j.version>0.35.0</langchain4j.version>
+        <!--
+        A2A (Agent2Agent) Java SDK. groupId io.github.a2asdk. The 1.0 protocol line is
+        currently published only as alphas on Maven Central (newest stable Final is 0.3.x);
+        we pin the 1.0 surface and isolate it behind our own A2AClient SPI so a later Final
+        bump is a one-module change. See docs/a2a.md.
+        -->
+        <a2a.version>1.0.0.Alpha3</a2a.version>
         <lombok.version>1.18.38</lombok.version>
         <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
         <junit.version>5.8.1</junit.version>
@@ -22,6 +29,19 @@
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- A2A Java SDK BOM — aligns all a2a-java-sdk-* module versions. -->
+            <dependency>
+                <groupId>io.github.a2asdk</groupId>
+                <artifactId>a2a-java-sdk-bom</artifactId>
+                <version>${a2a.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Apache Flink Core -->
@@ -178,6 +198,41 @@
             <groupId>org.zeromq</groupId>
             <artifactId>jeromq</artifactId>
             <version>0.6.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+        A2A (Agent2Agent) Java SDK — OPTIONAL.
+
+        a2a-java-sdk-spec provides the wire POJOs (AgentCard, Message, Part, Task, Artifact);
+        a2a-java-sdk-client + its transport modules implement the outbound client. All marked
+        optional so consumers who don't use A2A pay nothing transitively — the SDK is only
+        touched by org.agentic.flink.a2a.SdkA2AClient (everything else uses our A2AClient SPI).
+        Versions come from the a2a-java-sdk-bom imported above.
+        -->
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-spec</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client-transport-jsonrpc</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client-transport-grpc</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client-transport-rest</artifactId>
             <optional>true</optional>
         </dependency>
 

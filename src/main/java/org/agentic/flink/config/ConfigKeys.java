@@ -67,4 +67,35 @@ public final class ConfigKeys {
   public static final String OPENAI_API_KEY = "openai.api.key";
   public static final String OPENAI_MODEL = "openai.model";
   public static final String DEFAULT_OPENAI_MODEL = "gpt-4";
+
+  // A2A (Agent2Agent) — outbound client + inbound Quarkus gateway. See docs/a2a.md.
+  public static final String A2A_PROTOCOL_VERSION = "a2a.protocol.version";
+  public static final String DEFAULT_A2A_PROTOCOL_VERSION = "1.0";
+  public static final String A2A_CLIENT_DEFAULT_TRANSPORT = "a2a.client.default.transport";
+  public static final String DEFAULT_A2A_CLIENT_TRANSPORT = "JSONRPC";
+
+  // A2A gateway (Quarkus): each binding listens on its own port.
+  public static final String A2A_GATEWAY_ENABLED = "a2a.gateway.enabled";
+  public static final String A2A_GATEWAY_HOST = "a2a.gateway.host";
+  public static final String A2A_GATEWAY_JSONRPC_PORT = "a2a.gateway.jsonrpc.port";
+  public static final String A2A_GATEWAY_GRPC_PORT = "a2a.gateway.grpc.port";
+  public static final String A2A_GATEWAY_REST_PORT = "a2a.gateway.rest.port";
+  public static final String A2A_GATEWAY_PUBLIC_URL = "a2a.gateway.public.url";
+  public static final boolean DEFAULT_A2A_GATEWAY_ENABLED = false;
+  public static final String DEFAULT_A2A_GATEWAY_HOST = "0.0.0.0";
+  public static final int DEFAULT_A2A_GATEWAY_JSONRPC_PORT = 9999;
+  public static final int DEFAULT_A2A_GATEWAY_GRPC_PORT = 9998;
+  public static final int DEFAULT_A2A_GATEWAY_REST_PORT = 9997;
+
+  // A2A bridge (gateway <-> Flink job transport). Default ZeroMQ for localhost/in-host.
+  public static final String A2A_BRIDGE_TRANSPORT = "a2a.bridge.transport";
+  public static final String A2A_BRIDGE_REQUEST_ENDPOINT = "a2a.bridge.request.endpoint";
+  public static final String A2A_BRIDGE_RESPONSE_ENDPOINT = "a2a.bridge.response.endpoint";
+  public static final String DEFAULT_A2A_BRIDGE_TRANSPORT = "zeromq";
+  public static final String DEFAULT_A2A_BRIDGE_REQUEST_ENDPOINT = "tcp://127.0.0.1:5760";
+  public static final String DEFAULT_A2A_BRIDGE_RESPONSE_ENDPOINT = "tcp://127.0.0.1:5761";
+
+  // A2A task store (gateway-side task lifecycle persistence).
+  public static final String A2A_TASK_STORE = "a2a.task.store";
+  public static final String DEFAULT_A2A_TASK_STORE = "memory";
 }
