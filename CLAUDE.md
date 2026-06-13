@@ -30,8 +30,10 @@ Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
   - `storage/vector/` -- pgvector implementation of VectorStore (Qdrant via the SPI path)
   - `cep/` -- Flink CEP integration for event-driven patterns
   - `compensation/` -- Saga compensation/rollback support
+  - `a2a/` -- A2A (Agent2Agent) protocol support. Outbound: `RemoteAgentSpec`, `A2AClient` SPI + `SdkA2AClient` (official a2a-java SDK, optional dep, isolated behind the SPI), `A2AToolExecutor` (peer-as-tool), `A2AStep` (explicit pipeline step). `a2a/bridge/` -- pluggable gateway↔Flink transport (`inproc`/`zeromq`/`redis`). `a2a/storage/` -- `A2ATaskStore` (memory/postgres/redis). See `docs/a2a.md`.
   - `example/` -- Working examples (SimpleCalculatorTool, ToolAnnotationExample)
   - `plugins/flintagents/` -- Optional Apache Flink Agents integration (excluded from default build)
+- `a2a-gateway/` -- Optional standalone Quarkus module: inbound A2A gateway (Agent Card + JSON-RPC/SSE + gRPC + REST) bridging external A2A callers into a Flink job. Built separately (`mvn -f a2a-gateway/pom.xml package`), kept out of the core reactor. See `a2a-gateway/README.md`.
 - `python/` -- JPype-backed Python facade (`agentic-flink` PyPI package). In-process JVM, `@tool` decorator for Python functions, examples mirror the Java ones. See `docs/python.md`.
 
 ## Build
@@ -40,6 +42,7 @@ Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
 mvn clean test                        # unit tests
 mvn test -P integration-tests         # integration tests (requires containers)
 mvn clean package -P flink-agents     # build with optional Flink Agents plugin
+mvn install -DskipTests && mvn -f a2a-gateway/pom.xml package   # build the A2A gateway
 ```
 
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
