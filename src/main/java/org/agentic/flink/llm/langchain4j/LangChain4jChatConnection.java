@@ -129,12 +129,13 @@ public final class LangChain4jChatConnection implements ChatConnection {
             .build();
       case OPENAI:
         OpenAiChatModel.OpenAiChatModelBuilder b =
-            OpenAiChatModel.builder()
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .temperature(temperature)
-                .timeout(timeout)
-                .maxTokens(maxTokens);
+            OpenAiChatModel.builder().apiKey(apiKey).modelName(modelName).timeout(timeout);
+        // OpenAI reasoning models (gpt-5*, o1/o3/o4*) reject `max_tokens` (they require
+        // `max_completion_tokens`, which langchain4j 0.35.0 can't send) and only allow the default
+        // temperature. Omit both for those models so the request is accepted; send them otherwise.
+        if (!isOpenAiReasoningModel(modelName)) {
+          b.temperature(temperature).maxTokens(maxTokens);
+        }
         if (baseUrl != null && !baseUrl.isEmpty()) {
           b.baseUrl(baseUrl);
         }
@@ -158,6 +159,21 @@ public final class LangChain4jChatConnection implements ChatConnection {
       default:
         throw new IllegalStateException("Unknown provider: " + provider);
     }
+  }
+
+  /**
+   * OpenAI reasoning models — the {@code gpt-5*} family and the {@code o1/o3/o4} series — don't
+   * accept {@code max_tokens} or a non-default {@code temperature} on the Chat Completions API.
+   */
+  static boolean isOpenAiReasoningModel(String modelName) {
+    if (modelName == null) {
+      return false;
+    }
+    String m = modelName.toLowerCase(java.util.Locale.ROOT);
+    return m.startsWith("gpt-5")
+        || m.startsWith("o1")
+        || m.startsWith("o3")
+        || m.startsWith("o4");
   }
 
   /** Convert framework {@link org.agentic.flink.llm.ChatMessage} to LangChain4J form. */

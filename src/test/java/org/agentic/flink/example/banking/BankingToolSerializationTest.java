@@ -84,6 +84,14 @@ final class BankingToolSerializationTest {
   }
 
   @Test
+  @DisplayName("Personal->CS client round-trips (transient JDK HttpClient rebuilt lazily)")
+  void csClientSerializable() throws Exception {
+    BankingTurnContext.CustomerServiceClient cs =
+        BankingA2AServer.httpCsClient("http://localhost:9002");
+    assertNotNull(roundTrip(cs));
+  }
+
+  @Test
   @DisplayName("Env tools + authorization guard round-trip (transient HttpClient rebuilt lazily)")
   void envToolsSerializable() throws Exception {
     EnvApiClient client = new EnvApiClient("http://localhost:1/", "tok-" + UUID.randomUUID(), 1000);

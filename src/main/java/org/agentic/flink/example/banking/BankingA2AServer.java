@@ -167,8 +167,39 @@ public final class BankingA2AServer {
       LOG.warn("CS_AGENT_URL not set — ask_customer_service unavailable");
       return null;
     }
-    HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-    return (contextId, messageText) -> {
+    return new HttpCsClient(csUrl);
+  }
+
+  /**
+   * Serializable personal→CS A2A client (spec {@code message/send}, contextId-propagating). It is
+   * held by the DELEGATE path operator and shipped into the Flink job, so the JDK {@link HttpClient}
+   * is {@code transient} and built lazily on the task side (a plain lambda capturing an HttpClient
+   * is not serializable — Flink rejects the operator at submit).
+   */
+  static final class HttpCsClient implements BankingTurnContext.CustomerServiceClient {
+    private static final long serialVersionUID = 1L;
+    private final String csUrl;
+    private transient volatile HttpClient http;
+
+    HttpCsClient(String csUrl) {
+      this.csUrl = csUrl;
+    }
+
+    private HttpClient http() {
+      HttpClient c = http;
+      if (c == null) {
+        synchronized (this) {
+          if (http == null) {
+            http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+          }
+          c = http;
+        }
+      }
+      return c;
+    }
+
+    @Override
+    public String ask(String contextId, String messageText) {
       try {
         ObjectNode msg = JSON.createObjectNode();
         msg.put("role", "user");
@@ -191,13 +222,13 @@ public final class BankingA2AServer {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(JSON.writeValueAsBytes(rpc)))
                 .build();
-        HttpResponse<byte[]> resp = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> resp = http().send(request, HttpResponse.BodyHandlers.ofByteArray());
         JsonNode result = JSON.readTree(resp.body()).path("result");
         return replyText(result);
       } catch (Exception e) {
         return "[customer service unavailable: " + e.getMessage() + "]";
       }
-    };
+    }
   }
 
   /** Extract reply text from a message/send result (Message, or Task artifacts + status message). */

@@ -6,6 +6,7 @@ import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.embedding.GeminiEmbeddingConnection;
 import org.agentic.flink.embedding.HashEmbeddingConnection;
 import org.agentic.flink.embedding.OllamaEmbeddingConnection;
+import org.agentic.flink.embedding.OpenAIEmbeddingConnection;
 import org.agentic.flink.embedding.djl.DjlEmbeddingConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +18,8 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li>{@code EMBED_PROVIDER} — {@code djl} (default, local inbuilt) | {@code gemini} | {@code
- *       ollama} | {@code hash} | {@code keyword} (handled by the caller — no embeddings).
+ *       openai} | {@code ollama} | {@code hash} | {@code keyword} (handled by the caller — no
+ *       embeddings).
  *   <li>{@code EMBED_MODEL} / {@code EMBED_DIM} — override the model name / dimension.
  *   <li>{@code GOOGLE_API_KEY} (gemini), {@code OLLAMA_BASE_URL} (ollama).
  * </ul>
@@ -64,6 +66,11 @@ public final class BankingEmbeddings {
         connection = new GeminiEmbeddingConnection(require("GOOGLE_API_KEY"));
         modelName = model == null ? "gemini-embedding-001" : model;
         dim = dimOverride == null ? 768 : dimOverride;
+        break;
+      case "openai":
+        connection = new OpenAIEmbeddingConnection(require("OPENAI_API_KEY"));
+        modelName = model == null ? "text-embedding-3-small" : model;
+        dim = dimOverride == null ? 1536 : dimOverride;
         break;
       case "ollama":
         connection = new OllamaEmbeddingConnection(env("OLLAMA_BASE_URL", "http://localhost:11434"));
