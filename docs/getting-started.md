@@ -509,7 +509,7 @@ config.setAiModel(AiModel.OPENAI);
 
 Map<String, String> props = new HashMap<>();
 props.put("apiKey", "your-api-key-here");
-props.put("modelName", "gpt-3.5-turbo");
+props.put("modelName", "gpt-5.4-mini");
 config.setProperties(props);
 ```
 

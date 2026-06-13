@@ -82,10 +82,10 @@ public class OpenAIFlinkAgentsDemo {
     printSectionHeader("Demo 1: Simple OpenAI Chat");
 
     System.out.println(ANSI_CYAN + "Creating OpenAI chat model..." + ANSI_RESET);
+    // gpt-5.x reasoning models reject max_tokens / custom temperature (see OpenAiModels) — omit them.
     ChatLanguageModel model = OpenAiChatModel.builder()
         .apiKey(apiKey)
-        .modelName("gpt-3.5-turbo")
-        .temperature(0.7)
+        .modelName("gpt-5.4-mini")
         .build();
 
     System.out.println(ANSI_GREEN + "✓ Model created" + ANSI_RESET);
@@ -180,7 +180,7 @@ public class OpenAIFlinkAgentsDemo {
     );
     ourEvent.setData(Map.of(
         "question", "Explain event-driven agents in 25 words",
-        "model", "gpt-3.5-turbo"
+        "model", "gpt-5.4-mini"
     ));
 
     System.out.println(ANSI_GREEN + "✓ AgentEvent created (our framework)" + ANSI_RESET);
@@ -190,11 +190,10 @@ public class OpenAIFlinkAgentsDemo {
     System.out.println(ANSI_GREEN + "✓ Converted to Flink Agents Event" + ANSI_RESET);
 
     // Create OpenAI model
+    // gpt-5.x reasoning models reject max_tokens / custom temperature (see OpenAiModels) — omit them.
     ChatLanguageModel model = OpenAiChatModel.builder()
         .apiKey(apiKey)
-        .modelName("gpt-3.5-turbo")
-        .temperature(0.7)
-        .maxTokens(100)
+        .modelName("gpt-5.4-mini")
         .build();
 
     System.out.println(ANSI_GREEN + "✓ OpenAI model configured" + ANSI_RESET);

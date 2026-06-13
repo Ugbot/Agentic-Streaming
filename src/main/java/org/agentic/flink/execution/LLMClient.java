@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * <p><b>Supported Models:</b>
  * <ul>
  *   <li>Ollama (local): qwen2.5:3b, qwen2.5:7b, llama3:8b, etc.</li>
- *   <li>OpenAI: gpt-4o, gpt-4o-mini, gpt-3.5-turbo</li>
+ *   <li>OpenAI: gpt-5.5, gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano</li>
  * </ul>
  *
  * @author Agentic Flink Team

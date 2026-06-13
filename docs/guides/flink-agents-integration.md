@@ -650,7 +650,7 @@ public class HybridAgentJob {
 
         // 1. Create Flink Agents ReAct agent
         ReActAgent reactAgent = ReActAgent.builder()
-            .model("gpt-4")
+            .model("gpt-5.4-mini")
             .tools(mcpServer("my-tools"))
             .build();
 

@@ -75,7 +75,7 @@ public final class ConfigKeys {
   // OpenAI (optional)
   public static final String OPENAI_API_KEY = "openai.api.key";
   public static final String OPENAI_MODEL = "openai.model";
-  public static final String DEFAULT_OPENAI_MODEL = "gpt-4";
+  public static final String DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 
   // A2A (Agent2Agent) — outbound client + inbound Quarkus gateway. See docs/a2a.md.
   public static final String A2A_PROTOCOL_VERSION = "a2a.protocol.version";

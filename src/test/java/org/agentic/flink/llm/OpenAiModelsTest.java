@@ -24,11 +24,11 @@ class OpenAiModelsTest {
   }
 
   @Test
-  @DisplayName("classic chat models are NOT reasoning models")
+  @DisplayName("non gpt-5 / non o-series names are NOT reasoning models")
   void notReasoning() {
-    assertFalse(OpenAiModels.isReasoning("gpt-4o-mini"));
-    assertFalse(OpenAiModels.isReasoning("gpt-4o"));
-    assertFalse(OpenAiModels.isReasoning("gpt-3.5-turbo"));
+    assertFalse(OpenAiModels.isReasoning("qwen2.5:7b"));
+    assertFalse(OpenAiModels.isReasoning("gemini-3.5-flash"));
+    assertFalse(OpenAiModels.isReasoning("claude-sonnet-4-6"));
     assertFalse(OpenAiModels.isReasoning(null));
     assertFalse(OpenAiModels.isReasoning(""));
   }
