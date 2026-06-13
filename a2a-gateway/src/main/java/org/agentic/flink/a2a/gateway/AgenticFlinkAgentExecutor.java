@@ -4,6 +4,7 @@ import io.a2a.server.agentexecution.AgentExecutor;
 import io.a2a.server.agentexecution.RequestContext;
 import io.a2a.server.tasks.AgentEmitter;
 import io.a2a.spec.A2AError;
+import io.quarkus.arc.properties.UnlessBuildProperty;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.util.UUID;
@@ -23,6 +24,7 @@ import org.slf4j.LoggerFactory;
  * <p>This single bean backs all three transport bindings — no per-binding duplication.
  */
 @ApplicationScoped
+@UnlessBuildProperty(name = "a2a.mode", stringValue = "banking", enableIfMissing = true)
 public class AgenticFlinkAgentExecutor implements AgentExecutor {
   private static final Logger LOG = LoggerFactory.getLogger(AgenticFlinkAgentExecutor.class);
 

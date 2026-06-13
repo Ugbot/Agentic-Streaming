@@ -1,0 +1,68 @@
+# Rho-Bank A2A demo — two safe banking agents on the Agentic-Flink gateway (docs/a2a-banking-demo.md).
+#
+# personal-agent (:9001) and cs-agent (:9002) each run the bounded ReAct brain + safety stack
+# (screening, authorization guard, routing budget) in-process. Same banking image, different role.
+#
+# Build the banking jar first (build-time a2a.mode selects the in-proc banking executor), then up:
+#   mvn -q install -DskipTests
+#   mvn -q -f a2a-gateway/pom.xml package -DskipTests -Da2a.mode=banking
+#   OPENAI_API_KEY=sk-... podman compose -f docker-compose-a2a-banking.yml up --build
+#
+# Swap to the hackathon model: LLM_PROVIDER=gemini GOOGLE_API_KEY=... (no rebuild needed).
+# Point the harness at it: uv run a2a-hack smoke --personal-url http://localhost:9001 --cs-url http://localhost:9002
+
+services:
+  redis:
+    image: redis:8
+    ports:
+      - "6379:6379"
+
+  cs-agent:
+    build:
+      context: ./a2a-gateway
+      dockerfile: src/main/docker/Dockerfile.jvm
+    image: agentic-flink-a2a-banking
+    container_name: rho-bank-cs
+    depends_on:
+      - redis
+    ports:
+      - "9002:9002"
+    environment:
+      QUARKUS_HTTP_PORT: "9002"
+      A2A_BANKING_ROLE: "cs"
+      AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Rho-Bank Customer Service"
+      AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9002"
+      KB_PATH: "/app/kb/documents"
+      KB_POLICY_PATH: "/app/kb/policy.md"
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      MODEL: ${MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      ENV_API_URL: ${ENV_API_URL:-}
+      ENV_API_TOKEN: ${CS_ENV_API_TOKEN:-dev-agent-token}
+    volumes:
+      - ./hackathons/a2a-hackathon-template/kb:/app/kb:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  personal-agent:
+    image: agentic-flink-a2a-banking
+    container_name: rho-bank-personal
+    depends_on:
+      - cs-agent
+    ports:
+      - "9001:9001"
+    environment:
+      QUARKUS_HTTP_PORT: "9001"
+      A2A_BANKING_ROLE: "personal"
+      AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Rho-Bank Personal Assistant"
+      AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9001"
+      CS_AGENT_URL: ${CS_AGENT_URL:-http://cs-agent:9002}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      MODEL: ${MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      ENV_API_URL: ${ENV_API_URL:-}
+      ENV_API_TOKEN: ${PERSONAL_ENV_API_TOKEN:-dev-user-token}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
