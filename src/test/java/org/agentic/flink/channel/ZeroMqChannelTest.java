@@ -1,4 +1,5 @@
 package org.agentic.flink.channel;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -13,7 +14,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.junit.jupiter.api.DisplayName;
@@ -74,7 +75,7 @@ final class ZeroMqChannelTest {
 
     // PUSH sink connects.
     ZeroMqSink<TestMsg> sink = ZeroMqSink.push(endpoint);
-    sink.open(new Configuration());
+    sink.open((OpenContext) null);
 
     int n = 25;
     for (int i = 0; i < n; i++) {
@@ -101,7 +102,7 @@ final class ZeroMqChannelTest {
     String endpoint = "tcp://127.0.0.1:" + port;
 
     ZeroMqSink<TestMsg> sink = ZeroMqSink.pub(endpoint, ""); // empty topic = no prefix frame
-    sink.open(new Configuration());
+    sink.open((OpenContext) null);
 
     // Give the bind a moment, then connect a SUB and let it settle (PUB/SUB has a slow-joiner
     // window where early messages are dropped).
@@ -185,7 +186,7 @@ final class ZeroMqChannelTest {
 
     // DEALER sink connects.
     ZeroMqSink<TestMsg> sink = ZeroMqSink.dealer(endpoint);
-    sink.open(new Configuration());
+    sink.open((OpenContext) null);
 
     int n = 10;
     for (int i = 0; i < n; i++) {
@@ -242,7 +243,7 @@ final class ZeroMqChannelTest {
       // Publisher connects to the front end of the proxy (so it must NOT bind).
       ZeroMqSink<TestMsg> sink =
           ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, pubFront).bind(false).build();
-      sink.open(new Configuration());
+      sink.open((OpenContext) null);
       Thread.sleep(150);
 
       int n = 12;

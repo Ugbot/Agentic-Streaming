@@ -4,7 +4,7 @@ import org.agentic.flink.a2a.A2AJson;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.ZeroMqChannel;
 import org.agentic.flink.channel.ZeroMqSink;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;

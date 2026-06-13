@@ -1,4 +1,5 @@
 package org.agentic.flink.typeinfo;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -25,10 +26,11 @@ import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
+import org.apache.flink.streaming.api.functions.sink.legacy.DiscardingSink;
 import org.apache.flink.util.Collector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,10 +55,11 @@ final class KryoDisabledPipelineTest {
   }
 
   private static StreamExecutionEnvironment strictEnv() {
-    StreamExecutionEnvironment env =
-        StreamExecutionEnvironment.createLocalEnvironment(1, new Configuration());
-    env.getConfig().disableGenericTypes(); // any Kryo fallback now throws at job build/submit
-    return env;
+    // Flink 2.x: ExecutionConfig.disableGenericTypes() is gone; the Kryo-fallback guard is now a
+    // pipeline option set on the cluster Configuration.
+    Configuration conf = new Configuration();
+    conf.set(PipelineOptions.GENERIC_TYPES, false); // any Kryo fallback now throws at job build/submit
+    return StreamExecutionEnvironment.createLocalEnvironment(1, conf);
   }
 
   @Test
@@ -119,7 +122,7 @@ final class KryoDisabledPipelineTest {
     private transient ListState<ChatMessage> transcript;
 
     @Override
-    public void open(Configuration p) {
+    public void open(OpenContext openContext) {
       ctxState = getRuntimeContext().getState(new ValueStateDescriptor<>("ctx", AgentContext.class));
       execState =
           getRuntimeContext().getState(new ValueStateDescriptor<>("exec", AgentExecutionState.class));

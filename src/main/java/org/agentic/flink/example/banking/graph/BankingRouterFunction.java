@@ -1,4 +1,5 @@
 package org.agentic.flink.example.banking.graph;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.a2a.bridge.A2ARequest;
 import org.agentic.flink.example.banking.safety.BankingScreening;
@@ -36,7 +37,7 @@ public final class BankingRouterFunction
   }
 
   @Override
-  public void open(Configuration parameters) {
+  public void open(OpenContext openContext) {
     screening = BankingScreening.defaults();
   }
 

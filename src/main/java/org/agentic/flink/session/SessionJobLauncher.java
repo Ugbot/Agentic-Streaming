@@ -27,7 +27,7 @@ import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -200,7 +200,7 @@ public final class SessionJobLauncher {
     // conflicts. Notebook side connects with SUB.
     if (a.opt("debug-sink").isPresent()) {
       String dbgEndpoint = a.require("debug-sink");
-      org.apache.flink.streaming.api.functions.sink.RichSinkFunction<
+      org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction<
               org.agentic.flink.control.DebugEvent>
           dbgSink;
       if (dbgEndpoint.startsWith("tcp://")) {

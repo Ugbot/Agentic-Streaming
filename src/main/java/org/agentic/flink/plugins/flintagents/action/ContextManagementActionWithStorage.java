@@ -1,4 +1,5 @@
 package org.agentic.flink.plugins.flintagents.action;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -92,8 +93,8 @@ public class ContextManagementActionWithStorage
   }
 
   @Override
-  public void open(Configuration parameters) throws Exception {
-    super.open(parameters);
+  public void open(OpenContext openContext) throws Exception {
+    super.open(openContext);
 
     org.apache.flink.api.common.state.ValueStateDescriptor<Integer> eventCountDescriptor =
         new org.apache.flink.api.common.state.ValueStateDescriptor<>(

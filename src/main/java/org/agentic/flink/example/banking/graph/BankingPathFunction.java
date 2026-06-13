@@ -1,4 +1,5 @@
 package org.agentic.flink.example.banking.graph;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.example.banking.BankingTurnContext;
 import org.agentic.flink.example.banking.TurnBrain;
@@ -54,7 +55,7 @@ public final class BankingPathFunction
   }
 
   @Override
-  public void open(Configuration parameters) {
+  public void open(OpenContext openContext) {
     budgetState =
         getRuntimeContext()
             .getState(new ValueStateDescriptor<>("banking-budget-" + path, RoutingBudget.class));

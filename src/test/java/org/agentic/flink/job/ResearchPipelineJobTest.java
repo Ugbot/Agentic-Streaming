@@ -108,6 +108,16 @@ class ResearchPipelineJobTest {
     }
 
     @Override
+    public void complete(
+        org.apache.flink.streaming.api.functions.async.CollectionSupplier<AgentEvent> supplier) {
+      try {
+        results.set(supplier.get());
+      } catch (Exception e) {
+        error.set(e);
+      }
+    }
+
+    @Override
     public void completeExceptionally(Throwable throwable) {
       error.set(throwable);
     }

@@ -3,7 +3,7 @@ package org.agentic.flink.typeinfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.Objects;
-import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerSchemaCompatibility;
@@ -79,7 +79,7 @@ public final class JsonTypeInfo<T> extends TypeInformation<T> {
   }
 
   @Override
-  public TypeSerializer<T> createSerializer(ExecutionConfig config) {
+  public TypeSerializer<T> createSerializer(SerializerConfig config) {
     return new JsonSerializer<>(type, mutable);
   }
 

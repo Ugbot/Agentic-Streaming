@@ -12,7 +12,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
 
 /**
  * The framework's stream-graph wiring helper. Three responsibilities:
@@ -81,7 +81,7 @@ public final class AgenticPipeline {
    * {@link #seededControl}.
    */
   static final class SeededControlSource
-      implements org.apache.flink.streaming.api.functions.source.SourceFunction<ControlMessage> {
+      implements org.apache.flink.streaming.api.functions.source.legacy.SourceFunction<ControlMessage> {
     private static final long serialVersionUID = 1L;
     private final java.util.List<ControlMessage> seq;
     private volatile boolean running = true;

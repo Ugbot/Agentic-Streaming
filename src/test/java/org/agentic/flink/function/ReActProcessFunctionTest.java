@@ -222,7 +222,7 @@ class ReActProcessFunctionTest {
         .keyBy((org.apache.flink.api.java.functions.KeySelector<String, String>) s -> "k")
         .process(new ReActProcessFunction<>(agent, registry))
         .returns(String.class)
-        .addSink(new org.apache.flink.streaming.api.functions.sink.DiscardingSink<>());
+        .addSink(new org.apache.flink.streaming.api.functions.sink.legacy.DiscardingSink<>());
     env.execute("react-stall-guard");
 
     // Without the guard, turn-1's stall final would end the loop with 0 tool calls. With it, the

@@ -11,7 +11,7 @@
     <description>Standalone Agentic Framework for Apache Flink with LangChain4J Integration</description>
 
     <properties>
-        <flink.version>1.20.1</flink.version>
+        <flink.version>2.2.1</flink.version>
         <java.version>17</java.version>
         <log4j.version>2.17.1</log4j.version>
         <langchain4j.version>0.35.0</langchain4j.version>
@@ -194,7 +194,7 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka</artifactId>
-            <version>3.2.0-1.19</version>
+            <version>5.0.0-2.2</version>
             <optional>true</optional>
         </dependency>
 

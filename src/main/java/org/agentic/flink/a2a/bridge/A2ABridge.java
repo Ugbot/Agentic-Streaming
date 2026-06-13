@@ -2,7 +2,7 @@ package org.agentic.flink.a2a.bridge;
 
 import java.io.Serializable;
 import org.agentic.flink.channel.Channel;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
 
 /**
  * Pluggable transport connecting the Quarkus A2A gateway to a running Flink agent job.

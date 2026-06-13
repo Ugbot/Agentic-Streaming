@@ -1,4 +1,5 @@
 package org.agentic.flink.plan;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -28,7 +29,7 @@ class AgentPlanProcessFunctionTest {
         new AgentPlan(
             "agent-" + UUID.randomUUID(), null, null, null, null, null, null, null);
     AgentPlanProcessFunction<String> fn = new AgentPlanProcessFunction<>(plan);
-    fn.open(new Configuration());
+    fn.open((OpenContext) null);
 
     CapturingCollector<Object> out = new CapturingCollector<>();
     String key = "k-" + UUID.randomUUID();
@@ -48,7 +49,7 @@ class AgentPlanProcessFunctionTest {
     AgentPlan plan =
         new AgentPlan("a", null, null, null, List.of(ts), null, null, null);
     AgentPlanProcessFunction<String> fn = new AgentPlanProcessFunction<>(plan);
-    fn.open(new Configuration());
+    fn.open((OpenContext) null);
 
     assertNotNull(fn.getToolRegistry());
     ToolExecutor exec =
@@ -67,7 +68,7 @@ class AgentPlanProcessFunctionTest {
             ToolSpec.KIND_JAVA, "not-tool", "desc", NotATool.class.getName(), Map.of(), null, null);
     AgentPlan plan = new AgentPlan("a", null, null, null, List.of(ts), null, null, null);
     AgentPlanProcessFunction<String> fn = new AgentPlanProcessFunction<>(plan);
-    assertThrows(IllegalStateException.class, () -> fn.open(new Configuration()));
+    assertThrows(IllegalStateException.class, () -> fn.open((OpenContext) null));
   }
 
   @Test

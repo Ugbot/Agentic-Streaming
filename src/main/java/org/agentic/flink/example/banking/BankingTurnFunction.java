@@ -1,4 +1,5 @@
 package org.agentic.flink.example.banking;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import java.util.List;
 import org.agentic.flink.a2a.A2AArtifact;
@@ -68,7 +69,7 @@ public final class BankingTurnFunction
   }
 
   @Override
-  public void open(Configuration parameters) {
+  public void open(OpenContext openContext) {
     budgetState =
         getRuntimeContext()
             .getState(new ValueStateDescriptor<>("routing-budget-" + agentId, RoutingBudget.class));

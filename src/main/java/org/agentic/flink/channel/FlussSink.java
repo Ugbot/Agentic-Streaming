@@ -23,7 +23,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.java.functions.KeySelector;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

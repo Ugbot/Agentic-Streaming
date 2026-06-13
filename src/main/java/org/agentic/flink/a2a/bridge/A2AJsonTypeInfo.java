@@ -3,7 +3,7 @@ package org.agentic.flink.a2a.bridge;
 import java.io.IOException;
 import java.util.Objects;
 import org.agentic.flink.a2a.A2AJson;
-import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.SimpleTypeSerializerSnapshot;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -65,7 +65,7 @@ public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
   }
 
   @Override
-  public TypeSerializer<T> createSerializer(ExecutionConfig config) {
+  public TypeSerializer<T> createSerializer(SerializerConfig config) {
     return new A2AJsonSerializer<>(type);
   }
 

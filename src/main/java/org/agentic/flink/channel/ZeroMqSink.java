@@ -1,4 +1,5 @@
 package org.agentic.flink.channel;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
@@ -8,7 +9,7 @@ import java.util.Objects;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
@@ -128,7 +129,7 @@ public final class ZeroMqSink<T> extends RichSinkFunction<T> {
   }
 
   @Override
-  public void open(Configuration parameters) {
+  public void open(OpenContext openContext) {
     this.zc = new ZContext();
     this.sock = zc.createSocket(toSocketType(pattern));
     sock.setSndHWM(hwm);

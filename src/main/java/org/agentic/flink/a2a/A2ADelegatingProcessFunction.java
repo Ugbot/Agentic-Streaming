@@ -1,4 +1,5 @@
 package org.agentic.flink.a2a;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +44,7 @@ public final class A2ADelegatingProcessFunction
   }
 
   @Override
-  public void open(Configuration parameters) {
+  public void open(OpenContext openContext) {
     client = step.clientFactory().create(step.spec());
     contextIdState =
         getRuntimeContext()

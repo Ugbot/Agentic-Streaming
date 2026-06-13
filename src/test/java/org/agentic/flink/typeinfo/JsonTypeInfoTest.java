@@ -15,7 +15,7 @@ import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatRole;
-import org.apache.flink.api.common.ExecutionConfig;
+import org.apache.flink.api.common.serialization.SerializerConfigImpl;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 class JsonTypeInfoTest {
 
   private static <T> T roundTrip(JsonTypeInfo<T> info, T value) throws Exception {
-    TypeSerializer<T> ser = info.createSerializer(new ExecutionConfig());
+    TypeSerializer<T> ser = info.createSerializer(new SerializerConfigImpl());
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     ser.serialize(value, new DataOutputViewStreamWrapper(bos));
     return ser.deserialize(new DataInputViewStreamWrapper(new ByteArrayInputStream(bos.toByteArray())));
@@ -67,7 +67,7 @@ class JsonTypeInfoTest {
     assertEquals(7, ((Number) restored.getData().get("n")).intValue());
 
     // Mutable copy() must deep-copy so Flink object reuse can't alias live state.
-    TypeSerializer<AgentEvent> ser = info.createSerializer(new ExecutionConfig());
+    TypeSerializer<AgentEvent> ser = info.createSerializer(new SerializerConfigImpl());
     assertFalse(ser.isImmutableType());
     AgentEvent copy = ser.copy(ev);
     assertNotSame(ev, copy);

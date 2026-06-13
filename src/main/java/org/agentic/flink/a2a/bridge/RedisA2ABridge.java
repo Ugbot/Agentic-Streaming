@@ -1,4 +1,5 @@
 package org.agentic.flink.a2a.bridge;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import java.util.List;
 import org.agentic.flink.a2a.A2AJson;
@@ -7,8 +8,8 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
+import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -57,7 +58,7 @@ public final class RedisA2ABridge implements A2ABridge {
   }
 
   @Override
-  public org.apache.flink.streaming.api.functions.sink.SinkFunction<A2AResponse> responseSink() {
+  public org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction<A2AResponse> responseSink() {
     return new RedisResponseSink(host, port, responseChannel);
   }
 
@@ -169,7 +170,7 @@ public final class RedisA2ABridge implements A2ABridge {
     }
 
     @Override
-    public void open(Configuration parameters) {
+    public void open(OpenContext openContext) {
       pool = new JedisPool(host, port);
     }
 

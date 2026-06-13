@@ -22,7 +22,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <quarkus.platform.version>3.30.6</quarkus.platform.version>
         <a2a.version>1.0.0.Alpha3</a2a.version>
-        <flink.version>1.20.1</flink.version>
+        <flink.version>2.2.1</flink.version>
         <agentic.flink.version>1.0.0-SNAPSHOT</agentic.flink.version>
     </properties>
 
