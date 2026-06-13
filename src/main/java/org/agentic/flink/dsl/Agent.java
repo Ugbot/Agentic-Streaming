@@ -145,6 +145,10 @@ public class Agent implements Serializable {
   private final SkillRegistry skillRegistry;
   private final List<McpServerSpec> mcpServers;
 
+  // A2A remote agents (peers)
+  private final List<org.agentic.flink.a2a.RemoteAgentSpec> remoteAgents;
+  private final org.agentic.flink.a2a.A2AClientFactory a2aClientFactory;
+
   // Inference
   private final Map<String, InferenceConnection> inferenceConnections;
   private final List<InferenceToolAdapter> inferenceTools;
@@ -229,6 +233,12 @@ public class Agent implements Serializable {
     this.skillRegistry = rb.build();
     this.mcpServers =
         Collections.unmodifiableList(new ArrayList<>(builder.mcpServers));
+    this.remoteAgents =
+        Collections.unmodifiableList(new ArrayList<>(builder.remoteAgents));
+    this.a2aClientFactory =
+        builder.a2aClientFactory == null
+            ? org.agentic.flink.a2a.A2AClientFactory.discovering()
+            : builder.a2aClientFactory;
 
     // Inference
     this.inferenceConnections =
@@ -298,8 +308,11 @@ public class Agent implements Serializable {
   public List<AgentEventListener> getListeners() { return listeners; }
   public SkillRegistry getSkillRegistry() { return skillRegistry; }
   public List<McpServerSpec> getMcpServers() { return mcpServers; }
+  public List<org.agentic.flink.a2a.RemoteAgentSpec> getRemoteAgents() { return remoteAgents; }
+  public org.agentic.flink.a2a.A2AClientFactory getA2AClientFactory() { return a2aClientFactory; }
   public boolean hasSkills() { return skillRegistry != null && skillRegistry.size() > 0; }
   public boolean hasMcpServers() { return !mcpServers.isEmpty(); }
+  public boolean hasRemoteAgents() { return !remoteAgents.isEmpty(); }
 
   public Map<String, InferenceConnection> getInferenceConnections() { return inferenceConnections; }
   public InferenceConnection getInferenceConnection(String name) { return inferenceConnections.get(name); }
