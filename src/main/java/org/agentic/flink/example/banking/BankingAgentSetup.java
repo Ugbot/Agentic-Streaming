@@ -96,6 +96,15 @@ public final class BankingAgentSetup {
 
   /** Build the agent for {@code role} from environment variables. */
   public static BankingAgentSetup fromEnv(Role role) {
+    return fromEnv(role, null);
+  }
+
+  /**
+   * Build the agent for {@code role}, optionally overriding the personal→CS client (e.g. with a
+   * minimal spec-conformant HTTP client instead of the SDK one).
+   */
+  public static BankingAgentSetup fromEnv(
+      Role role, BankingTurnContext.CustomerServiceClient csOverride) {
     BankingModel model = BankingModel.fromEnv();
     SessionAuthState authState = new SessionAuthState();
     Map<String, ToolExecutor> tools = new LinkedHashMap<>();
@@ -122,7 +131,7 @@ public final class BankingAgentSetup {
       systemPrompt = csSystemPrompt();
     } else {
       systemPrompt = personalSystemPrompt();
-      cs = customerServiceClient();
+      cs = csOverride != null ? csOverride : customerServiceClient();
     }
 
     int maxRoundTrips = intEnv("A2A_MAX_ROUND_TRIPS", 4);

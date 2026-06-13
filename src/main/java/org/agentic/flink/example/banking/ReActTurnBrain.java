@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import org.agentic.flink.function.ReActProcessFunction;
+
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
@@ -43,7 +43,7 @@ public final class ReActTurnBrain implements TurnBrain {
   private final long toolTimeoutMs;
 
   private transient volatile ChatClient client;
-  private transient volatile OutputSchema<ReActProcessFunction.ReActStep> schema;
+  private transient volatile OutputSchema<ReActStep> schema;
 
   public ReActTurnBrain(
       ChatConnection connection,
@@ -71,9 +71,8 @@ public final class ReActTurnBrain implements TurnBrain {
     while (ctx.withinDeadline() && ctx.budget().allowIteration()) {
       ChatResponse response = client().chat(messages, turnSetup);
       lastText = response.getText() == null ? "" : response.getText();
-      messages.add(ChatMessage.assistant(lastText));
 
-      ReActProcessFunction.ReActStep step;
+      ReActStep step;
       try {
         step = response.as(schema());
       } catch (OutputSchema.SchemaViolation e) {
@@ -85,13 +84,17 @@ public final class ReActTurnBrain implements TurnBrain {
       if ("final".equals(type)) {
         return step.getAnswer() != null ? step.getAnswer() : lastText;
       }
+
+      // Record the model's step, then always continue with a USER turn so the transcript ends on a
+      // user message before the next call (Anthropic rejects assistant-terminated conversations).
+      messages.add(ChatMessage.assistant(lastText));
       if ("action".equals(type) && step.getTool() != null) {
         Map<String, Object> args = step.getArguments() == null ? new HashMap<>() : step.getArguments();
         String observation = runTool(step.getTool(), args, ctx);
-        messages.add(ChatMessage.tool("react-" + ctx.budget().iterationsUsed(), step.getTool(), observation));
-        continue;
+        messages.add(ChatMessage.user("Observation from " + step.getTool() + ": " + observation));
+      } else {
+        messages.add(ChatMessage.user("Continue: respond with your next step or a final answer."));
       }
-      // "thought" / unrecognized — keep looping.
     }
 
     // Budget exhausted — answer with what we have, never spin into the timeout.
@@ -159,12 +162,12 @@ public final class ReActTurnBrain implements TurnBrain {
     return c;
   }
 
-  private OutputSchema<ReActProcessFunction.ReActStep> schema() {
-    OutputSchema<ReActProcessFunction.ReActStep> s = schema;
+  private OutputSchema<ReActStep> schema() {
+    OutputSchema<ReActStep> s = schema;
     if (s == null) {
       synchronized (this) {
         if (schema == null) {
-          schema = OutputSchema.of(ReActProcessFunction.ReActStep.class);
+          schema = OutputSchema.of(ReActStep.class);
         }
         s = schema;
       }

@@ -52,6 +52,12 @@ public final class BankingModel implements Serializable {
         return new BankingModel(
             c, setup(model == null ? "gemini-3.5-flash" : model, temperature, maxTokens));
       }
+      case "anthropic":
+      case "claude": {
+        ChatConnection c = LangChain4jChatConnection.anthropic(require("ANTHROPIC_API_KEY"));
+        return new BankingModel(
+            c, setup(model == null ? "claude-sonnet-4-6" : model, temperature, maxTokens));
+      }
       case "ollama": {
         ChatConnection c =
             LangChain4jChatConnection.ollama(env("OLLAMA_BASE_URL", "http://localhost:11434"));
