@@ -41,8 +41,15 @@ public final class BankingModel implements Serializable {
 
   /** Resolve the model from environment variables (see class doc). */
   public static BankingModel fromEnv() {
-    String provider = env("LLM_PROVIDER", "openai").toLowerCase(Locale.ROOT);
     String model = System.getenv("MODEL");
+    // Honor an explicit LLM_PROVIDER; otherwise INFER it. The hackathon's compose injects only
+    // MODEL=gemini-3.5-flash + GOOGLE_API_KEY (no LLM_PROVIDER), and a marked run MUST use Gemini —
+    // so we must not silently fall back to the OpenAI dev default in that case.
+    String providerEnv = System.getenv("LLM_PROVIDER");
+    String provider =
+        (providerEnv != null && !providerEnv.isBlank())
+            ? providerEnv.toLowerCase(Locale.ROOT)
+            : inferProvider(model);
     double temperature = 0.2;
     int maxTokens = 1024;
 
@@ -71,6 +78,45 @@ public final class BankingModel implements Serializable {
         return new BankingModel(c, setup(model == null ? "gpt-5.4-nano" : model, temperature, maxTokens));
       }
     }
+  }
+
+  /**
+   * Infer the provider when {@code LLM_PROVIDER} is unset: the model name wins (a {@code gemini-*}
+   * or {@code gpt-*}/{@code o*} id is unambiguous), then an available credential, else the OpenAI
+   * dev default. This makes the hackathon compose (MODEL=gemini-3.5-flash + GOOGLE_API_KEY) select
+   * Gemini with no extra env.
+   */
+  private static String inferProvider(String model) {
+    if (model != null && !model.isBlank()) {
+      String m = model.toLowerCase(Locale.ROOT);
+      if (m.startsWith("gemini")) {
+        return "gemini";
+      }
+      if (m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3") || m.startsWith("o4")) {
+        return "openai";
+      }
+      if (m.startsWith("claude")) {
+        return "anthropic";
+      }
+    }
+    if (isSet("GOOGLE_API_KEY")) {
+      return "gemini";
+    }
+    if (isSet("OPENAI_API_KEY")) {
+      return "openai";
+    }
+    if (isSet("ANTHROPIC_API_KEY")) {
+      return "anthropic";
+    }
+    if (isSet("OLLAMA_BASE_URL")) {
+      return "ollama";
+    }
+    return "openai"; // dev default (gpt-5.4-nano)
+  }
+
+  private static boolean isSet(String key) {
+    String v = System.getenv(key);
+    return v != null && !v.isBlank();
   }
 
   private static ChatSetup setup(String model, double temperature, int maxTokens) {
