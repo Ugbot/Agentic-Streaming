@@ -113,6 +113,6 @@ public final class BankingAgentGraph {
             turnType,
             A2AJsonTypeInfo.of(A2AResponse.class));
 
-    responses.addSink(bridge.responseSink()).name("a2a-response-sink");
+    responses.sinkTo(bridge.responseSink()).name("a2a-response-sink");
   }
 }

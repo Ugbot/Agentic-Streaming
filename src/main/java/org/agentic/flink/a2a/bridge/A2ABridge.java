@@ -2,7 +2,7 @@ package org.agentic.flink.a2a.bridge;
 
 import java.io.Serializable;
 import org.agentic.flink.channel.Channel;
-import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
+import org.apache.flink.api.connector.sink2.Sink;
 
 /**
  * Pluggable transport connecting the Quarkus A2A gateway to a running Flink agent job.
@@ -28,7 +28,7 @@ public interface A2ABridge extends Serializable {
   Channel<A2ARequest> requestChannel();
 
   /** Flink sink the job writes agent results/updates to; delivered back to the gateway. */
-  SinkFunction<A2AResponse> responseSink();
+  Sink<A2AResponse> responseSink();
 
   /** Open the gateway-side connector (non-Flink side). Call from the gateway process. */
   A2AGatewayConnector openGateway() throws Exception;

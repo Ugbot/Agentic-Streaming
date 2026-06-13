@@ -4,7 +4,7 @@ import org.agentic.flink.a2a.A2AJson;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.ZeroMqChannel;
 import org.agentic.flink.channel.ZeroMqSink;
-import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
+import org.apache.flink.api.connector.sink2.Sink;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
@@ -42,7 +42,7 @@ public final class ZeroMqA2ABridge implements A2ABridge {
   }
 
   @Override
-  public SinkFunction<A2AResponse> responseSink() {
+  public Sink<A2AResponse> responseSink() {
     return ZeroMqSink.<A2AResponse>builder(ZeroMqSink.Pattern.PUSH, responseEndpoint)
         .serializer(A2AWireSerde.serializer())
         .build();

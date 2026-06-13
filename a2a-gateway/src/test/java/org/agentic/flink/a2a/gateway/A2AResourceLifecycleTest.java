@@ -66,7 +66,7 @@ final class A2AResourceLifecycleTest {
     requests
         .map(new EchoResponder())
         .returns(A2AJsonTypeInfo.of(A2AResponse.class))
-        .addSink(bridge.responseSink());
+        .sinkTo(bridge.responseSink());
     job = env.executeAsync("resource-lifecycle-echo");
     Thread.sleep(300);
   }
@@ -177,7 +177,7 @@ final class A2AResourceLifecycleTest {
           .open(env)
           .map(new ClaimsEchoResponder())
           .returns(A2AJsonTypeInfo.of(A2AResponse.class))
-          .addSink(bridge.responseSink());
+          .sinkTo(bridge.responseSink());
       job = env.executeAsync("resource-claims-echo");
       Thread.sleep(300);
 

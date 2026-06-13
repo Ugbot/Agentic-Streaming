@@ -58,8 +58,9 @@ public final class RedisA2ABridge implements A2ABridge {
   }
 
   @Override
-  public org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction<A2AResponse> responseSink() {
-    return new RedisResponseSink(host, port, responseChannel);
+  public org.apache.flink.api.connector.sink2.Sink<A2AResponse> responseSink() {
+    return new org.agentic.flink.channel.sink.ForEachSink<>(
+        new RedisResponseWriteFn(host, port, responseChannel));
   }
 
   @Override
@@ -156,26 +157,27 @@ public final class RedisA2ABridge implements A2ABridge {
 
   // ==================== Flink response sink ====================
 
-  static final class RedisResponseSink extends RichSinkFunction<A2AResponse> {
+  static final class RedisResponseWriteFn
+      implements org.agentic.flink.channel.sink.ForEachSink.WriteFn<A2AResponse> {
     private static final long serialVersionUID = 1L;
     private final String host;
     private final int port;
     private final String channel;
     private transient JedisPool pool;
 
-    RedisResponseSink(String host, int port, String channel) {
+    RedisResponseWriteFn(String host, int port, String channel) {
       this.host = host;
       this.port = port;
       this.channel = channel;
     }
 
     @Override
-    public void open(OpenContext openContext) {
+    public void open(int subtaskIndex) {
       pool = new JedisPool(host, port);
     }
 
     @Override
-    public void invoke(A2AResponse value, Context context) throws Exception {
+    public void write(A2AResponse value) throws Exception {
       try (Jedis jedis = pool.getResource()) {
         jedis.rpush(channel, A2AJson.mapper().writeValueAsString(value));
       }

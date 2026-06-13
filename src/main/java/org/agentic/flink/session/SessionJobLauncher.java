@@ -27,7 +27,6 @@ import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,7 +89,7 @@ public final class SessionJobLauncher {
         env.addSource(new CoinbaseTickerSource(products), TypeInformation.of(Inventory.class))
             .name("coinbase-ws[" + String.join(",", products) + "]")
             .setParallelism(1);
-    src.addSink(sinkFor(a.require("out"), a, Inventory.class))
+    src.sinkTo(sinkFor(a.require("out"), a, Inventory.class))
         .name("sink[" + a.require("out") + "]")
         .setParallelism(1);
   }
@@ -99,7 +98,7 @@ public final class SessionJobLauncher {
   static void buildLevel1(StreamExecutionEnvironment env, Args a) throws Exception {
     DataStream<Inventory> in =
         sourceFor(a.require("in"), a, Inventory.class).open(env);
-    in.addSink(sinkFor(a.require("out"), a, Inventory.class))
+    in.sinkTo(sinkFor(a.require("out"), a, Inventory.class))
         .name("L1.passthrough.sink")
         .setParallelism(1);
   }
@@ -113,7 +112,7 @@ public final class SessionJobLauncher {
     DataStream<EnrichedInventory> enriched =
         in.connect(securities).process(new EnrichmentFn()).name("L2.enrich");
     enriched
-        .addSink(sinkFor(a.require("out"), a, EnrichedInventory.class))
+        .sinkTo(sinkFor(a.require("out"), a, EnrichedInventory.class))
         .name("L2.sink")
         .setParallelism(1);
   }
@@ -128,7 +127,7 @@ public final class SessionJobLauncher {
             .process(new TopNRankerFn(topN))
             .name("L3.top-" + topN);
     ranked
-        .addSink(sinkFor(a.require("out"), a, RankedQuote.class))
+        .sinkTo(sinkFor(a.require("out"), a, RankedQuote.class))
         .name("L3.sink")
         .setParallelism(1);
   }
@@ -143,7 +142,7 @@ public final class SessionJobLauncher {
             .process(new FeatureAggregatorFn(windowMs, topN))
             .name("L4.feature-aggregator");
     features
-        .addSink(sinkFor(a.require("out"), a, MarketFeatures.class))
+        .sinkTo(sinkFor(a.require("out"), a, MarketFeatures.class))
         .name("L4.sink")
         .setParallelism(1);
   }
@@ -180,7 +179,7 @@ public final class SessionJobLauncher {
             in.keyBy(f -> Long.toString(f.instrumentId())), control, fn);
 
     alerts
-        .addSink(sinkFor(a.require("out"), a, String.class))
+        .sinkTo(sinkFor(a.require("out"), a, String.class))
         .name("L5.sink")
         .setParallelism(1);
 
@@ -190,7 +189,7 @@ public final class SessionJobLauncher {
     // String isn't double-encoded by the default Jackson serializer.
     if (a.opt("alerts-pub").isPresent()) {
       alerts
-          .addSink(ZeroMqSink.pubRaw(a.require("alerts-pub"), ""))
+          .sinkTo(ZeroMqSink.pubRaw(a.require("alerts-pub"), ""))
           .name("L5.alerts-pub")
           .setParallelism(1);
     }
@@ -200,15 +199,13 @@ public final class SessionJobLauncher {
     // conflicts. Notebook side connects with SUB.
     if (a.opt("debug-sink").isPresent()) {
       String dbgEndpoint = a.require("debug-sink");
-      org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction<
-              org.agentic.flink.control.DebugEvent>
-          dbgSink;
+      org.apache.flink.api.connector.sink2.Sink<org.agentic.flink.control.DebugEvent> dbgSink;
       if (dbgEndpoint.startsWith("tcp://")) {
         dbgSink = ZeroMqSink.pub(dbgEndpoint, "");
       } else {
         dbgSink = sinkFor(dbgEndpoint, a, org.agentic.flink.control.DebugEvent.class);
       }
-      AgenticPipeline.debugStream(alerts).addSink(dbgSink).name("L5.debug-sink").setParallelism(1);
+      AgenticPipeline.debugStream(alerts).sinkTo(dbgSink).name("L5.debug-sink").setParallelism(1);
     }
   }
 
@@ -231,10 +228,9 @@ public final class SessionJobLauncher {
     throw new IllegalArgumentException("unknown source endpoint scheme: " + endpoint);
   }
 
-  @SuppressWarnings("unchecked")
-  static <T> RichSinkFunction<T> sinkFor(String endpoint, Args a, Class<T> type) {
+  static <T> org.apache.flink.api.connector.sink2.Sink<T> sinkFor(String endpoint, Args a, Class<T> type) {
     if (endpoint.startsWith("tcp://")) {
-      return (RichSinkFunction<T>) ZeroMqSink.push(endpoint);
+      return ZeroMqSink.push(endpoint);
     }
     if (endpoint.startsWith("fluss://")) {
       String body = endpoint.substring("fluss://".length());

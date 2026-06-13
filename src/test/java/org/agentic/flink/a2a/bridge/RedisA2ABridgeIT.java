@@ -93,7 +93,7 @@ class RedisA2ABridgeIT {
       requests
           .map(new EchoResponder())
           .returns(A2AJsonTypeInfo.of(A2AResponse.class))
-          .addSink(bridge.responseSink());
+          .sinkTo(bridge.responseSink());
       job = env.executeAsync("redis-bridge-nonlossy");
 
       A2AResponse response = connector.awaitFinal(taskId, 25_000);

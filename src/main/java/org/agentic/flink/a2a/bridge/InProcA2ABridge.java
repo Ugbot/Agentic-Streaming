@@ -12,7 +12,6 @@ import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction;
 import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 
 /**
@@ -47,8 +46,8 @@ public final class InProcA2ABridge implements A2ABridge {
   }
 
   @Override
-  public SinkFunction<A2AResponse> responseSink() {
-    return new InProcResponseSink(responseEndpoint);
+  public org.apache.flink.api.connector.sink2.Sink<A2AResponse> responseSink() {
+    return new org.agentic.flink.channel.sink.ForEachSink<>(new InProcResponseWriteFn(responseEndpoint));
   }
 
   @Override
@@ -150,16 +149,17 @@ public final class InProcA2ABridge implements A2ABridge {
 
   // ==================== Flink response sink ====================
 
-  static final class InProcResponseSink implements SinkFunction<A2AResponse> {
+  static final class InProcResponseWriteFn
+      implements org.agentic.flink.channel.sink.ForEachSink.WriteFn<A2AResponse> {
     private static final long serialVersionUID = 1L;
     private final String endpoint;
 
-    InProcResponseSink(String endpoint) {
+    InProcResponseWriteFn(String endpoint) {
       this.endpoint = endpoint;
     }
 
     @Override
-    public void invoke(A2AResponse value, Context context) {
+    public void write(A2AResponse value) {
       Hub.deliver(endpoint, value);
     }
   }

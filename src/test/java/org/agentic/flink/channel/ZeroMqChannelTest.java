@@ -52,11 +52,11 @@ final class ZeroMqChannelTest {
         new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.PULL, endpoint, true, "", 250))) {
 
       // PUSH sink connects.
-      ZeroMqSink<TestMsg> sink = ZeroMqSink.push(endpoint);
-      sink.open(null);
+      ZeroMqSink.ZmqWriteFn<TestMsg> sink = ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUSH, endpoint).writeFn();
+      sink.open(0);
       int n = 25;
       for (int i = 0; i < n; i++) {
-        sink.invoke(new TestMsg("m-" + i, i), null);
+        sink.write(new TestMsg("m-" + i, i));
       }
 
       boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
@@ -76,8 +76,8 @@ final class ZeroMqChannelTest {
     int port = freePort();
     String endpoint = "tcp://127.0.0.1:" + port;
 
-    ZeroMqSink<TestMsg> sink = ZeroMqSink.pub(endpoint, ""); // empty topic = no prefix frame
-    sink.open(null);
+    ZeroMqSink.ZmqWriteFn<TestMsg> sink = ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, endpoint).topic("").writeFn(); // empty topic = no prefix frame
+    sink.open(0);
     Thread.sleep(100); // let the bind settle
 
     try (ZmqSourceDriver<TestMsg> src =
@@ -86,7 +86,7 @@ final class ZeroMqChannelTest {
 
       int n = 20;
       for (int i = 0; i < n; i++) {
-        sink.invoke(new TestMsg("pub-" + i, i), null);
+        sink.write(new TestMsg("pub-" + i, i));
       }
 
       boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
@@ -105,11 +105,11 @@ final class ZeroMqChannelTest {
         new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.ROUTER, endpoint, true, "", 250))) {
       Thread.sleep(100);
 
-      ZeroMqSink<TestMsg> sink = ZeroMqSink.dealer(endpoint);
-      sink.open(null);
+      ZeroMqSink.ZmqWriteFn<TestMsg> sink = ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.DEALER, endpoint).writeFn();
+      sink.open(0);
       int n = 10;
       for (int i = 0; i < n; i++) {
-        sink.invoke(new TestMsg("rd-" + i, i), null);
+        sink.write(new TestMsg("rd-" + i, i));
       }
 
       boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
@@ -134,14 +134,14 @@ final class ZeroMqChannelTest {
         Thread.sleep(250);
 
         // Publisher connects to the front end of the proxy (so it must NOT bind).
-        ZeroMqSink<TestMsg> sink =
-            ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, pubFront).bind(false).build();
-        sink.open(null);
+        ZeroMqSink.ZmqWriteFn<TestMsg> sink =
+            ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, pubFront).bind(false).writeFn();
+        sink.open(0);
         Thread.sleep(150);
 
         int n = 12;
         for (int i = 0; i < n; i++) {
-          sink.invoke(new TestMsg("proxied-" + i, i), null);
+          sink.write(new TestMsg("proxied-" + i, i));
         }
 
         boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);

@@ -56,7 +56,7 @@ final class A2ARequestBridgeTest {
       requests
           .map(new EchoResponder())
           .returns(A2AJsonTypeInfo.of(A2AResponse.class))
-          .addSink(bridge.responseSink());
+          .sinkTo(bridge.responseSink());
       job = env.executeAsync("gateway-bridge-test");
       Thread.sleep(300);
 

@@ -54,7 +54,7 @@ final class A2ABridgeTest {
       requests
           .map(new EchoResponder())
           .returns(A2AJsonTypeInfo.of(A2AResponse.class))
-          .addSink(bridge.responseSink());
+          .sinkTo(bridge.responseSink());
       job = env.executeAsync("a2a-bridge-" + transport);
 
       // Give the source a moment to start before publishing.

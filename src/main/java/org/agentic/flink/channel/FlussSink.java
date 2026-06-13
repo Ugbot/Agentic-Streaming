@@ -21,16 +21,16 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import org.apache.flink.api.common.functions.OpenContext;
+import org.agentic.flink.channel.sink.ForEachSink;
 import org.apache.flink.api.java.functions.KeySelector;
-import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Fluss-backed sink that upserts each emitted {@code T} into a {@code (key, payload)} table.
- * Pairs with {@link FlussChannel} on the source side; the key is provided by a
- * {@link KeySelector}.
+ * Fluss producer side: upserts each emitted {@code T} into a {@code (key, payload)} table. A native
+ * Flink 2.x ({@link org.apache.flink.api.connector.sink2 FLIP-143}) sink — the factories return a
+ * {@link ForEachSink} backed by a {@link FlussWriteFn}; wire it with {@code stream.sinkTo(...)}.
+ * Pairs with {@link FlussChannel} on the source side; the key is provided by a {@link KeySelector}.
  *
  * <p>Table is auto-created if missing using the same envelope layout
  * {@link FlussChannel} reads. Schema is fixed:
@@ -43,36 +43,16 @@ import org.slf4j.LoggerFactory;
  *   ) DISTRIBUTED BY (key) INTO {buckets} BUCKETS;
  * </pre>
  */
-public final class FlussSink<T> extends RichSinkFunction<T> {
-  private static final long serialVersionUID = 1L;
+public final class FlussSink<T> {
   private static final Logger LOG = LoggerFactory.getLogger(FlussSink.class);
 
-  /** Public-package constant referenced by {@link FlussChannel.Source} for the payload column. */
   static final int COL_KEY = 0;
-
   static final int COL_PAYLOAD = 1;
 
-  private final String bootstrapServers;
-  private final String database;
-  private final String table;
-  private final int buckets;
-  private final SerializableKeySelector<T> keySelector;
-
-  private transient Connection connection;
-  private transient Table flussTable;
-  private transient UpsertWriter writer;
-  private transient ObjectMapper mapper;
-
-  private FlussSink(Builder<T> b) {
-    this.bootstrapServers = Objects.requireNonNull(b.bootstrapServers, "bootstrapServers");
-    this.database = Objects.requireNonNull(b.database, "database");
-    this.table = Objects.requireNonNull(b.table, "table");
-    this.buckets = b.buckets;
-    this.keySelector = b.keySelector != null ? b.keySelector : new RandomKeySelector<>();
-  }
+  private FlussSink() {}
 
   /** Convenience factory: caller supplies a key selector. */
-  public static <T> FlussSink<T> of(
+  public static <T> ForEachSink<T> of(
       String bootstrapServers,
       String database,
       String table,
@@ -81,7 +61,7 @@ public final class FlussSink<T> extends RichSinkFunction<T> {
   }
 
   /** Convenience factory: random-UUID keys per element (no upsert dedup). */
-  public static <T> FlussSink<T> randomKey(
+  public static <T> ForEachSink<T> randomKey(
       String bootstrapServers, String database, String table) {
     return new Builder<T>(bootstrapServers, database, table).build();
   }
@@ -90,85 +70,109 @@ public final class FlussSink<T> extends RichSinkFunction<T> {
     return new Builder<>(bootstrapServers, database, table);
   }
 
-  @Override
-  public void open(OpenContext openContext) throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(ConfigOptions.BOOTSTRAP_SERVERS, List.of(bootstrapServers.split(",")));
-    this.connection = ConnectionFactory.createConnection(conf);
+  /** Per-subtask Fluss upsert writer behavior. */
+  static final class FlussWriteFn<T> implements ForEachSink.WriteFn<T> {
+    private static final long serialVersionUID = 1L;
 
-    try (Admin admin = connection.getAdmin()) {
-      TablePath path = TablePath.of(database, table);
-      if (!admin.databaseExists(database).get()) {
-        admin.createDatabase(database, DatabaseDescriptor.EMPTY, true).get();
+    private final String bootstrapServers;
+    private final String database;
+    private final String table;
+    private final int buckets;
+    private final SerializableKeySelector<T> keySelector;
+
+    private transient Connection connection;
+    private transient Table flussTable;
+    private transient UpsertWriter writer;
+    private transient ObjectMapper mapper;
+
+    FlussWriteFn(Builder<T> b) {
+      this.bootstrapServers = Objects.requireNonNull(b.bootstrapServers, "bootstrapServers");
+      this.database = Objects.requireNonNull(b.database, "database");
+      this.table = Objects.requireNonNull(b.table, "table");
+      this.buckets = b.buckets;
+      this.keySelector = b.keySelector != null ? b.keySelector : new RandomKeySelector<>();
+    }
+
+    @Override
+    public void open(int subtaskIndex) throws Exception {
+      Configuration conf = new Configuration();
+      conf.set(ConfigOptions.BOOTSTRAP_SERVERS, List.of(bootstrapServers.split(",")));
+      this.connection = ConnectionFactory.createConnection(conf);
+
+      try (Admin admin = connection.getAdmin()) {
+        TablePath path = TablePath.of(database, table);
+        if (!admin.databaseExists(database).get()) {
+          admin.createDatabase(database, DatabaseDescriptor.EMPTY, true).get();
+        }
+        if (!admin.tableExists(path).get()) {
+          Schema schema =
+              Schema.newBuilder()
+                  .column("key", DataTypes.STRING())
+                  .column("payload", DataTypes.STRING())
+                  .primaryKey("key")
+                  .build();
+          TableDescriptor descriptor =
+              TableDescriptor.builder().schema(schema).distributedBy(buckets, "key").build();
+          admin.createTable(path, descriptor, true).get();
+          LOG.info("fluss sink created table {} (buckets={})", path, buckets);
+        }
       }
-      if (!admin.tableExists(path).get()) {
-        Schema schema =
-            Schema.newBuilder()
-                .column("key", DataTypes.STRING())
-                .column("payload", DataTypes.STRING())
-                .primaryKey("key")
-                .build();
-        TableDescriptor descriptor =
-            TableDescriptor.builder().schema(schema).distributedBy(buckets, "key").build();
-        admin.createTable(path, descriptor, true).get();
-        LOG.info("fluss sink created table {} (buckets={})", path, buckets);
+
+      this.flussTable = connection.getTable(TablePath.of(database, table));
+      this.writer = flussTable.newUpsert().createWriter();
+      this.mapper = new ObjectMapper().registerModule(new ParameterNamesModule());
+      LOG.info("fluss sink open db={} table={}", database, table);
+    }
+
+    @Override
+    public void write(T value) throws Exception {
+      if (value == null) {
+        return;
       }
-    }
-
-    this.flussTable = connection.getTable(TablePath.of(database, table));
-    this.writer = flussTable.newUpsert().createWriter();
-    this.mapper = new ObjectMapper().registerModule(new ParameterNamesModule());
-    LOG.info("fluss sink open db={} table={}", database, table);
-  }
-
-  @Override
-  public void invoke(T value, Context context) throws Exception {
-    if (value == null) {
-      return;
-    }
-    String key;
-    try {
-      key = keySelector.getKey(value);
-    } catch (Exception e) {
-      LOG.warn("fluss sink: key selector failed, falling back to random UUID: {}", e.getMessage());
-      key = UUID.randomUUID().toString();
-    }
-    if (key == null || key.isEmpty()) {
-      key = UUID.randomUUID().toString();
-    }
-    String payload;
-    try {
-      payload = mapper.writeValueAsString(value);
-    } catch (IOException e) {
-      throw new RuntimeException("fluss sink: JSON encode failed: " + e.getMessage(), e);
-    }
-    GenericRow row = new GenericRow(2);
-    row.setField(COL_KEY, BinaryString.fromString(key));
-    row.setField(COL_PAYLOAD, BinaryString.fromString(payload));
-    writer.upsert(row).get();
-  }
-
-  @Override
-  public void close() throws Exception {
-    if (writer != null) {
+      String key;
       try {
+        key = keySelector.getKey(value);
+      } catch (Exception e) {
+        LOG.warn("fluss sink: key selector failed, falling back to random UUID: {}", e.getMessage());
+        key = UUID.randomUUID().toString();
+      }
+      if (key == null || key.isEmpty()) {
+        key = UUID.randomUUID().toString();
+      }
+      String payload;
+      try {
+        payload = mapper.writeValueAsString(value);
+      } catch (IOException e) {
+        throw new RuntimeException("fluss sink: JSON encode failed: " + e.getMessage(), e);
+      }
+      GenericRow row = new GenericRow(2);
+      row.setField(COL_KEY, BinaryString.fromString(key));
+      row.setField(COL_PAYLOAD, BinaryString.fromString(payload));
+      writer.upsert(row).get();
+    }
+
+    @Override
+    public void flush() throws Exception {
+      if (writer != null) {
         writer.flush();
-      } catch (Exception ignored) {
-        // best-effort
       }
     }
-    if (flussTable != null) {
-      try {
-        flussTable.close();
-      } catch (Exception ignored) {
-        // best-effort
+
+    @Override
+    public void close() {
+      if (flussTable != null) {
+        try {
+          flussTable.close();
+        } catch (Exception ignored) {
+          // best-effort
+        }
       }
-    }
-    if (connection != null) {
-      try {
-        connection.close();
-      } catch (Exception ignored) {
-        // best-effort
+      if (connection != null) {
+        try {
+          connection.close();
+        } catch (Exception ignored) {
+          // best-effort
+        }
       }
     }
   }
@@ -211,8 +215,8 @@ public final class FlussSink<T> extends RichSinkFunction<T> {
       return this;
     }
 
-    public FlussSink<T> build() {
-      return new FlussSink<>(this);
+    public ForEachSink<T> build() {
+      return new ForEachSink<>(new FlussWriteFn<>(this));
     }
   }
 }
