@@ -1,0 +1,3 @@
+# Default A2A client factory provider (official a2a-java SDK, JSON-RPC transport).
+# Discovered by A2AClientFactory.discovering(); requires the optional a2a-java-sdk-client dep.
+org.agentic.flink.a2a.SdkA2AClientFactory
