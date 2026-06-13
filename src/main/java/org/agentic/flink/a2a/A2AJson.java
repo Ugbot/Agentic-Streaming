@@ -1,10 +1,7 @@
 package org.agentic.flink.a2a;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import org.agentic.flink.typeinfo.FlinkJson;
 
 /**
  * The canonical Jackson {@link ObjectMapper} for A2A wire types.
@@ -19,33 +16,18 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
  */
 public final class A2AJson {
 
-  private static final ObjectMapper MAPPER = create();
-
   private A2AJson() {}
 
-  /** A fresh, fully-configured mapper. Use {@link #mapper()} unless you need to customize a copy. */
+  /**
+   * A fresh, fully-configured mapper. Delegates to {@link FlinkJson#create()} so the A2A wire codec
+   * and the framework's {@link org.agentic.flink.typeinfo.JsonTypeInfo} share one configuration.
+   */
   public static ObjectMapper create() {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.registerModule(new ParameterNamesModule());
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
-    // Drive both directions off fields, not getters, so property names equal the constructor
-    // parameter names the ParameterNamesModule binds against. This avoids boolean-getter renaming
-    // (e.g. isFinal() -> "final") that would otherwise fail to bind the "isFinal" constructor arg.
-    mapper.setVisibility(
-        mapper
-            .getSerializationConfig()
-            .getDefaultVisibilityChecker()
-            .withFieldVisibility(JsonAutoDetect.Visibility.ANY)
-            .withGetterVisibility(JsonAutoDetect.Visibility.NONE)
-            .withIsGetterVisibility(JsonAutoDetect.Visibility.NONE)
-            .withSetterVisibility(JsonAutoDetect.Visibility.NONE)
-            .withCreatorVisibility(JsonAutoDetect.Visibility.ANY));
-    return mapper;
+    return FlinkJson.create();
   }
 
-  /** The shared, thread-safe mapper instance. */
+  /** The shared, thread-safe mapper instance (the same one {@link FlinkJson#mapper()} returns). */
   public static ObjectMapper mapper() {
-    return MAPPER;
+    return FlinkJson.mapper();
   }
 }

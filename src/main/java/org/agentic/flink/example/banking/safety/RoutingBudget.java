@@ -3,6 +3,8 @@ package org.agentic.flink.example.banking.safety;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
+import org.apache.flink.api.common.typeinfo.TypeInfo;
 
 /**
  * Per-session anti-explosion budget — the linchpin that keeps the two banking agents from running
@@ -24,8 +26,21 @@ import java.util.Deque;
  * Flink state. Time is passed in (never {@code System.currentTimeMillis()} inside) so it stays
  * deterministic and testable.
  */
+@TypeInfo(RoutingBudget.Factory.class)
 public final class RoutingBudget implements Serializable {
   private static final long serialVersionUID = 1L;
+
+  /**
+   * Stores the budget in Flink keyed state as JSON ({@link org.agentic.flink.typeinfo.FlinkJson})
+   * rather than the old manual {@code byte[]} Java-serialization workaround. Jackson binds the caps
+   * via the all-args constructor ({@code ParameterNamesModule}) and restores the mutable counters +
+   * the {@code recentHashes} deque via field access. Mutable, so Flink object reuse deep-copies it.
+   */
+  public static final class Factory extends JsonTypeInfoFactory<RoutingBudget> {
+    public Factory() {
+      super(RoutingBudget.class, true);
+    }
+  }
 
   private final int maxRoundTrips;
   private final int maxIterations;

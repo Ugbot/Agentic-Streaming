@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
+import org.apache.flink.api.common.typeinfo.TypeInfo;
 
 /**
  * Complete agent context containing all memory types
@@ -13,7 +15,15 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor  // Required for Jackson deserialization
+@TypeInfo(AgentContext.Factory.class)
 public class AgentContext implements Serializable {
+
+  /** JSON (FlinkJson) serialization in keyed state instead of Kryo (customData is Map&lt;String,Object&gt;). */
+  public static final class Factory extends JsonTypeInfoFactory<AgentContext> {
+    public Factory() {
+      super(AgentContext.class, true);
+    }
+  }
 
   private String agentId;
   private String flowId;

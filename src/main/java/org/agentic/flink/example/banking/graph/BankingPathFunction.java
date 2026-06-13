@@ -34,7 +34,7 @@ public final class BankingPathFunction
   private final long turnDeadlineMs;
   private final int dedupeWindow;
 
-  private transient ValueState<byte[]> budgetState;
+  private transient ValueState<RoutingBudget> budgetState;
 
   public BankingPathFunction(
       BankingPath path,
@@ -57,9 +57,7 @@ public final class BankingPathFunction
   public void open(Configuration parameters) {
     budgetState =
         getRuntimeContext()
-            .getState(
-                new ValueStateDescriptor<>(
-                    "banking-budget-" + path, TypeInformation.of(byte[].class)));
+            .getState(new ValueStateDescriptor<>("banking-budget-" + path, RoutingBudget.class));
   }
 
   @Override
@@ -71,7 +69,7 @@ public final class BankingPathFunction
     }
 
     long now = ctx.timerService().currentProcessingTime();
-    RoutingBudget budget = deserialize(budgetState.value());
+    RoutingBudget budget = budgetState.value();
     if (budget == null) {
       budget = new RoutingBudget(maxRoundTrips, maxIterations, turnDeadlineMs, dedupeWindow);
     }
@@ -92,30 +90,7 @@ public final class BankingPathFunction
 
     turn.setReplyText(result.value);
     turn.setActionPerformed(result.actionPerformed);
-    budgetState.update(serialize(budget));
+    budgetState.update(budget);
     out.collect(turn);
-  }
-
-  private static byte[] serialize(RoutingBudget budget) {
-    try (java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
-      oos.writeObject(budget);
-      oos.flush();
-      return bos.toByteArray();
-    } catch (java.io.IOException e) {
-      throw new RuntimeException("Failed to persist RoutingBudget", e);
-    }
-  }
-
-  private static RoutingBudget deserialize(byte[] bytes) {
-    if (bytes == null) {
-      return null;
-    }
-    try (java.io.ObjectInputStream ois =
-        new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes))) {
-      return (RoutingBudget) ois.readObject();
-    } catch (java.io.IOException | ClassNotFoundException e) {
-      throw new RuntimeException("Failed to read RoutingBudget", e);
-    }
   }
 }

@@ -10,7 +10,6 @@ import org.agentic.flink.example.banking.safety.RoutingBudget;
 import org.agentic.flink.screening.ScreeningResult;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
@@ -46,9 +45,9 @@ public final class BankingTurnFunction
   private final long turnDeadlineMs;
   private final int dedupeWindow;
 
-  // Stored as bytes via Java serialization: RoutingBudget is Serializable but not a Flink POJO
-  // (final fields + an ArrayDeque), so Kryo can't round-trip it in keyed state.
-  private transient ValueState<byte[]> budgetState;
+  // RoutingBudget is @TypeInfo-annotated (JSON via FlinkJson), so it's a first-class keyed-state
+  // type — no manual byte[] / Kryo workaround needed.
+  private transient ValueState<RoutingBudget> budgetState;
   private transient BankingScreening screening;
 
   public BankingTurnFunction(
@@ -72,9 +71,7 @@ public final class BankingTurnFunction
   public void open(Configuration parameters) {
     budgetState =
         getRuntimeContext()
-            .getState(
-                new ValueStateDescriptor<>(
-                    "routing-budget-" + agentId, TypeInformation.of(byte[].class)));
+            .getState(new ValueStateDescriptor<>("routing-budget-" + agentId, RoutingBudget.class));
     screening = BankingScreening.defaults();
   }
 
@@ -84,7 +81,7 @@ public final class BankingTurnFunction
     String contextId = req.getContextId() != null ? req.getContextId() : req.getTaskId();
     long now = ctx.timerService().currentProcessingTime();
 
-    RoutingBudget budget = deserialize(budgetState.value());
+    RoutingBudget budget = budgetState.value();
     if (budget == null) {
       budget = new RoutingBudget(maxRoundTrips, maxIterations, turnDeadlineMs, dedupeWindow);
     }
@@ -97,7 +94,7 @@ public final class BankingTurnFunction
     if ("BLOCK".equals(screen.verdict)) {
       LOG.info("Screening BLOCK for ctx {} ({})", contextId, screen.reason);
       out.collect(reply(req, "I can't help with that request."));
-      budgetState.update(serialize(budget));
+      budgetState.update(budget);
       return;
     }
 
@@ -110,35 +107,12 @@ public final class BankingTurnFunction
             () -> brain.respond(userText, new BankingTurnContext(contextId, b, t, cs)));
 
     out.collect(reply(req, replyText));
-    budgetState.update(serialize(budget));
+    budgetState.update(budget);
   }
 
   private A2AResponse reply(A2ARequest req, String text) {
     A2AArtifact artifact =
         A2AArtifact.text(java.util.UUID.randomUUID().toString(), "reply", text == null ? "" : text);
     return A2AResponse.completed(req.getTaskId(), req.getContextId(), List.of(artifact));
-  }
-
-  private static byte[] serialize(RoutingBudget budget) {
-    try (java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-        java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
-      oos.writeObject(budget);
-      oos.flush();
-      return bos.toByteArray();
-    } catch (java.io.IOException e) {
-      throw new RuntimeException("Failed to persist RoutingBudget", e);
-    }
-  }
-
-  private static RoutingBudget deserialize(byte[] bytes) {
-    if (bytes == null) {
-      return null;
-    }
-    try (java.io.ObjectInputStream ois =
-        new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes))) {
-      return (RoutingBudget) ois.readObject();
-    } catch (java.io.IOException | ClassNotFoundException e) {
-      throw new RuntimeException("Failed to read RoutingBudget", e);
-    }
   }
 }
