@@ -1,5 +1,4 @@
 package org.agentic.flink.channel;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -10,20 +9,15 @@ import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
-import org.apache.flink.streaming.api.watermark.Watermark;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Wire-level round-trip tests for {@link ZeroMqChannel} + {@link ZeroMqSink}. The Source is
- * driven directly (without a Flink MiniCluster) against a capturing context; the Sink is driven
- * via its {@link ZeroMqSink#open}/{@link ZeroMqSink#invoke} lifecycle.
+ * Wire-level round-trip tests for {@link ZeroMqChannel} (now a native FLIP-27 {@code PollingSource}
+ * via {@link ZeroMqChannel.ZmqPollFn}) + {@link ZeroMqSink}. The source side is driven directly
+ * through the {@code ZmqPollFn} open/poll/close lifecycle on a worker thread (no MiniCluster); the
+ * sink via its open/invoke lifecycle.
  *
  * <p>Uses an ephemeral free port to avoid collisions and the JDK's {@link ServerSocket} trick to
  * grab one without race-prone {@code tcp://*:0} parsing on the jeromq side.
@@ -38,60 +32,41 @@ final class ZeroMqChannelTest {
     }
   }
 
+  private static ZeroMqChannel.ZmqPollFn<TestMsg> pollFn(
+      ZeroMqChannel.Pattern pattern, String endpoint, boolean bind, String sub, int recvTimeoutMs) {
+    ZeroMqChannel<TestMsg> ch =
+        ZeroMqChannel.builder(pattern, endpoint, TestMsg.class).build();
+    return new ZeroMqChannel.ZmqPollFn<>(
+        pattern, endpoint, bind, sub, 1000, 0, recvTimeoutMs,
+        new KafkaChannel.JsonSchema<>(TestMsg.class, ch.elementType()));
+  }
+
   @Test
   @DisplayName("PUSH/PULL: sink invokes N strings, source receives N")
   void pushPullRoundTrip() throws Exception {
     int port = freePort();
     String endpoint = "tcp://127.0.0.1:" + port;
 
-    // PULL source binds. Drive it on a worker thread; collect into a queue via a capturing ctx.
-    ZeroMqChannel<TestMsg> ch = ZeroMqChannel.pull(endpoint, TestMsg.class);
-    // Build the inner Source by re-constructing with the same parameters via reflection? No —
-    // we expose package-private fields, so just open it in a controlled way:
-    final ZeroMqChannel.Source<TestMsg> src =
-        new ZeroMqChannel.Source<>(
-            ZeroMqChannel.Pattern.PULL,
-            endpoint,
-            true,
-            "",
-            1000,
-            0,
-            250,
-            new KafkaChannel.JsonSchema<>(TestMsg.class, ch.elementType()));
+    // PULL source binds; drive its PollFn on a worker thread.
+    try (ZmqSourceDriver<TestMsg> src =
+        new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.PULL, endpoint, true, "", 250))) {
 
-    CapturingCtx<TestMsg> ctx = new CapturingCtx<>();
-    Thread runner =
-        new Thread(
-            () -> {
-              try {
-                src.run(ctx);
-              } catch (Exception e) {
-                ctx.fail(e);
-              }
-            },
-            "zmq-test-pull");
-    runner.setDaemon(true);
-    runner.start();
+      // PUSH sink connects.
+      ZeroMqSink<TestMsg> sink = ZeroMqSink.push(endpoint);
+      sink.open(null);
+      int n = 25;
+      for (int i = 0; i < n; i++) {
+        sink.invoke(new TestMsg("m-" + i, i), null);
+      }
 
-    // PUSH sink connects.
-    ZeroMqSink<TestMsg> sink = ZeroMqSink.push(endpoint);
-    sink.open((OpenContext) null);
-
-    int n = 25;
-    for (int i = 0; i < n; i++) {
-      sink.invoke(new TestMsg("m-" + i, i), null);
-    }
-
-    boolean ok = ctx.awaitCount(n, 5, TimeUnit.SECONDS);
-    src.cancel();
-    runner.join(2000);
-    sink.close();
-
-    assertTrue(ok, "expected " + n + " messages, got " + ctx.collected.size());
-    List<TestMsg> got = new ArrayList<>(ctx.collected);
-    for (int i = 0; i < n; i++) {
-      assertEquals("m-" + i, got.get(i).id, "out-of-order at " + i);
-      assertEquals(i, got.get(i).value, "value mismatch at " + i);
+      boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
+      sink.close();
+      assertTrue(ok, "expected " + n + " messages, got " + src.collected.size());
+      List<TestMsg> got = new ArrayList<>(src.collected);
+      for (int i = 0; i < n; i++) {
+        assertEquals("m-" + i, got.get(i).id, "out-of-order at " + i);
+        assertEquals(i, got.get(i).value, "value mismatch at " + i);
+      }
     }
   }
 
@@ -102,52 +77,22 @@ final class ZeroMqChannelTest {
     String endpoint = "tcp://127.0.0.1:" + port;
 
     ZeroMqSink<TestMsg> sink = ZeroMqSink.pub(endpoint, ""); // empty topic = no prefix frame
-    sink.open((OpenContext) null);
+    sink.open(null);
+    Thread.sleep(100); // let the bind settle
 
-    // Give the bind a moment, then connect a SUB and let it settle (PUB/SUB has a slow-joiner
-    // window where early messages are dropped).
-    Thread.sleep(100);
+    try (ZmqSourceDriver<TestMsg> src =
+        new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.SUB, endpoint, false, "", 250))) {
+      Thread.sleep(300); // settle the subscription (PUB/SUB slow-joiner window)
 
-    ZeroMqChannel<TestMsg> ch = ZeroMqChannel.sub(endpoint, TestMsg.class, "");
-    final ZeroMqChannel.Source<TestMsg> src =
-        new ZeroMqChannel.Source<>(
-            ZeroMqChannel.Pattern.SUB,
-            endpoint,
-            false,
-            "",
-            1000,
-            0,
-            250,
-            new KafkaChannel.JsonSchema<>(TestMsg.class, ch.elementType()));
+      int n = 20;
+      for (int i = 0; i < n; i++) {
+        sink.invoke(new TestMsg("pub-" + i, i), null);
+      }
 
-    CapturingCtx<TestMsg> ctx = new CapturingCtx<>();
-    Thread runner =
-        new Thread(
-            () -> {
-              try {
-                src.run(ctx);
-              } catch (Exception e) {
-                ctx.fail(e);
-              }
-            },
-            "zmq-test-sub");
-    runner.setDaemon(true);
-    runner.start();
-
-    // Settle the subscription.
-    Thread.sleep(300);
-
-    int n = 20;
-    for (int i = 0; i < n; i++) {
-      sink.invoke(new TestMsg("pub-" + i, i), null);
+      boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
+      sink.close();
+      assertTrue(ok, "expected " + n + " messages, got " + src.collected.size());
     }
-
-    boolean ok = ctx.awaitCount(n, 5, TimeUnit.SECONDS);
-    src.cancel();
-    runner.join(2000);
-    sink.close();
-
-    assertTrue(ok, "expected " + n + " messages, got " + ctx.collected.size());
   }
 
   @Test
@@ -156,49 +101,21 @@ final class ZeroMqChannelTest {
     int port = freePort();
     String endpoint = "tcp://127.0.0.1:" + port;
 
-    // ROUTER source binds.
-    ZeroMqChannel<TestMsg> ch = ZeroMqChannel.router(endpoint, TestMsg.class);
-    final ZeroMqChannel.Source<TestMsg> src =
-        new ZeroMqChannel.Source<>(
-            ZeroMqChannel.Pattern.ROUTER,
-            endpoint,
-            true,
-            "",
-            1000,
-            0,
-            250,
-            new KafkaChannel.JsonSchema<>(TestMsg.class, ch.elementType()));
-    CapturingCtx<TestMsg> ctx = new CapturingCtx<>();
-    Thread runner =
-        new Thread(
-            () -> {
-              try {
-                src.run(ctx);
-              } catch (Exception e) {
-                ctx.fail(e);
-              }
-            },
-            "zmq-test-router");
-    runner.setDaemon(true);
-    runner.start();
+    try (ZmqSourceDriver<TestMsg> src =
+        new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.ROUTER, endpoint, true, "", 250))) {
+      Thread.sleep(100);
 
-    Thread.sleep(100);
+      ZeroMqSink<TestMsg> sink = ZeroMqSink.dealer(endpoint);
+      sink.open(null);
+      int n = 10;
+      for (int i = 0; i < n; i++) {
+        sink.invoke(new TestMsg("rd-" + i, i), null);
+      }
 
-    // DEALER sink connects.
-    ZeroMqSink<TestMsg> sink = ZeroMqSink.dealer(endpoint);
-    sink.open((OpenContext) null);
-
-    int n = 10;
-    for (int i = 0; i < n; i++) {
-      sink.invoke(new TestMsg("rd-" + i, i), null);
+      boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
+      sink.close();
+      assertTrue(ok, "expected " + n + " messages, got " + src.collected.size());
     }
-
-    boolean ok = ctx.awaitCount(n, 5, TimeUnit.SECONDS);
-    src.cancel();
-    runner.join(2000);
-    sink.close();
-
-    assertTrue(ok, "expected " + n + " messages, got " + ctx.collected.size());
   }
 
   @Test
@@ -212,51 +129,25 @@ final class ZeroMqChannelTest {
     try (ZeroMqProxy proxy = ZeroMqProxy.pubSubProxy(pubFront, subBack)) {
       Thread.sleep(150);
 
-      // Subscriber connects to the back end of the proxy.
-      ZeroMqChannel<TestMsg> ch = ZeroMqChannel.sub(subBack, TestMsg.class, "");
-      final ZeroMqChannel.Source<TestMsg> src =
-          new ZeroMqChannel.Source<>(
-              ZeroMqChannel.Pattern.SUB,
-              subBack,
-              false,
-              "",
-              1000,
-              0,
-              250,
-              new KafkaChannel.JsonSchema<>(TestMsg.class, ch.elementType()));
+      try (ZmqSourceDriver<TestMsg> src =
+          new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.SUB, subBack, false, "", 250))) {
+        Thread.sleep(250);
 
-      CapturingCtx<TestMsg> ctx = new CapturingCtx<>();
-      Thread runner =
-          new Thread(
-              () -> {
-                try {
-                  src.run(ctx);
-                } catch (Exception e) {
-                  ctx.fail(e);
-                }
-              },
-              "zmq-test-proxy-sub");
-      runner.setDaemon(true);
-      runner.start();
-      Thread.sleep(250);
+        // Publisher connects to the front end of the proxy (so it must NOT bind).
+        ZeroMqSink<TestMsg> sink =
+            ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, pubFront).bind(false).build();
+        sink.open(null);
+        Thread.sleep(150);
 
-      // Publisher connects to the front end of the proxy (so it must NOT bind).
-      ZeroMqSink<TestMsg> sink =
-          ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, pubFront).bind(false).build();
-      sink.open((OpenContext) null);
-      Thread.sleep(150);
+        int n = 12;
+        for (int i = 0; i < n; i++) {
+          sink.invoke(new TestMsg("proxied-" + i, i), null);
+        }
 
-      int n = 12;
-      for (int i = 0; i < n; i++) {
-        sink.invoke(new TestMsg("proxied-" + i, i), null);
+        boolean ok = src.awaitCount(n, 5, TimeUnit.SECONDS);
+        sink.close();
+        assertTrue(ok, "expected " + n + " proxied messages, got " + src.collected.size());
       }
-
-      boolean ok = ctx.awaitCount(n, 5, TimeUnit.SECONDS);
-      src.cancel();
-      runner.join(2000);
-      sink.close();
-
-      assertTrue(ok, "expected " + n + " proxied messages, got " + ctx.collected.size());
     }
   }
 
@@ -275,62 +166,64 @@ final class ZeroMqChannelTest {
     }
   }
 
-  /** Minimal capturing SourceContext for unit tests. Thread-safe collection. */
-  static final class CapturingCtx<T> implements SourceFunction.SourceContext<T> {
+  /**
+   * Drives a {@link ZeroMqChannel.ZmqPollFn} on a daemon thread: opens on that thread, loops
+   * {@code poll()} into a thread-safe queue, and closes on the same thread (ZMQ thread-affinity).
+   */
+  static final class ZmqSourceDriver<T> implements AutoCloseable {
     final ConcurrentLinkedQueue<T> collected = new ConcurrentLinkedQueue<>();
-    private final AtomicBoolean failed = new AtomicBoolean(false);
-    private volatile Throwable failure;
-    private final Object lock = new Object();
-    private CountDownLatch latch;
-    private int target;
+    private final ZeroMqChannel.ZmqPollFn<T> fn;
+    private final Thread thread;
+    private volatile boolean running = true;
 
-    boolean awaitCount(int n, long timeout, TimeUnit unit) throws InterruptedException {
-      synchronized (lock) {
-        target = n;
-        latch = new CountDownLatch(Math.max(0, n - collected.size()));
-      }
-      return latch.await(timeout, unit);
+    ZmqSourceDriver(ZeroMqChannel.ZmqPollFn<T> fn) {
+      this.fn = fn;
+      this.thread = new Thread(this::run, "zmq-test-src");
+      this.thread.setDaemon(true);
+      this.thread.start();
     }
 
-    void fail(Throwable t) {
-      failure = t;
-      failed.set(true);
-    }
-
-    @Override
-    public void collect(T element) {
-      collected.add(element);
-      synchronized (lock) {
-        if (latch != null && collected.size() <= target) {
-          latch.countDown();
+    private void run() {
+      try {
+        fn.open(0);
+        while (running) {
+          T m = fn.poll(250);
+          if (m != null) {
+            collected.add(m);
+          }
+        }
+      } catch (Exception ignored) {
+        // test thread; surfaced via awaitCount failing
+      } finally {
+        try {
+          fn.close();
+        } catch (Exception ignored) {
+          // best-effort
         }
       }
     }
 
-    @Override
-    public void collectWithTimestamp(T element, long timestamp) {
-      collect(element);
+    boolean awaitCount(int n, long timeout, TimeUnit unit) throws InterruptedException {
+      long deadline = System.nanoTime() + unit.toNanos(timeout);
+      while (System.nanoTime() < deadline) {
+        if (collected.size() >= n) {
+          return true;
+        }
+        Thread.sleep(20);
+      }
+      return collected.size() >= n;
     }
 
     @Override
-    public void emitWatermark(Watermark mark) {}
-
-    @Override
-    public void markAsTemporarilyIdle() {}
-
-    @Override
-    public Object getCheckpointLock() {
-      return lock;
+    public void close() {
+      running = false;
+      thread.interrupt();
+      try {
+        thread.join(2000);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
     }
-
-    @Override
-    public void close() {}
-  }
-
-  // Avoid an "unused import" complaint if StreamRecord ever gets pulled in.
-  @SuppressWarnings("unused")
-  private static StreamRecord<Object> never() {
-    return null;
   }
 
   static {
