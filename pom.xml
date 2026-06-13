@@ -113,6 +113,15 @@
             <version>${langchain4j.version}</version>
         </dependency>
 
+        <!-- LangChain4J Google Gemini Integration (API-key auth; required by the A2A banking demo,
+             where the model is locked to gemini-3.5-flash). For Vertex project/location auth instead,
+             swap to langchain4j-vertex-ai-gemini. -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-google-ai-gemini</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
         <!-- Apache Fluss streaming storage client (backs FlussVectorStore; optional) -->
         <dependency>
             <groupId>com.alibaba.fluss</groupId>
