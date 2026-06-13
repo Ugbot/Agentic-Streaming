@@ -36,13 +36,24 @@ public final class ConfigKeys {
   public static final String DEFAULT_REDIS_PORT = "6379";
 
   // Per-conversation memory (ConversationStore) backend selection.
-  // "memory" (default) = in-JVM; "redis" = RedisConversationStore (cross-process state spine).
+  // "memory" (default) = in-JVM; "redis" = RedisConversationStore (cross-process state spine);
+  // "fluss" = FlussConversationStore (PK-table state spine).
   public static final String CONVERSATION_STORE = "conversation.store";
   public static final String DEFAULT_CONVERSATION_STORE = "memory";
   public static final String CONVERSATION_STORE_TTL_SECONDS = "conversation.store.ttl.seconds";
   public static final String DEFAULT_CONVERSATION_STORE_TTL_SECONDS = "86400"; // 24h
   public static final String CONVERSATION_STORE_MAX_MESSAGES = "conversation.store.max.messages";
   public static final String DEFAULT_CONVERSATION_STORE_MAX_MESSAGES = "200";
+
+  // Fluss conversation store (PK table). bootstrap servers + database/table to upsert into.
+  public static final String FLUSS_BOOTSTRAP_SERVERS = "fluss.bootstrap.servers";
+  public static final String DEFAULT_FLUSS_BOOTSTRAP_SERVERS = "localhost:9123";
+  public static final String CONVERSATION_STORE_FLUSS_DATABASE = "conversation.store.fluss.database";
+  public static final String DEFAULT_CONVERSATION_STORE_FLUSS_DATABASE = "agentic";
+  public static final String CONVERSATION_STORE_FLUSS_TABLE = "conversation.store.fluss.table";
+  public static final String DEFAULT_CONVERSATION_STORE_FLUSS_TABLE = "conversations";
+  public static final String CONVERSATION_STORE_FLUSS_BUCKETS = "conversation.store.fluss.buckets";
+  public static final String DEFAULT_CONVERSATION_STORE_FLUSS_BUCKETS = "4";
 
   // PostgreSQL
   public static final String POSTGRES_URL = "postgres.url";
