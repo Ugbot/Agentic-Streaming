@@ -92,6 +92,47 @@ final class ReActTurnBrainTest {
     assertTrue(reply != null);
   }
 
+  @Test
+  @DisplayName("a 'I need to inspect the tools first' stall final is rejected and forces the action")
+  void stallFinalForcesAction() {
+    AtomicInteger toolCalls = new AtomicInteger();
+    ToolExecutor listTools =
+        new StubTool(
+            "list_env_tools",
+            p -> {
+              toolCalls.incrementAndGet();
+              return Map.of("error", false, "content", "[{\"name\":\"apply\",\"params\":[\"card_type\"]}]");
+            });
+    // 1) stall final (must be pushed back), 2) the action it should have emitted, 3) real final.
+    ChatConnection chat =
+        new ScriptedChat(
+            List.of(
+                "{\"type\":\"final\",\"answer\":\"I can't proceed yet — I need to inspect the available tools first.\"}",
+                "{\"type\":\"action\",\"tool\":\"list_env_tools\",\"arguments\":{}}",
+                "{\"type\":\"final\",\"answer\":\"Done — application submitted.\"}"));
+
+    ReActTurnBrain brain =
+        new ReActTurnBrain(chat, setup(), "agent", Map.of("list_env_tools", listTools), 5000);
+    String reply = brain.respond("apply for the card", ctx(RoutingBudget.defaults(), null));
+
+    assertEquals("Done — application submitted.", reply);
+    assertEquals(1, toolCalls.get(), "the stall guard must make the model actually call the tool");
+  }
+
+  @Test
+  @DisplayName("a genuine final (no tool-stall language) is returned as-is, not nudged")
+  void genuineFinalNotNudged() {
+    ToolExecutor unused = new StubTool("list_env_tools", p -> Map.of("error", false, "content", "x"));
+    ChatConnection chat =
+        new ScriptedChat(
+            List.of(
+                "{\"type\":\"final\",\"answer\":\"The Gold Rewards Card has 2.5% cash back and no annual fee.\"}"));
+    ReActTurnBrain brain =
+        new ReActTurnBrain(chat, setup(), "agent", Map.of("list_env_tools", unused), 5000);
+    String reply = brain.respond("which card is best?", ctx(RoutingBudget.defaults(), null));
+    assertEquals("The Gold Rewards Card has 2.5% cash back and no annual fee.", reply);
+  }
+
   // ---- scripted chat doubles ----
 
   /** Returns each scripted response once, in order; repeats the last when exhausted. */

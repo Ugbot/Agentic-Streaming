@@ -199,8 +199,14 @@ public final class BankingAgentSetup {
         break;
       case GATHER:
         directive =
-            "You are missing required details from the user. Ask a concise question for exactly the"
-                + " detail(s) still needed to proceed, then stop. Do not call tools.";
+            "You are missing details the action will require. Ask the user — in ONE concise message"
+                + " — for ONLY the values the upcoming action actually needs (the parameters its"
+                + " schema lists), e.g. full legal name, annual income, and whether they hold a"
+                + " Rho-Bank+ subscription/membership (a required argument that changes"
+                + " eligibility/rewards). Do NOT ask for details the action doesn't take (e.g. don't"
+                + " demand phone/email for a card application that doesn't require them) — over-asking"
+                + " makes users abandon. Collect everything still missing in one message, then stop."
+                + " Do not call tools.";
         break;
       case DELEGATE:
         offerCs = true;
@@ -213,9 +219,15 @@ public final class BankingAgentSetup {
         keep(subset, "list_env_tools");
         keep(subset, "call_env_tool");
         directive =
-            "Perform the user's requested action now with your environment tools. Discover the tool"
-                + " (list_env_tools) if unsure, then call_env_tool with the real argument values you"
-                + " already gathered — never placeholders. Confirm the outcome.";
+            "Perform the user's requested action with your environment tools. STEP 1: ALWAYS call"
+                + " list_env_tools first and read the exact tool name and its parameter"
+                + " names/types — NEVER guess argument names (do not invent names like 'card_name';"
+                + " use exactly the parameters the schema lists). STEP 2: call call_env_tool with"
+                + " tool_name set to that tool and arguments_json a JSON object whose keys match the"
+                + " schema's parameter names EXACTLY, filled with the real values you gathered (never"
+                + " placeholders, and include every required parameter). If a call returns an error"
+                + " about an unexpected/missing argument, re-read the schema from list_env_tools and"
+                + " correct the names — do not retry the same wrong names. Then confirm the outcome.";
         break;
       case DISPUTE:
         keep(subset, "kb_search");
