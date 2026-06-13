@@ -54,6 +54,7 @@ public class AgentJobBuilder {
   RoutingConfig routingConfig = RoutingConfig.internal();  // Default to internal routing
   MonitoringConfig monitoringConfig = MonitoringConfig.defaults();  // Default monitoring
   Map<String, Object> jobProperties = new HashMap<>();
+  List<org.agentic.flink.a2a.A2AStep> a2aSteps = new ArrayList<>();
 
   // Package-private constructor
   AgentJobBuilder() {}
@@ -167,6 +168,21 @@ public class AgentJobBuilder {
    */
   public AgentJobBuilder withMonitoringConfig(MonitoringConfig monitoringConfig) {
     this.monitoringConfig = monitoringConfig;
+    return this;
+  }
+
+  // ==================== A2A steps ====================
+
+  /**
+   * Add one or more explicit {@link org.agentic.flink.a2a.A2AStep}s — deterministic remote-agent
+   * delegations spliced into the stream graph (as opposed to LLM-selected {@code a2a:} tools added
+   * via {@code AgentBuilder.withRemoteAgent}). Recorded on the job; wire them into the topology with
+   * {@link org.agentic.flink.a2a.A2AStep#applyTo(org.apache.flink.streaming.api.datastream.DataStream)}.
+   */
+  public AgentJobBuilder withA2AStep(org.agentic.flink.a2a.A2AStep... steps) {
+    if (steps != null) {
+      this.a2aSteps.addAll(Arrays.asList(steps));
+    }
     return this;
   }
 
