@@ -65,4 +65,41 @@ public class GatewayConfig {
   public String skillsSpec() {
     return config.get("a2a.gateway.agent.skills", "");
   }
+
+  /** Task-store backend for gateway-side lifecycle persistence: {@code memory|redis|postgres}. */
+  public String taskStoreBackend() {
+    return config.get(ConfigKeys.A2A_TASK_STORE, ConfigKeys.DEFAULT_A2A_TASK_STORE);
+  }
+
+  /**
+   * Connection config passed to the task store's {@code initialize} — the relevant Redis/Postgres
+   * keys from the environment. {@code memory} ignores it.
+   */
+  public java.util.Map<String, String> taskStoreConfig() {
+    java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+    putIfPresent(m, ConfigKeys.REDIS_HOST);
+    putIfPresent(m, ConfigKeys.REDIS_PORT);
+    putIfPresent(m, ConfigKeys.REDIS_PASSWORD);
+    putIfPresent(m, ConfigKeys.POSTGRES_URL);
+    putIfPresent(m, ConfigKeys.POSTGRES_USER);
+    putIfPresent(m, ConfigKeys.POSTGRES_PASSWORD);
+    return m;
+  }
+
+  private void putIfPresent(java.util.Map<String, String> m, String key) {
+    String v = config.get(key);
+    if (v != null && !v.isEmpty()) {
+      m.put(key, v);
+    }
+  }
+
+  /** Whether the Agent Card advertises streaming (message/stream SSE). */
+  public boolean streamingEnabled() {
+    return Boolean.parseBoolean(config.get("a2a.gateway.streaming.enabled", "false"));
+  }
+
+  /** Whether the Agent Card advertises push notifications. */
+  public boolean pushEnabled() {
+    return Boolean.parseBoolean(config.get("a2a.gateway.push.enabled", "false"));
+  }
 }
