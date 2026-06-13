@@ -39,6 +39,11 @@ public final class BankingTurnContext implements Serializable {
     return budget;
   }
 
+  /** True while the turn is still within its soft per-turn deadline. */
+  public boolean withinDeadline() {
+    return budget.withinDeadline(nowEpochMs);
+  }
+
   /** True once any routing gate (round-trips / iterations / deadline) has been hit this turn. */
   public boolean budgetExhausted() {
     return !budget.withinDeadline(nowEpochMs)
