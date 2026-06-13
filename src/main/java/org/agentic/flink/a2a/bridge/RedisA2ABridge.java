@@ -1,7 +1,6 @@
 package org.agentic.flink.a2a.bridge;
 
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.List;
 import org.agentic.flink.a2a.A2AJson;
 import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -14,17 +13,26 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPubSub;
 
 /**
- * Redis pub/sub {@link A2ABridge} — distributed-light transport (requires the optional Jedis dep).
+ * Redis {@link A2ABridge} — distributed-light transport (requires the optional Jedis dep), backed by
+ * Redis <b>lists</b> with blocking pops ({@code RPUSH} + {@code BLPOP}), not pub/sub.
  *
- * <p>Requests are published to the {@code requestChannel} Redis channel and consumed by the Flink
- * source; responses are published to the {@code responseChannel} and consumed by the gateway. JSON
- * via {@link A2AJson}. Unlike ZeroMQ this needs a Redis server but no socket bind/connect topology.
+ * <p>Requests are {@code RPUSH}ed onto the {@code requestChannel} list and {@code BLPOP}ped by the
+ * Flink source; responses are {@code RPUSH}ed onto the {@code responseChannel} list and {@code
+ * BLPOP}ped by the gateway connector (correlated by {@code taskId} in {@link
+ * AbstractA2AGatewayConnector}). JSON via {@link A2AJson}.
+ *
+ * <p>Lists (not pub/sub) make the bridge <b>non-lossy</b>: a request published before the Flink
+ * source is ready simply waits in the list until it pops it — no startup race — and queued
+ * messages survive a consumer restart. Assumes a single gateway connector per response list (the
+ * one-agent-process deployment); BLPOP would otherwise load-balance responses across connectors.
  */
 public final class RedisA2ABridge implements A2ABridge {
   private static final long serialVersionUID = 1L;
+
+  /** BLPOP timeout (seconds) — bounded so cancel()/close() is observed promptly. */
+  private static final int BLPOP_TIMEOUT_SECONDS = 2;
 
   private final String host;
   private final int port;
@@ -91,11 +99,11 @@ public final class RedisA2ABridge implements A2ABridge {
 
   static final class RedisRequestSource implements SourceFunction<A2ARequest> {
     private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(RedisRequestSource.class);
     private final String host;
     private final int port;
     private final String channel;
     private volatile boolean running = true;
-    private transient JedisPubSub pubSub;
 
     RedisRequestSource(String host, int port, String channel) {
       this.host = host;
@@ -105,46 +113,36 @@ public final class RedisA2ABridge implements A2ABridge {
 
     @Override
     public void run(SourceContext<A2ARequest> ctx) {
-      LinkedBlockingQueue<A2ARequest> queue = new LinkedBlockingQueue<>();
-      pubSub =
-          new JedisPubSub() {
-            @Override
-            public void onMessage(String ch, String message) {
-              try {
-                queue.offer(A2AJson.mapper().readValue(message, A2ARequest.class));
-              } catch (Exception e) {
-                // skip malformed
-              }
-            }
-          };
       JedisPool pool = new JedisPool(host, port);
-      Thread sub =
-          new Thread(
-              () -> {
-                try (Jedis jedis = pool.getResource()) {
-                  jedis.subscribe(pubSub, channel);
-                } catch (RuntimeException ignored) {
-                  // unsubscribe / shutdown
-                }
-              },
-              "a2a-redis-sub");
-      sub.setDaemon(true);
-      sub.start();
       try {
         while (running) {
-          A2ARequest req = queue.poll(200, TimeUnit.MILLISECONDS);
-          if (req != null) {
-            synchronized (ctx.getCheckpointLock()) {
-              ctx.collect(req);
+          try (Jedis jedis = pool.getResource()) {
+            while (running) {
+              // BLPOP blocks up to the timeout, then returns null — so requests queued before we
+              // started are still delivered (no lost messages), and cancel() is seen within ~2s.
+              List<String> res = jedis.blpop(BLPOP_TIMEOUT_SECONDS, channel);
+              if (res == null || res.size() != 2) {
+                continue;
+              }
+              A2ARequest req;
+              try {
+                req = A2AJson.mapper().readValue(res.get(1), A2ARequest.class);
+              } catch (Exception e) {
+                LOG.warn("Dropping malformed A2A request: {}", e.getMessage());
+                continue;
+              }
+              synchronized (ctx.getCheckpointLock()) {
+                ctx.collect(req);
+              }
+            }
+          } catch (RuntimeException e) {
+            if (running) {
+              LOG.warn("Redis request BLPOP loop error, reconnecting: {}", e.getMessage());
+              sleepQuietly();
             }
           }
         }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
       } finally {
-        if (pubSub != null && pubSub.isSubscribed()) {
-          pubSub.unsubscribe();
-        }
         pool.close();
       }
     }
@@ -152,9 +150,6 @@ public final class RedisA2ABridge implements A2ABridge {
     @Override
     public void cancel() {
       running = false;
-      if (pubSub != null && pubSub.isSubscribed()) {
-        pubSub.unsubscribe();
-      }
     }
   }
 
@@ -181,7 +176,7 @@ public final class RedisA2ABridge implements A2ABridge {
     @Override
     public void invoke(A2AResponse value, Context context) throws Exception {
       try (Jedis jedis = pool.getResource()) {
-        jedis.publish(channel, A2AJson.mapper().writeValueAsString(value));
+        jedis.rpush(channel, A2AJson.mapper().writeValueAsString(value));
       }
     }
 
@@ -200,51 +195,63 @@ public final class RedisA2ABridge implements A2ABridge {
 
     private final JedisPool pool;
     private final String requestChannel;
-    private final JedisPubSub pubSub;
-    private final Thread subThread;
+    private final String responseChannel;
+    private final Thread pollThread;
+    private volatile boolean running = true;
 
     RedisConnector(String host, int port, String requestChannel, String responseChannel) {
       this.pool = new JedisPool(host, port);
       this.requestChannel = requestChannel;
-      this.pubSub =
-          new JedisPubSub() {
-            @Override
-            public void onMessage(String channel, String message) {
-              try {
-                deliver(A2AJson.mapper().readValue(message, A2AResponse.class));
-              } catch (Exception e) {
-                LOG.warn("Dropping malformed A2A response: {}", e.getMessage());
-              }
+      this.responseChannel = responseChannel;
+      this.pollThread =
+          new Thread(this::pollResponses, "a2a-redis-gateway-poll");
+      this.pollThread.setDaemon(true);
+      this.pollThread.start();
+    }
+
+    private void pollResponses() {
+      while (running) {
+        try (Jedis jedis = pool.getResource()) {
+          while (running) {
+            List<String> res = jedis.blpop(BLPOP_TIMEOUT_SECONDS, responseChannel);
+            if (res == null || res.size() != 2) {
+              continue;
             }
-          };
-      this.subThread =
-          new Thread(
-              () -> {
-                try (Jedis jedis = pool.getResource()) {
-                  jedis.subscribe(pubSub, responseChannel);
-                } catch (RuntimeException ignored) {
-                  // shutdown
-                }
-              },
-              "a2a-redis-gateway-sub");
-      this.subThread.setDaemon(true);
-      this.subThread.start();
+            try {
+              deliver(A2AJson.mapper().readValue(res.get(1), A2AResponse.class));
+            } catch (Exception e) {
+              LOG.warn("Dropping malformed A2A response: {}", e.getMessage());
+            }
+          }
+        } catch (RuntimeException e) {
+          if (running) {
+            LOG.warn("Redis response BLPOP loop error, reconnecting: {}", e.getMessage());
+            sleepQuietly();
+          }
+        }
+      }
     }
 
     @Override
     public void publishRequest(A2ARequest request) throws Exception {
       try (Jedis jedis = pool.getResource()) {
-        jedis.publish(requestChannel, A2AJson.mapper().writeValueAsString(request));
+        jedis.rpush(requestChannel, A2AJson.mapper().writeValueAsString(request));
       }
     }
 
     @Override
     public void close() {
-      if (pubSub.isSubscribed()) {
-        pubSub.unsubscribe();
-      }
+      running = false;
       pool.close();
       clearListeners();
+    }
+  }
+
+  private static void sleepQuietly() {
+    try {
+      Thread.sleep(500);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 }
