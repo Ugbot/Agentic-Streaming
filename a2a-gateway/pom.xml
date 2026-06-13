@@ -35,26 +35,6 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <dependency>
-                <groupId>io.github.a2asdk</groupId>
-                <artifactId>a2a-java-sdk-bom</artifactId>
-                <version>${a2a.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- The A2A gRPC gencode is built against protobuf 4.33.1; Quarkus pins an older 4.32.1
-                 runtime, which the gencode rejects (runtime must be >= gencode). Align upward so the
-                 gRPC binding starts. -->
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java</artifactId>
-                <version>4.33.1</version>
-            </dependency>
-            <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java-util</artifactId>
-                <version>4.33.1</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -74,21 +54,17 @@
             </exclusions>
         </dependency>
 
-        <!--
-        A2A reference servers — one per transport binding. Each contributes its Quarkus routes;
-        all share our single AgentExecutor CDI bean. JSON-RPC is the primary verified binding.
-        -->
+        <!-- Quarkus REST (RESTEasy Reactive) + Jackson: we serve the A2A wire ourselves with a
+             hand-rolled JSON-RPC resource (A2AResource), because the a2a-java SDK's reference
+             JSON-RPC server registers proto method names (SendMessage) instead of the spec's
+             message/send the harness calls. Owning the route lets us speak message/send exactly. -->
         <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-reference-jsonrpc</artifactId>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-reference-grpc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-reference-rest</artifactId>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-jackson</artifactId>
         </dependency>
 
         <!-- Quarkus core (CDI). -->
