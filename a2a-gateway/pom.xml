@@ -73,10 +73,19 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
-        <!-- Flink types referenced by the core bridge SPI (compile-time only; the gateway is not a Flink job). -->
+        <!-- Flink runtime: the gateway image also hosts the embedded MiniCluster job
+             (BankingFlinkJob, launched as a second process from this app's classpath), so the full
+             local-execution stack must be bundled. flink-clients provides the LocalExecutor that
+             StreamExecutionEnvironment.createLocalEnvironment().execute() needs; flink-streaming-java
+             pulls in flink-runtime. (Core marks Flink 'provided' for cluster deploys.) -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
             <version>${flink.version}</version>
         </dependency>
 

@@ -43,20 +43,25 @@ public final class VectorKbSearchTool implements ToolExecutor {
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final int MAX_CONTENT = 1500;
 
+  // Serializable config — the tool is held by a Flink path operator (KNOWLEDGE/DISPUTE brain) and
+  // shipped with it. The heavy index + embedder are transient and rebuilt lazily on the task side
+  // (a fast disk-cache read, since build() warms the cache at submit time).
   private final Map<String, Doc> docsById;
-  private final transient InMemoryHnswVectorMemory index;
-  private final transient EmbeddingClient embedder;
+  private final EmbeddingConnection connection;
   private final EmbeddingSetup setup;
+  private final String cacheDir;
+  private transient volatile InMemoryHnswVectorMemory index;
+  private transient volatile EmbeddingClient embedder;
 
   private VectorKbSearchTool(
       Map<String, Doc> docsById,
-      InMemoryHnswVectorMemory index,
-      EmbeddingClient embedder,
-      EmbeddingSetup setup) {
+      EmbeddingConnection connection,
+      EmbeddingSetup setup,
+      String cacheDir) {
     this.docsById = docsById;
-    this.index = index;
-    this.embedder = embedder;
+    this.connection = connection;
     this.setup = setup;
+    this.cacheDir = cacheDir;
   }
 
   /**
@@ -75,25 +80,51 @@ public final class VectorKbSearchTool implements ToolExecutor {
       org.agentic.flink.embedding.EmbeddingConnection connection,
       EmbeddingSetup setup) {
     Map<String, Doc> docs = loadDocs(kbDir);
-    EmbeddingClient embedder;
+    // Warm the embedding cache at submit time (this runs on the client / job-submit JVM), so the
+    // per-operator lazy build on the task side is a fast cache read — not a re-embed on the first
+    // harness turn. The vectors themselves are NOT kept on the tool (they'd bloat the operator).
     try {
-      embedder = connection.bind(null);
+      EmbeddingClient embedder = connection.bind(null);
+      loadOrComputeVectors(docs, setup, embedder, cacheDir);
     } catch (Exception e) {
-      throw new RuntimeException("Failed to bind embedding model", e);
+      LOG.warn("KB embedding warm failed (will build lazily on first use): {}", e.getMessage());
     }
+    return new VectorKbSearchTool(docs, connection, setup, cacheDir);
+  }
 
-    InMemoryHnswVectorMemory index = InMemoryHnswVectorMemory.of(setup.getDimension());
-    Map<String, float[]> vectors = loadOrComputeVectors(docs, setup, embedder, cacheDir);
-    for (Map.Entry<String, Doc> e : docs.entrySet()) {
-      float[] vec = vectors.get(e.getKey());
-      if (vec != null) {
-        ContextItem item =
-            new ContextItem(e.getValue().content, ContextPriority.SHOULD, MemoryType.LONG_TERM);
-        index.put(new VectorEntry(e.getKey(), vec, item));
+  /**
+   * Lazily (re)build the HNSW index + embedder on the task side. Idempotent and thread-safe; the
+   * vectors come from the disk cache warmed by {@link #build} (so this is a fast read, not a
+   * re-embed). Called on the first {@code execute} in each operator.
+   */
+  private void ensureReady() {
+    if (index != null) {
+      return;
+    }
+    synchronized (this) {
+      if (index != null) {
+        return;
+      }
+      try {
+        EmbeddingClient e = connection.bind(null);
+        InMemoryHnswVectorMemory idx = InMemoryHnswVectorMemory.of(setup.getDimension());
+        Map<String, float[]> vectors = loadOrComputeVectors(docsById, setup, e, cacheDir);
+        for (Map.Entry<String, Doc> en : docsById.entrySet()) {
+          float[] vec = vectors.get(en.getKey());
+          if (vec != null) {
+            ContextItem item =
+                new ContextItem(en.getValue().content, ContextPriority.SHOULD, MemoryType.LONG_TERM);
+            idx.put(new VectorEntry(en.getKey(), vec, item));
+          }
+        }
+        this.embedder = e;
+        this.index = idx;
+        LOG.info(
+            "VectorKbSearchTool ready: {} docs indexed (dim={})", idx.size(), setup.getDimension());
+      } catch (Exception ex) {
+        throw new RuntimeException("Failed to build KB vector index", ex);
       }
     }
-    LOG.info("VectorKbSearchTool ready: {} docs indexed (dim={})", index.size(), setup.getDimension());
-    return new VectorKbSearchTool(docs, index, embedder, setup);
   }
 
   @Override
@@ -120,6 +151,7 @@ public final class VectorKbSearchTool implements ToolExecutor {
     if (query.isBlank()) {
       return CompletableFuture.completedFuture(List.of());
     }
+    ensureReady();
     float[] qvec = embedder.embed(query, setup);
     List<ScoredItem> hits = index.search(qvec, topK);
     List<Map<String, Object>> out = new ArrayList<>(hits.size());
@@ -258,7 +290,8 @@ public final class VectorKbSearchTool implements ToolExecutor {
     return o == null ? "" : o.toString();
   }
 
-  private static final class Doc {
+  private static final class Doc implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     final String id;
     final String title;
     final String content;

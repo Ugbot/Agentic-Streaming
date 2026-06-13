@@ -127,7 +127,10 @@ public final class KbSearchTool implements ToolExecutor {
     return s;
   }
 
-  private static final class Doc {
+  // Serializable: the tool is held by a Flink path operator (KNOWLEDGE/DISPUTE brain) and shipped
+  // with it, so its loaded docs must serialize into the operator.
+  private static final class Doc implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     final String id;
     final String title;
     final String content;
