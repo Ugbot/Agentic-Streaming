@@ -5,5 +5,7 @@ public enum Phase {
   BAND_PASS,
   REPEAT,
   VELOCITY,
+  /** Text keyword/lexicon rule (e.g. prompt-injection / social-engineering screening). */
+  LEXICON,
   CLASSIFIER
 }
