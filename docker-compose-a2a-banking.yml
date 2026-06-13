@@ -1,16 +1,17 @@
-# Rho-Bank A2A demo — two safe banking agents on the Agentic-Flink gateway (docs/a2a-banking-demo.md).
+# Rho-Bank A2A demo — the hackathon shape (personal-agent:9001, cs-agent:9002, redis), each agent
+# container running ONE Quarkus A2A gateway (spec message/send front) + ONE embedded Flink
+# MiniCluster job (the routed graph whose path operators call the LLM), joined by Redis (the
+# non-lossy bridge + the per-conversation transcript/phase store). Same image, role via
+# A2A_BANKING_ROLE. The public KB is baked into the image (banking-kb/), so no host mount.
 #
-# personal-agent (:9001) and cs-agent (:9002) each run the bounded ReAct brain + safety stack
-# (screening, authorization guard, routing budget) in-process. Same banking image, different role.
+# Build the jars + image first, then `up`:
+#   mvn -o clean install -DskipTests
+#   mvn -o -f a2a-gateway/pom.xml package -DskipTests
+#   mvn -o -f banking-job/pom.xml package -DskipTests
+#   GOOGLE_API_KEY=... podman compose -f docker-compose-a2a-banking.yml up --build
 #
-# Build the banking jar first (build-time a2a.mode selects the in-proc banking executor), then up:
-#   mvn -q install -DskipTests
-#   mvn -q -f a2a-gateway/pom.xml package -DskipTests -Da2a.mode=banking
-#   OPENAI_API_KEY=sk-... podman compose -f docker-compose-a2a-banking.yml up --build
-#
-# Swap to the hackathon model: LLM_PROVIDER=gemini GOOGLE_API_KEY=... (no rebuild needed).
-# Point the harness at it: uv run a2a-hack smoke --personal-url http://localhost:9001 --cs-url http://localhost:9002
-
+# Marked runs: MODEL=gemini-3.5-flash + GOOGLE_API_KEY (Vertex), EMBED_PROVIDER=gemini.
+# Local dev: LLM_PROVIDER=openai MODEL=gpt-5.4-nano OPENAI_API_KEY=... EMBED_PROVIDER=openai.
 services:
   redis:
     image: redis:8
@@ -19,50 +20,58 @@ services:
 
   cs-agent:
     build:
-      context: ./a2a-gateway
-      dockerfile: src/main/docker/Dockerfile.jvm
-    image: agentic-flink-a2a-banking
+      context: .
+      dockerfile: docker/banking.Dockerfile
+    image: agentic-flink-banking
     container_name: rho-bank-cs
     depends_on:
       - redis
     ports:
       - "9002:9002"
     environment:
-      QUARKUS_HTTP_PORT: "9002"
       A2A_BANKING_ROLE: "cs"
+      QUARKUS_HTTP_PORT: "9002"
       AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Rho-Bank Customer Service"
       AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9002"
-      KB_PATH: "/app/kb/documents"
-      KB_POLICY_PATH: "/app/kb/policy.md"
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
-      MODEL: ${MODEL:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AGENTIC_FLINK_A2A_GATEWAY_REQUEST_TIMEOUT_MS: "280000"
+      AGENTIC_FLINK_REDIS_HOST: "redis"
+      AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT: "redis"
+      AGENTIC_FLINK_CONVERSATION_STORE: "redis"
+      MODEL: ${MODEL:-gemini-3.5-flash}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      ENV_API_URL: ${ENV_API_URL:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-gemini}
+      ENV_API_URL: ${ENV_API_URL:-http://host.docker.internal:8090}
       ENV_API_TOKEN: ${CS_ENV_API_TOKEN:-dev-agent-token}
-    volumes:
-      - ./hackathons/a2a-hackathon-template/kb:/app/kb:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   personal-agent:
-    image: agentic-flink-a2a-banking
+    image: agentic-flink-banking
     container_name: rho-bank-personal
     depends_on:
       - cs-agent
     ports:
       - "9001:9001"
     environment:
-      QUARKUS_HTTP_PORT: "9001"
       A2A_BANKING_ROLE: "personal"
+      QUARKUS_HTTP_PORT: "9001"
       AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Rho-Bank Personal Assistant"
       AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9001"
+      AGENTIC_FLINK_A2A_GATEWAY_REQUEST_TIMEOUT_MS: "280000"
+      AGENTIC_FLINK_REDIS_HOST: "redis"
+      AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT: "redis"
+      AGENTIC_FLINK_CONVERSATION_STORE: "redis"
       CS_AGENT_URL: ${CS_AGENT_URL:-http://cs-agent:9002}
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
-      MODEL: ${MODEL:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MODEL: ${MODEL:-gemini-3.5-flash}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      ENV_API_URL: ${ENV_API_URL:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-gemini}
+      ENV_API_URL: ${ENV_API_URL:-http://host.docker.internal:8090}
       ENV_API_TOKEN: ${PERSONAL_ENV_API_TOKEN:-dev-user-token}
     extra_hosts:
       - "host.docker.internal:host-gateway"

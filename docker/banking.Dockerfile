@@ -11,11 +11,8 @@
 #   podman build -f docker/banking.Dockerfile -t agentic-flink-banking .
 FROM eclipse-temurin:17-jre
 
-# redis-cli — the entrypoint polls it to know when the Flink job has subscribed (Redis pub/sub is
-# lossy, so the gateway must not accept traffic before the job is listening).
-RUN apt-get update && apt-get install -y --no-install-recommends redis-tools \
-    && rm -rf /var/lib/apt/lists/*
-
+# The Redis A2A bridge is non-lossy (RPUSH/BLPOP), so the entrypoint just starts both processes —
+# no redis-cli readiness polling needed.
 WORKDIR /deployments
 
 # The Quarkus gateway (exploded quarkus-app layout) and the self-contained Flink job uber-jar.

@@ -67,11 +67,20 @@ trap cleanup EXIT INT TERM
 start_role cs 9002 "${CS_ENV_API_TOKEN:-dev-agent-token}" "Rho-Bank Customer Service"
 start_role personal 9001 "${PERSONAL_ENV_API_TOKEN:-dev-user-token}" "Rho-Bank Personal Assistant"
 
-echo "waiting for both Flink jobs to subscribe to Redis…"
+# The Redis bridge is non-lossy (RPUSH/BLPOP), so requests queue until each job's source consumes
+# them — no need to wait for a subscription. Wait for the jobs to boot their graph and the gateway
+# fronts to answer their agent card, so the harness only hits ready endpoints.
+echo "waiting for both Flink jobs to start their graph…"
 for role in cs personal; do
-  for i in $(seq 1 120); do
-    n=$(redis-cli -h "$REDIS_HOST" pubsub numsub "a2a:$role:req" | tail -1)
-    [ "${n:-0}" -ge 1 ] && { echo "  $role job subscribed"; break; }
+  for i in $(seq 1 180); do
+    grep -q "Banking Flink job \[$role\] starting" "$LOG/job-$role.log" 2>/dev/null && { echo "  $role job started"; break; }
+    sleep 1
+  done
+done
+echo "waiting for gateway agent cards…"
+for port in 9001 9002; do
+  for i in $(seq 1 60); do
+    curl -sf -m 2 "http://localhost:$port/.well-known/agent-card.json" >/dev/null 2>&1 && break
     sleep 1
   done
 done
