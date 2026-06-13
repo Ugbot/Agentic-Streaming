@@ -127,7 +127,15 @@ public final class BankingAgentSetup {
     String systemPrompt;
     BankingTurnContext.CustomerServiceClient cs = null;
     if (role == Role.CS) {
-      tools.put("kb_search", KbSearchTool.fromDirectory(env("KB_PATH", "kb/documents")));
+      String kbDir = env("KB_PATH", "kb/documents");
+      if (BankingEmbeddings.isKeyword()) {
+        tools.put("kb_search", KbSearchTool.fromDirectory(kbDir));
+      } else {
+        tools.put(
+            "kb_search",
+            VectorKbSearchTool.build(
+                kbDir, env("EMBED_CACHE_DIR", ".kb-cache"), BankingEmbeddings.fromEnv()));
+      }
       systemPrompt = csSystemPrompt();
     } else {
       systemPrompt = personalSystemPrompt();
