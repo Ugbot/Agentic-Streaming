@@ -480,6 +480,14 @@
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.agentic.flink.example.SimpleAgentExample</mainClass>
                                 </transformer>
+                                <!-- Merge META-INF/services so every ServiceLoader provider survives
+                                     the uber-jar: DJL's model-zoo (ai.djl.repository.zoo.ZooProvider,
+                                     needed for the djl:// HuggingFace embedder) and our own SPIs
+                                     (A2AClientFactory, ChatConnection, EmbeddingConnection, VectorStore,
+                                     LongTermMemoryStore). Without this, shade keeps only one file per
+                                     service and the rest are silently dropped. -->
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                         </configuration>
                     </execution>

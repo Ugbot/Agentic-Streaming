@@ -142,8 +142,8 @@ public final class BankingAgentSetup {
       cs = csOverride != null ? csOverride : customerServiceClient();
     }
 
-    int maxRoundTrips = intEnv("A2A_MAX_ROUND_TRIPS", 4);
-    int maxIterations = intEnv("A2A_MAX_ITERATIONS", 12);
+    int maxRoundTrips = intEnv("A2A_MAX_ROUND_TRIPS", 6);
+    int maxIterations = intEnv("A2A_MAX_ITERATIONS", 24);
     long turnDeadlineMs = (long) intEnv("A2A_TURN_DEADLINE_MS", 240_000);
     long toolTimeoutMs = (long) intEnv("A2A_TOOL_TIMEOUT_MS", 30_000);
 
@@ -185,21 +185,35 @@ public final class BankingAgentSetup {
     return policy
         + "\n\n## Knowledge base\n"
         + "Before answering policy questions or performing procedures, call kb_search(query) to find"
-        + " the relevant document. Do not invent policies. If the customer's request is outside your"
+        + " the relevant documents. Do not invent policies. When asked to compare or recommend"
+        + " products, search broadly and return ALL relevant options in one reply, each with the"
+        + " attributes the caller needs to decide — cash-back/interest rate, annual fee, eligibility,"
+        + " and how any subscription, membership, or benefit changes those. Give the complete answer"
+        + " in a single response so the caller need not ask again. If the request is outside your"
         + " capabilities or the knowledge base, follow the escalation/transfer guidance above.";
   }
 
   private static String personalSystemPrompt() {
-    return "You are the user's personal banking assistant for their Rho-Bank accounts.\n"
-        + "- Use your own environment tools (discover them with list_env_tools, call them with"
-        + " call_env_tool) for the user's banking actions.\n"
-        + "- For anything bank-side — account lookups, policy questions, disputes — contact customer"
-        + " service with ask_customer_service, relaying the user's request faithfully and reporting"
-        + " back.\n"
-        + "- Customer service usually needs to verify the user's identity; ask the user for exactly"
-        + " the details requested and pass them along.\n"
-        + "- Never use placeholder argument values; if you don't know a required detail, ask the"
-        + " user first. Be concise and never invent account details or policies.";
+    return "You are the user's personal banking assistant for their Rho-Bank accounts. Your job is"
+        + " to ACTUALLY COMPLETE the user's request by taking actions on their behalf — not just to"
+        + " chat. A request is only done when you have performed the required action with your"
+        + " environment tools (or confirmed none is needed).\n\n"
+        + "Follow this workflow:\n"
+        + "1. Discover what you can do for the user: call list_env_tools, then use call_env_tool to"
+        + " run a specific tool by name (arguments_json is a JSON object string).\n"
+        + "2. Gather the real details the action needs from the user (e.g. full name, income). For a"
+        + " recommendation, PROACTIVELY ask about anything that changes the best choice — existing"
+        + " subscriptions, memberships or benefits, fee sensitivity, how they'll use it — because"
+        + " the user won't volunteer these.\n"
+        + "3. For bank-side facts (product details, rates, fees, eligibility, policy) contact"
+        + " customer service ONCE with ask_customer_service, asking for the full comparison you"
+        + " need. Relay their answer to the user. NEVER ask customer service the same question"
+        + " again — if you already have their answer, use it.\n"
+        + "4. When you know the right action and have every real argument value, PERFORM it with"
+        + " call_env_tool (e.g. apply_for_credit_card with the chosen card and the user's details),"
+        + " then confirm the outcome to the user.\n\n"
+        + "Rules: never use placeholder argument values — if you're missing a required detail, ask"
+        + " the user for it first. Be concise. Never invent account details, products, or policies.";
   }
 
   private static String readOrEmpty(String path) {
