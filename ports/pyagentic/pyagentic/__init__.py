@@ -28,7 +28,17 @@ from .embeddings import Embedder, HashingEmbedder, LiteLLMEmbedder, make_embedde
 from .a2a import A2AClient, peer_tool
 from .context import ContextItem, ContextWindowManager, Priority
 from .guardrails import Guardrail, RegexGuardrail
+from .inference import (
+    Classification,
+    Classifier,
+    ClassifierGuardrail,
+    ClassifierScorer,
+    EmbeddingClassifier,
+    LexiconClassifier,
+    Scorer,
+)
 from .mcp_client import McpClient, register_mcp_server
+from .web import register_web_tools, web_fetch
 from .saga import CompensationAction, Saga
 from .listeners import AgentListener, CompositeListener, LoggingListener, MetricsListener
 from .skills import Skill, SkillRegistry
@@ -119,6 +129,15 @@ __all__ = [
     "peer_tool",
     "McpClient",
     "register_mcp_server",
+    "register_web_tools",
+    "web_fetch",
+    "Classification",
+    "Classifier",
+    "Scorer",
+    "LexiconClassifier",
+    "EmbeddingClassifier",
+    "ClassifierScorer",
+    "ClassifierGuardrail",
 ]
 
 __version__ = "0.1.0"
