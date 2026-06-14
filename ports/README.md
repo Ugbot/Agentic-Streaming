@@ -1,60 +1,137 @@
-# `ports/` — Agentic-Flink, built on engines other than Flink
+# `ports/` — Agentic-Flink on seven engines, compared
 
-Working implementations of the designs in [`docs/portability/`](../docs/portability/).
-Everything builds on one **pure-Python essence core** (`pyagentic/`) — the
-engine-agnostic abstractions (per-conversation memory, keyed state, tools, the
-`router→path→verifier` routed graph, hot+cold retrieval) — and each engine adapter
-is a thin **runtime seam** wiring that core onto its engine.
+Working implementations of the [`docs/portability/`](../docs/portability/) designs:
+the Agentic-Flink **essence** (per-conversation stateful agents that remember, route,
+use tools, and retrieve) built on engines *other than Flink*. Every port runs the
+same `router → path → verifier` **banking** worked example, so the comparison is
+apples-to-apples.
+
+Two shared, **Flink-free** essence cores carry the agent logic; each engine port is
+a thin **runtime seam** on top:
 
 ```
 ports/
-  pyagentic/      the engine-agnostic core + LocalRuntime  (runs + tested, no deps)
-  faust/          Faust agent + Table-backed ConversationStore        (Python)
-  ray/            actor-per-conversation runtime                       (Python)
-  dask/           batch RAG ingest + eval + routed-graph replay        (Python)
-  airflow/        router→path→verifier as a branching DAG + ingest DAG (Python)
-  kafka-streams/  Processor API topology, state-store keyed state      (Java)
-  spring/         Spring Integration EIP + StateMachine                (Java)
-  quarkus/        SmallRye Reactive Messaging + Mutiny                 (Java)
+  pyagentic/      pure-Python essence + LocalRuntime     ← Faust/Ray/Dask/Airflow build on this
+  jagentic-core/  pure-Java essence + LocalRuntime       ← Kafka Streams/Spring/Quarkus build on this
+  faust/ ray/ dask/ airflow/        (Python adapters)
+  kafka-streams/ spring/ quarkus/   (JVM adapters)
 ```
 
-## Status (what's verified)
+The cores implement the engine-agnostic abstractions once — `ConversationStore`,
+`KeyedStateStore`, `ToolRegistry`, `AgentContext`, `RoutedGraph`, hot+cold
+`Retrieval`, `Banking` example. An adapter only supplies *how this engine gives a
+durable thing per conversation, processed in order, with async I/O*.
 
-| Port | Lang | State of this version | Verified |
-|------|------|------------------------|----------|
-| **pyagentic** (core) | Python | Full essence: memory, tools, retrieval, routed graph, LocalRuntime | ✅ 6 tests pass (no deps) |
-| **dask** | Python | Parallel RAG ingest + recall@k eval + routed-graph replay | ✅ runs on **real Dask** (and sequential fallback) |
-| **airflow** | Python | `routed_triage` branching DAG + `agentic_ingestion` DAG; `simulate()` | ✅ logic runs; DAGs load with Airflow |
-| **faust** | Python | `@app.agent` + Table-backed `ConversationStore` | ✅ imports clean (engine-guarded); runs with Kafka + faust-streaming |
-| **ray** | Python | actor-per-conversation `RayRuntime` (+ write-through durability) | ✅ imports clean (engine-guarded); runs with `ray[default]` |
-| **kafka-streams** | Java | Processor topology, `KeyValueStore` keyed state, async-completion split | ✅ compiles (`mvn -q compile`) |
-| **spring** | Java | Spring Integration router→channels→verifier + StateMachine phase | ✅ compiles |
-| **quarkus** | Java | Reactive-messaging agent over Kafka + Redis/in-mem state | ✅ compiles |
+---
 
-The Python engines target **pure Python**. Faust/Ray need their engine + a broker/
-cluster to *run* (unavailable here on Python 3.14, which predates faust/ray wheels),
-so they're import-checked + engine-guarded; their agent logic is the tested core.
+## The seven at a glance
+
+| Engine | Lang | Streaming? | The one-line fit | Verified here |
+|--------|:----:|:----------:|------------------|---------------|
+| **Faust** | Python | ✅ yes | `@app.agent` ≈ our agent; `Table` ≈ ConversationStore; native asyncio. Thinnest Python port. | imports clean, engine-guarded¹ |
+| **Kafka Streams** | Java | ✅ yes | Closest analog — state stores + partitions + EOS; reuses the Java core; bridge async I/O. | `mvn compile` ✅ |
+| **Ray** | Python | ◑ rpc/actors | Actor-per-conversation = single-writer keyed state in memory; durability write-through. | imports clean, engine-guarded¹ |
+| **Quarkus** | Java | ◐ reactive | SmallRye Reactive Messaging + Mutiny; keyed state external (Redis/Fluss). Already our proxy. | `mvn compile` ✅ |
+| **Spring** | Java | ◐ messaging | Spring Integration EIP maps router→path→verifier ≈1:1; StateMachine for phase. | `mvn compile` ✅ |
+| **Dask** | Python | ✗ batch | Batch data plane — parallel RAG ingest + offline eval; not the live loop. | **runs on real Dask** ✅ |
+| **Airflow** | Python | ✗ orchestration | Routed graph → branching DAG; scheduled agentic + RAG ingestion + HITL. | `simulate()` runs ✅ |
+
+¹ Faust/Ray *run* with their engine + a broker/cluster. They can't run on this box (Python 3.14, ahead of faust/ray wheels), so they're import-checked + engine-guarded; their agent logic is the tested `pyagentic` core.
+
+**Core tests:** `pyagentic` 6/6 · `jagentic-core` 4/4 · Python adapters 3/3 · Dask on real engine · 3 JVM modules compile.
+
+---
+
+## Capability comparison (how each supplies what Flink gave for free)
+
+From the keystone's capability inventory (C1–C12). Legend: **N**ative · **L**ibrary/idiom · **X**ternal service · **—** drop / not a fit.
+
+| Capability | Faust | Kafka Streams | Ray | Quarkus | Spring | Dask | Airflow |
+|------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **C1** durable keyed state | N `Table` | N state store | N* actor +X | X Redis/Fluss | X Redis/JPA | L* Actor | X store, tiny XCom |
+| **C2** per-key ordering | N partition | N partition | N actor mailbox | L partition | L partition | — | — |
+| **C3** fault tolerance / EOS | L offsets | N txn EOS | X checkpoint | X broker+store | X broker+store | L retry | N retry/idempotent |
+| **C4** async I/O | N asyncio | L async-bridge | N async actor | N Mutiny/vthreads | L Reactor/@Async | L futures | L deferrable |
+| **C5** backpressure | L | L pause | L | N reactive | L | L | — |
+| **C6** connectors | N Kafka | N Kafka | L Serve/Data | N SmallRye | N Cloud Stream | L read_* | L hooks |
+| **C9** event-time/windows | N | N | — | L | L | — | — |
+| **C12** topology builder | N agents | N Topology | N actor/task | L msg-flows | L EIP flows | N task graph | N DAG |
+
+`*` = present with a caveat (see that port's design doc). The pattern is stark: the
+**heart is C1 + C2** ("a durable thing per key, processed in order"). Engines that
+give both natively — **Faust, Kafka Streams**, and **Ray** (in memory) — host the
+*live* essence faithfully. Quarkus/Spring assemble it from Kafka partitions + an
+external store. Dask/Airflow don't have C2 at all, so they host *parts* (the data
+plane / the workflow topology), not the live conversational loop.
+
+---
+
+## How the worked example lands on each
+
+Same `Banking.buildGraph()` (router → cards/payments/general → verifier) everywhere;
+only the wiring differs:
+
+- **Faust** — `@app.agent` consumes `agentic.requests.group_by(conversation_id)`,
+  runs the graph against a `FaustTableConversationStore`, emits to `agentic.replies`.
+- **Kafka Streams** — a `Topology`: source topic → `BankingAgentProcessor` (builds an
+  `AgentContext` over a `KeyValueStore`-backed `KeyedStateStore` + `ConversationStore`,
+  runs the graph) → sink topic; state store wired via `StoreBuilder`.
+- **Ray** — `RayRuntime.submit` routes each event to the get-or-create
+  `ConversationAgent` actor named `conv:<cid>`; the actor *is* the keyed state, runs
+  the graph, with a write-through point to a durable store.
+- **Quarkus** — `@Incoming("requests")`/`@Outgoing("replies")` agent keyed by
+  `conversation_id` + a Mutiny `Uni` REST `AgentResource`; state via the
+  `ConversationStore` CDI bean.
+- **Spring** — `POST /agent` controller + a Spring Integration flow
+  (`.route(Banking::router)` → `cards`/`payments`/`general` channels → `verify`) +
+  a Spring StateMachine for the phase FSM.
+- **Dask** — not the live graph: a batch pipeline that ingests the KB in parallel,
+  scores `recall@1`, and *replays* the routed graph over many transcripts.
+- **Airflow** — a `routed_triage` DAG: `@task.branch` (router) → `path_*` tasks →
+  `one_success` `verify`; plus an `agentic_ingestion` DAG for the cold index.
+
+---
 
 ## Run it
 
 ```bash
-# core (no deps)
-cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q
+# pure-Python core (no deps)
+cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q          # 6 pass
 
-# adapters' portable logic (Dask runs on the real engine if installed)
-cd ports && PYTHONPATH=pyagentic python -m pytest tests/ -q
-
-# individual demos
-python ports/dask/agentic_dask.py            # batch RAG + eval (+real Dask if installed)
-python ports/airflow/agentic_banking_dag.py  # routing simulate (no scheduler)
+# Python adapters' portable logic (Dask uses the real engine if installed)
+cd ports && PYTHONPATH=pyagentic python -m pytest tests/ -q           # 3 pass
+python ports/dask/agentic_dask.py             # batch RAG + recall@1 + replay
+python ports/airflow/agentic_banking_dag.py   # routing simulate (no scheduler)
 # faust:  faust -A agentic_faust:app worker -l info     (needs Kafka + faust-streaming)
 # ray:    python ports/ray/agentic_ray.py               (needs ray[default])
+
+# pure-Java core + JVM engine modules
+mvn -f ports/jagentic-core/pom.xml test       # 4 pass
+mvn -f ports/kafka-streams/pom.xml compile
+mvn -f ports/spring/pom.xml compile
+mvn -f ports/quarkus/pom.xml compile
 ```
 
-## The shared design
+---
 
-Read [`docs/portability/00-essence-and-core-abstractions.md`](../docs/portability/00-essence-and-core-abstractions.md)
-first. The throughline these ports prove out: the agent logic is engine-agnostic;
-only the **operator/state/DAG seam** differs, and **Redis or Fluss** is the recurring
-durable-state answer once Flink's checkpointed keyed state is gone (here the
-`ConversationStore`/`KeyedStateStore` SPIs).
+## Choosing an engine
+
+- **Want the live, low-latency, stateful conversational loop?** → **Faust** (pure
+  Python) or **Kafka Streams** (JVM). They give keyed durable state + per-key
+  ordering natively; the agent maps almost 1:1.
+- **Pure-Python, actor-shaped, request/response agents?** → **Ray** — the most
+  idiomatic Python home for the stateful-agent essence (one actor per conversation),
+  with durability written through to Redis/Fluss.
+- **Already reactive / on the JVM, state in Redis or Fluss?** → **Quarkus** (we
+  already ship the A2A + RAG gateway on it) or **Spring** (best EIP/enterprise
+  fit; Spring AI can supply chat/tools/vectors).
+- **Heavy offline data work** — build the cold index, sweep eval/benchmarks, replay
+  the graph over a dataset? → **Dask**.
+- **Scheduled / triggered agentic workflows, RAG ingestion, human-in-the-loop?** →
+  **Airflow** — its retries/backfill/sensors/branching are exactly the fit.
+
+The recurring lesson across all seven: the agent logic is engine-agnostic; the only
+thing that changes is the operator/state/DAG seam — and **Redis or Fluss** is the
+durable-state answer once Flink's checkpointed keyed state is gone. Start by reading
+[`docs/portability/00-essence-and-core-abstractions.md`](../docs/portability/00-essence-and-core-abstractions.md);
+each engine has a matching deep-dive in that folder.
