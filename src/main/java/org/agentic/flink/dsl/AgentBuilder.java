@@ -17,8 +17,13 @@ import org.agentic.flink.memory.FlinkStateShortTermMemory;
 import org.agentic.flink.memory.ShortTermMemorySpec;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.KeyedContextItem;
+import org.agentic.flink.memory.conversation.ConversationStore;
+import org.agentic.flink.memory.conversation.ConversationStores;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.agentic.flink.skill.Skill;
+import org.agentic.flink.a2a.A2AClientFactory;
+import org.agentic.flink.a2a.A2ASkillMapper;
+import org.agentic.flink.a2a.RemoteAgentSpec;
 import org.agentic.flink.skill.SkillRegistry;
 import org.agentic.flink.tools.mcp.McpServerSpec;
 import org.agentic.flink.statemachine.AgentStateMachine;
@@ -127,6 +132,7 @@ public class AgentBuilder {
   LongTermMemoryStore longTermStore;
   List<Channel<KeyedContextItem>> memoryChannels = new ArrayList<>();
   VectorMemorySpec vectorMemorySpec;
+  ConversationStore conversationStore;
 
   // Chat model (LangChain4J wrapped behind the ChatConnection SPI)
   ChatConnection chatConnection;
@@ -145,6 +151,10 @@ public class AgentBuilder {
 
   // MCP servers
   List<McpServerSpec> mcpServers = new ArrayList<>();
+
+  // A2A remote agents (peers callable as workflow steps / tools)
+  List<RemoteAgentSpec> remoteAgents = new ArrayList<>();
+  A2AClientFactory a2aClientFactory = A2AClientFactory.discovering();
 
   // Inference (non-LLM deep learning models)
   Map<String, InferenceConnection> inferenceConnections = new LinkedHashMap<>();
@@ -591,6 +601,22 @@ public class AgentBuilder {
     return this;
   }
 
+  /**
+   * Configure the per-conversation memory store — the multi-turn transcript (and small workflow
+   * attributes) shared <b>across operators</b>, keyed by conversation id. This is the layer between
+   * per-operator short-term Flink state and the long-term store: a conversation split across a
+   * routed graph (router → path → verifier) reads and appends the same dialogue here so it
+   * progresses across turns.
+   *
+   * <p>When not set, the framework discovers one via {@link ConversationStores#discover()} — the
+   * process-wide in-JVM store for the embedded deployment, or a ServiceLoader-registered
+   * Redis/Postgres-backed store for a distributed cluster.
+   */
+  public AgentBuilder withConversationStore(ConversationStore store) {
+    this.conversationStore = store;
+    return this;
+  }
+
   /** Sets the embedding transport. ServiceLoader-discovered Ollama is used by default. */
   public AgentBuilder withEmbeddingConnection(EmbeddingConnection connection) {
     this.embeddingConnection = connection;
@@ -633,6 +659,39 @@ public class AgentBuilder {
   public AgentBuilder withMcpServer(McpServerSpec... servers) {
     if (servers != null) {
       this.mcpServers.addAll(Arrays.asList(servers));
+    }
+    return this;
+  }
+
+  /**
+   * Register one or more remote A2A agents ("peers") this agent can call as workflow steps.
+   *
+   * <p>Each peer is exposed to the LLM as a synthetic tool named {@code a2a:<name>} (added to the
+   * allowed-tools list) and described via a generated {@link Skill} so the model knows when to
+   * delegate. The concrete {@link org.agentic.flink.a2a.A2AToolExecutor} is registered into the
+   * job's tool registry at assembly time via {@code A2AToolRegistry.registerInto(...)}. For
+   * deterministic (non-LLM) sequencing, use {@code AgentJobBuilder.withA2AStep(...)} instead.
+   */
+  public AgentBuilder withRemoteAgent(RemoteAgentSpec... specs) {
+    if (specs != null) {
+      for (RemoteAgentSpec spec : specs) {
+        this.remoteAgents.add(spec);
+        this.allowedTools.add(spec.toolId());
+        Skill skill = A2ASkillMapper.fromSpec(spec);
+        this.skills.add(skill);
+      }
+    }
+    return this;
+  }
+
+  /**
+   * Override the {@link A2AClientFactory} used to build clients for this agent's remote peers.
+   * Defaults to {@link A2AClientFactory#discovering()} (resolves the SDK adapter via ServiceLoader).
+   * Tests inject an in-memory factory here.
+   */
+  public AgentBuilder withA2AClientFactory(A2AClientFactory factory) {
+    if (factory != null) {
+      this.a2aClientFactory = factory;
     }
     return this;
   }
@@ -724,6 +783,11 @@ public class AgentBuilder {
     // Default short-term memory: Flink keyed state with the configured TTL.
     if (shortTermMemorySpec == null) {
       shortTermMemorySpec = FlinkStateShortTermMemory.spec(shortTermTtl);
+    }
+
+    // Default per-conversation memory: ServiceLoader-discovered, else the shared in-JVM store.
+    if (conversationStore == null) {
+      conversationStore = ConversationStores.discover();
     }
 
     // Concatenate skill prompt fragments onto the system prompt.

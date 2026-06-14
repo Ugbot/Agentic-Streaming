@@ -1,0 +1,6 @@
+# ConversationStore providers (ServiceLoader). Each self-gates on conversation.store=<name>;
+# when not selected it throws on construction and discovery skips it, falling back to the in-JVM
+# InMemoryConversationStore. RedisConversationStore -> conversation.store=redis;
+# FlussConversationStore -> conversation.store=fluss.
+org.agentic.flink.memory.conversation.redis.RedisConversationStore
+org.agentic.flink.memory.conversation.fluss.FlussConversationStore

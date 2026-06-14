@@ -13,7 +13,6 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.time.Time;
 
 /**
  * Default {@link ShortTermMemory} implementation backed by Flink keyed state.
@@ -140,7 +139,7 @@ public final class FlinkStateShortTermMemory implements ShortTermMemory {
 
       if (!ttl.isZero() && !ttl.isNegative()) {
         StateTtlConfig ttlConfig =
-            StateTtlConfig.newBuilder(Time.milliseconds(ttl.toMillis()))
+            StateTtlConfig.newBuilder(ttl)
                 .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
                 .setStateVisibility(StateTtlConfig.StateVisibility.ReturnExpiredIfNotCleanedUp)
                 .cleanupIncrementally(10, false)

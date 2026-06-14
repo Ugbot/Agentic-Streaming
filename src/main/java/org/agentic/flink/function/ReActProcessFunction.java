@@ -137,6 +137,8 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
 
     int iteration = iterationsState.value() == null ? 0 : iterationsState.value();
     int maxIterations = agent.getMaxIterations();
+    int toolCalls = 0; // tool calls performed during this loop run
+    int stallNudges = 0; // pushbacks on a "I need a tool" non-action final
 
     while (iteration < maxIterations) {
       iteration++;
@@ -174,6 +176,18 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
 
       String type = step.getType() == null ? "" : step.getType().toLowerCase();
       if ("final".equals(type)) {
+        // Action-adherence guard: small models often END the turn by narrating that they need to
+        // call a tool ("I need to inspect the tools first" / "I don't have access…") without ever
+        // emitting the action step. If the agent has tools, has called none this run, and the final
+        // reads like that stall, push back and make it act (bounded; a genuine final still passes).
+        String answer = step.getAnswer() != null ? step.getAnswer() : response.getText();
+        if (org.agentic.flink.llm.ReActGuard.shouldNudge(
+            answer, !toolRegistry.getToolNames().isEmpty(), toolCalls, stallNudges)) {
+          stallNudges++;
+          messages.add(
+              ChatMessage.user(org.agentic.flink.llm.ReActGuard.stallNudge(toolRegistry.getToolNames())));
+          continue;
+        }
         markFinished(iteration, messages);
         out.collect(event);
         return;
@@ -208,6 +222,7 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
         listener.onToolCallEnd(agent.getAgentId(), toolName, toolCallId, success, durationMs);
 
         messages.add(ChatMessage.tool(toolCallId, toolName, String.valueOf(result)));
+        toolCalls++;
         continue;
       }
 

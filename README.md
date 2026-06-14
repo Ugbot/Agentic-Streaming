@@ -1,9 +1,62 @@
-# Agentic Flink
+# Agentic Streaming
 
-> **Heads up (2026-05-26):** The repo needed a sizeable cleanup pass with a big
-> module reshuffle, and its git history was reset to a fresh root commit. If
-> you cloned before this date your local copy will not fast-forward — please
-> **delete it and clone fresh**.
+> **Formerly _Agentic Flink_.** This project began as an agent framework *for Apache
+> Flink*. It has outgrown that name: the same essence now runs on a dozen engines across
+> **Python, the JVM, and Go**, with two HTTP gateways and a full design-doc series. Flink
+> is still the **first-class runtime** — the deepest, most feature-complete
+> implementation — but it's no longer the only one. So: **Agentic Streaming** — a library
+> *and* an example pack for building agents as streaming, stateful, event-sourced systems.
+
+## The ethos: an agent is a materialized view over a stream of events
+
+The one idea everything here is built around: **treat an agent as both _stateful_ and a
+_stream_ at the same time.** A conversation is not a request/response call — it's an
+ordered **log of events** (user turns, tool results, model outputs, routing decisions).
+The agent's "memory" or "state" is simply a **materialized view** — a fold/reduce — over
+that log. Ask what the agent *is*, and the honest answer is: *the value you get by
+replaying its events.*
+
+Two long-standing patterns fall straight out of that framing, and they are the real
+ethos of this whole set of tools:
+
+- **Event sourcing.** The log of events is the source of truth; state is derived, not
+  primary. That buys durability, replay, time-travel/debugging, audit, and exactly the
+  recovery story every engine here implements differently — Flink checkpoints, Kafka/NATS
+  offsets, Pulsar's BookKeeper state, Pekko persistence, **Temporal's event-sourced
+  workflow history**. Same idea, many substrates.
+- **CQRS — Command/Query Responsibility Segregation.** Writes and reads are different
+  shapes. A **command** is "process this turn" — an ordered, single-writer-per-conversation
+  mutation that appends to the log and advances state. A **query** is "what's the current
+  answer / transcript / phase?" — a read of the materialized view, freely fan-outable.
+  Keeping them separate is what lets a conversation be both a durable keyed entity *and* a
+  high-throughput stream.
+
+That's why the essence ports so cleanly: every engine in this repo is, at heart, a
+different way to **materialize a series of events into a value, in order, durably, per
+key.** A Flink keyed operator, a Kafka-Streams partition, a Pekko/Temporal/Ray entity, a
+NATS-KV envelope, a Pulsar function's state store — all the same pattern wearing different
+clothes. See [`docs/portability/00-essence-and-core-abstractions.md`](docs/portability/00-essence-and-core-abstractions.md)
+for the capability inventory behind this.
+
+## What's in the box
+
+- **The Flink framework (first-class).** The original, full-featured agent framework —
+  Flink-state-first memory, vector memory, CEP orchestration, the chat/embedding/tool/
+  inference SPIs, Python (PyFlink + JPype), A2A, RAG. This is the deepest implementation
+  and the rest of this README documents it.
+- **The portability pack — [`ports/`](ports/).** The same essence, proven on **twelve
+  engines** across **three pure cores** (Python `pyagentic`, Java `jagentic-core`, Go
+  `goagentic`): Kafka Streams, Pekko, Temporal, Pulsar Functions, NATS JetStream, Ray,
+  Quarkus, Spring, Celery, Dask, Airflow, Faust — plus a **stdlib Go gateway** and a
+  **FastAPI gateway** that expose the agent under one A2A-style Agent Card. A new
+  tool/path added to a core propagates to every port (enforced by tests). Start at
+  [`ports/README.md`](ports/README.md).
+- **The design-doc series — [`docs/portability/`](docs/portability/).** An honest,
+  per-engine mapping of the essence onto each runtime: what fits natively, what's
+  assembled, what to drop. The keystone names the capability inventory (durable keyed
+  state, per-key ordering, fault tolerance, async I/O, …) and ranks the engines by fit.
+
+## Flink — the first-class runtime
 
 A framework for building LLM-powered AI agents on Apache Flink. Memory lives in
 Flink keyed state by default; LLM providers, embedders, tools, and observability
@@ -59,8 +112,8 @@ storage backend.
 ## Quick start
 
 ```bash
-git clone https://github.com/Ugbot/Agentic-Flink.git
-cd Agentic-Flink
+git clone https://github.com/Ugbot/Agentic-Streaming.git
+cd Agentic-Streaming
 
 # Optional infrastructure. PostgreSQL is only needed for long-term resumption;
 # the framework runs entirely on Flink state otherwise. Use `podman compose` if
@@ -289,8 +342,10 @@ agents inside an upstream runtime.
 
 - Java 17+
 - Maven 3.8+
-- Apache Flink 1.20
-- Docker or Podman (only for optional Postgres / Redis / Ollama services)
+- Apache Flink 2.2 (native FLIP-27 sources / FLIP-143 sinks) — for the first-class runtime
+- Go 1.24+ (only for the Go core / gateway / engines under `ports/go/`)
+- Python 3.11+ (only for the pure-Python cores, ports, and the FastAPI gateway)
+- Docker or Podman (only for optional Postgres / Redis / Ollama / NATS services)
 - Ollama (for local LLM examples)
 
 ## Contributing

@@ -14,7 +14,6 @@ import java.util.function.Function;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -203,8 +202,11 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
       case IN_JVM:
         // Both transports expose a BlockingQueue-backed source; for SIDE_OUTPUT this is the
         // fallback path used when no operator context is available (tests, single-JVM dev).
-        return env.addSource(new QueueSource<>(toolId), typeInfo)
-            .name("tool-channel[" + toolId + "/" + transport.name().toLowerCase() + "]")
+        return env.fromSource(
+                new org.agentic.flink.channel.source.PollingSource<>(new QueuePollFn<>(toolId)),
+                org.apache.flink.api.common.eventtime.WatermarkStrategy.noWatermarks(),
+                "tool-channel[" + toolId + "/" + transport.name().toLowerCase() + "]",
+                typeInfo)
             .setParallelism(1);
       case EXTERNAL:
         return wrappedChannel.open(env);
@@ -269,33 +271,25 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
     return CompletableFuture.completedFuture(result);
   }
 
-  /** Per-tool-id source that drains the shared BlockingQueue. */
-  static final class QueueSource<T> implements SourceFunction<T> {
+  /** Per-tool-id native poll fn that drains the shared BlockingQueue. */
+  static final class QueuePollFn<T> implements org.agentic.flink.channel.source.PollingSource.PollFn<T> {
     private static final long serialVersionUID = 1L;
     private final String toolId;
-    private volatile boolean running = true;
+    private transient BlockingQueue<Object> queue;
 
-    QueueSource(String toolId) {
+    QueuePollFn(String toolId) {
       this.toolId = toolId;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public void run(SourceContext<T> ctx) throws Exception {
-      BlockingQueue<Object> q = IN_JVM_QUEUES.computeIfAbsent(toolId, k -> new LinkedBlockingQueue<>());
-      while (running) {
-        Object item = q.poll(500, TimeUnit.MILLISECONDS);
-        if (item != null) {
-          synchronized (ctx.getCheckpointLock()) {
-            ctx.collect((T) item);
-          }
-        }
-      }
+    public void open(int subtaskIndex) {
+      queue = IN_JVM_QUEUES.computeIfAbsent(toolId, k -> new LinkedBlockingQueue<>());
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    @SuppressWarnings("unchecked")
+    public T poll(long timeoutMs) throws InterruptedException {
+      return (T) queue.poll(Math.max(1, timeoutMs), TimeUnit.MILLISECONDS);
     }
   }
 

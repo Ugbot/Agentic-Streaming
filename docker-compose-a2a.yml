@@ -1,0 +1,51 @@
+# Compose umbrella for the A2A gateway scenario (docs/a2a.md, a2a-gateway/).
+#
+# Brings up:
+#   - Redis    (A2A bridge transport + optional task store; from docker-compose.yml)
+#   - Postgres (optional A2A task store; from docker-compose.yml)
+#   - a2a-gateway (Quarkus): serves the Agent Card + JSON-RPC/SSE (9999) and gRPC (9000),
+#     bridging A2A requests into a Flink job over Redis pub/sub.
+#
+# Build the gateway jar first, then bring the stack up:
+#   mvn -q install -DskipTests
+#   mvn -f a2a-gateway/pom.xml package
+#   podman network create agentic-flink-network    # once
+#   podman compose -f docker-compose-a2a.yml up -d
+#
+# Then run a Flink job that unions bridge.requestChannel() / addSink(bridge.responseSink())
+# with a2a.bridge.transport=redis pointed at this Redis (see docs/a2a.md and A2AAgentExample).
+#
+#   curl http://localhost:9999/.well-known/agent-card.json
+
+include:
+  - docker-compose.yml
+
+services:
+  a2a-gateway:
+    build:
+      context: ./a2a-gateway
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: agentic-flink-a2a-gateway
+    depends_on:
+      - redis
+    ports:
+      - "9999:9999"   # JSON-RPC + SSE + Agent Card
+      - "9000:9000"   # gRPC
+    environment:
+      QUARKUS_HTTP_PORT: "9999"
+      AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9999"
+      AGENTIC_FLINK_A2A_GATEWAY_GRPC_URL: "http://localhost:9000"
+      AGENTIC_FLINK_A2A_GATEWAY_REST_URL: "http://localhost:9999"
+      AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Agentic Flink Agent"
+      AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT: "redis"
+      AGENTIC_FLINK_A2A_BRIDGE_REQUEST_ENDPOINT: "a2a.requests"
+      AGENTIC_FLINK_A2A_BRIDGE_RESPONSE_ENDPOINT: "a2a.responses"
+      AGENTIC_FLINK_REDIS_HOST: "redis"
+      AGENTIC_FLINK_REDIS_PORT: "6379"
+      AGENTIC_FLINK_A2A_TASK_STORE: "redis"
+    networks:
+      - agentic-flink-network
+
+networks:
+  agentic-flink-network:
+    external: true

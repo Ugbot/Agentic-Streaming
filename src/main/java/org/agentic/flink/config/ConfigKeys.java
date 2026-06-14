@@ -35,6 +35,26 @@ public final class ConfigKeys {
   public static final String DEFAULT_REDIS_HOST = "localhost";
   public static final String DEFAULT_REDIS_PORT = "6379";
 
+  // Per-conversation memory (ConversationStore) backend selection.
+  // "memory" (default) = in-JVM; "redis" = RedisConversationStore (cross-process state spine);
+  // "fluss" = FlussConversationStore (PK-table state spine).
+  public static final String CONVERSATION_STORE = "conversation.store";
+  public static final String DEFAULT_CONVERSATION_STORE = "memory";
+  public static final String CONVERSATION_STORE_TTL_SECONDS = "conversation.store.ttl.seconds";
+  public static final String DEFAULT_CONVERSATION_STORE_TTL_SECONDS = "86400"; // 24h
+  public static final String CONVERSATION_STORE_MAX_MESSAGES = "conversation.store.max.messages";
+  public static final String DEFAULT_CONVERSATION_STORE_MAX_MESSAGES = "200";
+
+  // Fluss conversation store (PK table). bootstrap servers + database/table to upsert into.
+  public static final String FLUSS_BOOTSTRAP_SERVERS = "fluss.bootstrap.servers";
+  public static final String DEFAULT_FLUSS_BOOTSTRAP_SERVERS = "localhost:9123";
+  public static final String CONVERSATION_STORE_FLUSS_DATABASE = "conversation.store.fluss.database";
+  public static final String DEFAULT_CONVERSATION_STORE_FLUSS_DATABASE = "agentic";
+  public static final String CONVERSATION_STORE_FLUSS_TABLE = "conversation.store.fluss.table";
+  public static final String DEFAULT_CONVERSATION_STORE_FLUSS_TABLE = "conversations";
+  public static final String CONVERSATION_STORE_FLUSS_BUCKETS = "conversation.store.fluss.buckets";
+  public static final String DEFAULT_CONVERSATION_STORE_FLUSS_BUCKETS = "4";
+
   // PostgreSQL
   public static final String POSTGRES_URL = "postgres.url";
   public static final String POSTGRES_USER = "postgres.user";
@@ -66,5 +86,36 @@ public final class ConfigKeys {
   // OpenAI (optional)
   public static final String OPENAI_API_KEY = "openai.api.key";
   public static final String OPENAI_MODEL = "openai.model";
-  public static final String DEFAULT_OPENAI_MODEL = "gpt-4";
+  public static final String DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
+
+  // A2A (Agent2Agent) — outbound client + inbound Quarkus gateway. See docs/a2a.md.
+  public static final String A2A_PROTOCOL_VERSION = "a2a.protocol.version";
+  public static final String DEFAULT_A2A_PROTOCOL_VERSION = "1.0";
+  public static final String A2A_CLIENT_DEFAULT_TRANSPORT = "a2a.client.default.transport";
+  public static final String DEFAULT_A2A_CLIENT_TRANSPORT = "JSONRPC";
+
+  // A2A gateway (Quarkus): each binding listens on its own port.
+  public static final String A2A_GATEWAY_ENABLED = "a2a.gateway.enabled";
+  public static final String A2A_GATEWAY_HOST = "a2a.gateway.host";
+  public static final String A2A_GATEWAY_JSONRPC_PORT = "a2a.gateway.jsonrpc.port";
+  public static final String A2A_GATEWAY_GRPC_PORT = "a2a.gateway.grpc.port";
+  public static final String A2A_GATEWAY_REST_PORT = "a2a.gateway.rest.port";
+  public static final String A2A_GATEWAY_PUBLIC_URL = "a2a.gateway.public.url";
+  public static final boolean DEFAULT_A2A_GATEWAY_ENABLED = false;
+  public static final String DEFAULT_A2A_GATEWAY_HOST = "0.0.0.0";
+  public static final int DEFAULT_A2A_GATEWAY_JSONRPC_PORT = 9999;
+  public static final int DEFAULT_A2A_GATEWAY_GRPC_PORT = 9998;
+  public static final int DEFAULT_A2A_GATEWAY_REST_PORT = 9997;
+
+  // A2A bridge (gateway <-> Flink job transport). Default ZeroMQ for localhost/in-host.
+  public static final String A2A_BRIDGE_TRANSPORT = "a2a.bridge.transport";
+  public static final String A2A_BRIDGE_REQUEST_ENDPOINT = "a2a.bridge.request.endpoint";
+  public static final String A2A_BRIDGE_RESPONSE_ENDPOINT = "a2a.bridge.response.endpoint";
+  public static final String DEFAULT_A2A_BRIDGE_TRANSPORT = "zeromq";
+  public static final String DEFAULT_A2A_BRIDGE_REQUEST_ENDPOINT = "tcp://127.0.0.1:5760";
+  public static final String DEFAULT_A2A_BRIDGE_RESPONSE_ENDPOINT = "tcp://127.0.0.1:5761";
+
+  // A2A task store (gateway-side task lifecycle persistence).
+  public static final String A2A_TASK_STORE = "a2a.task.store";
+  public static final String DEFAULT_A2A_TASK_STORE = "memory";
 }

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.agentic.flink</groupId>
+    <artifactId>agentic-flink-banking-job</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <!--
+    Standalone, self-contained uber-jar for the banking Flink job (BankingFlinkJob): the embedded
+    MiniCluster process of an agent container. Kept out of the core reactor (like a2a-gateway) and
+    built separately:  mvn install -DskipTests && mvn -f banking-job/pom.xml package
+
+    Core marks Flink/Jedis 'provided'/'optional' (it deploys onto a cluster); here we pull them in
+    at compile scope so the shaded jar runs a local MiniCluster + Redis bridge with `java -jar`.
+    -->
+
+    <properties>
+        <java.version>17</java.version>
+        <flink.version>2.2.1</flink.version>
+        <agentic.flink.version>1.0.0-SNAPSHOT</agentic.flink.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- Core: agents, banking graph, A2A bridge, conversation store (+ its compile deps:
+             langchain4j, jackson, …). -->
+        <dependency>
+            <groupId>org.agentic.flink</groupId>
+            <artifactId>agentic-flink</artifactId>
+            <version>${agentic.flink.version}</version>
+        </dependency>
+
+        <!-- Flink local-execution stack (provided in core). flink-clients supplies the LocalExecutor
+             that createLocalEnvironment().execute() needs. -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+
+        <!-- Redis bridge + RedisConversationStore (optional in core). -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.1.0</version>
+        </dependency>
+
+        <!-- Logging backend for the standalone process. -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.17.1</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.17.1</version>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>banking-job</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>module-info.class</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.agentic.flink.example.banking.BankingFlinkJob</mainClass>
+                                </transformer>
+                                <!-- Merge META-INF/services so every ServiceLoader provider survives:
+                                     our ConversationStore (RedisConversationStore), EmbeddingConnection,
+                                     ChatConnection, and Flink's own service files. -->
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

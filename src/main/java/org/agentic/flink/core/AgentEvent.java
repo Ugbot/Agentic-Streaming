@@ -6,11 +6,24 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
+import org.apache.flink.api.common.typeinfo.TypeInfo;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@TypeInfo(AgentEvent.Factory.class)
 public class AgentEvent implements Serializable {
+
+  /**
+   * Serializes via JSON ({@link org.agentic.flink.typeinfo.FlinkJson}) instead of Kryo wherever this
+   * event flows (stream elements + keyed state). Mutable, so Flink object reuse deep-copies it.
+   */
+  public static final class Factory extends JsonTypeInfoFactory<AgentEvent> {
+    public Factory() {
+      super(AgentEvent.class, true);
+    }
+  }
 
   private String flowId;
   private String userId;

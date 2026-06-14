@@ -14,8 +14,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
  * <p>Single parallelism by design — Coinbase rate-limits per connection and we want a stable
  * monotonic per-product update stream.
  */
-public final class CoinbaseTickerSource implements SourceFunction<Inventory> {
+public final class CoinbaseTickerSource implements PollingSource.PollFn<Inventory> {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(CoinbaseTickerSource.class);
 
@@ -42,7 +42,8 @@ public final class CoinbaseTickerSource implements SourceFunction<Inventory> {
 
   private final List<String> products;
 
-  private volatile boolean running = true;
+  private transient BlockingQueue<Inventory> queue;
+  private transient WebSocket ws;
 
   public CoinbaseTickerSource(List<String> products) {
     if (products == null || products.isEmpty()) {
@@ -56,33 +57,35 @@ public final class CoinbaseTickerSource implements SourceFunction<Inventory> {
     return new CoinbaseTickerSource(List.of("BTC-USD", "ETH-USD", "SOL-USD"));
   }
 
+  /** Wrap as a native FLIP-27 source for {@code env.fromSource(...)}. */
+  public static PollingSource<Inventory> source(List<String> products) {
+    return new PollingSource<>(new CoinbaseTickerSource(products), QUEUE_CAPACITY);
+  }
+
   @Override
-  public void run(SourceContext<Inventory> ctx) throws Exception {
-    BlockingQueue<Inventory> queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
+  public void open(int subtaskIndex) throws Exception {
+    queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
     HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     ObjectMapper mapper =
         new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
     Listener listener = new Listener(queue, mapper, products);
-    WebSocket ws =
+    ws =
         client
             .newWebSocketBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             .buildAsync(WS_URI, listener)
             .get(20, TimeUnit.SECONDS);
     LOG.info("coinbase ws open products={}", products);
+  }
 
-    try {
-      while (running) {
-        Inventory inv = queue.poll(500, TimeUnit.MILLISECONDS);
-        if (inv == null) {
-          continue;
-        }
-        synchronized (ctx.getCheckpointLock()) {
-          ctx.collect(inv);
-        }
-      }
-    } finally {
+  @Override
+  public Inventory poll(long timeoutMs) throws InterruptedException {
+    return queue.poll(Math.max(1, timeoutMs), TimeUnit.MILLISECONDS);
+  }
+
+  @Override
+  public void close() {
+    if (ws != null) {
       try {
         ws.sendClose(WebSocket.NORMAL_CLOSURE, "bye")
             .orTimeout(2, TimeUnit.SECONDS)
@@ -92,11 +95,6 @@ public final class CoinbaseTickerSource implements SourceFunction<Inventory> {
         // best-effort
       }
     }
-  }
-
-  @Override
-  public void cancel() {
-    running = false;
   }
 
   /**

@@ -90,6 +90,23 @@ class ChatSpecSerializationTest {
   }
 
   @Test
+  @DisplayName("LangChain4jChatConnection (Gemini) round-trips and builds a model offline")
+  void geminiConnectionRoundTripsAndBuilds() throws Exception {
+    String fakeKey = "AIza-test-" + UUID.randomUUID();
+    LangChain4jChatConnection original = LangChain4jChatConnection.gemini(fakeKey);
+
+    LangChain4jChatConnection r = (LangChain4jChatConnection) roundTrip(original);
+    assertEquals(LangChain4jChatConnection.Provider.GEMINI, r.getProvider());
+    assertNull(r.getBaseUrl());
+    assertEquals(Duration.ofSeconds(120), r.getTimeout());
+    assertTrue(r.providerName().contains("gemini"));
+
+    // Building the model is offline (no API call until chat()); the harness locks gemini-3.5-flash.
+    var model = r.buildModel("gemini-3.5-flash", 0.2, 512);
+    assertTrue(model.getClass().getSimpleName().contains("Gemini"), model.getClass().getName());
+  }
+
+  @Test
   @DisplayName("Default ChatConnection is discovered via ServiceLoader")
   void serviceLoaderFindsDefault() {
     java.util.ServiceLoader<ChatConnection> loader =

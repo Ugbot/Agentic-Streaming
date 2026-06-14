@@ -215,3 +215,36 @@ if you want `ServiceLoader` discovery, or pass it explicitly via
 
 ONNX Runtime and DL4J would each follow this pattern. Their dependencies stay
 out of the default build the same way DJL's do — mark them `<optional>true</optional>`.
+
+## Running DJL live (native PyTorch) + benchmark
+
+The default build pulls DJL's `api` + `pytorch-engine` but **not** the native
+PyTorch shared library, so a no-DL build stays small and `mvn test` never
+downloads models (the DJL tests are `@Tag("djl")` and excluded by default).
+
+To run real DJL embeddings, use the **`djl-native`** Maven profile — it selects
+the `djl` test group, and DJL's `pytorch-engine` auto-downloads the
+platform-matched CPU native + JNI on first model load (cached under
+`~/.djl.ai`; needs network once, offline thereafter):
+
+```bash
+mvn test -P djl-native -Dtest=DjlRecallIT     # live embed → recall → micro-benchmark
+# or the wrapper:
+bash examples-bin/run-djl-embed.sh
+```
+
+`DjlRecallIT` loads `sentence-transformers/all-MiniLM-L6-v2`, embeds a small
+corpus into the RAG hot index, and asserts **semantic recall** — a paraphrased
+query (`"Which European city is France's capital?"`) retrieves the Paris passage
+as top-1 — then prints mean embed latency (≈5 ms/doc CPU on Apple Silicon).
+
+Wiring an embedder into an agent:
+
+```java
+var embedder = DjlEmbeddingConnection.of(
+    "djl://ai.djl.huggingface.pytorch/sentence-transformers/all-MiniLM-L6-v2");
+Agent.builder().withId("rag").withEmbeddingConnection(embedder)...;
+```
+
+For a fully offline/air-gapped jar, add `ai.djl.pytorch:pytorch-native-cpu` with
+your platform's DJL classifier (`osx-aarch64`, `linux-x86_64`, …) at the call site.

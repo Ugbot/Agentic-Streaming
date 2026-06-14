@@ -1,0 +1,19 @@
+# Quarkus JVM image for the Agentic Flink A2A gateway.
+# Build the app first (produces target/quarkus-app/), then build this image:
+#   mvn -f a2a-gateway/pom.xml package
+#   podman build -f a2a-gateway/src/main/docker/Dockerfile.jvm -t agentic-flink-a2a-gateway a2a-gateway
+FROM registry.access.redhat.com/ubi9/openjdk-17-runtime:latest
+
+ENV LANGUAGE='en_US:en'
+
+COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
+COPY --chown=185 target/quarkus-app/*.jar /deployments/
+COPY --chown=185 target/quarkus-app/app/ /deployments/app/
+COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
+
+EXPOSE 9999 9000
+USER 185
+ENV JAVA_OPTS_APPEND="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+
+ENTRYPOINT [ "/opt/jboss/container/java/run/run-java.sh" ]

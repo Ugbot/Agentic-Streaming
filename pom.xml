@@ -11,10 +11,17 @@
     <description>Standalone Agentic Framework for Apache Flink with LangChain4J Integration</description>
 
     <properties>
-        <flink.version>1.20.1</flink.version>
+        <flink.version>2.2.1</flink.version>
         <java.version>17</java.version>
         <log4j.version>2.17.1</log4j.version>
         <langchain4j.version>0.35.0</langchain4j.version>
+        <!--
+        A2A (Agent2Agent) Java SDK. groupId io.github.a2asdk. The 1.0 protocol line is
+        currently published only as alphas on Maven Central (newest stable Final is 0.3.x);
+        we pin the 1.0 surface and isolate it behind our own A2AClient SPI so a later Final
+        bump is a one-module change. See docs/a2a.md.
+        -->
+        <a2a.version>1.0.0.Alpha3</a2a.version>
         <lombok.version>1.18.38</lombok.version>
         <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
         <junit.version>5.8.1</junit.version>
@@ -22,6 +29,19 @@
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- A2A Java SDK BOM — aligns all a2a-java-sdk-* module versions. -->
+            <dependency>
+                <groupId>io.github.a2asdk</groupId>
+                <artifactId>a2a-java-sdk-bom</artifactId>
+                <version>${a2a.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Apache Flink Core -->
@@ -90,6 +110,15 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-anthropic</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- LangChain4J Google Gemini Integration (API-key auth; required by the A2A banking demo,
+             where the model is locked to gemini-3.5-flash). For Vertex project/location auth instead,
+             swap to langchain4j-vertex-ai-gemini. -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-google-ai-gemini</artifactId>
             <version>${langchain4j.version}</version>
         </dependency>
 
@@ -165,7 +194,7 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka</artifactId>
-            <version>3.2.0-1.19</version>
+            <version>5.0.0-2.2</version>
             <optional>true</optional>
         </dependency>
 
@@ -178,6 +207,41 @@
             <groupId>org.zeromq</groupId>
             <artifactId>jeromq</artifactId>
             <version>0.6.0</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+        A2A (Agent2Agent) Java SDK — OPTIONAL.
+
+        a2a-java-sdk-spec provides the wire POJOs (AgentCard, Message, Part, Task, Artifact);
+        a2a-java-sdk-client + its transport modules implement the outbound client. All marked
+        optional so consumers who don't use A2A pay nothing transitively — the SDK is only
+        touched by org.agentic.flink.a2a.SdkA2AClient (everything else uses our A2AClient SPI).
+        Versions come from the a2a-java-sdk-bom imported above.
+        -->
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-spec</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client-transport-jsonrpc</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client-transport-grpc</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.a2asdk</groupId>
+            <artifactId>a2a-java-sdk-client-transport-rest</artifactId>
             <optional>true</optional>
         </dependency>
 
@@ -416,21 +480,29 @@
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.agentic.flink.example.SimpleAgentExample</mainClass>
                                 </transformer>
+                                <!-- Merge META-INF/services so every ServiceLoader provider survives
+                                     the uber-jar: DJL's model-zoo (ai.djl.repository.zoo.ZooProvider,
+                                     needed for the djl:// HuggingFace embedder) and our own SPIs
+                                     (A2AClientFactory, ChatConnection, EmbeddingConnection, VectorStore,
+                                     LongTermMemoryStore). Without this, shade keeps only one file per
+                                     service and the rest are silently dropped. -->
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
 
-            <!-- Maven Surefire Plugin - exclude integration tests by default -->
+            <!-- Maven Surefire Plugin - exclude integration + DJL (live-download) tests by default -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <excludedGroups>integration</excludedGroups>
+                    <excludedGroups>integration,djl</excludedGroups>
                     <!--
-                    Flink 1.20 on Java 17: Kryo / Twitter Chill reflective access into JDK
+                    Flink on Java 17: Kryo / Twitter Chill reflective access into JDK
                     internals is blocked by the module system without these opens. Mirrors
                     Flink's own recommended JVM args.
                     -->
@@ -512,6 +584,35 @@
                         <configuration>
                             <excludedGroups>none</excludedGroups>
                             <groups>integration</groups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+        DJL live profile. The default build pulls the DJL API + pytorch-engine but not the native
+        PyTorch shared library (a no-DL build stays small). Enabling this profile selects the live
+        DJL test group ({@code @Tag("djl")}); DJL's pytorch-engine auto-downloads the
+        platform-matched CPU native + JNI on first model load (cached under ~/.djl.ai), so no
+        platform-specific Maven classifier is needed:
+
+            mvn test -P djl-native -Dtest=DjlRecallIT     # live embed + recall + micro-benchmark
+
+        For a fully offline/air-gapped jar, add ai.djl.pytorch:pytorch-native-cpu with your
+        platform's DJL classifier (osx-aarch64 / linux-x86_64 / …) at the call site.
+        -->
+        <profile>
+            <id>djl-native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <configuration>
+                            <excludedGroups>none</excludedGroups>
+                            <groups>djl</groups>
                         </configuration>
                     </plugin>
                 </plugins>

@@ -75,7 +75,7 @@ System properties use the prefix `agentic.flink.` followed by the key verbatim (
 | Key | Default | Description |
 |---|---|---|
 | `openai.api.key` | _(none)_ | OpenAI API key. No default; required only if using OpenAI models |
-| `openai.model` | `gpt-4` | OpenAI model name |
+| `openai.model` | `gpt-5.4-mini` | OpenAI model name (current options: `gpt-5.5`, `gpt-5.4`/`-mini`/`-nano`) |
 
 ## Creating a Configuration Instance
 
@@ -172,7 +172,7 @@ AGENTIC_FLINK_QDRANT_PORT=6333
 
 # OpenAI (optional -- only if using OpenAI models)
 # AGENTIC_FLINK_OPENAI_API_KEY=sk-...
-# AGENTIC_FLINK_OPENAI_MODEL=gpt-4
+# AGENTIC_FLINK_OPENAI_MODEL=gpt-5.4-mini
 ```
 
 ## File Locations

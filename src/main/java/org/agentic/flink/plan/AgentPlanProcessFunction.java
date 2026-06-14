@@ -1,4 +1,5 @@
 package org.agentic.flink.plan;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.python.PythonAction;
 import org.agentic.flink.python.PythonExecutor;
@@ -59,8 +60,8 @@ public class AgentPlanProcessFunction<K> extends KeyedProcessFunction<K, Object,
   }
 
   @Override
-  public void open(Configuration parameters) throws Exception {
-    super.open(parameters);
+  public void open(OpenContext openContext) throws Exception {
+    super.open(openContext);
     this.plan = AgentPlan.fromJson(planJson);
     this.pythonActions = new ArrayList<>();
     this.resourceInstances = new HashMap<>();

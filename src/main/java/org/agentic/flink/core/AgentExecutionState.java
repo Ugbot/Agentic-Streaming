@@ -7,10 +7,20 @@ import java.util.List;
 import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
+import org.apache.flink.api.common.typeinfo.TypeInfo;
 
 @Data
 @NoArgsConstructor
+@TypeInfo(AgentExecutionState.Factory.class)
 public class AgentExecutionState implements Serializable {
+
+  /** JSON (FlinkJson) serialization in keyed state instead of Kryo (contextData is Map&lt;String,Object&gt;). */
+  public static final class Factory extends JsonTypeInfoFactory<AgentExecutionState> {
+    public Factory() {
+      super(AgentExecutionState.class, true);
+    }
+  }
 
   // Identifiers
   private String flowId;

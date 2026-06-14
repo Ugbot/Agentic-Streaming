@@ -79,6 +79,29 @@ def langchain4j_openai(api_key: str):
     return Conn.openai(api_key)
 
 
+def langchain4j_anthropic(api_key: str):
+    """Build a :class:`LangChain4jChatConnection` configured for Anthropic (Claude)."""
+    Conn = jclass("org.agentic.flink.llm.langchain4j.LangChain4jChatConnection")
+    return Conn.anthropic(api_key)
+
+
+def langchain4j_gemini(api_key: Optional[str] = None):
+    """Build a :class:`LangChain4jChatConnection` for Google Gemini (API-key auth).
+
+    Used by the A2A banking demo, where the model is locked to ``gemini-3.5-flash``.
+    Falls back to the ``GOOGLE_API_KEY`` environment variable when ``api_key`` is omitted.
+    """
+    import os
+
+    key = api_key or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        raise ValueError(
+            "langchain4j_gemini requires an API key (arg or GOOGLE_API_KEY env var)"
+        )
+    Conn = jclass("org.agentic.flink.llm.langchain4j.LangChain4jChatConnection")
+    return Conn.gemini(key)
+
+
 def chat(connection, messages: Iterable[ChatMessage], setup: ChatSetup):
     """One-shot blocking chat call. Returns the response as a Python dict
     ``{text, model, tokens_used, finish_reason}`` for convenience."""
@@ -104,5 +127,7 @@ __all__ = [
     "ChatMessage",
     "langchain4j_ollama",
     "langchain4j_openai",
+    "langchain4j_anthropic",
+    "langchain4j_gemini",
     "chat",
 ]

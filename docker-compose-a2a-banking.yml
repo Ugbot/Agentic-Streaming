@@ -1,0 +1,77 @@
+# Rho-Bank A2A demo — the hackathon shape (personal-agent:9001, cs-agent:9002, redis), each agent
+# container running ONE Quarkus A2A gateway (spec message/send front) + ONE embedded Flink
+# MiniCluster job (the routed graph whose path operators call the LLM), joined by Redis (the
+# non-lossy bridge + the per-conversation transcript/phase store). Same image, role via
+# A2A_BANKING_ROLE. The public KB is baked into the image (banking-kb/), so no host mount.
+#
+# Build the jars + image first, then `up`:
+#   mvn -o clean install -DskipTests
+#   mvn -o -f a2a-gateway/pom.xml package -DskipTests
+#   mvn -o -f banking-job/pom.xml package -DskipTests
+#   GOOGLE_API_KEY=... podman compose -f docker-compose-a2a-banking.yml up --build
+#
+# Marked runs: MODEL=gemini-3.5-flash + GOOGLE_API_KEY (Vertex), EMBED_PROVIDER=gemini.
+# Local dev: LLM_PROVIDER=openai MODEL=gpt-5.4-nano OPENAI_API_KEY=... EMBED_PROVIDER=openai.
+services:
+  redis:
+    image: redis:8
+    ports:
+      - "6379:6379"
+
+  cs-agent:
+    build:
+      context: .
+      dockerfile: docker/banking.Dockerfile
+    image: agentic-flink-banking
+    container_name: rho-bank-cs
+    depends_on:
+      - redis
+    ports:
+      - "9002:9002"
+    environment:
+      A2A_BANKING_ROLE: "cs"
+      QUARKUS_HTTP_PORT: "9002"
+      AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Rho-Bank Customer Service"
+      AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9002"
+      AGENTIC_FLINK_A2A_GATEWAY_REQUEST_TIMEOUT_MS: "280000"
+      AGENTIC_FLINK_REDIS_HOST: "redis"
+      AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT: "redis"
+      AGENTIC_FLINK_CONVERSATION_STORE: "redis"
+      MODEL: ${MODEL:-gemini-3.5-flash}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-gemini}
+      ENV_API_URL: ${ENV_API_URL:-http://host.docker.internal:8090}
+      ENV_API_TOKEN: ${CS_ENV_API_TOKEN:-dev-agent-token}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  personal-agent:
+    image: agentic-flink-banking
+    container_name: rho-bank-personal
+    depends_on:
+      - cs-agent
+    ports:
+      - "9001:9001"
+    environment:
+      A2A_BANKING_ROLE: "personal"
+      QUARKUS_HTTP_PORT: "9001"
+      AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME: "Rho-Bank Personal Assistant"
+      AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL: "http://localhost:9001"
+      AGENTIC_FLINK_A2A_GATEWAY_REQUEST_TIMEOUT_MS: "280000"
+      AGENTIC_FLINK_REDIS_HOST: "redis"
+      AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT: "redis"
+      AGENTIC_FLINK_CONVERSATION_STORE: "redis"
+      CS_AGENT_URL: ${CS_AGENT_URL:-http://cs-agent:9002}
+      MODEL: ${MODEL:-gemini-3.5-flash}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-gemini}
+      ENV_API_URL: ${ENV_API_URL:-http://host.docker.internal:8090}
+      ENV_API_TOKEN: ${PERSONAL_ENV_API_TOKEN:-dev-user-token}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

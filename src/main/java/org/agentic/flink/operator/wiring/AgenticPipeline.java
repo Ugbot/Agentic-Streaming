@@ -10,9 +10,11 @@ import org.agentic.flink.operator.OperatorDebug;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
+import org.agentic.flink.channel.source.PollingSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 
 /**
  * The framework's stream-graph wiring helper. Three responsibilities:
@@ -64,9 +66,12 @@ public final class AgenticPipeline {
   public static BroadcastStream<ControlMessage> seededControl(
       StreamExecutionEnvironment env, ControlMessage... directives) {
     java.util.List<ControlMessage> seq = java.util.Arrays.asList(directives);
-    return env.addSource(
-            new SeededControlSource(seq),
+    return env.fromSource(
+            new PollingSource<>(new SeededControlPollFn(seq)),
+            WatermarkStrategy.noWatermarks(),
+            "seeded-control",
             org.apache.flink.api.common.typeinfo.TypeInformation.of(ControlMessage.class))
+        .setParallelism(1)
         .broadcast(ControlState.DIRECTIVES);
   }
 
@@ -80,34 +85,28 @@ public final class AgenticPipeline {
    * seconds so the broadcast lands before the data sources finish. Used by
    * {@link #seededControl}.
    */
-  static final class SeededControlSource
-      implements org.apache.flink.streaming.api.functions.source.SourceFunction<ControlMessage> {
+  static final class SeededControlPollFn implements PollingSource.PollFn<ControlMessage> {
     private static final long serialVersionUID = 1L;
     private final java.util.List<ControlMessage> seq;
-    private volatile boolean running = true;
+    private transient java.util.Iterator<ControlMessage> it;
 
-    SeededControlSource(java.util.List<ControlMessage> seq) {
+    SeededControlPollFn(java.util.List<ControlMessage> seq) {
       this.seq = new java.util.ArrayList<>(seq);
     }
 
     @Override
-    public void run(SourceContext<ControlMessage> ctx) throws Exception {
-      for (ControlMessage m : seq) {
-        if (!running) {
-          return;
-        }
-        ctx.collect(m);
-      }
-      // Hold so finite data sources have time to start and pick up the broadcast.
-      long until = System.currentTimeMillis() + 2_000L;
-      while (running && System.currentTimeMillis() < until) {
-        Thread.sleep(50);
-      }
+    public void open(int subtaskIndex) {
+      it = new java.util.ArrayList<>(seq).iterator();
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    public ControlMessage poll(long timeoutMs) throws InterruptedException {
+      if (it.hasNext()) {
+        return it.next();
+      }
+      // Emitted the seed; idle (the broadcast stays open for the lifetime of the job).
+      Thread.sleep(Math.min(Math.max(1, timeoutMs), 200));
+      return null;
     }
   }
 
@@ -132,9 +131,9 @@ public final class AgenticPipeline {
    * callers can chain further (e.g. {@code .filter(...)}, alternate sinks).
    */
   public static DataStream<DebugEvent> attachDebugSink(
-      SinkFunction<DebugEvent> sink, SingleOutputStreamOperator<?>... operators) {
+      Sink<DebugEvent> sink, SingleOutputStreamOperator<?>... operators) {
     DataStream<DebugEvent> debug = debugStream(operators);
-    debug.addSink(sink).name("agentic-debug-sink");
+    debug.sinkTo(sink).name("agentic-debug-sink");
     return debug;
   }
 

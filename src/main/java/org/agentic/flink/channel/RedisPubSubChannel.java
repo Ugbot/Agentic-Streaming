@@ -4,11 +4,14 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import org.agentic.flink.channel.source.PollingSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -42,8 +45,11 @@ public final class RedisPubSubChannel implements Channel<KeyedContextItem> {
 
   @Override
   public DataStream<KeyedContextItem> open(StreamExecutionEnvironment env) {
-    return env.addSource(new Source(host, port, channelName))
-        .name("redis-pubsub-channel[" + channelName + "]")
+    return env.fromSource(
+            new PollingSource<>(new RedisPubSubPollFn(host, port, channelName)),
+            WatermarkStrategy.noWatermarks(),
+            "redis-pubsub-channel[" + channelName + "]",
+            elementType())
         .setParallelism(1);
   }
 
@@ -57,26 +63,35 @@ public final class RedisPubSubChannel implements Channel<KeyedContextItem> {
     return "redis-pubsub";
   }
 
-  static final class Source implements SourceFunction<KeyedContextItem> {
+  /**
+   * Native FLIP-27 {@link PollingSource.PollFn} for Redis pub/sub. Jedis {@code subscribe} is a
+   * blocking, push-callback API, so it runs on its own daemon thread feeding a queue; {@link #poll}
+   * drains the queue. Closed on the poll thread, which unsubscribes + stops the subscriber thread.
+   */
+  static final class RedisPubSubPollFn implements PollingSource.PollFn<KeyedContextItem> {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOG = LoggerFactory.getLogger(Source.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RedisPubSubPollFn.class);
 
     private final String host;
     private final int port;
     private final String channelName;
 
-    private volatile boolean running = true;
-    private transient JedisPubSub subscription;
+    private transient LinkedBlockingQueue<KeyedContextItem> queue;
+    private transient volatile boolean running;
+    private transient volatile JedisPubSub subscription;
+    private transient Thread subThread;
 
-    Source(String host, int port, String channelName) {
+    RedisPubSubPollFn(String host, int port, String channelName) {
       this.host = host;
       this.port = port;
       this.channelName = channelName;
     }
 
     @Override
-    public void run(SourceContext<KeyedContextItem> ctx) {
-      ObjectMapper mapper = new ObjectMapper();
+    public void open(int subtaskIndex) {
+      queue = new LinkedBlockingQueue<>();
+      running = true;
+      final ObjectMapper mapper = new ObjectMapper();
       mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
       mapper.registerModule(new ParameterNamesModule());
       mapper.setVisibility(
@@ -88,47 +103,59 @@ public final class RedisPubSubChannel implements Channel<KeyedContextItem> {
               .withSetterVisibility(JsonAutoDetect.Visibility.PUBLIC_ONLY)
               .withCreatorVisibility(JsonAutoDetect.Visibility.PUBLIC_ONLY));
 
-      while (running) {
-        try (Jedis jedis = new Jedis(host, port)) {
-          subscription =
-              new JedisPubSub() {
-                @Override
-                public void onMessage(String ch, String message) {
-                  try {
-                    KeyedContextItem out = mapper.readValue(message, KeyedContextItem.class);
-                    synchronized (ctx.getCheckpointLock()) {
-                      ctx.collect(out);
-                    }
+      subThread =
+          new Thread(
+              () -> {
+                while (running) {
+                  try (Jedis jedis = new Jedis(host, port)) {
+                    subscription =
+                        new JedisPubSub() {
+                          @Override
+                          public void onMessage(String ch, String message) {
+                            try {
+                              queue.add(mapper.readValue(message, KeyedContextItem.class));
+                            } catch (Exception e) {
+                              LOG.warn("Failed to deserialize Redis pub/sub message: {}", e.getMessage());
+                            }
+                          }
+                        };
+                    jedis.subscribe(subscription, channelName);
                   } catch (Exception e) {
-                    LOG.warn("Failed to deserialize Redis pub/sub message: {}", e.getMessage());
+                    if (running) {
+                      LOG.warn("RedisPubSubChannel subscription dropped, reconnecting in 1s: {}", e.getMessage());
+                      try {
+                        Thread.sleep(1000);
+                      } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                      }
+                    }
                   }
                 }
-              };
-          jedis.subscribe(subscription, channelName);
-        } catch (Exception e) {
-          if (running) {
-            LOG.warn(
-                "RedisPubSubChannel subscription dropped, reconnecting in 1s: {}", e.getMessage());
-            try {
-              Thread.sleep(1000);
-            } catch (InterruptedException ie) {
-              Thread.currentThread().interrupt();
-              return;
-            }
-          }
-        }
-      }
+              },
+              "redis-pubsub-" + channelName);
+      subThread.setDaemon(true);
+      subThread.start();
     }
 
     @Override
-    public void cancel() {
+    public KeyedContextItem poll(long timeoutMs) throws InterruptedException {
+      return queue.poll(Math.max(1, timeoutMs), TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void close() {
       running = false;
-      if (subscription != null && subscription.isSubscribed()) {
+      JedisPubSub sub = subscription;
+      if (sub != null && sub.isSubscribed()) {
         try {
-          subscription.unsubscribe();
+          sub.unsubscribe();
         } catch (Exception ignored) {
           // best-effort
         }
+      }
+      if (subThread != null) {
+        subThread.interrupt();
       }
     }
   }

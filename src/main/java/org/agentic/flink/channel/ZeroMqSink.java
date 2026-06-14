@@ -5,10 +5,9 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import org.agentic.flink.channel.sink.ForEachSink;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
@@ -16,7 +15,9 @@ import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
 /**
- * ZeroMQ-backed {@link RichSinkFunction} that mirrors {@link ZeroMqChannel} on the producer side.
+ * ZeroMQ producer side, mirroring {@link ZeroMqChannel}. A native Flink 2.x
+ * ({@link org.apache.flink.api.connector.sink2 FLIP-143}) sink: the factories return a
+ * {@link ForEachSink} backed by a {@link ZmqWriteFn}; wire it with {@code stream.sinkTo(...)}.
  *
  * <p>Static factories for every common sink pattern:
  *
@@ -35,13 +36,14 @@ import org.zeromq.ZMQ;
  * {@link Builder#bind(boolean)}.
  *
  * <p>Wire format: JSON via Jackson by default; supply a custom {@link SerializationSchema} for
- * binary / Avro / Protobuf. Single parallelism is supported via {@code setParallelism(1)} at the
- * call site (the sink itself works at any parallelism but ZMQ socket semantics make N>1 a
- * footgun; document and let the caller decide).
+ * binary / Avro / Protobuf. The ZMQ socket is thread-affined, so the {@link ForEachSink} writer
+ * opens/sends/closes it on a single subtask thread; keep parallelism at 1 ({@code setParallelism(1)})
+ * since N>1 ZMQ sockets round-robin/duplicate in surprising ways.
  */
-public final class ZeroMqSink<T> extends RichSinkFunction<T> {
-  private static final long serialVersionUID = 1L;
+public final class ZeroMqSink<T> {
   private static final Logger LOG = LoggerFactory.getLogger(ZeroMqSink.class);
+
+  private ZeroMqSink() {}
 
   /** Sink-side ZeroMQ socket pattern. */
   public enum Pattern {
@@ -52,51 +54,28 @@ public final class ZeroMqSink<T> extends RichSinkFunction<T> {
     DEALER
   }
 
-  private final Pattern pattern;
-  private final String endpoint;
-  private final boolean bind;
-  private final String publishTopic;
-  private final int hwm;
-  private final int linger;
-  private final int sendTimeoutMs;
-  private final SerializationSchema<T> serializer;
-
-  private transient ZContext zc;
-  private transient ZMQ.Socket sock;
-
-  private ZeroMqSink(Builder<T> b) {
-    this.pattern = b.pattern;
-    this.endpoint = Objects.requireNonNull(b.endpoint, "endpoint");
-    this.bind = b.bind;
-    this.publishTopic = b.publishTopic == null ? "" : b.publishTopic;
-    this.hwm = b.hwm;
-    this.linger = b.linger;
-    this.sendTimeoutMs = b.sendTimeoutMs;
-    this.serializer = b.serializer != null ? b.serializer : new JsonSerializer<>();
-  }
-
   /** {@code PUSH} — round-robin to N attached {@code PULL}-ers. */
-  public static <T> ZeroMqSink<T> push(String endpoint) {
+  public static <T> ForEachSink<T> push(String endpoint) {
     return new Builder<T>(Pattern.PUSH, endpoint).build();
   }
 
   /** {@code PUB} — fan-out broadcast to all {@code SUB}-ers. Optional topic prefix per message. */
-  public static <T> ZeroMqSink<T> pub(String endpoint, String topic) {
+  public static <T> ForEachSink<T> pub(String endpoint, String topic) {
     return new Builder<T>(Pattern.PUB, endpoint).topic(topic).build();
   }
 
   /** {@code XPUB} — publisher side of a broker; sees subscribe/unsubscribe acks. */
-  public static <T> ZeroMqSink<T> xpub(String endpoint) {
+  public static <T> ForEachSink<T> xpub(String endpoint) {
     return new Builder<T>(Pattern.XPUB, endpoint).build();
   }
 
   /** {@code ROUTER} — async req/rep server; pairs with {@link ZeroMqChannel#dealer}. */
-  public static <T> ZeroMqSink<T> router(String endpoint) {
+  public static <T> ForEachSink<T> router(String endpoint) {
     return new Builder<T>(Pattern.ROUTER, endpoint).build();
   }
 
   /** {@code DEALER} — async req/rep client; pairs with {@link ZeroMqChannel#router}. */
-  public static <T> ZeroMqSink<T> dealer(String endpoint) {
+  public static <T> ForEachSink<T> dealer(String endpoint) {
     return new Builder<T>(Pattern.DEALER, endpoint).build();
   }
 
@@ -110,7 +89,7 @@ public final class ZeroMqSink<T> extends RichSinkFunction<T> {
    * bytes (no extra JSON wrapping). Use when upstream operators already emit JSON envelopes —
    * the default Jackson serializer would otherwise double-encode the string.
    */
-  public static ZeroMqSink<String> pubRaw(String endpoint, String topic) {
+  public static ForEachSink<String> pubRaw(String endpoint, String topic) {
     return new Builder<String>(Pattern.PUB, endpoint)
         .topic(topic)
         .serializer(new RawStringSerializer())
@@ -127,58 +106,84 @@ public final class ZeroMqSink<T> extends RichSinkFunction<T> {
     }
   }
 
-  @Override
-  public void open(Configuration parameters) {
-    this.zc = new ZContext();
-    this.sock = zc.createSocket(toSocketType(pattern));
-    sock.setSndHWM(hwm);
-    sock.setLinger(linger);
-    sock.setSendTimeOut(sendTimeoutMs);
-    if (bind) {
-      sock.bind(endpoint);
-    } else {
-      sock.connect(endpoint);
-    }
-    LOG.info("zeromq sink open pattern={} endpoint={} bind={}", pattern, endpoint, bind);
-  }
+  /**
+   * The per-subtask ZeroMQ write behavior: opens the socket on the writer thread, sends one message
+   * per element, and closes on that same thread. Public so tests can drive it directly.
+   */
+  public static final class ZmqWriteFn<T> implements ForEachSink.WriteFn<T> {
+    private static final long serialVersionUID = 1L;
 
-  @Override
-  public void invoke(T value, Context context) throws Exception {
-    if (value == null) {
-      return;
-    }
-    byte[] payload = serializer.serialize(value);
-    if (payload == null) {
-      return;
-    }
-    if (pattern == Pattern.PUB && !publishTopic.isEmpty()) {
-      sock.sendMore(publishTopic.getBytes(StandardCharsets.UTF_8));
-    }
-    boolean sent = sock.send(payload, 0);
-    if (!sent) {
-      LOG.warn("zeromq sink send returned false (HWM or send timeout)");
-    }
-  }
+    private final Pattern pattern;
+    private final String endpoint;
+    private final boolean bind;
+    private final String publishTopic;
+    private final int hwm;
+    private final int linger;
+    private final int sendTimeoutMs;
+    private final SerializationSchema<T> serializer;
 
-  @Override
-  public void close() {
-    if (sock != null) {
-      try {
-        sock.close();
-      } catch (Exception ignored) {
-        // best-effort
+    private transient ZContext zc;
+    private transient ZMQ.Socket sock;
+
+    ZmqWriteFn(Builder<T> b) {
+      this.pattern = b.pattern;
+      this.endpoint = Objects.requireNonNull(b.endpoint, "endpoint");
+      this.bind = b.bind;
+      this.publishTopic = b.publishTopic == null ? "" : b.publishTopic;
+      this.hwm = b.hwm;
+      this.linger = b.linger;
+      this.sendTimeoutMs = b.sendTimeoutMs;
+      this.serializer = b.serializer != null ? b.serializer : new JsonSerializer<>();
+    }
+
+    @Override
+    public void open(int subtaskIndex) {
+      this.zc = new ZContext();
+      this.sock = zc.createSocket(toSocketType(pattern));
+      sock.setSndHWM(hwm);
+      sock.setLinger(linger);
+      sock.setSendTimeOut(sendTimeoutMs);
+      if (bind) {
+        sock.bind(endpoint);
+      } else {
+        sock.connect(endpoint);
+      }
+      LOG.info("zeromq sink open pattern={} endpoint={} bind={}", pattern, endpoint, bind);
+    }
+
+    @Override
+    public void write(T value) {
+      if (value == null) {
+        return;
+      }
+      byte[] payload = serializer.serialize(value);
+      if (payload == null) {
+        return;
+      }
+      if (pattern == Pattern.PUB && !publishTopic.isEmpty()) {
+        sock.sendMore(publishTopic.getBytes(StandardCharsets.UTF_8));
+      }
+      boolean sent = sock.send(payload, 0);
+      if (!sent) {
+        LOG.warn("zeromq sink send returned false (HWM or send timeout)");
       }
     }
-    if (zc != null) {
-      try {
-        zc.close();
-      } catch (Exception ignored) {
-        // best-effort
+
+    @Override
+    public void close() {
+      if (zc != null) {
+        try {
+          zc.close();
+        } catch (Exception ignored) {
+          // best-effort
+        }
+        zc = null;
+        sock = null;
       }
     }
   }
 
-  /** Builder for {@link ZeroMqSink}. */
+  /** Builder for a ZeroMQ {@link ForEachSink}. */
   public static final class Builder<T> {
     private final Pattern pattern;
     private final String endpoint;
@@ -226,8 +231,13 @@ public final class ZeroMqSink<T> extends RichSinkFunction<T> {
       return this;
     }
 
-    public ZeroMqSink<T> build() {
-      return new ZeroMqSink<>(this);
+    /** The per-subtask write function, for tests that drive open/write/close directly. */
+    public ZmqWriteFn<T> writeFn() {
+      return new ZmqWriteFn<>(this);
+    }
+
+    public ForEachSink<T> build() {
+      return new ForEachSink<>(new ZmqWriteFn<>(this));
     }
   }
 

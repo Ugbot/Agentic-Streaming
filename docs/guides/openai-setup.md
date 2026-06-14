@@ -131,7 +131,7 @@ String apiKey = System.getenv("OPENAI_API_KEY");
 // Create model
 ChatLanguageModel model = OpenAiChatModel.builder()
     .apiKey(apiKey)
-    .modelName("gpt-3.5-turbo")  // or "gpt-4"
+    .modelName("gpt-5.4-nano")  // or "gpt-5.5"
     .temperature(0.7)
     .maxTokens(500)
     .build();
@@ -149,7 +149,7 @@ import org.agentic.flink.langchain.model.language.OpenAiLanguageModel;
 OpenAiLanguageModel openAiModel = new OpenAiLanguageModel();
 ChatLanguageModel model = openAiModel.getModel(Map.of(
     "apiKey", System.getenv("OPENAI_API_KEY"),
-    "modelName", "gpt-3.5-turbo"
+    "modelName", "gpt-5.4-nano"
 ));
 
 // Use with your agents
@@ -158,9 +158,9 @@ ChatLanguageModel model = openAiModel.getModel(Map.of(
 
 ## Model Options
 
-### GPT-3.5 Turbo (Fast & Cheap)
+### GPT-5.4 nano (Fast & Cheap)
 ```java
-.modelName("gpt-3.5-turbo")
+.modelName("gpt-5.4-nano")
 .maxTokens(500)
 .temperature(0.7)  // 0.0 = deterministic, 1.0 = creative
 ```
@@ -173,9 +173,9 @@ ChatLanguageModel model = openAiModel.getModel(Map.of(
 
 **Cost:** ~$0.001 per 1K tokens
 
-### GPT-4 (Powerful & Accurate)
+### GPT-5.5 (Powerful & Accurate)
 ```java
-.modelName("gpt-4")
+.modelName("gpt-5.5")
 .maxTokens(1000)
 .temperature(0.5)
 ```
@@ -188,9 +188,9 @@ ChatLanguageModel model = openAiModel.getModel(Map.of(
 
 **Cost:** ~$0.03 per 1K tokens
 
-### GPT-4 Turbo (Balanced)
+### GPT-5.4 (Balanced)
 ```java
-.modelName("gpt-4-turbo")
+.modelName("gpt-5.4")
 .maxTokens(2000)
 .temperature(0.7)
 ```
@@ -251,7 +251,7 @@ mvn exec:java -Dexec.mainClass="..."
 **Solution:**
 - Check model name spelling
 - Verify you have access to that model
-- Try "gpt-3.5-turbo" as fallback
+- Try "gpt-5.4-nano" as fallback
 
 ## Cost Management
 
@@ -274,7 +274,7 @@ Or visit: https://platform.openai.com/usage
 ### Optimize Costs
 
 **Strategies:**
-- Use GPT-3.5-Turbo for most tasks
+- Use GPT-5.4 nano for most tasks
 - Set `maxTokens` to reasonable limits
 - Cache responses when possible
 - Use streaming for long responses
@@ -287,7 +287,7 @@ Or visit: https://platform.openai.com/usage
 ```java
 ChatLanguageModel model = OpenAiChatModel.builder()
     .apiKey(System.getenv("OPENAI_API_KEY"))
-    .modelName("gpt-3.5-turbo")
+    .modelName("gpt-5.4-nano")
     .build();
 
 String answer = model.generate("Question here");
@@ -346,7 +346,7 @@ public class CustomerSupportAgent {
     public CustomerSupportAgent() {
         model = OpenAiChatModel.builder()
             .apiKey(System.getenv("OPENAI_API_KEY"))
-            .modelName("gpt-3.5-turbo")
+            .modelName("gpt-5.4-nano")
             .temperature(0.5)  // More consistent responses
             .build();
     }
@@ -370,7 +370,7 @@ public String analyzeDocument(String documentText) {
 
     ChatLanguageModel model = OpenAiChatModel.builder()
         .apiKey(System.getenv("OPENAI_API_KEY"))
-        .modelName("gpt-4")  // Better for analysis
+        .modelName("gpt-5.5")  // Better for analysis
         .maxTokens(1000)
         .build();
 

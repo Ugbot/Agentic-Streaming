@@ -7,6 +7,7 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.output.Response;
@@ -36,7 +37,8 @@ public final class LangChain4jChatConnection implements ChatConnection {
   public enum Provider {
     OLLAMA,
     OPENAI,
-    ANTHROPIC
+    ANTHROPIC,
+    GEMINI
   }
 
   private final Provider provider;
@@ -72,6 +74,16 @@ public final class LangChain4jChatConnection implements ChatConnection {
   public static LangChain4jChatConnection anthropic(String apiKey) {
     return new LangChain4jChatConnection(
         Provider.ANTHROPIC, null, apiKey, Duration.ofSeconds(120));
+  }
+
+  /**
+   * Google Gemini via the Google AI API key ({@code GOOGLE_API_KEY}). The model name (e.g. {@code
+   * gemini-3.5-flash}, required by the A2A banking demo) is supplied per call through {@link
+   * org.agentic.flink.llm.ChatSetup}. Generous default timeout to stay under the harness's per-turn
+   * limit while tolerating Vertex rate-limiting.
+   */
+  public static LangChain4jChatConnection gemini(String apiKey) {
+    return new LangChain4jChatConnection(Provider.GEMINI, null, apiKey, Duration.ofSeconds(120));
   }
 
   public Provider getProvider() {
@@ -117,12 +129,13 @@ public final class LangChain4jChatConnection implements ChatConnection {
             .build();
       case OPENAI:
         OpenAiChatModel.OpenAiChatModelBuilder b =
-            OpenAiChatModel.builder()
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .temperature(temperature)
-                .timeout(timeout)
-                .maxTokens(maxTokens);
+            OpenAiChatModel.builder().apiKey(apiKey).modelName(modelName).timeout(timeout);
+        // OpenAI reasoning models (gpt-5*, o1/o3/o4*) reject `max_tokens` (they require
+        // `max_completion_tokens`, which langchain4j 0.35.0 can't send) and only allow the default
+        // temperature. Omit both for those models so the request is accepted; send them otherwise.
+        if (!org.agentic.flink.llm.OpenAiModels.isReasoning(modelName)) {
+          b.temperature(temperature).maxTokens(maxTokens);
+        }
         if (baseUrl != null && !baseUrl.isEmpty()) {
           b.baseUrl(baseUrl);
         }
@@ -135,10 +148,19 @@ public final class LangChain4jChatConnection implements ChatConnection {
             .maxTokens(maxTokens)
             .timeout(timeout)
             .build();
+      case GEMINI:
+        return GoogleAiGeminiChatModel.builder()
+            .apiKey(apiKey)
+            .modelName(modelName)
+            .temperature(temperature)
+            .maxOutputTokens(maxTokens)
+            .timeout(timeout)
+            .build();
       default:
         throw new IllegalStateException("Unknown provider: " + provider);
     }
   }
+
 
   /** Convert framework {@link org.agentic.flink.llm.ChatMessage} to LangChain4J form. */
   static dev.langchain4j.data.message.ChatMessage toLangChainMessage(

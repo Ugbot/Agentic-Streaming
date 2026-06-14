@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.agentic.flink</groupId>
+    <artifactId>agentic-flink-a2a-gateway</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <name>Agentic Flink A2A Gateway</name>
+    <description>Quarkus A2A (Agent2Agent) gateway bridging external A2A callers to a Flink agent job</description>
+
+    <!--
+    Standalone module (no parent). Build explicitly after installing the core artifact:
+        mvn -q -pl . -am -f ../pom.xml install -DskipTests   # or: (cd .. && mvn install -DskipTests)
+        mvn -f a2a-gateway/pom.xml package
+    Kept out of the default core reactor to avoid converting the root to pom packaging. See README.
+    -->
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <quarkus.platform.version>3.30.6</quarkus.platform.version>
+        <a2a.version>1.0.0.Alpha3</a2a.version>
+        <flink.version>2.2.1</flink.version>
+        <agentic.flink.version>1.0.0-SNAPSHOT</agentic.flink.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.quarkus.platform</groupId>
+                <artifactId>quarkus-bom</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Core: A2A bridge, value model, task store, config. -->
+        <dependency>
+            <groupId>org.agentic.flink</groupId>
+            <artifactId>agentic-flink</artifactId>
+            <version>${agentic.flink.version}</version>
+            <!-- Quarkus provides the logging backend (jboss-logmanager); drop core's log4j to
+                 avoid a duplicate-SLF4J-binding / LoggerContext init clash. -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Quarkus REST (RESTEasy Reactive) + Jackson: we serve the A2A wire ourselves with a
+             hand-rolled JSON-RPC resource (A2AResource), because the a2a-java SDK's reference
+             JSON-RPC server registers proto method names (SendMessage) instead of the spec's
+             message/send the harness calls. Owning the route lets us speak message/send exactly. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-jackson</artifactId>
+        </dependency>
+
+        <!-- Quarkus core (CDI). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+
+        <!-- Flink runtime: the gateway image also hosts the embedded MiniCluster job
+             (BankingFlinkJob, launched as a second process from this app's classpath), so the full
+             local-execution stack must be bundled. flink-clients provides the LocalExecutor that
+             StreamExecutionEnvironment.createLocalEnvironment().execute() needs; flink-streaming-java
+             pulls in flink-runtime. (Core marks Flink 'provided' for cluster deploys.) -->
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-streaming-java</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
+            <version>${flink.version}</version>
+        </dependency>
+
+        <!-- Bridge transports (optional in core; required here at runtime). -->
+        <dependency>
+            <groupId>org.zeromq</groupId>
+            <artifactId>jeromq</artifactId>
+            <version>0.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.1.0</version>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-clients</artifactId>
+            <version>${flink.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.quarkus.platform</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>generate-code</goal>
+                            <goal>generate-code-tests</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

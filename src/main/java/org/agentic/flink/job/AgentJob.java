@@ -76,6 +76,7 @@ public class AgentJob implements Serializable {
   private final RoutingConfig routingConfig;
   private final MonitoringConfig monitoringConfig;
   private final Map<String, Object> jobProperties;
+  private final List<org.agentic.flink.a2a.A2AStep> a2aSteps;
 
   // Package-private constructor - use builder
   AgentJob(AgentJobBuilder builder) {
@@ -88,6 +89,7 @@ public class AgentJob implements Serializable {
     this.routingConfig = builder.routingConfig;
     this.monitoringConfig = builder.monitoringConfig;
     this.jobProperties = Collections.unmodifiableMap(new HashMap<>(builder.jobProperties));
+    this.a2aSteps = Collections.unmodifiableList(new ArrayList<>(builder.a2aSteps));
   }
 
   // ==================== Getters ====================
@@ -100,6 +102,7 @@ public class AgentJob implements Serializable {
   public AgenticFlinkConfig getStorageConfig() { return storageConfig; }
   public RoutingConfig getRoutingConfig() { return routingConfig; }
   public MonitoringConfig getMonitoringConfig() { return monitoringConfig; }
+  public List<org.agentic.flink.a2a.A2AStep> getA2ASteps() { return a2aSteps; }
   public Map<String, Object> getJobProperties() { return jobProperties; }
 
   // ==================== Helper Methods ====================

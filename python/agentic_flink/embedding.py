@@ -33,4 +33,16 @@ def djl_embedding(model_uri: str):
     return Conn.of(model_uri)
 
 
-__all__ = ["EmbeddingSetup", "ollama_embedding", "djl_embedding"]
+def gemini_embedding(api_key: str | None = None):
+    """Google Gemini embedder (``gemini-embedding-001``; the hackathon-mandated marked-run model).
+    Falls back to the ``GOOGLE_API_KEY`` environment variable when ``api_key`` is omitted."""
+    import os
+
+    key = api_key or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        raise ValueError("gemini_embedding requires an API key (arg or GOOGLE_API_KEY env var)")
+    Conn = jclass("org.agentic.flink.embedding.GeminiEmbeddingConnection")
+    return Conn(key)
+
+
+__all__ = ["EmbeddingSetup", "ollama_embedding", "djl_embedding", "gemini_embedding"]

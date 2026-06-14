@@ -1,4 +1,5 @@
 package org.agentic.flink.plugins.flintagents.action;
+import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.context.compaction.CompactionResult;
 import org.agentic.flink.context.core.AgentContext;
@@ -136,8 +137,8 @@ public class ContextManagementAction extends KeyedProcessFunction<String, Event,
    * @throws Exception if state initialization fails
    */
   @Override
-  public void open(Configuration parameters) throws Exception {
-    super.open(parameters);
+  public void open(OpenContext openContext) throws Exception {
+    super.open(openContext);
 
     // Initialize context state (core metadata)
     ValueStateDescriptor<AgentContext> contextDescriptor =

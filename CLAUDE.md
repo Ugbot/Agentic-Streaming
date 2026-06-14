@@ -1,7 +1,19 @@
-# Agentic Flink
+# Agentic Streaming (formerly Agentic Flink)
 
-Standalone agentic framework for Apache Flink with LangChain4J integration.
-Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
+Agentic Streaming is a library + example pack for building agents as streaming,
+stateful, **event-sourced** systems — an agent's state is a materialized view over an
+ordered log of events, with CQRS (command = process a turn; query = read the view) and
+single-writer-per-conversation. Apache Flink is the **first-class runtime** (this main
+module); the same essence is ported to a dozen other engines across Python, the JVM, and
+Go under `ports/`, with design docs under `docs/portability/`.
+
+This main module is the Flink framework: a standalone agentic framework for Apache Flink
+with LangChain4J integration. Java 17 target, Flink 2.2.1 (native FLIP-27 sources /
+FLIP-143 sinks), LangChain4J 0.35.0. PyFlink path targets apache-flink 2.x (see
+docs/python.md).
+
+The multi-engine ports + gateways live under `ports/` (their own `ports/README.md`); the
+engine-agnostic "essence" and per-engine design notes are in `docs/portability/`.
 
 ## Project Structure
 
@@ -13,6 +25,7 @@ Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
   - `tool/` -- ToolRegistry (central tool registry with builder)
   - `langchain/` -- ToolAnnotationRegistry, LangChainToolAdapter (@Tool bridge)
   - `memory/` -- Flink-state-first short-term memory (ShortTermMemory, FlinkStateShortTermMemory) — the **default** for in-job memory
+  - `memory/conversation/` -- **Per-conversation memory shared across operators**: `ConversationStore` SPI (multi-turn ChatMessage transcript + scalar workflow attributes, keyed by conversationId, also indexable by userId). `InMemoryConversationStore` (default, process-wide `shared()` singleton for embedded single-JVM; bounded transcript); `ConversationStores.discover()` (ServiceLoader → else shared in-JVM). This is the layer between per-operator short-term Flink state and the long-term store — what a routed graph (router→path→verifier) needs to progress across turns. Wired via `AgentBuilder.withConversationStore(...)`.
   - `memory/vector/` -- In-JVM vector memory backed by Flink state (FlinkStateVectorMemory, brute-force KNN); external VectorStore SPI for HNSW backends
   - (memory feeds moved to `channel/` — see below; `Channel<KeyedContextItem>` replaces the old MemoryFeed)
   - `storage/` -- Long-term store SPI (LongTermMemoryStore) for resumption + archival; ServiceLoader-based discovery
@@ -30,8 +43,10 @@ Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
   - `storage/vector/` -- pgvector implementation of VectorStore (Qdrant via the SPI path)
   - `cep/` -- Flink CEP integration for event-driven patterns
   - `compensation/` -- Saga compensation/rollback support
+  - `a2a/` -- A2A (Agent2Agent) protocol support. Outbound: `RemoteAgentSpec`, `A2AClient` SPI + `SdkA2AClient` (official a2a-java SDK, optional dep, isolated behind the SPI), `A2AToolExecutor` (peer-as-tool), `A2AStep` (explicit pipeline step). `a2a/bridge/` -- pluggable gateway↔Flink transport (`inproc`/`zeromq`/`redis`). `a2a/storage/` -- `A2ATaskStore` (memory/postgres/redis). See `docs/a2a.md`.
   - `example/` -- Working examples (SimpleCalculatorTool, ToolAnnotationExample)
   - `plugins/flintagents/` -- Optional Apache Flink Agents integration (excluded from default build)
+- `a2a-gateway/` -- Optional standalone Quarkus module: inbound A2A gateway (Agent Card + JSON-RPC/SSE + gRPC + REST) bridging external A2A callers into a Flink job. Built separately (`mvn -f a2a-gateway/pom.xml package`), kept out of the core reactor. See `a2a-gateway/README.md`.
 - `python/` -- JPype-backed Python facade (`agentic-flink` PyPI package). In-process JVM, `@tool` decorator for Python functions, examples mirror the Java ones. See `docs/python.md`.
 
 ## Build
@@ -40,6 +55,7 @@ Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
 mvn clean test                        # unit tests
 mvn test -P integration-tests         # integration tests (requires containers)
 mvn clean package -P flink-agents     # build with optional Flink Agents plugin
+mvn install -DskipTests && mvn -f a2a-gateway/pom.xml package   # build the A2A gateway
 ```
 
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.

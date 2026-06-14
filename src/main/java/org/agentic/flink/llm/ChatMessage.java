@@ -2,6 +2,8 @@ package org.agentic.flink.llm;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
+import org.apache.flink.api.common.typeinfo.TypeInfo;
 
 /**
  * A single message in a chat conversation, decoupled from any vendor SDK.
@@ -9,8 +11,20 @@ import java.util.Objects;
  * <p>{@code toolCallId} and {@code toolName} are only populated for {@link ChatRole#TOOL}
  * messages — they identify which tool call this message reports the result of.
  */
+@TypeInfo(ChatMessage.Factory.class)
 public final class ChatMessage implements Serializable {
   private static final long serialVersionUID = 1L;
+
+  /**
+   * Serializes via JSON ({@link org.agentic.flink.typeinfo.FlinkJson}) instead of Kryo wherever it
+   * flows (e.g. {@code ReActProcessFunction}'s transcript {@code ListState}). Immutable — copied by
+   * reference. Jackson binds the all-args constructor via {@code ParameterNamesModule}.
+   */
+  public static final class Factory extends JsonTypeInfoFactory<ChatMessage> {
+    public Factory() {
+      super(ChatMessage.class, false);
+    }
+  }
 
   private final ChatRole role;
   private final String content;

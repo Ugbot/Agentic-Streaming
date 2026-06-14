@@ -7,10 +7,13 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import org.agentic.flink.channel.source.PollingSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,8 +49,11 @@ public final class WebhookChannel<T> implements Channel<T> {
 
   @Override
   public DataStream<T> open(StreamExecutionEnvironment env) {
-    return env.addSource(new Source<>(host, port, path, type), typeInfo)
-        .name("webhook[" + host + ":" + port + path + "]")
+    return env.fromSource(
+            new PollingSource<>(new WebhookPollFn<>(host, port, path, type)),
+            WatermarkStrategy.noWatermarks(),
+            "webhook[" + host + ":" + port + path + "]",
+            typeInfo)
         .setParallelism(1);
   }
 
@@ -61,19 +67,23 @@ public final class WebhookChannel<T> implements Channel<T> {
     return "webhook";
   }
 
-  static final class Source<T> implements SourceFunction<T> {
+  /**
+   * Native FLIP-27 {@link PollingSource.PollFn}: the HTTP handler pushes decoded payloads into a
+   * queue (open starts the server); {@link #poll} drains the queue; close stops the server.
+   */
+  static final class WebhookPollFn<T> implements PollingSource.PollFn<T> {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOG = LoggerFactory.getLogger(Source.class);
+    private static final Logger LOG = LoggerFactory.getLogger(WebhookPollFn.class);
 
     private final String host;
     private final int port;
     private final String path;
     private final Class<T> type;
 
-    private volatile boolean running = true;
     private transient HttpServer server;
+    private transient LinkedBlockingQueue<T> queue;
 
-    Source(String host, int port, String path, Class<T> type) {
+    WebhookPollFn(String host, int port, String path, Class<T> type) {
       this.host = host;
       this.port = port;
       this.path = path;
@@ -81,8 +91,9 @@ public final class WebhookChannel<T> implements Channel<T> {
     }
 
     @Override
-    public void run(SourceContext<T> ctx) throws Exception {
-      ObjectMapper mapper = new ObjectMapper();
+    public void open(int subtaskIndex) throws Exception {
+      queue = new LinkedBlockingQueue<>();
+      final ObjectMapper mapper = new ObjectMapper();
       server = HttpServer.create(new InetSocketAddress(host, port), 0);
       server.createContext(
           path,
@@ -94,10 +105,7 @@ public final class WebhookChannel<T> implements Channel<T> {
             }
             try (InputStream is = exchange.getRequestBody()) {
               byte[] body = is.readAllBytes();
-              T value = mapper.readValue(body, type);
-              synchronized (ctx.getCheckpointLock()) {
-                ctx.collect(value);
-              }
+              queue.add(mapper.readValue(body, type));
               byte[] ok = "ok".getBytes(StandardCharsets.UTF_8);
               exchange.sendResponseHeaders(200, ok.length);
               exchange.getResponseBody().write(ok);
@@ -110,21 +118,15 @@ public final class WebhookChannel<T> implements Channel<T> {
           });
       server.start();
       LOG.info("Webhook channel listening on http://{}:{}{}", host, port, path);
-
-      // Idle until cancel().
-      while (running) {
-        try {
-          Thread.sleep(500);
-        } catch (InterruptedException ie) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-      }
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    public T poll(long timeoutMs) throws InterruptedException {
+      return queue.poll(Math.max(1, timeoutMs), TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public void close() {
       if (server != null) {
         try {
           server.stop(0);

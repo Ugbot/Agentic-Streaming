@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyagentic"
+version = "0.1.0"
+description = "Pure-Python, engine-agnostic essence of Agentic-Flink (the portable core that the Faust/Ray/Dask/Airflow ports build on)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+include = ["pyagentic*"]

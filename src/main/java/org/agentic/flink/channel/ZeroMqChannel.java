@@ -1,11 +1,12 @@
 package org.agentic.flink.channel;
 
 import java.util.Objects;
+import org.agentic.flink.channel.source.PollingSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
@@ -106,18 +107,15 @@ public final class ZeroMqChannel<T> implements Channel<T> {
 
   @Override
   public DataStream<T> open(StreamExecutionEnvironment env) {
-    return env.addSource(
-            new Source<>(
-                pattern,
-                endpoint,
-                bind,
-                subscribePrefix,
-                hwm,
-                linger,
-                receiveTimeoutMs,
-                deserializer),
+    PollingSource<T> source =
+        new PollingSource<>(
+            new ZmqPollFn<>(
+                pattern, endpoint, bind, subscribePrefix, hwm, linger, receiveTimeoutMs, deserializer));
+    return env.fromSource(
+            source,
+            WatermarkStrategy.noWatermarks(),
+            "zeromq-" + pattern.name().toLowerCase() + "[" + endpoint + "]",
             typeInfo)
-        .name("zeromq-" + pattern.name().toLowerCase() + "[" + endpoint + "]")
         .setParallelism(1);
   }
 
@@ -193,9 +191,14 @@ public final class ZeroMqChannel<T> implements Channel<T> {
     }
   }
 
-  static final class Source<T> implements SourceFunction<T> {
+  /**
+   * Native FLIP-27 {@link PollingSource.PollFn} for ZeroMQ: opens the socket on the poll thread,
+   * receives one message per {@link #poll}, and is torn down on that same thread (ZMQ sockets are
+   * thread-affined). Replaces the deprecated {@code SourceFunction}.
+   */
+  static final class ZmqPollFn<T> implements PollingSource.PollFn<T> {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOG = LoggerFactory.getLogger(Source.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ZmqPollFn.class);
 
     private final Pattern pattern;
     private final String endpoint;
@@ -206,9 +209,10 @@ public final class ZeroMqChannel<T> implements Channel<T> {
     private final int receiveTimeoutMs;
     private final DeserializationSchema<T> deserializer;
 
-    private volatile boolean running = true;
+    private transient ZContext zc;
+    private transient ZMQ.Socket sock;
 
-    Source(
+    ZmqPollFn(
         Pattern pattern,
         String endpoint,
         boolean bind,
@@ -228,49 +232,49 @@ public final class ZeroMqChannel<T> implements Channel<T> {
     }
 
     @Override
-    public void run(SourceContext<T> ctx) throws Exception {
-      try (ZContext zc = new ZContext()) {
-        ZMQ.Socket sock = zc.createSocket(toSocketType(pattern));
-        sock.setRcvHWM(hwm);
-        sock.setLinger(linger);
-        sock.setReceiveTimeOut(receiveTimeoutMs);
-        if (bind) {
-          sock.bind(endpoint);
-        } else {
-          sock.connect(endpoint);
-        }
-        if (pattern == Pattern.SUB) {
-          sock.subscribe(subscribePrefix.getBytes(ZMQ.CHARSET));
-        }
-        if (pattern == Pattern.XSUB) {
-          // Subscribe-all so XSUB downstream of a broker sees everything.
-          sock.send(new byte[] {1}, 0);
-        }
-        LOG.info(
-            "zeromq source open pattern={} endpoint={} bind={} sub='{}'",
-            pattern,
-            endpoint,
-            bind,
-            subscribePrefix);
+    public void open(int subtaskIndex) {
+      zc = new ZContext();
+      sock = zc.createSocket(toSocketType(pattern));
+      sock.setRcvHWM(hwm);
+      sock.setLinger(linger);
+      sock.setReceiveTimeOut(receiveTimeoutMs);
+      if (bind) {
+        sock.bind(endpoint);
+      } else {
+        sock.connect(endpoint);
+      }
+      if (pattern == Pattern.SUB) {
+        sock.subscribe(subscribePrefix.getBytes(ZMQ.CHARSET));
+      }
+      if (pattern == Pattern.XSUB) {
+        // Subscribe-all so XSUB downstream of a broker sees everything.
+        sock.send(new byte[] {1}, 0);
+      }
+      LOG.info(
+          "zeromq source open pattern={} endpoint={} bind={} sub='{}'",
+          pattern, endpoint, bind, subscribePrefix);
+    }
 
-        while (running) {
-          byte[] payload = recvPayload(sock);
-          if (payload == null) {
-            continue;
-          }
-          try {
-            T value = deserializer.deserialize(payload);
-            synchronized (ctx.getCheckpointLock()) {
-              ctx.collect(value);
-            }
-          } catch (Exception e) {
-            LOG.warn("zeromq source deserialize failed: {}", e.getMessage());
-          }
-        }
+    @Override
+    public T poll(long timeoutMs) {
+      byte[] payload = recvPayload(sock);
+      if (payload == null) {
+        return null; // receive timed out (socket RcvTimeout); reader loop re-checks shutdown
+      }
+      try {
+        return deserializer.deserialize(payload);
       } catch (Exception e) {
-        if (running) {
-          throw e;
-        }
+        LOG.warn("zeromq source deserialize failed: {}", e.getMessage());
+        return null;
+      }
+    }
+
+    @Override
+    public void close() {
+      if (zc != null) {
+        zc.close();
+        zc = null;
+        sock = null;
       }
     }
 
@@ -301,11 +305,6 @@ public final class ZeroMqChannel<T> implements Channel<T> {
         return body != null ? body : frame;
       }
       return frame;
-    }
-
-    @Override
-    public void cancel() {
-      running = false;
     }
 
     private static SocketType toSocketType(Pattern p) {

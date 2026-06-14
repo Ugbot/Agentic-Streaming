@@ -479,7 +479,7 @@ public class AgentJobComposer {
       "properties": {
         "model": {
           "type": "string",
-          "examples": ["qwen2.5:3b", "qwen2.5:7b", "gpt-4o-mini"]
+          "examples": ["qwen2.5:3b", "qwen2.5:7b", "gpt-5.4-mini"]
         },
         "temperature": {
           "type": "number",
