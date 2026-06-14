@@ -60,7 +60,10 @@ from .longterm import (
 )
 from .runtime import LocalRuntime, Runtime
 from .stores import RedisConversationStore, make_conversation_store
+from .hnsw import HnswIndex
 from .vectorstores import (
+    DuckDBVectorStore,
+    HnswVectorStore,
     InMemoryVectorStore,
     QdrantVectorStore,
     VectorStore,
@@ -114,6 +117,9 @@ __all__ = [
     "schema_instruction",
     "VectorStore",
     "InMemoryVectorStore",
+    "HnswVectorStore",
+    "HnswIndex",
+    "DuckDBVectorStore",
     "QdrantVectorStore",
     "make_vector_store",
     "LongTermStore",
