@@ -24,6 +24,14 @@ from .retrieval import (
     cosine,
     hashing_embedder,
 )
+from .llm import (
+    ChatClient,
+    ChatResult,
+    LlmBrain,
+    OllamaChatClient,
+    OpenAIChatClient,
+    StubChatClient,
+)
 from .runtime import LocalRuntime, Runtime
 from .tools import Tool, ToolRegistry
 
@@ -47,6 +55,12 @@ __all__ = [
     "Runtime",
     "Tool",
     "ToolRegistry",
+    "ChatClient",
+    "ChatResult",
+    "LlmBrain",
+    "StubChatClient",
+    "OllamaChatClient",
+    "OpenAIChatClient",
 ]
 
 __version__ = "0.1.0"

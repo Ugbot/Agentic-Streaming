@@ -1,5 +1,7 @@
 package core
 
+import "sort"
+
 // ToolFunc executes a tool given its parameters and returns a result.
 type ToolFunc func(params map[string]any) any
 
@@ -28,6 +30,21 @@ func (r *ToolRegistry) Register(name, description string, fn ToolFunc) *ToolRegi
 func (r *ToolRegistry) Has(name string) bool {
 	_, ok := r.tools[name]
 	return ok
+}
+
+// Specs returns [{"name","description"}] sorted by name — what an LLM brain shows the
+// model so it can pick a tool by name.
+func (r *ToolRegistry) Specs() []map[string]string {
+	names := make([]string, 0, len(r.tools))
+	for n := range r.tools {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := make([]map[string]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, map[string]string{"name": n, "description": r.tools[n].description})
+	}
+	return out
 }
 
 // Execute runs the named tool; it panics with a clear message if the tool is unknown,
