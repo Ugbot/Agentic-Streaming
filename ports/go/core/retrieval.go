@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"unicode"
+	"sync"
 )
 
 // Scored is a retrieval hit: id, similarity score, and the document text.
@@ -15,15 +15,21 @@ type Scored struct {
 	Text  string
 }
 
+// Fnv1a32 is the FNV-1a 32-bit hash over the UTF-8 bytes of token — byte-for-byte
+// identical to the Python and Go cores, so the embedder produces the same vectors.
+func Fnv1a32(token string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(token))
+	return h.Sum32()
+}
+
 // Embed is a deterministic, model-free bag-of-words hashing embedder: tokenize, hash
-// each token into one of dim buckets, count, then L2-normalize. Good enough for the
-// model-free demo and identical across runs (no randomness).
+// each token into one of dim buckets (FNV-1a), count, then L2-normalize. Identical
+// across the Python/Java/Go cores and stable across processes.
 func Embed(text string, dim int) []float64 {
 	vec := make([]float64, dim)
 	for _, tok := range tokenize(text) {
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(tok))
-		vec[h.Sum32()%uint32(dim)]++
+		vec[Fnv1a32(tok)%uint32(dim)]++
 	}
 	var norm float64
 	for _, v := range vec {
@@ -38,9 +44,11 @@ func Embed(text string, dim int) []float64 {
 	return vec
 }
 
+// tokenize lowercases and splits on non-ASCII-alphanumeric runs, matching the Python
+// `[a-z0-9]+` / Java `[^a-z0-9]+` tokenizers exactly.
 func tokenize(text string) []string {
 	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
 	})
 }
 
@@ -68,30 +76,77 @@ type hotEntry struct {
 	text string
 }
 
-// InMemoryHotVectorIndex is a brute-force KNN index.
+// DefaultHotCapacity bounds the in-memory hot index (LRU eviction), matching the
+// Python/Java cores so long-running jobs don't grow without limit.
+const DefaultHotCapacity = 2000
+
+// InMemoryHotVectorIndex is a capacity-bounded (LRU), goroutine-safe brute-force KNN
+// index — the recent/hot tier.
 type InMemoryHotVectorIndex struct {
+	mu      sync.Mutex
+	max     int
 	entries map[string]hotEntry
+	order   []string // oldest first; LRU eviction order
 }
 
-// NewInMemoryHotVectorIndex builds an empty hot index.
+// NewInMemoryHotVectorIndex builds an empty hot index with the default capacity.
 func NewInMemoryHotVectorIndex() *InMemoryHotVectorIndex {
-	return &InMemoryHotVectorIndex{entries: map[string]hotEntry{}}
+	return NewInMemoryHotVectorIndexWithCapacity(DefaultHotCapacity)
+}
+
+// NewInMemoryHotVectorIndexWithCapacity builds a hot index keeping at most max entries
+// (<=0 means the default).
+func NewInMemoryHotVectorIndexWithCapacity(max int) *InMemoryHotVectorIndex {
+	if max <= 0 {
+		max = DefaultHotCapacity
+	}
+	return &InMemoryHotVectorIndex{max: max, entries: map[string]hotEntry{}}
 }
 
 func (idx *InMemoryHotVectorIndex) Upsert(id string, vec []float64, text string) {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	if _, exists := idx.entries[id]; exists {
+		idx.order = removeString(idx.order, id)
+	}
 	idx.entries[id] = hotEntry{vec: vec, text: text}
+	idx.order = append(idx.order, id)
+	for len(idx.order) > idx.max {
+		oldest := idx.order[0]
+		idx.order = idx.order[1:]
+		delete(idx.entries, oldest)
+	}
 }
 
 func (idx *InMemoryHotVectorIndex) Search(query []float64, k int) []Scored {
+	idx.mu.Lock()
 	hits := make([]Scored, 0, len(idx.entries))
 	for id, e := range idx.entries {
 		hits = append(hits, Scored{ID: id, Score: Cosine(query, e.vec), Text: e.text})
 	}
+	idx.mu.Unlock()
 	sortScored(hits)
 	if k > 0 && len(hits) > k {
 		hits = hits[:k]
 	}
 	return hits
+}
+
+// Size returns the number of entries currently held.
+func (idx *InMemoryHotVectorIndex) Size() int {
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
+	return len(idx.entries)
+}
+
+func removeString(xs []string, x string) []string {
+	out := xs[:0]
+	for _, v := range xs {
+		if v != x {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // ColdSearch is the optional external (cold tier) search function.

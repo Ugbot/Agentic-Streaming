@@ -31,18 +31,46 @@ public final class RoutedGraph {
   private final Router router;
   private final Map<String, Agent> paths;
   private final Verifier verifier; // may be null
+  private final java.util.List<Guardrail> guardrails;
+  private final java.util.List<AgentListener> listeners;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
+    this(router, paths, verifier, java.util.List.of(), java.util.List.of());
+  }
+
+  public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
+                     java.util.List<Guardrail> guardrails, java.util.List<AgentListener> listeners) {
     if (paths == null || paths.isEmpty()) {
       throw new IllegalArgumentException("RoutedGraph requires at least one path");
     }
     this.router = router;
     this.paths = new LinkedHashMap<>(paths);
     this.verifier = verifier;
+    this.guardrails = java.util.List.copyOf(guardrails == null ? java.util.List.of() : guardrails);
+    this.listeners = java.util.List.copyOf(listeners == null ? java.util.List.of() : listeners);
   }
 
   public TurnResult handle(Event event, AgentContext ctx) {
     String cid = event.conversationId();
+    for (AgentListener l : listeners) {
+      l.onTurnStart(event, ctx);
+    }
+
+    // Input guardrails: short-circuit a blocked turn before routing.
+    for (Guardrail g : guardrails) {
+      String reason = g.checkInput(event.text());
+      if (reason != null) {
+        ctx.store.putAttribute(cid, PHASE_ATTR, "blocked");
+        TurnResult blocked = new TurnResult(cid, "[blocked] " + reason, java.util.List.of());
+        blocked.path = "blocked";
+        blocked.ok = false;
+        for (AgentListener l : listeners) {
+          l.onTurnEnd(blocked, ctx);
+        }
+        return blocked;
+      }
+    }
+
     ctx.store.putAttribute(cid, PHASE_ATTR, "router");
     String path = router.apply(event, ctx);
     if (!paths.containsKey(path)) {
@@ -50,6 +78,9 @@ public final class RoutedGraph {
     }
     ctx.store.putAttribute(cid, PATH_ATTR, path);
     ctx.store.putAttribute(cid, PHASE_ATTR, "path:" + path);
+    for (AgentListener l : listeners) {
+      l.onRouted(path, ctx);
+    }
 
     TurnResult result = paths.get(path).turn(event, ctx);
     result.path = path;
@@ -60,7 +91,20 @@ public final class RoutedGraph {
       result.ok = v.ok();
       result.reply = v.reply();
     }
+
+    // Output guardrails: redact/replace a disallowed reply.
+    for (Guardrail g : guardrails) {
+      String reason = g.checkOutput(result.reply);
+      if (reason != null) {
+        result.reply = "[blocked] " + reason;
+        result.ok = false;
+      }
+    }
+
     ctx.store.putAttribute(cid, PHASE_ATTR, "done");
+    for (AgentListener l : listeners) {
+      l.onTurnEnd(result, ctx);
+    }
     return result;
   }
 }

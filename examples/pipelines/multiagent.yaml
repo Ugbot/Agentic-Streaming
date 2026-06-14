@@ -1,0 +1,32 @@
+# Multi-agent: a triage agent that CALLS ANOTHER AGENT over HTTP (A2A-as-a-tool).
+# The `escalations` path fires the `ask_specialist` tool (kind: agent) when the user
+# asks to escalate — POSTing the turn to a peer agent's gateway and returning its reply.
+# Point `url` at any backend's gateway (FastAPI or Go); the peer can run on any engine.
+#
+#   # peer (any backend), e.g. the FastAPI gateway:
+#   AGENTIC_GATEWAY_BACKEND=local uvicorn gateway_fastapi.__main__:app --port 8080
+#   # then run a turn that escalates:
+#   python -m agentic_pipeline run examples/pipelines/multiagent.yaml --text "please escalate this"
+
+backend: local
+
+agent:
+  router:
+    kind: keyword
+    default: triage
+    rules:
+      escalations: [escalate, supervisor, human]
+  paths:
+    triage:
+      brain: rule
+      prompt: You tryage and answer simple questions.
+    escalations:
+      brain: rule
+      prompt: You escalate to a specialist agent.
+      tool_triggers: {escalate: ask_specialist}
+  verifier: {kind: prefix}
+
+tools:
+  # "agent" is an A2A-as-a-tool: POST {conversation_id,text,user_id} to a peer gateway's
+  # /agent and return its reply. Swap the URL for any backend's gateway.
+  - {id: ask_specialist, kind: agent, url: "${AGENTIC_PEER_AGENT_URL}"}

@@ -32,26 +32,48 @@ from pyagentic.core import AgentContext, Event  # noqa: E402
 from pyagentic.memory import InMemoryConversationStore, InMemoryKeyedStateStore  # noqa: E402
 from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever, hashing_embedder  # noqa: E402
 
-_EMBED = hashing_embedder(64)
+# Injectable deps (default to the shared banking essence). configure(...) lets a YAML
+# loader / a custom workflow run an arbitrary graph through this DAG with no code change.
+_GRAPH = None
+_TOOLS = None
+_RETRIEVER = None
+
+
+def configure(graph=None, tools=None, retriever=None) -> None:
+    global _GRAPH, _TOOLS, _RETRIEVER
+    _GRAPH, _TOOLS, _RETRIEVER = graph, tools, retriever
+
+
+def _graph():
+    return _GRAPH if _GRAPH is not None else build_banking_graph()
+
+
+def _tools():
+    return _TOOLS if _TOOLS is not None else default_tools()
+
+
+def _retriever():
+    if _RETRIEVER is not None:
+        return _RETRIEVER
+    hot = InMemoryHotVectorIndex()
+    seed_kb(hot)
+    return TwoTierRetriever(hot, None, 4, 4)
 
 
 def classify(text: str) -> str:
     """The router as a pure function — used both by the DAG's branch task and by
     ``simulate``. Returns the task id to branch to."""
     ctx = AgentContext("airflow", "airflow", InMemoryConversationStore(), InMemoryKeyedStateStore(),
-                       default_tools(), None)
-    return "path_" + banking_router(Event("airflow", text), ctx)
+                       _tools(), None)
+    return "path_" + _graph().router(Event("airflow", text, "airflow"), ctx)
 
 
 def run_path(path: str, text: str, conversation_id: str) -> Dict[str, object]:
-    """Run a single path agent + verifier through the portable graph (one path
-    actually executes per run; the branch skips the others)."""
-    graph = build_banking_graph()
-    hot = InMemoryHotVectorIndex()
-    seed_kb(hot)
+    """Run the routed graph (it re-routes internally; the branch task picks which path
+    executes in the real DAG)."""
     ctx = AgentContext(conversation_id, "airflow", InMemoryConversationStore(),
-                       InMemoryKeyedStateStore(), default_tools(), TwoTierRetriever(hot, None, 4, 4))
-    res = graph.handle(Event(conversation_id, text, "airflow"), ctx)
+                       InMemoryKeyedStateStore(), _tools(), _retriever())
+    res = _graph().handle(Event(conversation_id, text, "airflow"), ctx)
     return {"path": res.path, "reply": res.reply, "ok": res.ok}
 
 

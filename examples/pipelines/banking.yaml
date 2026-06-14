@@ -1,0 +1,44 @@
+# Agentic Streaming — a declarative banking agent (router -> path -> verifier).
+# Build it to the agentic system of your choice by changing `backend:`; the same spec
+# runs on any backend (local / celery / nats / ... — all adapters are injectable).
+#
+#   python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+#   python -m agentic_pipeline run examples/pipelines/banking.yaml --backend celery --text "card types?"
+
+backend: local                      # local | celery | nats | ...
+
+agent:
+  router:
+    kind: keyword
+    default: general
+    rules:
+      cards:    [card, crypto, cash-back, cashback]
+      payments: [balance, transfer, payment, dispute, charge, limit]
+  paths:
+    cards:
+      brain: rule
+      prompt: You answer card questions.
+    payments:
+      brain: rule
+      prompt: You answer payment questions.
+      tool_triggers: {balance: get_balance}
+    general:
+      brain: rule
+      prompt: You answer general questions.
+  verifier:
+    kind: prefix
+
+tools:
+  - {id: get_balance, kind: constant, description: Look up the user's balance, value: 1234.56}
+
+retrieval:
+  embedder: hashing
+  dim: 256
+  kb:
+    - {id: kb_cards_types, text: "We offer three card types: classic, gold, and platinum, each with different fees."}
+    - {id: kb_cards_crypto, text: "Crypto cash-back can be redeemed to a linked wallet or a manual address."}
+    - {id: kb_payments_limits, text: "Daily transfer limits are 10,000 by default; raise them in settings."}
+    - {id: kb_payments_dispute, text: "To dispute a charge, open the transaction and tap Dispute within 60 days."}
+
+guardrails:
+  - {kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection"}

@@ -85,6 +85,26 @@ class FaustTableConversationStore(ConversationStore):
         self._a.pop(conversation_id, None)
 
 
+# ---- injectable deps (default to the shared banking essence) ----
+# A YAML loader / custom workflow calls configure(...) before the worker starts to run
+# an arbitrary graph through the Faust agent with no code change.
+_graph = build_banking_graph()
+_tools = default_tools()
+_hot = InMemoryHotVectorIndex()
+seed_kb(_hot)
+_retriever = TwoTierRetriever(_hot, None, 4, 4)
+
+
+def configure(graph=None, tools=None, retriever=None) -> None:
+    global _graph, _tools, _retriever
+    if graph is not None:
+        _graph = graph
+    if tools is not None:
+        _tools = tools
+    if retriever is not None:
+        _retriever = retriever
+
+
 # ---- the Faust app: one agent per conversation key ----
 
 if faust is not None:
@@ -101,12 +121,9 @@ if faust is not None:
     transcripts = app.Table("agentic.transcripts", default=list, partitions=8)
     attrs = app.Table("agentic.attrs", default=dict, partitions=8)
 
+    # Durable per-conversation store (needs Faust Tables); the graph/tools/retriever
+    # come from the module-level injectable deps above (override via configure()).
     _store = FaustTableConversationStore(transcripts, attrs)
-    _hot = InMemoryHotVectorIndex()
-    seed_kb(_hot)
-    _retriever = TwoTierRetriever(_hot, None, 4, 4)
-    _graph = build_banking_graph()
-    _tools = default_tools()
 
     @app.agent(requests_topic)
     async def banking_agent(stream):

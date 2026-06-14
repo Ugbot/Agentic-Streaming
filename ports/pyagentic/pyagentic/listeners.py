@@ -1,0 +1,56 @@
+"""Listeners SPI — the portable analogue of Flink's ``AgentEventListener``. Lifecycle
+hooks the RoutedGraph fires per turn: start → routed → end. Defaults: a logging
+listener and a counting metrics listener. Default off; opt in by passing listeners to
+the graph.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from typing import Protocol
+
+
+class AgentListener(Protocol):
+    def on_turn_start(self, event, ctx) -> None: ...
+
+    def on_routed(self, path: str, ctx) -> None: ...
+
+    def on_turn_end(self, result, ctx) -> None: ...
+
+
+class LoggingListener:
+    """Prints each lifecycle event (stand-in for the reference LoggingAgentEventListener)."""
+
+    def __init__(self, sink=print) -> None:
+        self._sink = sink
+
+    def on_turn_start(self, event, ctx) -> None:
+        self._sink(f"[turn-start] conv={event.conversation_id} text={event.text!r}")
+
+    def on_routed(self, path: str, ctx) -> None:
+        self._sink(f"[routed] conv={ctx.conversation_id} path={path}")
+
+    def on_turn_end(self, result, ctx) -> None:
+        self._sink(f"[turn-end] conv={result.conversation_id} path={result.path} ok={result.ok} "
+                   f"tools={result.tool_calls}")
+
+
+class MetricsListener:
+    """Counts turns, per-path dispatches, blocked turns, and tool calls."""
+
+    def __init__(self) -> None:
+        self.turns = 0
+        self.paths: Counter = Counter()
+        self.blocked = 0
+        self.tool_calls = 0
+
+    def on_turn_start(self, event, ctx) -> None:
+        self.turns += 1
+
+    def on_routed(self, path: str, ctx) -> None:
+        self.paths[path] += 1
+
+    def on_turn_end(self, result, ctx) -> None:
+        if not result.ok:
+            self.blocked += 1
+        self.tool_calls += len(result.tool_calls)

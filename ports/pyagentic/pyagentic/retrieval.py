@@ -20,18 +20,33 @@ from typing import Callable, Dict, List, Optional, Protocol, Tuple
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
+_FNV_OFFSET_32 = 0x811C9DC5
+_FNV_PRIME_32 = 0x01000193
+_MASK_32 = 0xFFFFFFFF
+
+
+def fnv1a_32(token: str) -> int:
+    """FNV-1a 32-bit hash over the UTF-8 bytes of ``token``. Stable across processes
+    (unlike Python's salted ``hash()``) and byte-for-byte identical to the Java and Go
+    cores, so the embedder produces the same vectors in every language."""
+    h = _FNV_OFFSET_32
+    for b in token.encode("utf-8"):
+        h ^= b
+        h = (h * _FNV_PRIME_32) & _MASK_32
+    return h
+
 
 def hashing_embedder(dim: int = 64) -> Callable[[str], List[float]]:
     """Deterministic bag-of-words hashing embedder. Documents sharing vocabulary
     land near each other in cosine space — enough to exercise retrieval end-to-end
-    without an external model."""
+    without an external model. Uses FNV-1a so vectors are identical across the
+    Python/Java/Go cores and stable across processes (Celery workers, NATS consumers)."""
 
     def embed(text: str) -> List[float]:
         v = [0.0] * dim
         if text:
             for tok in _TOKEN.findall(text.lower()):
-                h = hash(tok)
-                v[h % dim] += 1.0 if (h >> 63) == 0 else -1.0
+                v[fnv1a_32(tok) % dim] += 1.0
         norm = math.sqrt(sum(x * x for x in v))
         return [x / norm for x in v] if norm > 0 else v
 

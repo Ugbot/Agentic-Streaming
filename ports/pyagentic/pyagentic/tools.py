@@ -41,6 +41,11 @@ class ToolRegistry:
     def ids(self) -> List[str]:
         return list(self._tools.keys())
 
+    def specs(self) -> List[Dict[str, str]]:
+        """``[{"name", "description"}]`` — what an LLM brain shows the model so it can
+        pick a tool by name."""
+        return [{"name": t.tool_id, "description": t.description} for t in self._tools.values()]
+
     def execute(self, tool_id: str, params: Dict[str, Any]) -> Any:
         tool = self._tools.get(tool_id)
         if tool is None:

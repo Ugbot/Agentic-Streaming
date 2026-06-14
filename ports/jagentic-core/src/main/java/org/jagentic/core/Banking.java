@@ -13,7 +13,7 @@ import java.util.Map;
 public final class Banking {
   private Banking() {}
 
-  public static final int DIM = 64;
+  public static final int DIM = 256;
 
   /** A tiny KB the cards/payments paths retrieve from. */
   public static final Map<String, String> KB = Map.of(

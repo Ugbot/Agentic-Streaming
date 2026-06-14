@@ -15,7 +15,7 @@ from .core import Agent, AgentContext, Event, RoutedGraph
 from .retrieval import hashing_embedder
 from .tools import ToolRegistry
 
-_EMBED = hashing_embedder(64)
+_EMBED = hashing_embedder(256)
 
 # A tiny "knowledge base" the cards path retrieves from (hot+cold via the runtime's retriever).
 KB = {

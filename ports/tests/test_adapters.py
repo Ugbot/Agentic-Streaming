@@ -52,6 +52,28 @@ def test_faust_and_ray_adapters_import_without_engine():
     # When the engine isn't installed the guard nulls the handle (no crash on import).
     assert fa.faust is None or hasattr(fa.faust, "App")
     assert ra.ray is None or hasattr(ra.ray, "remote")
+    # Injectable: a custom graph/tools can be configured into the Faust agent.
+    assert callable(fa.configure)
+
+
+def test_airflow_injectable_extended_graph():
+    """An extended core graph (new fraud path + tool) flows through the Airflow DAG
+    logic via configure() — proving the adapter is no longer hardcoded to banking."""
+    import sys
+
+    sys.path.insert(0, str(_ROOT / "airflow"))
+    import agentic_banking_dag as af
+    from test_extensibility import extended_graph, extended_tools
+
+    af.configure(graph=extended_graph(), tools=extended_tools())
+    try:
+        res = af.simulate("my card was stolen, please freeze it")
+        assert res["path"] == "fraud"
+        assert "FRZ-" in res["reply"]
+        # original routing still works through the same injected graph
+        assert af.simulate("what is my balance?")["path"] == "payments"
+    finally:
+        af.configure()  # restore banking defaults
 
 
 def test_celery_runtime_runs_banking_on_real_engine():

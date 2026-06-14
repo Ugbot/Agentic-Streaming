@@ -7,6 +7,45 @@
 > implementation — but it's no longer the only one. So: **Agentic Streaming** — a library
 > *and* an example pack for building agents as streaming, stateful, event-sourced systems.
 
+## What you can build
+
+Agentic Streaming is for building **resilient pipelines of stateful agents that act on
+continuous streams of data** — not one-shot chatbot calls. Concretely, it lets you:
+
+- **Run agents over live event streams.** Drive agents from Kafka, Postgres CDC, Redis
+  pub/sub, webhooks, NATS, Fluss, ZeroMQ, or static seeds — every input is a
+  `Channel<T>`, and many channels can fan into one agent.
+- **Route and chain agents with deterministic outcomes.** A `router → path → verifier`
+  graph classifies each turn, dispatches to a specialized agent, and **validates the
+  result** before it leaves — with guardrails screening input/output and rule-based
+  brains that are fully reproducible (no model required).
+- **Call almost any function as a tool.** Plain `@Tool` methods, async `ToolExecutor`s,
+  **MCP servers** (stdio + HTTP/SSE), traditional DL models (DJL classifiers/scorers as
+  tools or guardrails), and HTTP calls — all in one `ToolRegistry`.
+- **Chain agents that call other agents.** **A2A (Agent-to-Agent)** — a peer agent is
+  just a tool, reachable in-process, over a gateway (JSON-RPC/SSE/gRPC/REST), or as an
+  explicit pipeline step, with retries + circuit-breaking.
+- **Keep state and survive failure.** Per-conversation memory + keyed state are
+  first-class; durability comes from the engine — **Flink checkpoints**, **Kafka Streams
+  transactions (`exactly_once_v2`)**, Pulsar/BookKeeper state, Pekko persistence,
+  **Temporal's event-sourced history**, or write-through to Redis/Postgres.
+- **Get exactly-once where the engine provides it** (Flink checkpointed state, Kafka
+  Streams transactional EOS) and **idempotent, effectively-once** processing everywhere
+  else — with the `ConversationStore` as the source of truth so a replayed turn is safe.
+- **Resolve long-running work with the saga pattern.** Compensation/rollback handlers
+  unwind a multi-step flow when a later step fails (and Temporal/Pekko add durable,
+  retried, human-in-the-loop workflows).
+- **Reach almost any data system, behind an interface.** Memory, vectors, and long-term
+  storage are SPIs — Postgres, Redis/Valkey, Fluss, pgvector/Qdrant, NATS KV — selected by
+  a connection link and **hot-swappable** without touching agent code.
+- **Build it once, deploy it anywhere.** Define the whole thing declaratively in a
+  [`pipeline.yaml`](docs/portability/pipelines.md) and run the *same* spec on Flink or any
+  of a dozen other backends (Python / JVM / Go).
+
+The through-line: **resilient pipelines of agents that act on almost any data, chain with
+almost any function call, and reach almost any data system** — with the correctness
+guarantees the underlying engine can give.
+
 ## The ethos: an agent is a materialized view over a stream of events
 
 The one idea everything here is built around: **treat an agent as both _stateful_ and a
@@ -51,10 +90,31 @@ for the capability inventory behind this.
   **FastAPI gateway** that expose the agent under one A2A-style Agent Card. A new
   tool/path added to a core propagates to every port (enforced by tests). Start at
   [`ports/README.md`](ports/README.md).
+- **Declarative pipelines — [`docs/portability/pipelines.md`](docs/portability/pipelines.md).**
+  Define an agent in a `pipeline.yaml` — prompts, tools, **calls to other agents**,
+  retrieval, guardrails, and a **hot-swappable durable store** — pick a `backend:`, and
+  the rest falls into place. The *same* YAML runs on any backend in Python, the JVM, or
+  Go (loaders in all three). External services (Redis/Valkey, Kafka/Fluss, Postgres) sit
+  behind interfaces, are chosen by a connection link, and come up via
+  [`examples/compose/externals.yml`](examples/compose/externals.yml).
 - **The design-doc series — [`docs/portability/`](docs/portability/).** An honest,
-  per-engine mapping of the essence onto each runtime: what fits natively, what's
-  assembled, what to drop. The keystone names the capability inventory (durable keyed
-  state, per-key ordering, fault tolerance, async I/O, …) and ranks the engines by fit.
+  per-engine mapping of the essence onto each runtime, plus a
+  [**parity matrix**](docs/portability/parity-matrix.md) (what each backend can do + its
+  limitations) and a [**choosing-a-backend**](docs/portability/choosing-a-backend.md)
+  guide. The keystone names the capability inventory and ranks the engines by fit.
+
+### Build once, deploy anywhere (not locked to Flink)
+
+```bash
+# the same banking.yaml on three backends — only `--backend` changes:
+python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+python -m agentic_pipeline run examples/pipelines/banking.yaml --backend celery --text "card types?"
+python -m agentic_pipeline run examples/pipelines/banking.yaml --backend nats   --text "what is my balance?"
+```
+
+Flink stays the first-class, feature-richest runtime; the *agent itself* is engine-agnostic.
+Prototype on the embedded **Local** runtime, then move to a streaming/durable backend by
+changing one line of YAML.
 
 ## Flink — the first-class runtime
 

@@ -19,10 +19,24 @@ const (
 // ConversationStore so the next turn can resume — what the Flink BankingAgentGraph does
 // with routed keyed state.
 type RoutedGraph struct {
-	router   Router
-	paths    map[string]*Agent
-	fallback string
-	verifier Verifier // may be nil
+	router     Router
+	paths      map[string]*Agent
+	fallback   string
+	verifier   Verifier // may be nil
+	guardrails []Guardrail
+	listeners  []AgentListener
+}
+
+// WithGuardrails attaches input/output guardrails and returns the graph for chaining.
+func (g *RoutedGraph) WithGuardrails(guardrails ...Guardrail) *RoutedGraph {
+	g.guardrails = append(g.guardrails, guardrails...)
+	return g
+}
+
+// WithListeners attaches lifecycle listeners and returns the graph for chaining.
+func (g *RoutedGraph) WithListeners(listeners ...AgentListener) *RoutedGraph {
+	g.listeners = append(g.listeners, listeners...)
+	return g
 }
 
 // NewRoutedGraph builds a graph. It panics if paths is empty. When the router returns an
@@ -50,9 +64,26 @@ func (g *RoutedGraph) Paths() []string {
 	return keys
 }
 
-// Handle runs one turn through router -> path -> verifier, persisting phase/path.
+// Handle runs one turn through guardrails -> router -> path -> verifier -> guardrails,
+// firing listeners and persisting phase/path.
 func (g *RoutedGraph) Handle(event Event, ctx *AgentContext) TurnResult {
 	cid := event.ConversationID
+	for _, l := range g.listeners {
+		l.OnTurnStart(event, ctx)
+	}
+
+	// Input guardrails: short-circuit a blocked turn before routing.
+	for _, gr := range g.guardrails {
+		if reason := gr.CheckInput(event.Text); reason != "" {
+			ctx.Store.PutAttribute(cid, PhaseAttr, "blocked")
+			blocked := TurnResult{ConversationID: cid, Reply: "[blocked] " + reason, Path: "blocked", OK: false}
+			for _, l := range g.listeners {
+				l.OnTurnEnd(blocked, ctx)
+			}
+			return blocked
+		}
+	}
+
 	ctx.Store.PutAttribute(cid, PhaseAttr, "router")
 	path := g.router(event, ctx)
 	if _, ok := g.paths[path]; !ok {
@@ -60,6 +91,9 @@ func (g *RoutedGraph) Handle(event Event, ctx *AgentContext) TurnResult {
 	}
 	ctx.Store.PutAttribute(cid, PathAttr, path)
 	ctx.Store.PutAttribute(cid, PhaseAttr, "path:"+path)
+	for _, l := range g.listeners {
+		l.OnRouted(path, ctx)
+	}
 
 	result := g.paths[path].Turn(event, ctx)
 	result.Path = path
@@ -72,6 +106,18 @@ func (g *RoutedGraph) Handle(event Event, ctx *AgentContext) TurnResult {
 	} else {
 		result.OK = true
 	}
+
+	// Output guardrails: redact/replace a disallowed reply.
+	for _, gr := range g.guardrails {
+		if reason := gr.CheckOutput(result.Reply); reason != "" {
+			result.Reply = "[blocked] " + reason
+			result.OK = false
+		}
+	}
+
 	ctx.Store.PutAttribute(cid, PhaseAttr, "done")
+	for _, l := range g.listeners {
+		l.OnTurnEnd(result, ctx)
+	}
 	return result
 }

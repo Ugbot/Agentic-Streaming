@@ -30,6 +30,14 @@ public final class ToolRegistry {
     return List.copyOf(tools.keySet());
   }
 
+  /** {@code [{name, description}]} — what an LLM brain shows the model so it can pick a
+   * tool by name. */
+  public List<Map<String, String>> specs() {
+    return tools.values().stream()
+        .map(t -> Map.of("name", t.id(), "description", t.description()))
+        .toList();
+  }
+
   public Object execute(String id, Map<String, Object> params) {
     Tool t = tools.get(id);
     if (t == null) {

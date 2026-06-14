@@ -24,7 +24,18 @@ from .retrieval import (
     cosine,
     hashing_embedder,
 )
+from .guardrails import Guardrail, RegexGuardrail
+from .listeners import AgentListener, LoggingListener, MetricsListener
+from .llm import (
+    ChatClient,
+    ChatResult,
+    LlmBrain,
+    OllamaChatClient,
+    OpenAIChatClient,
+    StubChatClient,
+)
 from .runtime import LocalRuntime, Runtime
+from .stores import RedisConversationStore, make_conversation_store
 from .tools import Tool, ToolRegistry
 
 __all__ = [
@@ -47,6 +58,19 @@ __all__ = [
     "Runtime",
     "Tool",
     "ToolRegistry",
+    "ChatClient",
+    "ChatResult",
+    "LlmBrain",
+    "StubChatClient",
+    "OllamaChatClient",
+    "OpenAIChatClient",
+    "Guardrail",
+    "RegexGuardrail",
+    "AgentListener",
+    "LoggingListener",
+    "MetricsListener",
+    "RedisConversationStore",
+    "make_conversation_store",
 ]
 
 __version__ = "0.1.0"
