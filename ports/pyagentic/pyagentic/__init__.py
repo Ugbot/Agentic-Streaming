@@ -38,8 +38,20 @@ from .llm import (
     OpenAIChatClient,
     StubChatClient,
 )
+from .longterm import (
+    InMemoryLongTermStore,
+    LongTermStore,
+    PostgresLongTermStore,
+    make_long_term_store,
+)
 from .runtime import LocalRuntime, Runtime
 from .stores import RedisConversationStore, make_conversation_store
+from .vectorstores import (
+    InMemoryVectorStore,
+    QdrantVectorStore,
+    VectorStore,
+    make_vector_store,
+)
 from .tools import Tool, ToolRegistry
 
 __all__ = [
@@ -86,6 +98,14 @@ __all__ = [
     "validate",
     "parse_structured",
     "schema_instruction",
+    "VectorStore",
+    "InMemoryVectorStore",
+    "QdrantVectorStore",
+    "make_vector_store",
+    "LongTermStore",
+    "InMemoryLongTermStore",
+    "PostgresLongTermStore",
+    "make_long_term_store",
 ]
 
 __version__ = "0.1.0"
