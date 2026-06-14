@@ -5,11 +5,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Counts turns, per-path dispatches, blocked turns, and tool calls. */
+/** Counts turns, per-path dispatches, guardrail blocks, tool calls, and errors via the
+ * lifecycle hooks. */
 public final class MetricsListener implements AgentListener {
   public final AtomicLong turns = new AtomicLong();
   public final AtomicLong blocked = new AtomicLong();
   public final AtomicLong toolCalls = new AtomicLong();
+  public final AtomicLong errors = new AtomicLong();
   public final Map<String, AtomicInteger> paths = new ConcurrentHashMap<>();
 
   @Override
@@ -23,11 +25,18 @@ public final class MetricsListener implements AgentListener {
   }
 
   @Override
-  public void onTurnEnd(TurnResult result, AgentContext ctx) {
-    if (!result.ok) {
-      blocked.incrementAndGet();
-    }
-    toolCalls.addAndGet(result.toolCalls.size());
+  public void onToolCallEnd(String toolId, Object result, AgentContext ctx) {
+    toolCalls.incrementAndGet();
+  }
+
+  @Override
+  public void onGuardrailBlock(String reason, AgentContext ctx) {
+    blocked.incrementAndGet();
+  }
+
+  @Override
+  public void onError(String stage, Throwable error, AgentContext ctx) {
+    errors.incrementAndGet();
   }
 
   public int pathCount(String path) {

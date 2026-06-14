@@ -48,6 +48,14 @@ type LlmBrain struct {
 	systemPrompt  string
 	allowed       map[string]bool // nil => all tools
 	maxIterations int
+	outputSchema  map[string]any // optional structured-output contract
+}
+
+// WithOutputSchema enforces a structured (JSON-schema-lite) final answer; returns the
+// brain for chaining.
+func (b *LlmBrain) WithOutputSchema(schema map[string]any) *LlmBrain {
+	b.outputSchema = schema
+	return b
 }
 
 // NewLlmBrain builds an LLM brain. allowed may be nil (all tools); maxIterations<=0 => 6.
@@ -76,6 +84,9 @@ func (b *LlmBrain) Turn(userText string, ctx *AgentContext) string {
 		}
 	}
 	sys := strings.TrimSpace(b.systemPrompt + "\n" + reactSystem + strings.Join(toolList, ", "))
+	if b.outputSchema != nil {
+		sys += "\n" + SchemaInstruction(b.outputSchema)
+	}
 	msgs := []map[string]string{{"role": "system", "content": sys}}
 	for _, m := range ctx.Store.History(ctx.ConversationID) {
 		msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
@@ -93,11 +104,28 @@ func (b *LlmBrain) Turn(userText string, ctx *AgentContext) string {
 			continue
 		}
 		if r.Text != "" {
-			return "[" + b.name + "] " + r.Text
+			return "[" + b.name + "] " + b.finalize(r.Text, ctx)
 		}
 		return "[" + b.name + "] (no answer)"
 	}
 	return fmt.Sprintf("[%s] (stopped after %d steps)", b.name, b.maxIterations)
+}
+
+func (b *LlmBrain) finalize(text string, ctx *AgentContext) string {
+	if b.outputSchema == nil {
+		return text
+	}
+	obj, errs := ParseStructured(text, b.outputSchema)
+	if len(errs) > 0 {
+		for _, l := range ctx.Listeners {
+			if el, ok := l.(ErrorListener); ok {
+				el.OnError("output_schema", strings.Join(errs, "; "), ctx)
+			}
+		}
+		return text
+	}
+	canon, _ := json.Marshal(obj)
+	return string(canon)
 }
 
 // StubChatClient is a deterministic, scripted ChatClient for offline tests.

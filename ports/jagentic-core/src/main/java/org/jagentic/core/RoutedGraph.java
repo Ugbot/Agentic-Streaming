@@ -52,6 +52,7 @@ public final class RoutedGraph {
 
   public TurnResult handle(Event event, AgentContext ctx) {
     String cid = event.conversationId();
+    ctx.listeners = listeners; // so callTool can fire tool-call hooks
     for (AgentListener l : listeners) {
       l.onTurnStart(event, ctx);
     }
@@ -65,6 +66,7 @@ public final class RoutedGraph {
         blocked.path = "blocked";
         blocked.ok = false;
         for (AgentListener l : listeners) {
+          l.onGuardrailBlock(reason, ctx);
           l.onTurnEnd(blocked, ctx);
         }
         return blocked;
@@ -98,6 +100,9 @@ public final class RoutedGraph {
       if (reason != null) {
         result.reply = "[blocked] " + reason;
         result.ok = false;
+        for (AgentListener l : listeners) {
+          l.onGuardrailBlock(reason, ctx);
+        }
       }
     }
 

@@ -29,6 +29,7 @@ public final class LlmBrain implements Brain {
   private final String systemPrompt;
   private final Set<String> allowedTools; // null => all
   private final int maxIterations;
+  private Map<String, Object> outputSchema; // optional structured-output contract
 
   public LlmBrain(ChatClient client, String name) {
     this(client, name, "", null, 6);
@@ -43,6 +44,12 @@ public final class LlmBrain implements Brain {
     this.maxIterations = Math.max(1, maxIterations);
   }
 
+  /** Enforce a structured (JSON-schema-lite) final answer; returns this for chaining. */
+  public LlmBrain withOutputSchema(Map<String, Object> schema) {
+    this.outputSchema = schema;
+    return this;
+  }
+
   @Override
   public String turn(String userText, AgentContext ctx) {
     List<Map<String, String>> specs = ctx.tools.specs().stream()
@@ -52,8 +59,12 @@ public final class LlmBrain implements Brain {
         .map(s -> s.get("name") + ": " + s.get("description"))
         .collect(Collectors.joining(", "));
 
+    String sys = (systemPrompt + "\n" + REACT_SYSTEM + toolList).strip();
+    if (outputSchema != null) {
+      sys += "\n" + org.jagentic.core.structured.Structured.schemaInstruction(outputSchema);
+    }
     List<Map<String, String>> messages = new ArrayList<>();
-    messages.add(Map.of("role", "system", "content", (systemPrompt + "\n" + REACT_SYSTEM + toolList).strip()));
+    messages.add(Map.of("role", "system", "content", sys));
     for (ChatMessage m : ctx.store.history(ctx.conversationId)) {
       messages.add(Map.of("role", m.role(), "content", m.content() == null ? "" : m.content()));
     }
@@ -69,8 +80,29 @@ public final class LlmBrain implements Brain {
         messages.add(Map.of("role", "tool", "content", String.valueOf(observation)));
         continue;
       }
-      return "[" + name + "] " + (r.text() == null ? "(no answer)" : r.text());
+      return "[" + name + "] " + finalize(r.text(), ctx);
     }
     return "[" + name + "] (stopped after " + maxIterations + " steps)";
+  }
+
+  private String finalize(String text, AgentContext ctx) {
+    if (text == null) {
+      return "(no answer)";
+    }
+    if (outputSchema != null) {
+      var result = org.jagentic.core.structured.Structured.parse(text, outputSchema);
+      if (!result.ok()) {
+        for (org.jagentic.core.AgentListener l : ctx.listeners) {
+          l.onError("output_schema", new IllegalArgumentException(String.join("; ", result.errors())), ctx);
+        }
+      } else if (result.value() != null) {
+        try {
+          return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(result.value());
+        } catch (Exception ignore) {
+          // fall through to raw text
+        }
+      }
+    }
+    return text;
   }
 }

@@ -48,19 +48,87 @@ func (g *RegexGuardrail) CheckOutput(reply string) string {
 	return ""
 }
 
-// AgentListener has lifecycle hooks the RoutedGraph fires per turn: start → routed → end.
+// AgentListener has the core lifecycle hooks the RoutedGraph fires per turn:
+// start → routed → end.
 type AgentListener interface {
 	OnTurnStart(event Event, ctx *AgentContext)
 	OnRouted(path string, ctx *AgentContext)
 	OnTurnEnd(result TurnResult, ctx *AgentContext)
 }
 
-// MetricsListener counts turns, per-path dispatches, blocked turns, and tool calls.
+// Optional hooks — a listener implements only what it cares about; the framework
+// fires them via type assertion, so the core AgentListener contract stays small.
+type ToolCallListener interface {
+	OnToolCallStart(toolID string, ctx *AgentContext)
+	OnToolCallEnd(toolID string, result any, ctx *AgentContext)
+}
+type ErrorListener interface {
+	OnError(stage string, err any, ctx *AgentContext)
+}
+type GuardrailListener interface {
+	OnGuardrailBlock(reason string, ctx *AgentContext)
+}
+
+// CompositeListener fans every hook out to several listeners.
+type CompositeListener struct{ Listeners []AgentListener }
+
+// NewCompositeListener builds a composite over the given listeners.
+func NewCompositeListener(listeners ...AgentListener) *CompositeListener {
+	return &CompositeListener{Listeners: listeners}
+}
+
+func (c *CompositeListener) OnTurnStart(e Event, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		l.OnTurnStart(e, ctx)
+	}
+}
+func (c *CompositeListener) OnRouted(p string, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		l.OnRouted(p, ctx)
+	}
+}
+func (c *CompositeListener) OnTurnEnd(r TurnResult, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		l.OnTurnEnd(r, ctx)
+	}
+}
+func (c *CompositeListener) OnToolCallStart(t string, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		if tl, ok := l.(ToolCallListener); ok {
+			tl.OnToolCallStart(t, ctx)
+		}
+	}
+}
+func (c *CompositeListener) OnToolCallEnd(t string, result any, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		if tl, ok := l.(ToolCallListener); ok {
+			tl.OnToolCallEnd(t, result, ctx)
+		}
+	}
+}
+func (c *CompositeListener) OnError(stage string, err any, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		if el, ok := l.(ErrorListener); ok {
+			el.OnError(stage, err, ctx)
+		}
+	}
+}
+func (c *CompositeListener) OnGuardrailBlock(reason string, ctx *AgentContext) {
+	for _, l := range c.Listeners {
+		if gl, ok := l.(GuardrailListener); ok {
+			gl.OnGuardrailBlock(reason, ctx)
+		}
+	}
+}
+
+// MetricsListener counts turns, per-path dispatches, blocked turns, tool calls, and
+// errors (via the core + optional hooks).
 type MetricsListener struct {
 	mu        sync.Mutex
 	Turns     int64
 	Blocked   int64
 	ToolCalls int64
+	Errors    int64
 	Paths     map[string]int
 }
 
@@ -77,11 +145,20 @@ func (m *MetricsListener) OnRouted(path string, ctx *AgentContext) {
 	m.mu.Unlock()
 }
 
-func (m *MetricsListener) OnTurnEnd(result TurnResult, ctx *AgentContext) {
-	if !result.OK {
-		atomic.AddInt64(&m.Blocked, 1)
-	}
-	atomic.AddInt64(&m.ToolCalls, int64(len(result.ToolCalls)))
+func (m *MetricsListener) OnTurnEnd(result TurnResult, ctx *AgentContext) {}
+
+func (m *MetricsListener) OnToolCallStart(toolID string, ctx *AgentContext) {}
+
+func (m *MetricsListener) OnToolCallEnd(toolID string, result any, ctx *AgentContext) {
+	atomic.AddInt64(&m.ToolCalls, 1)
+}
+
+func (m *MetricsListener) OnGuardrailBlock(reason string, ctx *AgentContext) {
+	atomic.AddInt64(&m.Blocked, 1)
+}
+
+func (m *MetricsListener) OnError(stage string, err any, ctx *AgentContext) {
+	atomic.AddInt64(&m.Errors, 1)
 }
 
 // PathCount returns the dispatch count for a path.
@@ -115,4 +192,20 @@ func (l *LoggingListener) OnRouted(path string, ctx *AgentContext) {
 func (l *LoggingListener) OnTurnEnd(result TurnResult, ctx *AgentContext) {
 	l.emit(fmt.Sprintf("[turn-end] conv=%s path=%s ok=%v tools=%v",
 		result.ConversationID, result.Path, result.OK, result.ToolCalls))
+}
+
+func (l *LoggingListener) OnToolCallStart(toolID string, ctx *AgentContext) {
+	l.emit(fmt.Sprintf("[tool-call] conv=%s tool=%s", ctx.ConversationID, toolID))
+}
+
+func (l *LoggingListener) OnToolCallEnd(toolID string, result any, ctx *AgentContext) {
+	l.emit(fmt.Sprintf("[tool-done] conv=%s tool=%s result=%v", ctx.ConversationID, toolID, result))
+}
+
+func (l *LoggingListener) OnGuardrailBlock(reason string, ctx *AgentContext) {
+	l.emit(fmt.Sprintf("[guardrail-block] conv=%s reason=%q", ctx.ConversationID, reason))
+}
+
+func (l *LoggingListener) OnError(stage string, err any, ctx *AgentContext) {
+	l.emit(fmt.Sprintf("[error] conv=%s stage=%s error=%v", ctx.ConversationID, stage, err))
 }

@@ -66,10 +66,25 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 	dim := asInt(retrieval["dim"], 256)
 	retriever := buildRetriever(retrieval, dim)
 
+	// Skills: a path's `skills:` expand into extra tools + an appended prompt fragment.
+	var skillSpecs []map[string]any
+	for _, s := range asList(spec["skills"]) {
+		skillSpecs = append(skillSpecs, asMap(s))
+	}
+	skills := core.SkillRegistryFromSpecs(skillSpecs)
+
 	paths := map[string]*core.Agent{}
 	for name, raw := range pathSpecs {
 		ps := asMap(raw)
 		prompt := asString(ps["prompt"], "You answer "+name+" questions.")
+		var skillNames []string
+		for _, s := range asList(ps["skills"]) {
+			skillNames = append(skillNames, fmt.Sprint(s))
+		}
+		skillTools, fragment, _ := skills.Expand(skillNames)
+		if fragment != "" {
+			prompt = prompt + "\n" + fragment
+		}
 		brainKind := asString(ps["brain"], "rule")
 		var brain core.Brain
 		switch brainKind {
@@ -82,7 +97,12 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 			for _, t := range asList(ps["tools"]) {
 				allowed = append(allowed, fmt.Sprint(t))
 			}
-			brain = core.NewLlmBrain(client, name, prompt, allowed, asInt(ps["max_iterations"], 6))
+			allowed = append(allowed, skillTools...)
+			lb := core.NewLlmBrain(client, name, prompt, allowed, asInt(ps["max_iterations"], 6))
+			if os := asMap(ps["output_schema"]); len(os) > 0 {
+				lb.WithOutputSchema(os)
+			}
+			brain = lb
 		case "rule":
 			triggers := map[string]string{}
 			for k, v := range asMap(ps["tool_triggers"]) {

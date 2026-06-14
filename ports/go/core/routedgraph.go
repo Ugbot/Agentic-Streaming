@@ -68,6 +68,7 @@ func (g *RoutedGraph) Paths() []string {
 // firing listeners and persisting phase/path.
 func (g *RoutedGraph) Handle(event Event, ctx *AgentContext) TurnResult {
 	cid := event.ConversationID
+	ctx.Listeners = g.listeners // so CallTool can fire tool-call hooks
 	for _, l := range g.listeners {
 		l.OnTurnStart(event, ctx)
 	}
@@ -78,6 +79,9 @@ func (g *RoutedGraph) Handle(event Event, ctx *AgentContext) TurnResult {
 			ctx.Store.PutAttribute(cid, PhaseAttr, "blocked")
 			blocked := TurnResult{ConversationID: cid, Reply: "[blocked] " + reason, Path: "blocked", OK: false}
 			for _, l := range g.listeners {
+				if gl, ok := l.(GuardrailListener); ok {
+					gl.OnGuardrailBlock(reason, ctx)
+				}
 				l.OnTurnEnd(blocked, ctx)
 			}
 			return blocked
@@ -112,6 +116,11 @@ func (g *RoutedGraph) Handle(event Event, ctx *AgentContext) TurnResult {
 		if reason := gr.CheckOutput(result.Reply); reason != "" {
 			result.Reply = "[blocked] " + reason
 			result.OK = false
+			for _, l := range g.listeners {
+				if gl, ok := l.(GuardrailListener); ok {
+					gl.OnGuardrailBlock(reason, ctx)
+				}
+			}
 		}
 	}
 

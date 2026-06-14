@@ -60,11 +60,18 @@ public final class GraphBuilder {
     int dim = retrievalSpec == null ? 256 : ((Number) retrievalSpec.getOrDefault("dim", 256)).intValue();
     Retrieval.TwoTierRetriever retriever = buildRetriever(retrievalSpec, dim);
 
+    org.jagentic.core.skill.SkillRegistry skills =
+        org.jagentic.core.skill.SkillRegistry.fromSpecs((List<Map<String, Object>>) spec.get("skills"));
+
     Map<String, Agent> paths = new LinkedHashMap<>();
     for (Map.Entry<String, Object> e : pathSpecs.entrySet()) {
       String name = e.getKey();
       Map<String, Object> ps = (Map<String, Object>) e.getValue();
       String prompt = (String) ps.getOrDefault("prompt", "You answer " + name + " questions.");
+      var expanded = skills.expand((List<String>) ps.get("skills"));
+      if (!expanded.promptFragment().isBlank()) {
+        prompt = prompt + "\n" + expanded.promptFragment();
+      }
       String brainKind = (String) ps.getOrDefault("brain", "rule");
       Brain brain;
       if ("llm".equals(brainKind)) {
@@ -72,8 +79,19 @@ public final class GraphBuilder {
           throw new IllegalArgumentException("spec uses an llm brain but no ChatClientFactory was provided");
         }
         ChatClient client = chatClientFactory.create((Map<String, Object>) spec.getOrDefault("llm", Map.of()));
-        brain = new LlmBrain(client, name, prompt, (List<String>) ps.get("tools"),
+        List<String> pathTools = new ArrayList<>();
+        if (ps.get("tools") instanceof List<?> declared) {
+          for (Object t : declared) pathTools.add(String.valueOf(t));
+        }
+        for (String t : expanded.tools()) {
+          if (!pathTools.contains(t)) pathTools.add(t);
+        }
+        LlmBrain lb = new LlmBrain(client, name, prompt, pathTools.isEmpty() ? null : pathTools,
             ((Number) ps.getOrDefault("max_iterations", 6)).intValue());
+        if (ps.get("output_schema") instanceof Map<?, ?> os) {
+          lb.withOutputSchema((Map<String, Object>) os);
+        }
+        brain = lb;
       } else if ("rule".equals(brainKind)) {
         brain = new KeywordBrain(name, dim, (Map<String, String>) ps.get("tool_triggers"),
             ((Number) ps.getOrDefault("threshold", 0.15)).doubleValue());

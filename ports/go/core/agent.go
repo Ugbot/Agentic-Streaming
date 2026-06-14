@@ -10,12 +10,35 @@ type AgentContext struct {
 	Tools          *ToolRegistry
 	Retriever      *TwoTierRetriever // may be nil
 	ToolCalls      []string
+	Listeners      []AgentListener // set by RoutedGraph so tool-call hooks fire
 }
 
-// CallTool records and executes a tool call.
-func (c *AgentContext) CallTool(name string, params map[string]any) any {
+// CallTool records and executes a tool call, firing tool-call (and on-panic error)
+// listener hooks.
+func (c *AgentContext) CallTool(name string, params map[string]any) (result any) {
 	c.ToolCalls = append(c.ToolCalls, name)
-	return c.Tools.Execute(name, params)
+	for _, l := range c.Listeners {
+		if tl, ok := l.(ToolCallListener); ok {
+			tl.OnToolCallStart(name, c)
+		}
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			for _, l := range c.Listeners {
+				if el, ok := l.(ErrorListener); ok {
+					el.OnError("tool:"+name, r, c)
+				}
+			}
+			panic(r)
+		}
+	}()
+	result = c.Tools.Execute(name, params)
+	for _, l := range c.Listeners {
+		if tl, ok := l.(ToolCallListener); ok {
+			tl.OnToolCallEnd(name, result, c)
+		}
+	}
+	return result
 }
 
 // Brain produces a reply for a turn. A real brain runs an LLM ReAct loop; tests use a
