@@ -1,8 +1,19 @@
-# Agentic Flink
+# Agentic Streaming (formerly Agentic Flink)
 
-Standalone agentic framework for Apache Flink with LangChain4J integration.
-Java 17 target, Flink 2.2.1 (native FLIP-27 sources / FLIP-143 sinks), LangChain4J 0.35.0.
-PyFlink path targets apache-flink 2.x (see docs/python.md).
+Agentic Streaming is a library + example pack for building agents as streaming,
+stateful, **event-sourced** systems — an agent's state is a materialized view over an
+ordered log of events, with CQRS (command = process a turn; query = read the view) and
+single-writer-per-conversation. Apache Flink is the **first-class runtime** (this main
+module); the same essence is ported to a dozen other engines across Python, the JVM, and
+Go under `ports/`, with design docs under `docs/portability/`.
+
+This main module is the Flink framework: a standalone agentic framework for Apache Flink
+with LangChain4J integration. Java 17 target, Flink 2.2.1 (native FLIP-27 sources /
+FLIP-143 sinks), LangChain4J 0.35.0. PyFlink path targets apache-flink 2.x (see
+docs/python.md).
+
+The multi-engine ports + gateways live under `ports/` (their own `ports/README.md`); the
+engine-agnostic "essence" and per-engine design notes are in `docs/portability/`.
 
 ## Project Structure
 
