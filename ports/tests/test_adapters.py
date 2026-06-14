@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
-for sub in ("pyagentic", "dask", "airflow", "faust", "ray"):
+for sub in ("pyagentic", "pyagentic/tests", "dask", "airflow", "faust", "ray", "celery"):
     sys.path.insert(0, str(_ROOT / sub))
 
 
@@ -50,3 +50,43 @@ def test_faust_and_ray_adapters_import_without_engine():
     # When the engine isn't installed the guard nulls the handle (no crash on import).
     assert fa.faust is None or hasattr(fa.faust, "App")
     assert ra.ray is None or hasattr(ra.ray, "remote")
+
+
+def test_celery_runtime_runs_banking_on_real_engine():
+    """Celery 5.x runs here, so this exercises the real engine in eager mode (the task
+    body runs in-process, no broker) — like the Dask test, not just an import guard."""
+    import agentic_celery as cl
+    from pyagentic.core import Event
+
+    assert cl.Celery is not None, "celery should be installed in the test env"
+    rt = cl.CeleryRuntime(eager=True)
+    cards = rt.submit(Event("c1", "what card types do you offer?", "demo"))
+    pay = rt.submit(Event("c2", "what is my balance?", "demo"))
+    general = rt.submit(Event("c3", "where is the nearest branch?", "demo"))
+    assert (cards.path, pay.path, general.path) == ("cards", "payments", "general")
+    assert "get_balance" in pay.tool_calls
+    # C2 seam: a conversation maps to a stable queue.
+    assert cl.conversation_queue("c1") == cl.conversation_queue("c1")
+
+
+def test_celery_propagates_an_extended_core_graph():
+    """The decisive extensibility check at the adapter level: take an EXTENDED core
+    graph (a new 'fraud' path + a new 'freeze_card' tool, built only from the public
+    pyagentic abstractions), inject it, and run it through the *real Celery task seam*.
+    The new path routes and the new tool fires — proving a core addition flows through
+    the engine with no adapter change."""
+    import agentic_celery as cl
+    from pyagentic.core import Event
+    from test_extensibility import extended_graph, extended_tools  # the shared extension
+
+    cl.configure(graph=extended_graph(), tools=extended_tools(), retriever=None)
+    try:
+        rt = cl.CeleryRuntime(eager=True)
+        res = rt.submit(Event("c-fraud", "my card was stolen, please freeze it", "alice"))
+        assert res.path == "fraud"
+        assert "freeze_card" in res.tool_calls
+        assert "FRZ-alice" in res.reply
+        # original paths still routable through the same injected graph
+        assert rt.submit(Event("c-ok", "what is my balance?", "alice")).path == "payments"
+    finally:
+        cl.configure()  # restore the default banking deps for other tests

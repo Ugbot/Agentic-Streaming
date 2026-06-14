@@ -1,9 +1,9 @@
 # The Essence of Agentic-Flink — and How to Port It Off Flink
 
 > Keystone design note for the `docs/portability/` series. Read this first; every
-> per-engine doc (`kafka-streams.md`, `pekko.md`, `spring.md`, `quarkus.md`,
-> `ray.md`, `dask.md`, `airflow.md`, `faust.md`) is written against the abstractions,
-> capability matrix, and Engine SPI defined here.
+> per-engine doc (`kafka-streams.md`, `pekko.md`, `pulsar.md`, `spring.md`,
+> `quarkus.md`, `ray.md`, `celery.md`, `dask.md`, `airflow.md`, `faust.md`) is written
+> against the abstractions, capability matrix, and Engine SPI defined here.
 
 ## 1. Why this exists
 
@@ -15,7 +15,8 @@ processors with per-conversation memory, tool use, routing, peer delegation, and
 retrieval — sits *above* those capabilities.
 
 This series asks: **if you deleted Flink, what would the same project look like on
-Kafka Streams, Apache Pekko, Spring, Quarkus, Ray, Dask, Airflow, or Faust?** The goal is not
+Kafka Streams, Apache Pekko, Apache Pulsar Functions, Spring, Quarkus, Ray, Celery,
+Dask, Airflow, or Faust?** The goal is not
 "reimplement Flink everywhere" — it's to (a) name the engine-agnostic core
 precisely, (b) name exactly what Flink was providing, and (c) honestly map each
 target engine: what fits cleanly, what fits awkwardly, and what simply doesn't
@@ -204,9 +205,29 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
 > for C2 (one entity per key, sequential mailbox), **N** for C3 (Persistence /
 > event sourcing — durable natively, unlike Ray), **N** for C4 (async actors / `ask`),
 > **N** for C5 (Pekko Streams), **L** for C6 (Pekko Connectors), **N** for C11
-> (cluster sharding rebalances entities), **N** for C12 (actor/stream graph). It is the
-> **only engine besides Flink here that supplies C1+C2+C3 all natively** — the
-> actor-model peer of Kafka Streams' streaming-model fit.
+> (cluster sharding rebalances entities), **N** for C12 (actor/stream graph). Together
+> with **Pulsar Functions** (below), it is one of only two engines besides Flink here
+> that supply **C1+C2+C3 all natively** — the actor-model peer of Kafka Streams'
+> streaming-model fit.
+
+> **Apache Pulsar Functions** (added after the table; see [`pulsar.md`](pulsar.md)) is
+> Pulsar's lightweight serverless compute. Its column would read **N** for C1 (the
+> built-in **state store**, BookKeeper-backed and durable), **N** for C2 (a
+> `Key_Shared` subscription keyed by `conversationId` delivers one key to one instance
+> in order), **N** for C3 (effectively-once processing + acks), **L** for C4 (publish
+> the reply to a response topic to go non-blocking), **N** for C6 (Pulsar IO
+> connectors), **N** for C11 (instances scale per partition), **N** for C12 (chained
+> functions / topics). With Pekko it is one of only two engines besides Flink to give
+> C1+C2+C3 natively — and the closest of the two to Flink's topic-in/topic-out shape.
+
+> **Celery** (added after the table; see [`celery.md`](celery.md)) is the Python
+> distributed task queue. Its column would read **X** for C1 (state in the result
+> backend / an external ConversationStore — Redis), **L** for C2 (no native keyed
+> ordering; route a conversation to one queue + a per-conversation lock), **L/N** for
+> C3 (`acks_late` + retries + the durable store make a redelivered turn idempotent),
+> **L** for C4 (chord/chain or an async task body), **L** for C6 (broker transports).
+> It hosts the *online* request/response turn (unlike Dask/Airflow's batch), but
+> assembles the keyed-state heart from routing + an external store rather than natively.
 
 ## 7. Per-engine fit, at a glance (ranked)
 
@@ -225,27 +246,40 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
    **Persistence**/event-sourcing for durability, `ask` for async, Pekko Streams for
    backpressure. You keep the whole Java core; only the actor seam is Pekko. Not a
    Kafka-topology streaming engine (you wire ingress yourself) and no event-time engine.
-4. **Ray** *(Python)* — **actor-per-conversation** is a beautiful fit for stateful
+4. **Apache Pulsar Functions** *(JVM, serverless streaming)* — Pulsar's lightweight
+   compute, and the closest of the native-C1+C2+C3 engines to Flink's topic-in/topic-out
+   shape. The built-in **state store** (BookKeeper) is durable keyed state (C1+C3); a
+   `Key_Shared` subscription keyed by `conversationId` gives single-writer ordering
+   (C2); chained functions are the topology (C12). Reuses the whole Java core; the
+   function body just calls `Banking.buildGraph().handle(...)` over a state-backed
+   ConversationStore. Go non-blocking (C4) via a response topic, as on Kafka Streams.
+5. **Ray** *(Python)* — **actor-per-conversation** is a beautiful fit for stateful
    agents: each actor is a single-writer, sequential, in-memory state holder (C1+C2
    in memory), Ray tasks/async actors give C4 trivially, Ray Serve is the inbound
    edge, Ray Data does batch RAG. Caveat: durability (C3) is external (checkpoint
    actor state to Redis/Fluss); continuous streaming is not Ray's home turf. (Pekko is
    the JVM analogue with durability + sharding built in.)
-5. **Quarkus** *(JVM, reactive)* — already our inbound proxy. SmallRye Reactive
+6. **Quarkus** *(JVM, reactive)* — already our inbound proxy. SmallRye Reactive
    Messaging (Kafka) + Mutiny/virtual threads (C4 native, C6 native). Keyed state
    is external (Redis/Fluss via the existing SPIs). Excellent for the proxy + the
    per-message agent and A2A gateway; the keyed-streaming core rides on Kafka + the
    state SPIs rather than an engine primitive.
-6. **Spring** *(JVM)* — Spring Cloud Stream (Kafka binder) + Spring StateMachine +
+7. **Spring** *(JVM)* — Spring Cloud Stream (Kafka binder) + Spring StateMachine +
    Spring AI + Spring Integration. Strong on the *agent/tool/memory/FSM*
    abstractions and enterprise wiring; the dataflow becomes message channels /
    integration flows rather than a streaming topology. Keyed state external.
-7. **Dask** *(Python)* — shines for **batch/parallel RAG** (embed + index a corpus
+8. **Celery** *(Python, task queue)* — hosts the *online* request/response turn (one
+   turn = one task), unlike Dask/Airflow's batch. No native keyed ordering, so C2 is
+   recovered by routing a conversation to one queue + a per-conversation lock; keyed
+   state (C1) is an external ConversationStore (Redis), and `acks_late` + retries +
+   that durable store give idempotent C3. Good for scheduled/fan-out agentic work on an
+   existing Celery/Redis stack; reuses the pure-Python core unchanged.
+9. **Dask** *(Python)* — shines for **batch/parallel RAG** (embed + index a corpus
    across a cluster) and offline eval/benchmark sweeps. Long-lived keyed streaming
    agents are awkward (Dask is a task-graph/futures engine; Actors exist but aren't
    the sweet spot). Port the ingestion + retrieval-eval parts; don't force the live
    loop.
-8. **Airflow** *(Python, orchestration)* — not streaming at all, but the **routed
+10. **Airflow** *(Python, orchestration)* — not streaming at all, but the **routed
    graph maps cleanly to a DAG** (router = `BranchPythonOperator`, paths = tasks,
    verifier = downstream task) and it's ideal for **scheduled/batch agentic
    workflows, RAG ingestion DAGs, and eval runs**. Per-event keyed state and
@@ -259,8 +293,9 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
   or Fluss** — which the project already supports. This is the single most
   important porting decision and the reason those SPIs exist.
 - **Single-writer-per-conversation.** Flink gives it via keyBy. Ports get it via
-  Kafka partitioning (Kafka Streams/Faust/Quarkus/Spring), a Ray actor per key, or
-  give it up and use optimistic concurrency / locks (Airflow/Dask).
+  Kafka partitioning (Kafka Streams/Faust/Quarkus/Spring), a `Key_Shared` subscription
+  (Pulsar Functions), an actor/entity per key (Ray/Pekko), a routed queue + per-key
+  lock (Celery), or give it up and use optimistic concurrency / locks (Airflow/Dask).
 - **Async, I/O-bound model calls.** Agents spend their time waiting on LLMs. Native
   asyncio (Faust/Ray) or reactive (Quarkus) win; thread-pool bridges work elsewhere.
 - **Exactly-once vs. at-least-once + idempotency.** Tool calls and A2A sends should

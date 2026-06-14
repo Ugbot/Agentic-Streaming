@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.jagentic.ports</groupId>
+  <artifactId>agentic-pulsar</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>agentic-pulsar</name>
+  <description>Agentic-Flink essence as an Apache Pulsar Function — per-conversation
+    state on Pulsar's built-in state store (BookKeeper), keyed by message key
+    (Key_Shared = single-writer), reusing the Flink-free jagentic-core.</description>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <pulsar.version>3.3.1</pulsar.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.jagentic</groupId>
+      <artifactId>jagentic-core</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+
+    <!-- The Pulsar Functions programming model: Function<I,O>, Context (state API),
+         Record. The state API is BookKeeper-backed durable keyed state (C1). -->
+    <dependency>
+      <groupId>org.apache.pulsar</groupId>
+      <artifactId>pulsar-functions-api</artifactId>
+      <version>${pulsar.version}</version>
+    </dependency>
+
+    <!-- Runtime-only: the Pulsar client supplies the implementation binding that
+         org.apache.pulsar.client.api.Schema initializes against. A deployed function
+         always has it on the classpath; the LocalDemo's in-memory Context proxy needs
+         it so the Context interface's Schema-typed methods can be resolved. -->
+    <dependency>
+      <groupId>org.apache.pulsar</groupId>
+      <artifactId>pulsar-client</artifactId>
+      <version>${pulsar.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- A binding so the function's slf4j logger prints in the local demo. -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>2.0.13</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <mainClass>org.jagentic.ports.pulsar.LocalDemo</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

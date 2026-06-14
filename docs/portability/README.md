@@ -17,12 +17,14 @@ migration plan.
 | [`faust.md`](faust.md) | Faust (faust-streaming) | Python | Native fit: faust *agents* + *Tables* ≈ our agent + ConversationStore. |
 | [`kafka-streams.md`](kafka-streams.md) | Kafka Streams | Java | Closest analog: state stores + partitions + EOS; bridge async I/O. |
 | [`pekko.md`](pekko.md) | Apache Pekko | Java | Actor-per-conversation via Cluster Sharding (C1+C2) + Persistence (C3) — all native. |
+| [`pulsar.md`](pulsar.md) | Apache Pulsar Functions | Java | State store (C1+C3) + Key_Shared (C2) — native, in Flink's topic-in/topic-out shape. |
 | [`ray.md`](ray.md) | Ray | Python | Actor-per-conversation = stateful agent; durability + streaming are external. |
 | [`quarkus.md`](quarkus.md) | Quarkus | Java | Reactive messaging + Mutiny; keyed state external. Already our proxy. |
 | [`spring.md`](spring.md) | Spring | Java | Cloud Stream + StateMachine + Spring AI; dataflow → message channels. |
+| [`celery.md`](celery.md) | Celery | Python | One turn = one task; online request/response; C2 via routed queue + lock, state external. |
 | [`dask.md`](dask.md) | Dask | Python | Great for batch/parallel RAG + eval; weak for live keyed streaming. |
 | [`airflow.md`](airflow.md) | Airflow | Python | Routed graph → DAG; batch/scheduled agentic + RAG ingestion; not streaming. |
 
-For the Python engines (Faust, Ray, Dask, Airflow) the target is **pure Python**.
-For the JVM engines (Kafka Streams, Quarkus, Spring) the existing Java core types
-are reused behind the Engine SPI.
+For the Python engines (Faust, Ray, Celery, Dask, Airflow) the target is **pure
+Python**. For the JVM engines (Kafka Streams, Pekko, Pulsar Functions, Quarkus,
+Spring) the existing Java core types are reused behind the Engine SPI.
