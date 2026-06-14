@@ -30,8 +30,8 @@ class _LocalBackend:
     name = "local"
     capability = "online"
 
-    def __init__(self, graph, tools, retriever):
-        self._rt = LocalRuntime(graph, tools=tools, retriever=retriever)
+    def __init__(self, graph, tools, retriever, store=None):
+        self._rt = LocalRuntime(graph, store=store, tools=tools, retriever=retriever)
 
     def submit(self, event: Event) -> TurnResult:
         return self._rt.submit(event)
@@ -45,12 +45,12 @@ class _CeleryBackend:
     name = "celery"
     capability = "online"
 
-    def __init__(self, graph, tools, retriever):
+    def __init__(self, graph, tools, retriever, store=None):
         import agentic_celery as cl  # type: ignore
 
         if cl.Celery is None:
             raise RuntimeError("celery not installed: pip install celery")
-        cl.configure(graph=graph, tools=tools, retriever=retriever)
+        cl.configure(graph=graph, tools=tools, retriever=retriever, store=store)
         self._rt = cl.CeleryRuntime(eager=True)
 
     def submit(self, event: Event) -> TurnResult:
@@ -64,7 +64,9 @@ class _NatsBackend:
     name = "nats"
     capability = "online"
 
-    def __init__(self, graph, tools, retriever):
+    def __init__(self, graph, tools, retriever, store=None):
+        # NATS keeps durable per-conversation state in its own JetStream KV, so an
+        # external `stores` selection doesn't apply here (the engine IS the store).
         import agentic_nats as na  # type: ignore
 
         if na.nats is None:
@@ -94,13 +96,15 @@ _BACKENDS: Dict[str, Callable[..., Any]] = {
 }
 
 
-def make_backend(name: str, graph, tools, retriever):
-    """Construct a backend by name from a built graph/tools/retriever."""
+def make_backend(name: str, graph, tools, retriever, store=None):
+    """Construct a backend by name from a built graph/tools/retriever. ``store`` is an
+    optional hot-swapped ConversationStore (e.g. Redis); backends with their own durable
+    store (nats) ignore it."""
     key = (name or "local").strip().lower()
     factory = _BACKENDS.get(key)
     if factory is None:
         raise ValueError(f"unknown backend {key!r}; choose one of {sorted(_BACKENDS)}")
-    return factory(graph, tools, retriever)
+    return factory(graph, tools, retriever, store=store)
 
 
 def backend_names():

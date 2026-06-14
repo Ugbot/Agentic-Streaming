@@ -35,6 +35,7 @@ from .llm import (
     StubChatClient,
 )
 from .runtime import LocalRuntime, Runtime
+from .stores import RedisConversationStore, make_conversation_store
 from .tools import Tool, ToolRegistry
 
 __all__ = [
@@ -68,6 +69,8 @@ __all__ = [
     "AgentListener",
     "LoggingListener",
     "MetricsListener",
+    "RedisConversationStore",
+    "make_conversation_store",
 ]
 
 __version__ = "0.1.0"

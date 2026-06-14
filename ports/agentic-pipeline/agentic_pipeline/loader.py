@@ -63,10 +63,15 @@ class PipelineSystem:
 
 def build_system(spec: Dict[str, Any], backend: Optional[str] = None) -> PipelineSystem:
     """Compile a spec dict and wire it onto the chosen backend (spec ``backend:`` unless
-    overridden)."""
+    overridden). A ``stores.conversation`` section hot-swaps the durable store (e.g.
+    Redis/Valkey) behind the ConversationStore SPI."""
+    from pyagentic.stores import make_conversation_store
+
     graph, tools, retriever = builder.build(spec, chat_client_factory=_chat_client_factory)
     name = backend or spec.get("backend", "local")
-    rt = backends.make_backend(name, graph, tools, retriever)
+    store_spec = (spec.get("stores") or {}).get("conversation")
+    store = make_conversation_store(store_spec) if store_spec else None
+    rt = backends.make_backend(name, graph, tools, retriever, store=store)
     return PipelineSystem(spec, rt, graph, tools, retriever)
 
 
