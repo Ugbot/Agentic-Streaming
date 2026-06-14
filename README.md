@@ -51,10 +51,31 @@ for the capability inventory behind this.
   **FastAPI gateway** that expose the agent under one A2A-style Agent Card. A new
   tool/path added to a core propagates to every port (enforced by tests). Start at
   [`ports/README.md`](ports/README.md).
+- **Declarative pipelines — [`docs/portability/pipelines.md`](docs/portability/pipelines.md).**
+  Define an agent in a `pipeline.yaml` — prompts, tools, **calls to other agents**,
+  retrieval, guardrails, and a **hot-swappable durable store** — pick a `backend:`, and
+  the rest falls into place. The *same* YAML runs on any backend in Python, the JVM, or
+  Go (loaders in all three). External services (Redis/Valkey, Kafka/Fluss, Postgres) sit
+  behind interfaces, are chosen by a connection link, and come up via
+  [`examples/compose/externals.yml`](examples/compose/externals.yml).
 - **The design-doc series — [`docs/portability/`](docs/portability/).** An honest,
-  per-engine mapping of the essence onto each runtime: what fits natively, what's
-  assembled, what to drop. The keystone names the capability inventory (durable keyed
-  state, per-key ordering, fault tolerance, async I/O, …) and ranks the engines by fit.
+  per-engine mapping of the essence onto each runtime, plus a
+  [**parity matrix**](docs/portability/parity-matrix.md) (what each backend can do + its
+  limitations) and a [**choosing-a-backend**](docs/portability/choosing-a-backend.md)
+  guide. The keystone names the capability inventory and ranks the engines by fit.
+
+### Build once, deploy anywhere (not locked to Flink)
+
+```bash
+# the same banking.yaml on three backends — only `--backend` changes:
+python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+python -m agentic_pipeline run examples/pipelines/banking.yaml --backend celery --text "card types?"
+python -m agentic_pipeline run examples/pipelines/banking.yaml --backend nats   --text "what is my balance?"
+```
+
+Flink stays the first-class, feature-richest runtime; the *agent itself* is engine-agnostic.
+Prototype on the embedded **Local** runtime, then move to a streaming/durable backend by
+changing one line of YAML.
 
 ## Flink — the first-class runtime
 

@@ -15,6 +15,7 @@ from pyagentic.core import Event
 _REPO = Path(__file__).resolve().parents[3]
 BANKING = str(_REPO / "examples" / "pipelines" / "banking.yaml")
 BANKING_LLM = str(_REPO / "examples" / "pipelines" / "banking-llm.yaml")
+MULTIAGENT = str(_REPO / "examples" / "pipelines" / "multiagent.yaml")
 
 
 def test_backend_registry_has_core_backends():
@@ -50,6 +51,16 @@ def test_llm_pipeline_runs_react_via_stub():
     assert res.path == "payments"
     assert "get_balance" in res.tool_calls
     assert res.reply == "[payments] Your balance is 1234.56."
+
+
+def test_multiagent_yaml_builds_with_agent_call_tool():
+    """The multi-agent pipeline registers an A2A-as-a-tool (`kind: agent`) and routes a
+    normal turn without calling the peer — proving calls-to-other-agents are expressible
+    declaratively and the spec loads on a backend."""
+    sys = load(MULTIAGENT, backend="local")
+    assert "ask_specialist" in sys.tools.ids()
+    res = sys.submit(Event("c1", "what time do you open?", "demo"))
+    assert res.path == "triage" and res.ok
 
 
 def test_banking_yaml_on_nats_if_available():

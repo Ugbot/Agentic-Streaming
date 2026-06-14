@@ -65,12 +65,22 @@ def _build_tools(specs: List[Dict[str, Any]]) -> ToolRegistry:
         if kind == "constant":
             value = t.get("value")
             reg.register(tool_id, desc, lambda params, v=value: v)
-        elif kind == "http":
-            url = t["url"]
+        elif kind in ("http", "agent"):
+            # "agent" is an alias: call another agent/gateway's /agent endpoint (A2A-as-tool).
+            url = _resolve_env(t["url"])
             reg.register(tool_id, desc, _http_tool(url))
         else:
             raise ValueError(f"unknown tool kind {kind!r} for {tool_id!r}")
     return reg
+
+
+def _resolve_env(value: str) -> str:
+    """Expand a ``${ENV}`` connection link (used for agent/http tool URLs)."""
+    import os
+
+    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+        return os.environ.get(value[2:-1], "")
+    return value
 
 
 def _http_tool(url: str) -> Callable[[Dict[str, Any]], Any]:

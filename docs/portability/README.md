@@ -1,11 +1,19 @@
-# Portability design notes — Agentic-Flink off Flink
+# Portability — Agentic Streaming on any backend (Flink is just the first‑class one)
 
 What would this project be on a *different* engine? These notes name the
 engine-agnostic essence, the capabilities Flink was providing, and an honest
-per-engine mapping (what fits, what's awkward, what to drop). Design intent, not a
-migration plan.
+per-engine mapping (what fits, what's awkward, what to drop). The essence is now
+implemented: three Flink‑free cores + 12 engine adapters + a declarative YAML pipeline.
 
-**Start here:**
+**Build & deploy (start here if you just want to use it):**
+- [`pipelines.md`](pipelines.md) — define an agent in `pipeline.yaml` (prompts, tools,
+  calls to other agents, retrieval, guardrails, hot‑swappable stores) and run it on any
+  backend, in Python / JVM / Go.
+- [`choosing-a-backend.md`](choosing-a-backend.md) — the decision guide.
+- [`parity-matrix.md`](parity-matrix.md) — what each backend can do + its limitations,
+  and the three‑core parity table.
+
+**Design (the why):**
 - [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md) —
   the essence, the capability inventory, the engine-agnostic core + Engine SPI, the
   capability matrix, and the ranked fit. Every engine doc is written against it.
