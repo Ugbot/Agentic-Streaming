@@ -11,6 +11,7 @@ same agent on Flink or a dozen other engines.**
 [![Backends](https://img.shields.io/badge/backends-Flink%20%2B%2012%20engines-success.svg)](docs/portability/parity-matrix.md)
 [![Build once](https://img.shields.io/badge/build%20once-deploy%20anywhere-orange.svg)](docs/portability/pipelines.md)
 
+[Why](#why) ·
 [What you can build](#what-you-can-build) ·
 [Quick start](#quick-start) ·
 [Deploy anywhere](#deploy-anywhere) ·
@@ -22,6 +23,26 @@ the same essence now runs across Python, the JVM, and Go. Flink is still the fir
 feature-complete runtime; it's just no longer the only one.</sub>
 
 </div>
+
+---
+
+## Why
+
+**An agent is only worth building if it actually works — and "works" means it stays
+reliable under pressure.** The moment agents do real work — moving money, resolving
+tickets, touching infrastructure, answering customers — a clever demo isn't enough. It has
+to keep its promises when traffic spikes, a node dies, or a message is replayed.
+
+Reliability at scale isn't a feature you bolt on later; it's the **substrate**. So instead
+of inventing a fragile new runtime, Agentic Streaming puts agents on the foundations that
+already run the world's high-throughput, fault-tolerant systems — **durable keyed state,
+exactly-once / idempotent processing, backpressure, and automatic recovery**. The agent you
+prototype in a notebook is the *same* agent that survives production load, partial
+failures, and restarts.
+
+The worst outcome is building something awesome that falls over the first time it matters.
+This project exists so you can build something awesome **and** keep it standing under
+pressure — then deploy it on whichever battle-tested engine your scale demands.
 
 ---
 
