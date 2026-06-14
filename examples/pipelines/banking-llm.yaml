@@ -1,0 +1,38 @@
+# Same banking agent, but the payments path uses an LLM brain (a bounded ReAct loop).
+# `provider: stub` makes it deterministic/offline for tests + demos; switch to
+# `provider: ollama` (model: qwen2.5:3b) or `provider: openai` for a real model.
+#
+#   python -m agentic_pipeline run examples/pipelines/banking-llm.yaml --text "what is my balance?"
+
+backend: local
+
+llm:
+  provider: stub                    # ollama | openai | stub
+  model: qwen2.5:3b
+  script:                           # only used by the stub provider (deterministic)
+    - {tool: get_balance, args: {user: demo}}
+    - {text: "Your balance is 1234.56."}
+
+agent:
+  router:
+    kind: keyword
+    default: general
+    rules:
+      cards:    [card, crypto, cash-back]
+      payments: [balance, transfer, payment]
+  paths:
+    cards:    {brain: rule, prompt: You answer card questions.}
+    payments: {brain: llm,  prompt: You are a payments specialist., tools: [get_balance]}
+    general:  {brain: rule, prompt: You answer general questions.}
+  verifier:
+    kind: prefix
+
+tools:
+  - {id: get_balance, kind: constant, value: 1234.56}
+
+retrieval:
+  embedder: hashing
+  dim: 256
+  kb:
+    - {id: kb_cards_types, text: "We offer three card types: classic, gold, and platinum."}
+    - {id: kb_cards_crypto, text: "Crypto cash-back can be redeemed to a linked wallet."}
