@@ -7,6 +7,45 @@
 > implementation — but it's no longer the only one. So: **Agentic Streaming** — a library
 > *and* an example pack for building agents as streaming, stateful, event-sourced systems.
 
+## What you can build
+
+Agentic Streaming is for building **resilient pipelines of stateful agents that act on
+continuous streams of data** — not one-shot chatbot calls. Concretely, it lets you:
+
+- **Run agents over live event streams.** Drive agents from Kafka, Postgres CDC, Redis
+  pub/sub, webhooks, NATS, Fluss, ZeroMQ, or static seeds — every input is a
+  `Channel<T>`, and many channels can fan into one agent.
+- **Route and chain agents with deterministic outcomes.** A `router → path → verifier`
+  graph classifies each turn, dispatches to a specialized agent, and **validates the
+  result** before it leaves — with guardrails screening input/output and rule-based
+  brains that are fully reproducible (no model required).
+- **Call almost any function as a tool.** Plain `@Tool` methods, async `ToolExecutor`s,
+  **MCP servers** (stdio + HTTP/SSE), traditional DL models (DJL classifiers/scorers as
+  tools or guardrails), and HTTP calls — all in one `ToolRegistry`.
+- **Chain agents that call other agents.** **A2A (Agent-to-Agent)** — a peer agent is
+  just a tool, reachable in-process, over a gateway (JSON-RPC/SSE/gRPC/REST), or as an
+  explicit pipeline step, with retries + circuit-breaking.
+- **Keep state and survive failure.** Per-conversation memory + keyed state are
+  first-class; durability comes from the engine — **Flink checkpoints**, **Kafka Streams
+  transactions (`exactly_once_v2`)**, Pulsar/BookKeeper state, Pekko persistence,
+  **Temporal's event-sourced history**, or write-through to Redis/Postgres.
+- **Get exactly-once where the engine provides it** (Flink checkpointed state, Kafka
+  Streams transactional EOS) and **idempotent, effectively-once** processing everywhere
+  else — with the `ConversationStore` as the source of truth so a replayed turn is safe.
+- **Resolve long-running work with the saga pattern.** Compensation/rollback handlers
+  unwind a multi-step flow when a later step fails (and Temporal/Pekko add durable,
+  retried, human-in-the-loop workflows).
+- **Reach almost any data system, behind an interface.** Memory, vectors, and long-term
+  storage are SPIs — Postgres, Redis/Valkey, Fluss, pgvector/Qdrant, NATS KV — selected by
+  a connection link and **hot-swappable** without touching agent code.
+- **Build it once, deploy it anywhere.** Define the whole thing declaratively in a
+  [`pipeline.yaml`](docs/portability/pipelines.md) and run the *same* spec on Flink or any
+  of a dozen other backends (Python / JVM / Go).
+
+The through-line: **resilient pipelines of agents that act on almost any data, chain with
+almost any function call, and reach almost any data system** — with the correctness
+guarantees the underlying engine can give.
+
 ## The ethos: an agent is a materialized view over a stream of events
 
 The one idea everything here is built around: **treat an agent as both _stateful_ and a
