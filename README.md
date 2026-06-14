@@ -218,7 +218,7 @@ value, in order, durably, per key** — see the
 | Component | What it is | Start here |
 |-----------|-----------|------------|
 | **Flink framework** *(first-class)* | the full agent framework on Apache Flink — state-first memory, vector memory, CEP, chat/embedding/tool/inference SPIs, A2A, RAG, PyFlink | this README |
-| **Portability pack** | the same essence on **12 engines** across **3 pure cores** (`pyagentic` / `jagentic-core` / `goagentic`) + 2 HTTP gateways; a new tool/path in a core propagates to every port | [`ports/`](ports/) |
+| **Portability pack** | the same essence on **12 engines** across **3 pure cores** (`pyagentic` / `jagentic-core` / `goagentic`) + 2 HTTP gateways; a new tool/path in a core propagates to every port. The cores are now **near-complete standalone agent frameworks** — real LLM/embedding libs, structured output, skills, MCP + A2A clients, saga, context-window mgmt, an in-process **HNSW** index, vector/long-term/conversation store SPIs (Qdrant/Postgres/Redis), web toolkit, DL-inference SPI | [`ports/`](ports/) |
 | **Declarative pipelines** | one `pipeline.yaml` → any backend; loaders in Python, JVM, and Go | [`pipelines.md`](docs/portability/pipelines.md) |
 | **Design docs** | per-engine mapping, parity matrix, choosing-a-backend | [`docs/portability/`](docs/portability/) |
 

@@ -33,10 +33,16 @@ python -m agentic_pipeline run examples/pipelines/banking.yaml --backend nats   
 backend: local            # which engine runs it (see the parity matrix for what each supports)
 
 llm:                      # OPTIONAL — omit for model-free rule brains
-  provider: ollama        # ollama | openai | stub  (stub = deterministic, offline)
+  provider: ollama        # ollama | openai | litellm | langchaingo | langchain4j | stub
   model: qwen2.5:3b
   base_url: http://localhost:11434     # connection link (or env)
   # script: [...]         # only for provider: stub — a scripted ReAct trace
+
+embeddings:               # OPTIONAL — default is the FNV hashing embedder (offline)
+  provider: hashing       # hashing | litellm | ollama | openai
+  model: nomic-embed-text
+  dim: 256
+  # base_url: http://localhost:11434
 
 agent:
   router:
@@ -51,10 +57,19 @@ agent:
       prompt: "You answer card questions."
       tools: [get_balance] # tools this path's LLM brain may call
       tool_triggers: {balance: get_balance}   # rule-brain: keyword -> tool
+      skills: [card_help]  # expand into extra tools + a prompt fragment
+      output_schema:       # OPTIONAL — enforce a schema-validated final answer
+        {type: object, properties: {answer: {type: string}}, required: [answer]}
     payments: { brain: llm, prompt: "You are a payments specialist.", tools: [get_balance] }
     general:  { brain: rule, prompt: "You answer general questions." }
   verifier:
     kind: prefix           # prefix | none
+
+skills:                    # OPTIONAL — reusable bundles a path can pull in by name
+  - name: card_help
+    prompt: "Prefer the knowledge base over guessing."
+    tools: [get_balance]
+    facts: [account_tier]
 
 tools:
   - {id: get_balance, kind: constant, value: 1234.56}          # a fixed value
@@ -62,23 +77,51 @@ tools:
   - {id: ask_cs, kind: agent, url: "http://cs-agent:8080/agent"}  # CALL ANOTHER AGENT (A2A-as-tool)
 
 retrieval:
-  embedder: hashing        # deterministic, model-free (swap for a real embedder via the SPI)
   dim: 256
+  vector_store:            # OPTIONAL cold tier — default is the in-memory hot tier only
+    kind: hnsw             # memory | hnsw (in-process ANN) | duckdb (Python) | qdrant
+    m: 16                  # hnsw graph degree
+    ef_search: 64
+    # url: http://localhost:6333   # qdrant connection link
   kb:
     - {id: kb_cards, text: "We offer classic, gold, and platinum cards."}
+
+context:                   # OPTIONAL — compact the replayed transcript before the model
+  max_tokens: 512          # (or max_items: N)
+  compaction: moscow
 
 guardrails:
   - {kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection"}        # input screen
   - {kind: regex, deny: ['\d{16}'], reason: "leaked PAN", check_outputs: true}        # output screen
+  - kind: classifier       # a learned/lexicon screen instead of a regex catalogue
+    classifier: lexicon    # lexicon | embedding (nearest-centroid over the Embedder)
+    blocked: [toxic]
+    threshold: 0.3
+    lexicon: {toxic: [idiot, stupid, hate], ok: [please, thanks, help]}
+
+mcp:                       # OPTIONAL — register an external MCP server's tools
+  - {name: fs, transport: stdio, command: [python, mcp_server.py]}   # tools become fs_<name>
+
+a2a:                       # OPTIONAL — register a peer agent as a tool (peer-as-tool)
+  - {id: specialist, url: "${SPECIALIST_URL}", retries: 2}
 
 stores:                    # OPTIONAL — hot-swap the durable backing (default: memory)
   conversation:
     kind: redis            # memory | redis (Redis/Valkey)
     url: "${AGENTIC_REDIS_URL}"   # connection link; ${ENV} is expanded
+  long_term:
+    kind: postgres         # memory | postgres — resumption + fact archive (LongTermStore SPI)
+    url: "${AGENTIC_PG_URL}"
 
 backend_config:            # OPTIONAL — engine connection links
   url: "nats://localhost:4222"
 ```
+
+See [`examples/pipelines/banking-rag.yaml`](../../examples/pipelines/banking-rag.yaml) for a
+runnable spec that uses the HNSW cold tier, a classifier guardrail, skills, context-window
+management and a long-term store — all on model-free defaults, identical routing in all
+three languages. [`banking-mcp.yaml`](../../examples/pipelines/banking-mcp.yaml) shows the
+MCP + A2A sections.
 
 ### Calling other agents
 

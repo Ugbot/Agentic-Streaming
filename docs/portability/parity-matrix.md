@@ -21,18 +21,32 @@ The cores are behaviorally identical (enforced by cross-core parity tests:
 | RoutedGraph (router → path → verifier) | ✅ | ✅ | ✅ |
 | Hot+cold retrieval (FNV‑1a embedder, identical) | ✅ | ✅ | ✅ |
 | **LLM brain SPI** (ChatClient + ReAct loop) | ✅ | ✅ | ✅ |
-| Providers: Ollama / OpenAI / Stub | ✅ | ✅ | ✅ |
-| **Guardrails** (input/output screen) | ✅ | ✅ | ✅ |
-| **Listeners** (lifecycle + metrics) | ✅ | ✅ | ✅ |
-| Call other agents (A2A‑as‑tool, http) | ✅ | ✅ | ✅ |
+| Providers (unified lib + native): litellm/Ollama/OpenAI · langchaingo · LangChain4J | ✅ | ✅ | ✅ |
+| **Embedder SPI** (hashing default; real via the LLM lib) | ✅ | ✅ | ✅ |
+| **Structured output** (schema‑validated answers) | ✅ | ✅ | ✅ |
+| **Skills** (tools + prompt fragment + facts) | ✅ | ✅ | ✅ |
+| **Guardrails** — regex + **classifier** (lexicon/embedding) | ✅ | ✅ | ✅ |
+| **Listeners** (≈9 lifecycle hooks + metrics + composite) | ✅ | ✅ | ✅ |
+| **Vector store SPI** — in‑memory · **in‑process HNSW** · Qdrant | ✅ | ✅ | ✅ |
+| Embeddable analytical store (DuckDB) | ✅ | — | — |
+| **Long‑term store SPI** — in‑memory · Postgres | ✅ | ✅ | ✅ |
+| Hot‑swap conversation store — in‑memory · **Redis/Valkey** | ✅ | ✅ | ✅ |
+| **MCP client** (register MCP server tools) | ✅ official SDK | ✅ pure‑Java | ✅ mark3labs |
+| **A2A client** (peer‑as‑tool, card+send+retries) | ✅ | ✅ | ✅ |
+| **Saga / compensation** (reverse‑order rollback) | ✅ | ✅ | ✅ |
+| **Context‑window mgmt** (MoSCoW compaction) | ✅ | ✅ | ✅ |
+| **Web toolkit** (robots‑aware fetch + extract) | ✅ | ✅ | ✅ |
+| **DL inference SPI** (Classifier/Scorer) | ✅ | ✅ | ✅ |
 | **GraphBuilder** (declarative spec → graph) | ✅ | ✅ | ✅ |
-| **YAML pipeline loader** | ✅ | ✅ | ✅ |
-| Hot‑swap durable store (Redis/Valkey) | ✅ | SPI¹ | SPI¹ |
+| **YAML pipeline loader** (full Phase‑F schema) | ✅ | ✅ | ✅ |
 
-¹ The `ConversationStore` SPI exists in all three; the Redis implementation ships in
-`pyagentic` (the canonical example). Java/Go add Redis/Postgres impls the same way (a
-class implementing the SPI + a registry entry) — the interface + config wiring is already
-there.
+All three cores ship the same SPIs **and** one working reference implementation per heavy
+integration (Qdrant vectors, Postgres long‑term, Redis/Valkey conversations, the official
+MCP client, HTTP A2A). Other backends are opt‑in: implement the SPI + add a `kind` to the
+loader factory. Real LLM/embedding providers, external stores and DL models are import‑/
+dependency‑guarded so the model‑free defaults (Stub chat, FNV hashing embedder, in‑memory
+stores, lexicon classifier) keep the offline test suites green; live paths are verified
+against podman infra (Ollama, Qdrant, Postgres, Valkey) and skip cleanly when absent.
 
 ## 2. Backends: capability + limitations
 
@@ -85,7 +99,10 @@ These are genuinely runtime‑native and not meaningfully portable; reimplementi
 Airflow/Celery would be pointless, so they remain first‑class‑Flink‑only:
 
 - the **CEP pattern engine** (event‑time pattern matching);
-- **in‑JVM HNSW vector memory over Flink state**;
+- **HNSW vector memory backed by *Flink state*** (checkpointed/keyed) — note the cores now
+  ship their own in‑process HNSW index (`HnswVectorStore`), so approximate‑nearest‑neighbour
+  search itself is portable; what stays Flink‑only is binding that index to Flink's managed,
+  checkpointed state;
 - **Flink checkpoint/savepoint** exactly‑once semantics.
 
 Every other agentic capability is portable and available on all backends via the cores.

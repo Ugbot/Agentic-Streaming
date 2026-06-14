@@ -34,8 +34,16 @@ and run the *same* spec on any backend in any language — see
 
 The cores implement the engine-agnostic abstractions once — `ConversationStore`,
 `KeyedStateStore`, `ToolRegistry`, `AgentContext`, `RoutedGraph`, hot+cold
-`Retrieval`, `Banking` example. An adapter only supplies *how this engine gives a
-durable thing per conversation, processed in order, with async I/O*.
+`Retrieval`, `Banking` example — and are now **near-complete standalone agent
+frameworks**: an LLM `ChatClient` SPI (litellm / langchaingo / LangChain4J + Ollama/
+OpenAI), an `Embedder` SPI, structured output, skills, regex **and** classifier
+guardrails, ≈9 listener hooks, a `VectorStore` SPI with an in-process **HNSW** index
+(+ Qdrant / DuckDB), a `LongTermStore` SPI (Postgres), Redis/Valkey conversations, an
+**MCP** client, an **A2A** peer-as-tool client, saga/compensation, context-window
+management, a web toolkit, and a DL-inference (`Classifier`/`Scorer`) SPI. Everything has
+a model-free default so the offline suites stay green; real providers/backends are opt-in.
+An adapter only supplies *how this engine gives a durable thing per conversation,
+processed in order, with async I/O*.
 
 ---
 
@@ -58,7 +66,7 @@ durable thing per conversation, processed in order, with async I/O*.
 
 ¹ Faust/Ray *run* with their engine + a broker/cluster. They can't run on this box (Python 3.14, ahead of faust/ray wheels), so they're import-checked + engine-guarded; their agent logic is the tested `pyagentic` core.
 
-**Core tests:** `pyagentic` 9/9 · `jagentic-core` 6/6 · Python adapters 7/7 · Pulsar adapter 2/2 · Temporal adapter 2/2 · Celery + Dask + Pekko + Pulsar + NATS + Temporal run on the real engine · all JVM modules compile.
+**Core tests:** `pyagentic` 52 · `jagentic-core` 52 · `goagentic` (core+pipeline+stores) 47 · `agentic-pipeline` 11 · Python adapters · Pulsar adapter 2/2 · Temporal adapter 2/2 · Celery + Dask + Pekko + Pulsar + NATS + Temporal run on the real engine · all JVM modules compile. Live paths (Ollama, Qdrant, Postgres, Valkey, MCP) are verified when infra is up and skip cleanly otherwise.
 
 ---
 
@@ -140,10 +148,11 @@ only the wiring differs:
 
 ```bash
 # pure-Python core (no deps)
-cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q          # 6 pass
+cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q          # 52 pass
 
 # Python adapters' portable logic (Dask + Celery + NATS use the real engine if available)
-cd ports && PYTHONPATH=pyagentic python -m pytest tests/ -q           # 7 pass (NATS test skips w/o a server)
+cd ports && PYTHONPATH=pyagentic python -m pytest tests/ -q           # adapters (NATS test skips w/o a server)
+cd ports/agentic-pipeline && PYTHONPATH=.:../pyagentic python -m pytest -q   # 11 pass (declarative loader)
 python ports/celery/agentic_celery.py         # live banking turns, eager mode (no broker)
 podman run -d -p 4222:4222 nats:latest -js && python ports/nats/agentic_nats.py  # live JetStream + KV
 python ports/dask/agentic_dask.py             # batch RAG + recall@1 + replay
@@ -152,7 +161,7 @@ python ports/airflow/agentic_banking_dag.py   # routing simulate (no scheduler)
 # ray:    python ports/ray/agentic_ray.py               (needs ray[default])
 
 # pure-Java core + JVM engine modules
-mvn -f ports/jagentic-core/pom.xml test       # 4 pass
+mvn -f ports/jagentic-core/pom.xml test       # 52 pass
 mvn -f ports/kafka-streams/pom.xml compile
 mvn -f ports/spring/pom.xml compile
 mvn -f ports/quarkus/pom.xml compile

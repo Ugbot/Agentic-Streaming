@@ -4,14 +4,21 @@ What would this project be on a *different* engine? These notes name the
 engine-agnostic essence, the capabilities Flink was providing, and an honest
 per-engine mapping (what fits, what's awkward, what to drop). The essence is now
 implemented: three Flink‑free cores + 12 engine adapters + a declarative YAML pipeline.
+The cores are now **near‑complete standalone agent frameworks** — real LLM/embedding
+libraries, structured output, skills, MCP + A2A clients, saga/compensation, context‑window
+management, an in‑process **HNSW** vector index, vector/long‑term/conversation store SPIs
+(Qdrant/Postgres/Redis reference impls), a web toolkit and a DL‑inference SPI — so you get
+the good parts without Flink.
 
 **Build & deploy (start here if you just want to use it):**
 - [`pipelines.md`](pipelines.md) — define an agent in `pipeline.yaml` (prompts, tools,
-  calls to other agents, retrieval, guardrails, hot‑swappable stores) and run it on any
-  backend, in Python / JVM / Go.
+  skills, retrieval + vector store, classifier/regex guardrails, MCP + A2A, context‑window
+  management, hot‑swappable stores) and run it on any backend, in Python / JVM / Go.
+- [`using-a-real-model.md`](using-a-real-model.md) — swap the model‑free defaults for real
+  chat + embeddings (Ollama / OpenAI / Anthropic) per language.
 - [`choosing-a-backend.md`](choosing-a-backend.md) — the decision guide.
 - [`parity-matrix.md`](parity-matrix.md) — what each backend can do + its limitations,
-  and the three‑core parity table.
+  and the full three‑core capability/parity table.
 
 **Design (the why):**
 - [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md) —

@@ -1,0 +1,58 @@
+# Agentic Streaming — integration & control (Tier 3): an agent that pulls tools from an
+# external MCP server and can delegate to a peer agent over A2A. Both sections sit behind
+# SPIs and are selected by a connection link, so they're hot-swappable.
+#
+# This spec needs live endpoints to load (an MCP stdio server + a peer A2A gateway), so it
+# is a documentation example rather than part of the offline test suite. Bring the peer up
+# with its gateway, point ${SPECIALIST_URL} at it, and adjust the MCP command to your server.
+#
+#   SPECIALIST_URL=http://localhost:8080/agent \
+#     python -m agentic_pipeline run examples/pipelines/banking-mcp.yaml --text "what is my balance?"
+
+backend: local
+
+llm:
+  provider: stub                     # swap for ollama/openai to drive a real ReAct loop
+  script:
+    - {tool: get_balance, args: {}}
+    - {text: "Your balance is 1234.56."}
+
+agent:
+  router:
+    kind: keyword
+    default: support
+    rules:
+      support: [balance, card, payment, help]
+  paths:
+    support:
+      brain: llm
+      prompt: "You are a banking assistant. Use MCP tools and delegate to the specialist when needed."
+      tools: [get_balance, fs_read_file, specialist]
+  verifier:
+    kind: prefix
+
+tools:
+  - {id: get_balance, kind: constant, description: Look up the user's balance, value: 1234.56}
+
+# Register an external MCP server's tools. transport: stdio launches the server process;
+# its tools are surfaced into the registry id-prefixed by `name_` (here fs_read_file, ...).
+mcp:
+  - name: fs
+    transport: stdio
+    command: [python, "-m", "mcp_server_filesystem"]
+    args: ["--root", "/srv/docs"]
+
+# Register a peer agent as a tool (peer-as-tool over A2A). The peer can be any backend's
+# gateway; ${SPECIALIST_URL} is a connection link expanded from the environment.
+a2a:
+  - id: specialist
+    url: "${SPECIALIST_URL}"
+    description: "Delegate complex disputes to the fraud specialist agent."
+    retries: 2
+
+stores:
+  conversation: {kind: memory}
+  long_term: {kind: memory}
+
+guardrails:
+  - {kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection"}
