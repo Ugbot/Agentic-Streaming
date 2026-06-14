@@ -27,7 +27,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-pyflink = ["apache-flink>=1.20", "cloudpickle>=2"]
+# Native PyFlink path targets the Flink 2.x line (matches the Java side's Flink 2.2).
+pyflink = ["apache-flink>=2.0", "cloudpickle>=2"]
 test = ["pytest>=7"]
 all = ["agentic-flink[pyflink,test]"]
 

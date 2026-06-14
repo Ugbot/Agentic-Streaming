@@ -1,7 +1,8 @@
 # Agentic Flink
 
 Standalone agentic framework for Apache Flink with LangChain4J integration.
-Java 17 target, Flink 1.20.1, LangChain4J 0.35.0.
+Java 17 target, Flink 2.2.1 (native FLIP-27 sources / FLIP-143 sinks), LangChain4J 0.35.0.
+PyFlink path targets apache-flink 2.x (see docs/python.md).
 
 ## Project Structure
 

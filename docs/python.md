@@ -159,6 +159,27 @@ agent = Agent.builder().with_listener(StdoutListener()).build()
 Same pattern works for `Guardrail`, `Classifier`, `Scorer`, `Chunker`
 implementations — JPype's `@JImplements` decorator generates the proxy.
 
+## Flink 2.2 / PyFlink version
+
+Both paths target the **Flink 2.2** line, matching the Java framework:
+
+```
+pip install 'agentic-flink[pyflink]'   # apache-flink>=2.0 (2.2.1 matches the Java build)
+```
+
+The PyFlink-native code is API-modern for 2.x — it uses `from_collection` /
+`from_source` (FLIP-27) / `key_by` / `sink_to` (FLIP-143) and the agent operator
+is attached via `CompileUtils.attachAgent`; no removed `add_source`/`SourceFunction`
+APIs are used. The new framework features (live hot+cold RAG, A2A graph steps,
+Redis/Fluss conversation stores) are reachable from the JPype facade modules
+(`agentic_flink.retrieve`, `.a2a`, `.conversation`) when running in the embedded
+single-JVM mode, and from PyFlink agent `@action`/`@tool` callbacks via the same
+JVM the job runs against.
+
+> **Python version:** the PyFlink runtime (`apache-flink` 2.x) supports CPython
+> 3.8–3.12. The JPype facade itself works on newer Pythons; only the PyFlink-native
+> path is bound by PyFlink's interpreter support.
+
 ## PyFlink integration
 
 JPype's JVM is the same JVM PyFlink runs against. Use the package's
