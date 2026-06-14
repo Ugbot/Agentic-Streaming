@@ -25,7 +25,11 @@ from .retrieval import (
     hashing_embedder,
 )
 from .embeddings import Embedder, HashingEmbedder, LiteLLMEmbedder, make_embedder
+from .a2a import A2AClient, peer_tool
+from .context import ContextItem, ContextWindowManager, Priority
 from .guardrails import Guardrail, RegexGuardrail
+from .mcp_client import McpClient, register_mcp_server
+from .saga import CompensationAction, Saga
 from .listeners import AgentListener, CompositeListener, LoggingListener, MetricsListener
 from .skills import Skill, SkillRegistry
 from .structured import parse_structured, schema_instruction, validate
@@ -106,6 +110,15 @@ __all__ = [
     "InMemoryLongTermStore",
     "PostgresLongTermStore",
     "make_long_term_store",
+    "Saga",
+    "CompensationAction",
+    "ContextItem",
+    "ContextWindowManager",
+    "Priority",
+    "A2AClient",
+    "peer_tool",
+    "McpClient",
+    "register_mcp_server",
 ]
 
 __version__ = "0.1.0"
