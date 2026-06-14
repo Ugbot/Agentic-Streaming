@@ -10,7 +10,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Kafka partition / a Ray actor). Engine ports supply their own runtime where the
  * engine provides per-key ordering.
  */
-public final class LocalRuntime {
+public final class LocalRuntime implements Runtime {
   private final RoutedGraph graph;
   private final ConversationStore store;
   private final KeyedStateStore state;
@@ -31,6 +31,7 @@ public final class LocalRuntime {
     return store;
   }
 
+  @Override
   public TurnResult submit(Event event) {
     ReentrantLock lock = locks.computeIfAbsent(event.conversationId(), k -> new ReentrantLock());
     lock.lock();
