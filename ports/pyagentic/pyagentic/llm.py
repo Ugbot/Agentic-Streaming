@@ -149,6 +149,40 @@ class OllamaChatClient(_HttpChatClient):
         return _parse_chat_json((data.get("message") or {}).get("content", ""))
 
 
+class LiteLLMChatClient:
+    """Real chat via `litellm` — one API across OpenAI / Anthropic / Ollama / Gemini /
+    etc. Uses the same JSON-mode ReAct protocol as the rest of the framework
+    (``{"tool": ...}`` / ``{"text": ...}``), so ``LlmBrain`` works unchanged. ``model``
+    is a litellm model string, e.g. ``ollama/llama3.2`` or ``gpt-4o-mini`` or
+    ``anthropic/claude-3-5-haiku-latest``."""
+
+    def __init__(self, model: str = "ollama/llama3.2", api_base: Optional[str] = None,
+                 json_mode: bool = True, **kwargs) -> None:
+        import litellm  # opt-in heavy dep
+
+        self._litellm = litellm
+        self.model = model
+        self.json_mode = json_mode
+        self._kwargs = dict(kwargs)
+        if api_base:
+            self._kwargs["api_base"] = api_base
+
+    def chat(self, messages: List[Dict[str, str]], tools: List[Dict[str, str]]) -> ChatResult:
+        kwargs = dict(self._kwargs)
+        if self.json_mode:
+            kwargs.setdefault("response_format", {"type": "json_object"})
+        try:
+            resp = self._litellm.completion(model=self.model, messages=messages, **kwargs)
+        except Exception:
+            # Some providers reject response_format; retry once without it.
+            kwargs.pop("response_format", None)
+            resp = self._litellm.completion(model=self.model, messages=messages, **kwargs)
+        choice = resp["choices"][0] if isinstance(resp, dict) else resp.choices[0]
+        msg = choice["message"] if isinstance(choice, dict) else choice.message
+        content = (msg["content"] if isinstance(msg, dict) else msg.content) or ""
+        return _parse_chat_json(content)
+
+
 class OpenAIChatClient(_HttpChatClient):
     """Talks to the OpenAI (or compatible) ``/chat/completions`` endpoint (JSON mode)."""
 

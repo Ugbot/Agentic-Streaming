@@ -24,11 +24,13 @@ from .retrieval import (
     cosine,
     hashing_embedder,
 )
+from .embeddings import Embedder, HashingEmbedder, LiteLLMEmbedder, make_embedder
 from .guardrails import Guardrail, RegexGuardrail
 from .listeners import AgentListener, LoggingListener, MetricsListener
 from .llm import (
     ChatClient,
     ChatResult,
+    LiteLLMChatClient,
     LlmBrain,
     OllamaChatClient,
     OpenAIChatClient,
@@ -71,6 +73,11 @@ __all__ = [
     "MetricsListener",
     "RedisConversationStore",
     "make_conversation_store",
+    "Embedder",
+    "HashingEmbedder",
+    "LiteLLMEmbedder",
+    "make_embedder",
+    "LiteLLMChatClient",
 ]
 
 __version__ = "0.1.0"
