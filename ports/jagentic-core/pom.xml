@@ -48,6 +48,21 @@
       <optional>true</optional>
     </dependency>
 
+    <!-- Reference store impls (optional; the in-memory defaults need none of them).
+         Qdrant uses java.net.http (no dep); Postgres uses JDBC; Redis uses Jedis. -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.7.4</version>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>redis.clients</groupId>
+      <artifactId>jedis</artifactId>
+      <version>5.1.5</version>
+      <optional>true</optional>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
