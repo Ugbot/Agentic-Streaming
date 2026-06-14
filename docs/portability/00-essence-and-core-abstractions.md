@@ -1,8 +1,8 @@
 # The Essence of Agentic-Flink — and How to Port It Off Flink
 
 > Keystone design note for the `docs/portability/` series. Read this first; every
-> per-engine doc (`kafka-streams.md`, `spring.md`, `quarkus.md`, `ray.md`,
-> `dask.md`, `airflow.md`, `faust.md`) is written against the abstractions,
+> per-engine doc (`kafka-streams.md`, `pekko.md`, `spring.md`, `quarkus.md`,
+> `ray.md`, `dask.md`, `airflow.md`, `faust.md`) is written against the abstractions,
 > capability matrix, and Engine SPI defined here.
 
 ## 1. Why this exists
@@ -15,7 +15,7 @@ processors with per-conversation memory, tool use, routing, peer delegation, and
 retrieval — sits *above* those capabilities.
 
 This series asks: **if you deleted Flink, what would the same project look like on
-Kafka Streams, Spring, Quarkus, Ray, Dask, Airflow, or Faust?** The goal is not
+Kafka Streams, Apache Pekko, Spring, Quarkus, Ray, Dask, Airflow, or Faust?** The goal is not
 "reimplement Flink everywhere" — it's to (a) name the engine-agnostic core
 precisely, (b) name exactly what Flink was providing, and (c) honestly map each
 target engine: what fits cleanly, what fits awkwardly, and what simply doesn't
@@ -199,6 +199,15 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
 
 `*` = present but with a caveat spelled out in that engine's doc.
 
+> **Apache Pekko** (added after the table; see [`pekko.md`](pekko.md)) is the JVM actor
+> toolkit. Its column would read **N** for C1 (actor fields + Cluster Sharding), **N**
+> for C2 (one entity per key, sequential mailbox), **N** for C3 (Persistence /
+> event sourcing — durable natively, unlike Ray), **N** for C4 (async actors / `ask`),
+> **N** for C5 (Pekko Streams), **L** for C6 (Pekko Connectors), **N** for C11
+> (cluster sharding rebalances entities), **N** for C12 (actor/stream graph). It is the
+> **only engine besides Flink here that supplies C1+C2+C3 all natively** — the
+> actor-model peer of Kafka Streams' streaming-model fit.
+
 ## 7. Per-engine fit, at a glance (ranked)
 
 1. **Faust** *(Python, streaming)* — the most natural Python target. Faust's own
@@ -210,26 +219,33 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
    = keyed state (C1), partitions = keyed ordering (C2), transactional EOS (C3),
    Processor API ≈ `KeyedProcessFunction`. Weak spot: no native async-I/O operator
    (bridge with an async executor + punctuators). Reuses the Java core directly.
-3. **Ray** *(Python)* — **actor-per-conversation** is a beautiful fit for stateful
+3. **Apache Pekko** *(JVM, actors)* — the actor-model peer of Kafka Streams, and the
+   only engine here besides Flink to give the C1+C2+C3 heart **all natively**: one
+   actor per conversation via **Cluster Sharding** (keyed state + single-writer), with
+   **Persistence**/event-sourcing for durability, `ask` for async, Pekko Streams for
+   backpressure. You keep the whole Java core; only the actor seam is Pekko. Not a
+   Kafka-topology streaming engine (you wire ingress yourself) and no event-time engine.
+4. **Ray** *(Python)* — **actor-per-conversation** is a beautiful fit for stateful
    agents: each actor is a single-writer, sequential, in-memory state holder (C1+C2
    in memory), Ray tasks/async actors give C4 trivially, Ray Serve is the inbound
    edge, Ray Data does batch RAG. Caveat: durability (C3) is external (checkpoint
-   actor state to Redis/Fluss); continuous streaming is not Ray's home turf.
-4. **Quarkus** *(JVM, reactive)* — already our inbound proxy. SmallRye Reactive
+   actor state to Redis/Fluss); continuous streaming is not Ray's home turf. (Pekko is
+   the JVM analogue with durability + sharding built in.)
+5. **Quarkus** *(JVM, reactive)* — already our inbound proxy. SmallRye Reactive
    Messaging (Kafka) + Mutiny/virtual threads (C4 native, C6 native). Keyed state
    is external (Redis/Fluss via the existing SPIs). Excellent for the proxy + the
    per-message agent and A2A gateway; the keyed-streaming core rides on Kafka + the
    state SPIs rather than an engine primitive.
-5. **Spring** *(JVM)* — Spring Cloud Stream (Kafka binder) + Spring StateMachine +
+6. **Spring** *(JVM)* — Spring Cloud Stream (Kafka binder) + Spring StateMachine +
    Spring AI + Spring Integration. Strong on the *agent/tool/memory/FSM*
    abstractions and enterprise wiring; the dataflow becomes message channels /
    integration flows rather than a streaming topology. Keyed state external.
-6. **Dask** *(Python)* — shines for **batch/parallel RAG** (embed + index a corpus
+7. **Dask** *(Python)* — shines for **batch/parallel RAG** (embed + index a corpus
    across a cluster) and offline eval/benchmark sweeps. Long-lived keyed streaming
    agents are awkward (Dask is a task-graph/futures engine; Actors exist but aren't
    the sweet spot). Port the ingestion + retrieval-eval parts; don't force the live
    loop.
-7. **Airflow** *(Python, orchestration)* — not streaming at all, but the **routed
+8. **Airflow** *(Python, orchestration)* — not streaming at all, but the **routed
    graph maps cleanly to a DAG** (router = `BranchPythonOperator`, paths = tasks,
    verifier = downstream task) and it's ideal for **scheduled/batch agentic
    workflows, RAG ingestion DAGs, and eval runs**. Per-event keyed state and
