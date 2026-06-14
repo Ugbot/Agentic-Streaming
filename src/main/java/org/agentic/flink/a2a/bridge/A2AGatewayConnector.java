@@ -19,6 +19,12 @@ public interface A2AGatewayConnector extends AutoCloseable {
   void onResponse(Consumer<A2AResponse> listener);
 
   /**
+   * Deregister a previously-{@link #onResponse registered} listener (e.g. when an SSE stream closes),
+   * so per-request listeners don't accumulate. No-op if not registered.
+   */
+  default void removeResponseListener(Consumer<A2AResponse> listener) {}
+
+  /**
    * Block until a {@linkplain A2AResponse#isFinal() final} response for {@code taskId} arrives or
    * {@code timeoutMs} elapses.
    *

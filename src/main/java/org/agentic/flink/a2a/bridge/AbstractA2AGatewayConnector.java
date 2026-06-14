@@ -41,6 +41,11 @@ abstract class AbstractA2AGatewayConnector implements A2AGatewayConnector {
   }
 
   @Override
+  public final void removeResponseListener(Consumer<A2AResponse> listener) {
+    listeners.remove(listener);
+  }
+
+  @Override
   public final A2AResponse awaitFinal(String taskId, long timeoutMs) throws InterruptedException {
     long deadline = System.currentTimeMillis() + timeoutMs;
     synchronized (lock) {

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.smallrye.mutiny.Multi;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -19,13 +20,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.agentic.flink.a2a.A2AArtifact;
 import org.agentic.flink.a2a.A2AMessage;
 import org.agentic.flink.a2a.A2APart;
+import org.agentic.flink.a2a.A2APushConfig;
 import org.agentic.flink.a2a.A2ATask;
 import org.agentic.flink.a2a.A2ATaskState;
+import org.agentic.flink.a2a.AuthSpec;
 import org.agentic.flink.a2a.bridge.A2AGatewayConnector;
 import org.agentic.flink.a2a.bridge.A2ARequest;
+import org.agentic.flink.a2a.bridge.A2AResponse;
 import org.agentic.flink.a2a.storage.A2ATaskStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,6 +105,14 @@ public class A2AResource {
           return tasksGet(idNode, req);
         case "tasks/cancel":
           return tasksCancel(idNode, req);
+        case "tasks/pushNotificationConfig/set":
+          return pushConfigSet(idNode, req);
+        case "tasks/pushNotificationConfig/get":
+          return pushConfigGet(idNode, req);
+        case "tasks/pushNotificationConfig/list":
+          return pushConfigList(idNode, req);
+        case "tasks/pushNotificationConfig/delete":
+          return pushConfigDelete(idNode, req);
         default:
           return rpcError(idNode, -32601, "Unsupported method: " + method);
       }
@@ -181,6 +194,192 @@ public class A2AResource {
       persist(task);
     }
     return rpcTaskResult(idNode, task);
+  }
+
+  // ---- message/stream (SSE) ----
+
+  /**
+   * {@code message/stream}: same JSON-RPC body, but the response is an SSE stream of A2A events for
+   * the new task (status-update for {@code working}, artifact-update + final status on terminal).
+   * Routed here by content negotiation (client sends {@code Accept: text/event-stream}).
+   */
+  @POST
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.SERVER_SENT_EVENTS)
+  public Multi<String> rpcStream(String body, @Context HttpHeaders headers) {
+    final JsonNode req;
+    try {
+      req = JSON.readTree(body);
+    } catch (Exception e) {
+      return Multi.createFrom().item(sseError("Parse error"));
+    }
+    JsonNode message = req.path("params").path("message");
+    String contextId = message.path("contextId").asText(null);
+    if (contextId == null || contextId.isBlank()) {
+      contextId = UUID.randomUUID().toString();
+    }
+    final String ctx = contextId;
+    final String userText = textOf(message);
+    final String taskId = UUID.randomUUID().toString();
+    final Map<String, Object> claims = claimsFrom(headers);
+
+    A2AMessage userMessage = A2AMessage.userText(UUID.randomUUID().toString(), userText);
+    persist(A2ATask.submitted(taskId, ctx, userMessage, System.currentTimeMillis()));
+
+    return Multi.createFrom()
+        .<String>emitter(
+            em -> {
+              // Per-task listener: forward each matching response as an SSE event; complete on final.
+              Consumer<A2AResponse> listener =
+                  resp -> {
+                    if (!taskId.equals(resp.getTaskId())) {
+                      return;
+                    }
+                    em.emit(sseEvent(resp, ctx));
+                    if (resp.isFinal()) {
+                      em.complete();
+                    }
+                  };
+              connector.onResponse(listener);
+              // Deregister when the stream terminates (completed/cancelled) so listeners don't leak.
+              em.onTermination(() -> connector.removeResponseListener(listener));
+              try {
+                connector.publishRequest(
+                    new A2ARequest(taskId, ctx, config.agentId(), userMessage, true, null, claims));
+              } catch (Exception e) {
+                em.emit(sseError("dispatch failed: " + e.getMessage()));
+                em.complete();
+              }
+            });
+  }
+
+  private String sseEvent(A2AResponse resp, String contextId) {
+    ObjectNode ev = JSON.createObjectNode();
+    ev.put("taskId", resp.getTaskId());
+    ev.put("contextId", contextId);
+    if (resp.isFinal()) {
+      ev.put("kind", "status-update");
+      ev.put("final", true);
+      ArrayNode arts = ev.putArray("artifacts");
+      for (A2AArtifact a : resp.getArtifacts()) {
+        String t = a.textContent();
+        if (t != null && !t.isEmpty()) {
+          arts.addObject().put("name", a.getName()).put("text", t);
+        }
+      }
+    } else {
+      ev.put("kind", "status-update");
+      ev.put("final", false);
+    }
+    ObjectNode status = ev.putObject("status");
+    status.put("state", resp.getState().wire());
+    if (resp.getStatusMessage() != null) {
+      status.put("message", resp.getStatusMessage());
+    }
+    try {
+      return JSON.writeValueAsString(ev);
+    } catch (Exception e) {
+      return "{\"kind\":\"status-update\",\"status\":{\"state\":\"failed\"}}";
+    }
+  }
+
+  private String sseError(String message) {
+    ObjectNode ev = JSON.createObjectNode();
+    ev.put("kind", "status-update");
+    ev.put("final", true);
+    ev.putObject("status").put("state", "failed").put("message", message);
+    try {
+      return JSON.writeValueAsString(ev);
+    } catch (Exception e) {
+      return "{\"kind\":\"status-update\",\"status\":{\"state\":\"failed\"}}";
+    }
+  }
+
+  // ---- tasks/pushNotificationConfig/* ----
+
+  private String pushConfigSet(JsonNode idNode, JsonNode req) throws Exception {
+    String taskId = req.path("params").path("taskId").asText(null);
+    JsonNode cfg = req.path("params").path("pushNotificationConfig");
+    if (taskId == null || taskId.isBlank() || cfg.isMissingNode()) {
+      return rpcError(idNode, -32602, "set requires params.taskId + pushNotificationConfig");
+    }
+    String configId = cfg.path("id").asText(UUID.randomUUID().toString());
+    String url = cfg.path("url").asText(null);
+    if (url == null || url.isBlank()) {
+      return rpcError(idNode, -32602, "pushNotificationConfig.url is required");
+    }
+    String token = cfg.path("token").asText(null);
+    AuthSpec auth = AuthSpec.none();
+    JsonNode authNode = cfg.path("authentication");
+    if (authNode.hasNonNull("credential") && authNode.hasNonNull("headerName")) {
+      auth = AuthSpec.apiKey(authNode.get("headerName").asText(), authNode.get("credential").asText());
+    }
+    A2APushConfig stored = new A2APushConfig(configId, url, token, auth);
+    taskStore.savePushConfig(taskId, stored);
+    return rpcPushConfigResult(idNode, taskId, stored);
+  }
+
+  private String pushConfigGet(JsonNode idNode, JsonNode req) throws Exception {
+    String taskId = req.path("params").path("taskId").asText(null);
+    String configId = req.path("params").path("pushNotificationConfigId").asText(null);
+    if (taskId == null || configId == null) {
+      return rpcError(idNode, -32602, "get requires params.taskId + pushNotificationConfigId");
+    }
+    Optional<A2APushConfig> cfg = taskStore.getPushConfig(taskId, configId);
+    if (cfg.isEmpty()) {
+      return rpcError(idNode, -32001, "push config not found");
+    }
+    return rpcPushConfigResult(idNode, taskId, cfg.get());
+  }
+
+  private String pushConfigList(JsonNode idNode, JsonNode req) throws Exception {
+    String taskId = req.path("params").path("taskId").asText(null);
+    if (taskId == null) {
+      return rpcError(idNode, -32602, "list requires params.taskId");
+    }
+    ObjectNode root = JSON.createObjectNode();
+    root.put("jsonrpc", "2.0");
+    root.set("id", idNode == null ? JSON.nullNode() : idNode);
+    ArrayNode result = root.putArray("result");
+    for (A2APushConfig cfg : taskStore.listPushConfigs(taskId)) {
+      result.add(pushConfigNode(taskId, cfg));
+    }
+    return JSON.writeValueAsString(root);
+  }
+
+  private String pushConfigDelete(JsonNode idNode, JsonNode req) throws Exception {
+    String taskId = req.path("params").path("taskId").asText(null);
+    String configId = req.path("params").path("pushNotificationConfigId").asText(null);
+    if (taskId == null || configId == null) {
+      return rpcError(idNode, -32602, "delete requires params.taskId + pushNotificationConfigId");
+    }
+    taskStore.deletePushConfig(taskId, configId);
+    ObjectNode root = JSON.createObjectNode();
+    root.put("jsonrpc", "2.0");
+    root.set("id", idNode == null ? JSON.nullNode() : idNode);
+    root.putNull("result");
+    return JSON.writeValueAsString(root);
+  }
+
+  private ObjectNode pushConfigNode(String taskId, A2APushConfig cfg) {
+    ObjectNode node = JSON.createObjectNode();
+    node.put("taskId", taskId);
+    ObjectNode c = node.putObject("pushNotificationConfig");
+    c.put("id", cfg.getId());
+    c.put("url", cfg.getUrl());
+    if (cfg.getToken() != null) {
+      c.put("token", cfg.getToken());
+    }
+    return node;
+  }
+
+  private String rpcPushConfigResult(JsonNode idNode, String taskId, A2APushConfig cfg)
+      throws Exception {
+    ObjectNode root = JSON.createObjectNode();
+    root.put("jsonrpc", "2.0");
+    root.set("id", idNode == null ? JSON.nullNode() : idNode);
+    root.set("result", pushConfigNode(taskId, cfg));
+    return JSON.writeValueAsString(root);
   }
 
   // ---- helpers ----
