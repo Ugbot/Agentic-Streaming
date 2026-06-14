@@ -6,15 +6,19 @@ use tools, and retrieve) built on engines *other than Flink*. Every port runs th
 same `router → path → verifier` **banking** worked example, so the comparison is
 apples-to-apples.
 
-Two shared, **Flink-free** essence cores carry the agent logic; each engine port is
-a thin **runtime seam** on top:
+Three shared, **Flink-free** essence cores carry the agent logic — one per language;
+each engine port is a thin **runtime seam** on top, and two HTTP **gateways** are front
+doors over the cores:
 
 ```
 ports/
   pyagentic/      pure-Python essence + LocalRuntime     ← Faust/Ray/NATS/Celery/Dask/Airflow build on this
   jagentic-core/  pure-Java essence + LocalRuntime       ← Kafka Streams/Pekko/Temporal/Pulsar/Spring/Quarkus build on this
+  go/             pure-Go essence (core/) + gateway + NATS + Temporal + cmds, one module
   faust/ ray/ nats/ celery/ dask/ airflow/                       (Python adapters)
   kafka-streams/ pekko/ temporal/ pulsar/ spring/ quarkus/       (JVM adapters)
+  gateway-fastapi/   FastAPI HTTP gateway over pyagentic (local/celery/nats backends)
+  go/gateway/        stdlib net/http gateway over the Go core
 ```
 
 The cores implement the engine-agnostic abstractions once — `ConversationStore`,
@@ -147,9 +151,42 @@ mvn -f ports/pulsar/pom.xml test              # 2 pass (banking + extended-graph
 mvn -f ports/pulsar/pom.xml -q exec:java      # runs the banking Pulsar Function (in-memory Context)
 mvn -f ports/temporal/pom.xml test            # 2 pass (banking + extended-graph via worker factory)
 mvn -f ports/temporal/pom.xml -q compile exec:java   # runs banking workflows on an in-memory Temporal service
+
+# pure-Go core + Go engines + Go gateway (one module)
+cd ports/go && go test ./...                  # core + gateway + temporal; natsjs runs if a JetStream server is up
+go run ./cmd/demo                             # banking graph on the Go LocalRuntime
+go run ./cmd/gateway                          # HTTP gateway on :8080
+go run ./cmd/natsdemo                         # streamed NATS JetStream round-trip (needs a server)
+
+# HTTP gateways (front doors over the cores)
+PYTHONPATH=ports/gateway-fastapi /tmp/af-venv/bin/python -m pytest ports/gateway-fastapi/tests -q  # 9 pass
+uvicorn gateway_fastapi.__main__:app          # FastAPI gateway over pyagentic (from ports/gateway-fastapi)
 ```
 
 ---
+
+## A third core (Go) + HTTP gateways
+
+The essence isn't Python- or JVM-specific. [`ports/go/`](go/) is a **third core**, in
+pure Go, with the same abstractions (`ConversationStore`, `KeyedStateStore`,
+`ToolRegistry`, `RoutedGraph`, `Retrieval`, `Banking`, `LocalRuntime`) and the same
+extensibility invariant — and it ships its own **NATS JetStream** and **Temporal**
+engines (the Go peers of the Python/Java ports) plus an HTTP gateway, all in one module
+reusing the Go core. So NATS JetStream and Temporal each now have **two** implementations
+(Python/Go and Java/Go respectively), proving the essence is language-portable.
+
+Two **HTTP gateways** are front doors that expose the banking agent over the same
+A2A-style contract — an **Agent Card** at `/.well-known/agent-card.json`, `POST /agent`,
+`GET /conversations/{id}`, `GET /healthz` — with an *identical card shape* so a client
+can't tell them apart:
+
+| Gateway | Stack | Over | Backends |
+|---------|-------|------|----------|
+| [`gateway-fastapi/`](gateway-fastapi/) | FastAPI + Pydantic (Python) | `pyagentic` | local (default), celery, nats — via `AGENTIC_GATEWAY_BACKEND` |
+| [`go/gateway/`](go/gateway/) | stdlib `net/http` (Go) | `goagentic` core | the Go `LocalRuntime` (or any Go engine `Runtime`) |
+
+Both reuse their core verbatim; the FastAPI one can route turns to the Local, Celery, or
+NATS runtimes behind one HTTP surface.
 
 ## Choosing an engine
 

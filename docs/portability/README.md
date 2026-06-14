@@ -31,3 +31,10 @@ For the Python engines (Faust, Ray, NATS JetStream, Celery, Dask, Airflow) the t
 is **pure Python**. For the JVM engines (Kafka Streams, Pekko, Temporal, Pulsar
 Functions, Quarkus, Spring) the existing Java core types are reused behind the Engine
 SPI.
+
+**A third core, in Go.** [`ports/go/`](../../ports/go/) is a pure-Go realization of the
+same essence, with its own **NATS JetStream** and **Temporal** engines (so both have
+two implementations — Python/Go and Java/Go) and a stdlib HTTP gateway. Together with
+the [FastAPI gateway](../../ports/gateway-fastapi/) over `pyagentic`, two HTTP front
+doors expose the agent under an identical A2A-style Agent Card — the essence is portable
+across Python, the JVM, and Go, behind one contract.

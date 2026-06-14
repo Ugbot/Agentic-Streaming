@@ -3,7 +3,9 @@
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > NATS JetStream adds persistent streams + a durable **key-value store** on top of the
 > NATS messaging system. A working port lives in [`../../ports/nats/`](../../ports/nats/)
-> — it **runs live** against a JetStream server and is covered by the adapter suite.
+> — it **runs live** against a JetStream server and is covered by the adapter suite. A
+> pure-Go peer (same KV-state + stream design) lives in
+> [`../../ports/go/engines/natsjs/`](../../ports/go/engines/natsjs/).
 
 ## 1. Verdict
 

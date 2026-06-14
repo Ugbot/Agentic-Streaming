@@ -5,7 +5,9 @@
 > survive process crashes via an event-sourced history, with activities for the
 > non-deterministic / I/O work. A working port lives in
 > [`../../ports/temporal/`](../../ports/temporal/) (compiles, runs, and is tested
-> against an in-memory Temporal service).
+> against an in-memory Temporal service). A pure-Go peer (entity workflow per
+> conversation, same design) lives in
+> [`../../ports/go/engines/temporal/`](../../ports/go/engines/temporal/).
 
 ## 1. Verdict
 
