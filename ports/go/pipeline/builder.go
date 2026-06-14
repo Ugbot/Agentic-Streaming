@@ -9,16 +9,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/jagentic/goagentic/core"
+	"github.com/jagentic/goagentic/stores"
 )
+
+// embedFunc turns text into a query vector. Default is the deterministic FNV hashing
+// embedder; an embeddings: section swaps in a real Embedder.
+type embedFunc func(text string) []float64
 
 // keywordBrain: fire a tool on a trigger keyword, else answer from retrieval, else echo.
 type keywordBrain struct {
 	name         string
-	dim          int
+	embed        embedFunc
 	toolTriggers map[string]string
 	threshold    float64
 }
@@ -32,7 +38,7 @@ func (b keywordBrain) Turn(userText string, ctx *core.AgentContext) string {
 		}
 	}
 	if ctx.Retriever != nil {
-		hits := ctx.Retriever.Retrieve(core.Embed(userText, b.dim), 1)
+		hits := ctx.Retriever.Retrieve(b.embed(userText), 1)
 		if len(hits) > 0 && hits[0].Score > b.threshold {
 			return fmt.Sprintf("[%s] %s", b.name, hits[0].Text)
 		}
@@ -62,9 +68,20 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 	if err != nil {
 		return Built{}, err
 	}
-	retrieval := asMap(spec["retrieval"])
-	dim := asInt(retrieval["dim"], 256)
-	retriever := buildRetriever(retrieval, dim)
+	if err := registerMcp(tools, asList(spec["mcp"])); err != nil {
+		return Built{}, err
+	}
+	registerA2A(tools, asList(spec["a2a"]))
+
+	embed, dim := buildEmbedder(spec["embeddings"], asMap(spec["retrieval"]))
+	retriever := buildRetriever(asMap(spec["retrieval"]), embed, dim)
+
+	// Context-window management: bound the replayed LLM transcript to a token budget.
+	var ctxMgr *core.ContextWindowManager
+	if cspec := asMap(spec["context"]); len(cspec) > 0 {
+		budget := asInt(cspec["max_tokens"], asInt(cspec["max_items"], 12)*64)
+		ctxMgr = core.NewContextWindowManager(budget)
+	}
 
 	// Skills: a path's `skills:` expand into extra tools + an appended prompt fragment.
 	var skillSpecs []map[string]any
@@ -99,8 +116,11 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 			}
 			allowed = append(allowed, skillTools...)
 			lb := core.NewLlmBrain(client, name, prompt, allowed, asInt(ps["max_iterations"], 6))
-			if os := asMap(ps["output_schema"]); len(os) > 0 {
-				lb.WithOutputSchema(os)
+			if osch := asMap(ps["output_schema"]); len(osch) > 0 {
+				lb.WithOutputSchema(osch)
+			}
+			if ctxMgr != nil {
+				lb.WithContextManager(ctxMgr)
 			}
 			brain = lb
 		case "rule":
@@ -108,7 +128,7 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 			for k, v := range asMap(ps["tool_triggers"]) {
 				triggers[k] = fmt.Sprint(v)
 			}
-			brain = keywordBrain{name: name, dim: dim, toolTriggers: triggers, threshold: asFloat(ps["threshold"], 0.15)}
+			brain = keywordBrain{name: name, embed: embed, toolTriggers: triggers, threshold: asFloat(ps["threshold"], 0.15)}
 		default:
 			return Built{}, fmt.Errorf("unknown brain kind %q for path %q", brainKind, name)
 		}
@@ -127,18 +147,66 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 
 	graph := core.NewRoutedGraph(router, paths, verifier)
 	for _, g := range asList(spec["guardrails"]) {
-		gm := asMap(g)
-		if asString(gm["kind"], "regex") == "regex" {
-			var deny []string
-			for _, d := range asList(gm["deny"]) {
-				deny = append(deny, fmt.Sprint(d))
-			}
-			graph.WithGuardrails(core.NewRegexGuardrail(deny, asString(gm["reason"], "blocked by policy"),
-				asBool(gm["check_outputs"])))
+		gr, err := buildGuardrail(asMap(g))
+		if err != nil {
+			return Built{}, err
 		}
+		graph.WithGuardrails(gr)
 	}
 
 	return Built{Graph: graph, Tools: tools, Retriever: retriever}, nil
+}
+
+// buildGuardrail builds one guardrail from its spec. kind = regex (default) | classifier.
+func buildGuardrail(gm map[string]any) (core.Guardrail, error) {
+	switch kind := asString(gm["kind"], "regex"); kind {
+	case "regex":
+		var deny []string
+		for _, d := range asList(gm["deny"]) {
+			deny = append(deny, fmt.Sprint(d))
+		}
+		return core.NewRegexGuardrail(deny, asString(gm["reason"], "blocked by policy"),
+			asBool(gm["check_outputs"])), nil
+	case "classifier":
+		var blocked []string
+		for _, b := range asList(gm["blocked"]) {
+			blocked = append(blocked, fmt.Sprint(b))
+		}
+		threshold := asFloat(gm["threshold"], 0.5)
+		reason := asString(gm["reason"], "blocked by classifier policy")
+		checkOutputs := asBool(gm["check_outputs"])
+		switch ctype := asString(gm["classifier"], "lexicon"); ctype {
+		case "lexicon":
+			lexicon := map[string][]string{}
+			for label, raw := range asMap(gm["lexicon"]) {
+				var words []string
+				for _, w := range asList(raw) {
+					words = append(words, fmt.Sprint(w))
+				}
+				lexicon[label] = words
+			}
+			clf := core.NewLexiconClassifier(lexicon, asString(gm["default_label"], "other"))
+			return core.NewClassifierGuardrail(clf, blocked, threshold, reason, checkOutputs), nil
+		case "embedding":
+			examples := map[string][]string{}
+			for label, raw := range asMap(gm["examples"]) {
+				var texts []string
+				for _, t := range asList(raw) {
+					texts = append(texts, fmt.Sprint(t))
+				}
+				examples[label] = texts
+			}
+			clf, err := core.NewEmbeddingClassifier(nil, 0).Fit(examples)
+			if err != nil {
+				return nil, fmt.Errorf("embedding guardrail fit: %w", err)
+			}
+			return core.NewClassifierGuardrail(clf, blocked, threshold, reason, checkOutputs), nil
+		default:
+			return nil, fmt.Errorf("unknown classifier %q; choose lexicon|embedding", ctype)
+		}
+	default:
+		return nil, fmt.Errorf("unknown guardrail kind %q; choose regex|classifier", kind)
+	}
 }
 
 func buildTools(specs []any) (*core.ToolRegistry, error) {
@@ -153,7 +221,7 @@ func buildTools(specs []any) (*core.ToolRegistry, error) {
 			value := t["value"]
 			reg.Register(id, desc, func(p map[string]any) any { return value })
 		case "http", "agent": // "agent" = call another agent/gateway's /agent (A2A-as-tool)
-			url := asString(t["url"], "")
+			url := resolveEnv(asString(t["url"], ""))
 			reg.Register(id, desc, httpTool(url))
 		default:
 			return nil, fmt.Errorf("unknown tool kind %q for %q", kind, id)
@@ -177,14 +245,133 @@ func httpTool(url string) core.ToolFunc {
 	}
 }
 
-func buildRetriever(spec map[string]any, dim int) *core.TwoTierRetriever {
+// buildEmbedder resolves the embed function + dim. An embeddings: section picks a real
+// provider via the Embedder SPI; otherwise the deterministic FNV hashing embedder is used
+// at the retrieval dim (default 256). Mirrors Python _build_embedder.
+func buildEmbedder(embSpec any, retrieval map[string]any) (embedFunc, int) {
+	if em := asMap(embSpec); len(em) > 0 {
+		provider := asString(em["provider"], asString(em["kind"], "hashing"))
+		if provider != "" && provider != "hashing" && provider != "memory" {
+			if embedder, err := core.NewEmbedder(em); err == nil {
+				return embedder.Embed, embedder.Dim()
+			}
+			// fall through to hashing on provider error
+		}
+	}
+	dim := asInt(retrieval["dim"], 256)
+	return func(text string) []float64 { return core.Embed(text, dim) }, dim
+}
+
+// buildRetriever builds the two-tier retriever. The hot tier is always an in-memory window
+// seeded with the kb; a vector_store: section adds a real cold tier (memory/hnsw/qdrant),
+// also seeded with the kb so cold recall works. Mirrors Python _build_retriever.
+func buildRetriever(spec map[string]any, embed embedFunc, dim int) *core.TwoTierRetriever {
+	if len(spec) == 0 {
+		return nil
+	}
 	hot := core.NewInMemoryHotVectorIndex()
+	store := buildVectorStore(asMap(spec["vector_store"]), dim)
+	var cold core.ColdSearch
+	if store != nil {
+		cold = store.ColdSearch()
+	}
 	for _, raw := range asList(spec["kb"]) {
 		doc := asMap(raw)
 		text := asString(doc["text"], "")
-		hot.Upsert(asString(doc["id"], ""), core.Embed(text, dim), text)
+		vec := embed(text)
+		id := asString(doc["id"], "")
+		hot.Upsert(id, vec, text)
+		if store != nil {
+			store.Upsert(id, vec, text)
+		}
 	}
-	return core.NewTwoTierRetriever(hot, nil, 4, 4)
+	return core.NewTwoTierRetriever(hot, cold, 4, 4)
+}
+
+// buildVectorStore builds the cold-tier vector store by kind. On a (qdrant) connection
+// error it returns nil so the cold tier is skipped gracefully. Mirrors Python make_vector_store.
+func buildVectorStore(spec map[string]any, dim int) core.VectorStore {
+	if len(spec) == 0 {
+		return nil
+	}
+	switch kind := asString(spec["kind"], "memory"); kind {
+	case "memory":
+		return core.NewInMemoryVectorStore()
+	case "hnsw":
+		m := asInt(spec["m"], 16)
+		efC := asInt(spec["ef_construction"], 200)
+		efS := asInt(spec["ef_search"], 50)
+		seed := int64(asInt(spec["seed"], 42))
+		return core.NewHnswVectorStore(m, efC, efS, seed)
+	case "qdrant":
+		url := resolveEnv(asString(spec["url"], ""))
+		collection := asString(spec["collection"], "agentic")
+		qd, err := stores.NewQdrantVectorStore(url, collection, dim)
+		if err != nil {
+			return nil // skip cold tier gracefully on connection error
+		}
+		return qd
+	default:
+		return nil
+	}
+}
+
+// registerMcp connects to each declared MCP server (stdio only) and registers its tools
+// (id-prefixed by name). Mirrors Python _register_mcp.
+func registerMcp(tools *core.ToolRegistry, specs []any) error {
+	for _, raw := range specs {
+		m := asMap(raw)
+		transport := strings.ToLower(asString(m["transport"], "stdio"))
+		if transport != "stdio" {
+			return fmt.Errorf("mcp transport %q not supported (use 'stdio')", transport)
+		}
+		var command string
+		var args []string
+		switch c := m["command"].(type) {
+		case []any:
+			if len(c) > 0 {
+				command = resolveEnv(fmt.Sprint(c[0]))
+				for _, a := range c[1:] {
+					args = append(args, resolveEnv(fmt.Sprint(a)))
+				}
+			}
+		default:
+			command = resolveEnv(asString(m["command"], ""))
+			for _, a := range asList(m["args"]) {
+				args = append(args, resolveEnv(fmt.Sprint(a)))
+			}
+		}
+		var env []string
+		for k, v := range asMap(m["env"]) {
+			env = append(env, k+"="+resolveEnv(fmt.Sprint(v)))
+		}
+		client, err := stores.NewMcpClient(command, env, args...)
+		if err != nil {
+			return fmt.Errorf("mcp %q: %w", asString(m["name"], "mcp"), err)
+		}
+		client.Register(tools, asString(m["name"], "mcp")+"_")
+	}
+	return nil
+}
+
+// registerA2A registers each declared peer agent as a tool (peer-as-tool over A2A HTTP).
+// Mirrors Python _register_a2a.
+func registerA2A(tools *core.ToolRegistry, specs []any) {
+	for _, raw := range specs {
+		a := asMap(raw)
+		id := asString(a["id"], "")
+		url := resolveEnv(asString(a["url"], ""))
+		desc := asString(a["description"], "Delegate to peer agent "+id)
+		tools.Register(id, desc, core.PeerTool(url, asInt(a["retries"], 2)))
+	}
+}
+
+// resolveEnv expands a ${ENV} connection link (used for tool/mcp/a2a URLs).
+func resolveEnv(value string) string {
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		return os.Getenv(value[2 : len(value)-1])
+	}
+	return value
 }
 
 func buildRouter(spec map[string]any, paths map[string]*core.Agent) core.Router {

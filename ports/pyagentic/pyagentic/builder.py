@@ -99,15 +99,86 @@ def _http_tool(url: str) -> Callable[[Dict[str, Any]], Any]:
     return call
 
 
-def _build_retriever(spec: Optional[Dict[str, Any]]):
+def _build_embedder(emb_spec: Optional[Dict[str, Any]], retrieval_spec: Optional[Dict[str, Any]]):
+    """Resolve the embed function + dim. An ``embeddings:`` section picks a real provider
+    (litellm/ollama/openai) via the Embedder SPI; otherwise the deterministic FNV hashing
+    embedder is used at the retrieval ``dim`` (default 256)."""
+    if emb_spec:
+        from .embeddings import make_embedder
+
+        embedder = make_embedder(emb_spec)
+        return embedder.embed, embedder.dim
+    dim = int((retrieval_spec or {}).get("dim", 256))
+    return hashing_embedder(dim), dim
+
+
+def _build_retriever(spec: Optional[Dict[str, Any]], embed, dim: int):
+    """Build the two-tier retriever. The hot tier is always an in-memory window seeded with
+    the ``kb``; a ``vector_store:`` section adds a real cold tier (memory/hnsw/duckdb/qdrant),
+    also seeded with the kb so cold recall works."""
     if not spec:
-        return None, hashing_embedder(256)
-    dim = int(spec.get("dim", 256))
-    embed = hashing_embedder(dim)
+        return None
     hot = InMemoryHotVectorIndex()
+    store = None
+    vs_spec = spec.get("vector_store")
+    if vs_spec:
+        from .vectorstores import make_vector_store
+
+        store = make_vector_store(vs_spec, dim)
+    cold = store.cold_search() if store is not None else None
     for doc in spec.get("kb", []) or []:
-        hot.upsert(doc["id"], embed(doc["text"]), doc["text"])
-    return TwoTierRetriever(hot, None, 4, 4), embed
+        vec = embed(doc["text"])
+        hot.upsert(doc["id"], vec, doc["text"])
+        if store is not None:
+            store.upsert(doc["id"], vec, doc["text"])
+    return TwoTierRetriever(hot, cold, 4, 4)
+
+
+def _register_mcp(tools: ToolRegistry, specs: Optional[List[Dict[str, Any]]]) -> None:
+    """Connect to each declared MCP server and register its tools (id-prefixed by name)."""
+    for m in specs or []:
+        from .mcp_client import McpClient
+
+        transport = (m.get("transport") or "stdio").lower()
+        if transport != "stdio":
+            raise ValueError(f"mcp transport {transport!r} not supported (use 'stdio')")
+        raw = m["command"]
+        command = raw if isinstance(raw, list) else [raw, *m.get("args", [])]
+        client = McpClient([_resolve_env(str(c)) for c in command])
+        client.register(tools, prefix=f"{m.get('name', 'mcp')}_")
+
+
+def _register_a2a(tools: ToolRegistry, specs: Optional[List[Dict[str, Any]]]) -> None:
+    """Register each declared peer agent as a tool (peer-as-tool over A2A HTTP)."""
+    for a in specs or []:
+        from .a2a import peer_tool
+
+        url = _resolve_env(a["url"])
+        tools.register(a["id"], a.get("description", f"Delegate to peer agent {a['id']}"),
+                       peer_tool(url, int(a.get("retries", 2))))
+
+
+def _build_guardrail(g: Dict[str, Any], embed):
+    """Build one guardrail from its spec. kind = regex (default) | classifier."""
+    kind = g.get("kind", "regex")
+    if kind == "regex":
+        return RegexGuardrail(deny=g.get("deny", []), reason=g.get("reason", "blocked by policy"),
+                              check_outputs=bool(g.get("check_outputs", False)))
+    if kind == "classifier":
+        from .inference import ClassifierGuardrail, EmbeddingClassifier, LexiconClassifier
+
+        ctype = (g.get("classifier") or "lexicon").lower()
+        if ctype == "lexicon":
+            clf = LexiconClassifier(g["lexicon"], default_label=g.get("default_label", "other"))
+        elif ctype == "embedding":
+            clf = EmbeddingClassifier().fit(g["examples"])
+        else:
+            raise ValueError(f"unknown classifier {ctype!r}; choose lexicon|embedding")
+        return ClassifierGuardrail(clf, blocked_labels=g.get("blocked", []),
+                                   threshold=float(g.get("threshold", 0.5)),
+                                   reason=g.get("reason", "blocked by classifier policy"),
+                                   check_outputs=bool(g.get("check_outputs", False)))
+    raise ValueError(f"unknown guardrail kind {kind!r}; choose regex|classifier")
 
 
 def _build_router(spec: Optional[Dict[str, Any]], paths: List[str]):
@@ -136,7 +207,19 @@ def build(spec: Dict[str, Any], chat_client_factory: Optional[ChatClientFactory]
         raise ValueError("pipeline spec needs agent.paths")
 
     tools = _build_tools(spec.get("tools", []))
-    retriever, embed = _build_retriever(spec.get("retrieval"))
+    _register_mcp(tools, spec.get("mcp"))
+    _register_a2a(tools, spec.get("a2a"))
+
+    embed, dim = _build_embedder(spec.get("embeddings"), spec.get("retrieval"))
+    retriever = _build_retriever(spec.get("retrieval"), embed, dim)
+
+    context_manager = None
+    ctx_spec = spec.get("context")
+    if ctx_spec:
+        from .context import ContextWindowManager
+
+        budget = int(ctx_spec.get("max_tokens", int(ctx_spec.get("max_items", 12)) * 64))
+        context_manager = ContextWindowManager(budget)
 
     from .skills import SkillRegistry
     skills = SkillRegistry.from_specs(spec.get("skills", []))
@@ -156,7 +239,7 @@ def build(spec: Dict[str, Any], chat_client_factory: Optional[ChatClientFactory]
             path_tools = list(ps.get("tools", []) or []) + [t for t in skill_tools if t not in (ps.get("tools") or [])]
             brain = LlmBrain(client, name=name, system_prompt=prompt,
                              tools=path_tools or None, max_iterations=int(ps.get("max_iterations", 6)),
-                             output_schema=ps.get("output_schema"))
+                             output_schema=ps.get("output_schema"), context_manager=context_manager)
         elif brain_kind == "rule":
             brain = KeywordBrain(name, embed, tool_triggers=ps.get("tool_triggers"),
                                  threshold=float(ps.get("threshold", 0.15)))
@@ -171,11 +254,7 @@ def build(spec: Dict[str, Any], chat_client_factory: Optional[ChatClientFactory]
     if vspec.get("kind", "prefix") == "prefix":
         verifier = lambda reply, ctx: (bool(reply) and reply.startswith("["), reply)  # noqa: E731
 
-    guardrails = []
-    for g in spec.get("guardrails", []) or []:
-        if g.get("kind", "regex") == "regex":
-            guardrails.append(RegexGuardrail(deny=g.get("deny", []), reason=g.get("reason", "blocked by policy"),
-                                             check_outputs=bool(g.get("check_outputs", False))))
+    guardrails = [_build_guardrail(g, embed) for g in spec.get("guardrails", []) or []]
 
     graph = RoutedGraph(router=router, paths=paths, verifier=verifier, guardrails=guardrails)
     return graph, tools, retriever

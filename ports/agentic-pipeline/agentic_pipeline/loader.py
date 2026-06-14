@@ -46,12 +46,13 @@ def _chat_client_factory(llm_spec: Dict[str, Any]):
 class PipelineSystem:
     """A built, deployed agentic system: a backend runtime + the spec that produced it."""
 
-    def __init__(self, spec: Dict[str, Any], backend, graph, tools, retriever):
+    def __init__(self, spec: Dict[str, Any], backend, graph, tools, retriever, long_term=None):
         self.spec = spec
         self.backend = backend
         self.graph = graph
         self.tools = tools
         self.retriever = retriever
+        self.long_term = long_term  # optional LongTermStore for resumption + fact archive
 
     @property
     def backend_name(self) -> str:
@@ -64,15 +65,19 @@ class PipelineSystem:
 def build_system(spec: Dict[str, Any], backend: Optional[str] = None) -> PipelineSystem:
     """Compile a spec dict and wire it onto the chosen backend (spec ``backend:`` unless
     overridden). A ``stores.conversation`` section hot-swaps the durable store (e.g.
-    Redis/Valkey) behind the ConversationStore SPI."""
+    Redis/Valkey) behind the ConversationStore SPI; ``stores.long_term`` selects the
+    resumption + fact archive (memory/postgres) behind the LongTermStore SPI."""
+    from pyagentic.longterm import make_long_term_store
     from pyagentic.stores import make_conversation_store
 
     graph, tools, retriever = builder.build(spec, chat_client_factory=_chat_client_factory)
     name = backend or spec.get("backend", "local")
-    store_spec = (spec.get("stores") or {}).get("conversation")
+    stores_spec = spec.get("stores") or {}
+    store_spec = stores_spec.get("conversation")
     store = make_conversation_store(store_spec) if store_spec else None
+    long_term = make_long_term_store(stores_spec.get("long_term")) if stores_spec.get("long_term") else None
     rt = backends.make_backend(name, graph, tools, retriever, store=store)
-    return PipelineSystem(spec, rt, graph, tools, retriever)
+    return PipelineSystem(spec, rt, graph, tools, retriever, long_term=long_term)
 
 
 def load(path: str, backend: Optional[str] = None) -> PipelineSystem:

@@ -43,18 +43,26 @@ const reactSystem = "You are a tool-using agent. On each step reply with ONE JSO
 // LlmBrain is a Brain that drives a bounded ReAct loop over a ChatClient (thought →
 // tool → observation → final). RuleBrain stays the default; LlmBrain is opt-in.
 type LlmBrain struct {
-	client        ChatClient
-	name          string
-	systemPrompt  string
-	allowed       map[string]bool // nil => all tools
-	maxIterations int
-	outputSchema  map[string]any // optional structured-output contract
+	client         ChatClient
+	name           string
+	systemPrompt   string
+	allowed        map[string]bool // nil => all tools
+	maxIterations  int
+	outputSchema   map[string]any        // optional structured-output contract
+	contextManager *ContextWindowManager // optional transcript compaction (recency MoSCoW)
 }
 
 // WithOutputSchema enforces a structured (JSON-schema-lite) final answer; returns the
 // brain for chaining.
 func (b *LlmBrain) WithOutputSchema(schema map[string]any) *LlmBrain {
 	b.outputSchema = schema
+	return b
+}
+
+// WithContextManager bounds the replayed transcript to a token budget on each turn (the
+// recency-based MoSCoW compaction); returns the brain for chaining.
+func (b *LlmBrain) WithContextManager(cm *ContextWindowManager) *LlmBrain {
+	b.contextManager = cm
 	return b
 }
 
@@ -88,7 +96,9 @@ func (b *LlmBrain) Turn(userText string, ctx *AgentContext) string {
 		sys += "\n" + SchemaInstruction(b.outputSchema)
 	}
 	msgs := []map[string]string{{"role": "system", "content": sys}}
-	for _, m := range ctx.Store.History(ctx.ConversationID) {
+	// The agent already appended the user turn; replay the persisted transcript, compacting
+	// it to the token budget (recency MoSCoW) if a ContextWindowManager is set.
+	for _, m := range b.compact(ctx.Store.History(ctx.ConversationID)) {
 		msgs = append(msgs, map[string]string{"role": m.Role, "content": m.Content})
 	}
 	if len(msgs) == 0 || msgs[len(msgs)-1]["content"] != userText {
@@ -109,6 +119,42 @@ func (b *LlmBrain) Turn(userText string, ctx *AgentContext) string {
 		return "[" + b.name + "] (no answer)"
 	}
 	return fmt.Sprintf("[%s] (stopped after %d steps)", b.name, b.maxIterations)
+}
+
+// compact bounds the replayed transcript with the ContextWindowManager if configured.
+// The most-recent turns are MUST-keep, the next ones SHOULD, the oldest COULD — so the
+// compactor drops from the tail of history first when over budget (mirrors Python _compact).
+func (b *LlmBrain) compact(transcript []ChatMessage) []ChatMessage {
+	if b.contextManager == nil || len(transcript) == 0 {
+		return transcript
+	}
+	n := len(transcript)
+	items := make([]ContextItem, n)
+	for i, m := range transcript {
+		// rank by recency: last 2 turns MUST, next 4 SHOULD, rest COULD
+		age := n - 1 - i
+		var prio Priority
+		switch {
+		case age < 2:
+			prio = PriorityMust
+		case age < 6:
+			prio = PriorityShould
+		default:
+			prio = PriorityCould
+		}
+		items[i] = ContextItem{Text: m.Role + ": " + m.Content, Priority: prio}
+	}
+	keptTexts := map[string]bool{}
+	for _, it := range b.contextManager.Compact(items) {
+		keptTexts[it.Text] = true
+	}
+	out := make([]ChatMessage, 0, n)
+	for _, m := range transcript {
+		if keptTexts[m.Role+": "+m.Content] {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func (b *LlmBrain) finalize(text string, ctx *AgentContext) string {

@@ -16,9 +16,14 @@ public final class Backends {
   private Backends() {}
 
   public static Runtime create(String name, GraphBuilder.Built built) {
+    return create(name, built, new ConversationStore.InMemory());
+  }
+
+  public static Runtime create(String name, GraphBuilder.Built built, ConversationStore conversationStore) {
     String key = (name == null ? "local" : name).trim().toLowerCase();
     if ("local".equals(key)) {
-      return new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+      return new LocalRuntime(built.graph(),
+          conversationStore == null ? new ConversationStore.InMemory() : conversationStore,
           new KeyedStateStore.InMemory(), built.tools(), built.retriever());
     }
     throw new IllegalArgumentException(

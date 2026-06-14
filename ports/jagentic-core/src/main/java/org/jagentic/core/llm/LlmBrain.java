@@ -10,6 +10,9 @@ import java.util.stream.Collectors;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.Brain;
 import org.jagentic.core.ChatMessage;
+import org.jagentic.core.ContextItem;
+import org.jagentic.core.ContextWindowManager;
+import org.jagentic.core.Priority;
 
 /**
  * A {@link Brain} that drives a bounded ReAct loop over a {@link ChatClient} (thought →
@@ -30,6 +33,7 @@ public final class LlmBrain implements Brain {
   private final Set<String> allowedTools; // null => all
   private final int maxIterations;
   private Map<String, Object> outputSchema; // optional structured-output contract
+  private ContextWindowManager contextManager; // optional transcript compaction (MoSCoW)
 
   public LlmBrain(ChatClient client, String name) {
     this(client, name, "", null, 6);
@@ -50,6 +54,12 @@ public final class LlmBrain implements Brain {
     return this;
   }
 
+  /** Compact the replayed transcript to a token budget (MoSCoW); returns this for chaining. */
+  public LlmBrain withContextManager(ContextWindowManager contextManager) {
+    this.contextManager = contextManager;
+    return this;
+  }
+
   @Override
   public String turn(String userText, AgentContext ctx) {
     List<Map<String, String>> specs = ctx.tools.specs().stream()
@@ -65,7 +75,10 @@ public final class LlmBrain implements Brain {
     }
     List<Map<String, String>> messages = new ArrayList<>();
     messages.add(Map.of("role", "system", "content", sys));
-    for (ChatMessage m : ctx.store.history(ctx.conversationId)) {
+    // The agent already appended the user turn; replay the persisted transcript, compacting
+    // it to the token budget (recency MoSCoW) if a ContextWindowManager is set.
+    List<ChatMessage> transcript = compact(ctx.store.history(ctx.conversationId));
+    for (ChatMessage m : transcript) {
       messages.add(Map.of("role", m.role(), "content", m.content() == null ? "" : m.content()));
     }
     if (messages.isEmpty() || !userText.equals(messages.get(messages.size() - 1).get("content"))) {
@@ -83,6 +96,39 @@ public final class LlmBrain implements Brain {
       return "[" + name + "] " + finalize(r.text(), ctx);
     }
     return "[" + name + "] (stopped after " + maxIterations + " steps)";
+  }
+
+  /**
+   * Bound the replayed transcript with the {@link ContextWindowManager} if configured.
+   * The most-recent turns are MUST-keep, the next four SHOULD, the rest COULD — so the
+   * compactor drops from the tail of history first when over budget. Mirrors pyagentic's
+   * {@code LlmBrain._compact}.
+   */
+  private List<ChatMessage> compact(List<ChatMessage> transcript) {
+    if (contextManager == null || transcript.isEmpty()) {
+      return transcript;
+    }
+    int n = transcript.size();
+    List<ContextItem> items = new ArrayList<>(n);
+    for (int i = 0; i < n; i++) {
+      ChatMessage m = transcript.get(i);
+      int age = n - 1 - i; // 0 = most recent
+      Priority prio = age < 2 ? Priority.MUST : (age < 6 ? Priority.SHOULD : Priority.COULD);
+      items.add(new ContextItem(itemText(m), prio));
+    }
+    Set<String> keptTexts = contextManager.compact(items).stream()
+        .map(ContextItem::text).collect(Collectors.toSet());
+    List<ChatMessage> kept = new ArrayList<>();
+    for (ChatMessage m : transcript) {
+      if (keptTexts.contains(itemText(m))) {
+        kept.add(m);
+      }
+    }
+    return kept;
+  }
+
+  private static String itemText(ChatMessage m) {
+    return m.role() + ": " + (m.content() == null ? "" : m.content());
   }
 
   private String finalize(String text, AgentContext ctx) {

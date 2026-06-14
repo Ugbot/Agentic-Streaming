@@ -77,6 +77,7 @@ class LlmBrain:
         tools: Optional[List[str]] = None,
         max_iterations: int = 6,
         output_schema: Optional[Dict[str, Any]] = None,
+        context_manager: Optional[Any] = None,
     ) -> None:
         self.chat_client = chat_client
         self.name = name
@@ -84,6 +85,7 @@ class LlmBrain:
         self.allowed_tools = tools  # None => all registered tools
         self.max_iterations = max(1, max_iterations)
         self.output_schema = output_schema  # optional structured-output contract
+        self.context_manager = context_manager  # optional ContextWindowManager for transcript compaction
 
     def turn(self, user_text: str, ctx: AgentContext) -> str:
         specs = [s for s in ctx.tools.specs() if self.allowed_tools is None or s["name"] in self.allowed_tools]
@@ -92,8 +94,11 @@ class LlmBrain:
             from .structured import schema_instruction
             sys_prompt += "\n" + schema_instruction(self.output_schema)
         messages: List[Dict[str, str]] = [{"role": "system", "content": sys_prompt}]
-        # The agent already appended the user turn; replay the persisted transcript.
-        for m in ctx.store.history(ctx.conversation_id):
+        # The agent already appended the user turn; replay the persisted transcript,
+        # compacting it to the token budget (MoSCoW) if a ContextWindowManager is set.
+        transcript = list(ctx.store.history(ctx.conversation_id))
+        transcript = self._compact(transcript)
+        for m in transcript:
             messages.append({"role": m.role, "content": m.content})
         if not messages or messages[-1]["content"] != user_text:
             messages.append({"role": "user", "content": user_text})
@@ -107,6 +112,31 @@ class LlmBrain:
                 continue
             return self._finalize(result.text, ctx)
         return f"[{self.name}] (stopped after {self.max_iterations} steps)"
+
+    def _compact(self, transcript):
+        """Bound the replayed transcript with the ContextWindowManager if configured.
+        The most-recent turns are MUST-keep, older ones SHOULD, the oldest COULD — so the
+        compactor drops from the tail of history first when over budget."""
+        if self.context_manager is None or not transcript:
+            return transcript
+        from .context import ContextItem, Priority
+
+        n = len(transcript)
+        items = []
+        for i, m in enumerate(transcript):
+            # rank by recency: last 2 turns MUST, next 4 SHOULD, rest COULD
+            age = n - 1 - i
+            if age < 2:
+                prio = Priority.MUST
+            elif age < 6:
+                prio = Priority.SHOULD
+            else:
+                prio = Priority.COULD
+            items.append(ContextItem(text=f"{m.role}: {m.content}", priority=prio))
+        kept = self.context_manager.compact(items)
+        kept_texts = {it.text for it in kept}
+        return [m for i, m in enumerate(transcript)
+                if f"{m.role}: {m.content}" in kept_texts]
 
     def _finalize(self, text: Optional[str], ctx: AgentContext) -> str:
         if not text:

@@ -11,7 +11,10 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
+import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Event;
+import org.jagentic.core.InMemoryLongTermStore;
+import org.jagentic.core.LongTermStore;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.llm.ChatClient;
@@ -35,11 +38,18 @@ public final class PipelineLoader {
     public final String backendName;
     public final Runtime runtime;
     public final GraphBuilder.Built built;
+    /** Durable long-term store (conversation resumption + per-user fact archive). */
+    public final LongTermStore longTerm;
+    /** Per-conversation transcript + attributes store wired into the backend runtime. */
+    public final ConversationStore conversation;
 
-    PipelineSystem(String backendName, Runtime runtime, GraphBuilder.Built built) {
+    PipelineSystem(String backendName, Runtime runtime, GraphBuilder.Built built,
+                   LongTermStore longTerm, ConversationStore conversation) {
       this.backendName = backendName;
       this.runtime = runtime;
       this.built = built;
+      this.longTerm = longTerm;
+      this.conversation = conversation;
     }
 
     public TurnResult submit(Event event) {
@@ -56,10 +66,65 @@ public final class PipelineLoader {
     }
   }
 
+  @SuppressWarnings("unchecked")
   public static PipelineSystem buildSystem(Map<String, Object> spec, String backendOverride) {
     GraphBuilder.Built built = GraphBuilder.build(spec, PipelineLoader::chatClient);
     String backend = backendOverride != null ? backendOverride : (String) spec.getOrDefault("backend", "local");
-    return new PipelineSystem(backend, Backends.create(backend, built), built);
+
+    Map<String, Object> stores = (Map<String, Object>) spec.getOrDefault("stores", Map.of());
+    LongTermStore longTerm = buildLongTermStore((Map<String, Object>) stores.get("long_term"));
+    ConversationStore conversation = buildConversationStore((Map<String, Object>) stores.get("conversation"));
+
+    Runtime runtime = Backends.create(backend, built, conversation);
+    return new PipelineSystem(backend, runtime, built, longTerm, conversation);
+  }
+
+  /** Build the long-term store by kind: memory (default) | postgres. A postgres failure
+   * (no reachable server) degrades to an in-memory store rather than failing the build. */
+  static LongTermStore buildLongTermStore(Map<String, Object> spec) {
+    if (spec == null) {
+      return new InMemoryLongTermStore();
+    }
+    String kind = String.valueOf(spec.getOrDefault("kind", "memory")).toLowerCase();
+    switch (kind) {
+      case "memory":
+        return new InMemoryLongTermStore();
+      case "postgres":
+        try {
+          return new org.jagentic.core.store.PostgresLongTermStore(
+              GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("url", spec.get("jdbc_url")))),
+              GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("user", "postgres"))),
+              GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("password", ""))),
+              (String) spec.get("schema"));
+        } catch (RuntimeException e) {
+          return new InMemoryLongTermStore();
+        }
+      default:
+        throw new IllegalArgumentException("unknown long_term store kind " + kind + "; choose memory|postgres");
+    }
+  }
+
+  /** Build the conversation store by kind: memory (default) | redis. A redis failure
+   * degrades to in-memory rather than failing the build. */
+  static ConversationStore buildConversationStore(Map<String, Object> spec) {
+    if (spec == null) {
+      return new ConversationStore.InMemory();
+    }
+    String kind = String.valueOf(spec.getOrDefault("kind", "memory")).toLowerCase();
+    switch (kind) {
+      case "memory":
+        return new ConversationStore.InMemory();
+      case "redis":
+        try {
+          String url = GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("url", "redis://localhost:6379")));
+          int max = ((Number) spec.getOrDefault("max_messages", 200)).intValue();
+          return new org.jagentic.core.store.RedisConversationStore(url, max);
+        } catch (RuntimeException e) {
+          return new ConversationStore.InMemory();
+        }
+      default:
+        throw new IllegalArgumentException("unknown conversation store kind " + kind + "; choose memory|redis");
+    }
   }
 
   public static PipelineSystem load(Path path, String backendOverride) {

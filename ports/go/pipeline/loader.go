@@ -7,6 +7,7 @@ import (
 
 	"github.com/jagentic/goagentic/core"
 	"github.com/jagentic/goagentic/engines/natsjs"
+	"github.com/jagentic/goagentic/stores"
 	"gopkg.in/yaml.v3"
 )
 
@@ -19,7 +20,10 @@ type Runtime interface {
 type System struct {
 	BackendName string
 	Built       Built
-	rt          Runtime
+	// LongTerm is the durable long-term store (conversation resumption + fact archive),
+	// built from stores.long_term. Defaults to an in-memory store.
+	LongTerm core.LongTermStore
+	rt       Runtime
 }
 
 // Submit runs a turn on the backend.
@@ -48,11 +52,35 @@ func BuildSystem(spec map[string]any, backend string) (*System, error) {
 	if name == "" {
 		name = asString(spec["backend"], "local")
 	}
+	longTerm, err := buildLongTerm(asMap(asMap(spec["stores"])["long_term"]))
+	if err != nil {
+		return nil, err
+	}
 	rt, err := makeBackend(name, built)
 	if err != nil {
 		return nil, err
 	}
-	return &System{BackendName: name, Built: built, rt: rt}, nil
+	return &System{BackendName: name, Built: built, LongTerm: longTerm, rt: rt}, nil
+}
+
+// buildLongTerm builds the durable long-term store by kind: memory (default) | postgres.
+// A postgres connection error is tolerated by falling back to the in-memory store.
+func buildLongTerm(spec map[string]any) (core.LongTermStore, error) {
+	switch kind := asString(spec["kind"], "memory"); kind {
+	case "", "memory":
+		return core.NewInMemoryLongTermStore(), nil
+	case "postgres":
+		url := resolveEnv(asString(spec["url"], ""))
+		schema := asString(spec["schema"], "")
+		store, err := stores.NewPostgresLongTermStore(url, schema)
+		if err != nil {
+			// tolerate: fall back to in-memory so the system still builds offline
+			return core.NewInMemoryLongTermStore(), nil
+		}
+		return store, nil
+	default:
+		return nil, fmt.Errorf("unknown long_term store kind %q (use memory|postgres)", kind)
+	}
 }
 
 type localBackend struct{ rt *core.LocalRuntime }

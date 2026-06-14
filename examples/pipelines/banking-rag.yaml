@@ -1,0 +1,86 @@
+# Agentic Streaming — a richer banking agent exercising the Phase-F schema additions:
+# an in-process HNSW cold tier, a classifier guardrail, skills, context-window management,
+# and a durable long-term store. The same spec builds on every backend / language core.
+#
+# All defaults are model-free and offline (hashing embedder, in-process HNSW, lexicon
+# classifier, in-memory long-term). Swap `embeddings` to a real provider and `vector_store`
+# to qdrant, or `stores` to postgres/redis, by changing a few lines — see docs/portability/pipelines.md.
+#
+#   python -m agentic_pipeline run examples/pipelines/banking-rag.yaml --text "how do I dispute a charge?"
+
+backend: local
+
+# Embeddings: default is the deterministic FNV hashing embedder. To use a real model:
+#   embeddings: {provider: ollama, model: nomic-embed-text, base_url: http://localhost:11434}
+embeddings:
+  provider: hashing
+  dim: 256
+
+agent:
+  router:
+    kind: keyword
+    default: general
+    rules:
+      cards:    [card, crypto, cash-back, cashback]
+      payments: [balance, transfer, payment, dispute, charge, limit]
+  paths:
+    cards:
+      brain: rule
+      prompt: You answer card questions.
+      skills: [card_help]
+    payments:
+      brain: rule
+      prompt: You answer payment questions.
+      tool_triggers: {balance: get_balance}
+      skills: [card_help]
+    general:
+      brain: rule
+      prompt: You answer general questions.
+  verifier:
+    kind: prefix
+
+# Skills expand into extra tools + an appended prompt fragment for the declaring paths.
+skills:
+  - name: card_help
+    prompt: "When asked about cards, prefer the knowledge base over guessing."
+    tools: [get_balance]
+    facts: [account_tier]
+
+tools:
+  - {id: get_balance, kind: constant, description: Look up the user's balance, value: 1234.56}
+
+retrieval:
+  dim: 256
+  # In-process HNSW cold tier — a real ANN index, no external vector DB.
+  # Change kind to qdrant (url: ...) or duckdb (Python) to swap the backend.
+  vector_store:
+    kind: hnsw
+    m: 16
+    ef_search: 64
+  kb:
+    - {id: kb_cards_types, text: "We offer three card types: classic, gold, and platinum, each with different fees."}
+    - {id: kb_cards_crypto, text: "Crypto cash-back can be redeemed to a linked wallet or a manual address."}
+    - {id: kb_payments_limits, text: "Daily transfer limits are 10,000 by default; raise them in settings."}
+    - {id: kb_payments_dispute, text: "To dispute a charge, open the transaction and tap Dispute within 60 days."}
+
+# Context-window management: compact the replayed transcript to a token budget (MoSCoW).
+context:
+  max_tokens: 512
+  compaction: moscow
+
+# Durable stores behind SPIs. Defaults are in-memory; point at postgres/redis via a link.
+stores:
+  conversation: {kind: memory}
+  long_term: {kind: memory}
+
+guardrails:
+  - {kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection"}
+  # A learned/lexicon guardrail — blocks abusive input without a regex catalogue.
+  - kind: classifier
+    classifier: lexicon
+    blocked: [toxic]
+    threshold: 0.3
+    reason: "abusive language"
+    lexicon:
+      toxic: [idiot, stupid, hate, moron]
+      ok: [please, thanks, help, balance, card]
