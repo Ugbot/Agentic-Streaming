@@ -19,7 +19,18 @@ ports/
   kafka-streams/ pekko/ temporal/ pulsar/ spring/ quarkus/       (JVM adapters)
   gateway-fastapi/   FastAPI HTTP gateway over pyagentic (local/celery/nats backends)
   go/gateway/        stdlib net/http gateway over the Go core
+  agentic-pipeline/  declarative pipeline.yaml loader + backend shim (Python); Java in
+                     jagentic-core/.../pipeline, Go in go/pipeline
 ```
+
+**Build once, deploy anywhere.** Define an agent in a `pipeline.yaml` (prompts, tools,
+calls to other agents, retrieval, guardrails, hot-swappable stores), pick a `backend:`,
+and run the *same* spec on any backend in any language — see
+[`docs/portability/pipelines.md`](../docs/portability/pipelines.md), the
+[parity matrix](../docs/portability/parity-matrix.md), and
+[choosing a backend](../docs/portability/choosing-a-backend.md). External services
+(Redis/Valkey, Kafka/Fluss, Postgres) sit behind interfaces and come up via
+[`examples/compose/externals.yml`](../examples/compose/externals.yml).
 
 The cores implement the engine-agnostic abstractions once — `ConversationStore`,
 `KeyedStateStore`, `ToolRegistry`, `AgentContext`, `RoutedGraph`, hot+cold
