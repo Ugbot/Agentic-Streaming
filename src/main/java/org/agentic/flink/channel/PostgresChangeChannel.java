@@ -11,11 +11,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
+import java.util.ArrayDeque;
+import org.agentic.flink.channel.source.PollingSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,8 +57,12 @@ public final class PostgresChangeChannel implements Channel<KeyedContextItem> {
 
   @Override
   public DataStream<KeyedContextItem> open(StreamExecutionEnvironment env) {
-    return env.addSource(new Source(jdbcUrl, username, password, pollInterval.toMillis()))
-        .name("postgres-change-channel")
+    return env.fromSource(
+            new PollingSource<>(
+                new PostgresPollFn(jdbcUrl, username, password, pollInterval.toMillis())),
+            WatermarkStrategy.noWatermarks(),
+            "postgres-change-channel",
+            elementType())
         .setParallelism(1);
   }
 
@@ -70,18 +76,26 @@ public final class PostgresChangeChannel implements Channel<KeyedContextItem> {
     return "postgres-change";
   }
 
-  static final class Source implements SourceFunction<KeyedContextItem> {
+  /**
+   * Native FLIP-27 {@link PollingSource.PollFn}: each query (throttled to {@code pollIntervalMs})
+   * fetches rows newer than the watermark into a buffer; {@link #poll} returns them one at a time.
+   * The watermark advances across calls so no row is re-emitted.
+   */
+  static final class PostgresPollFn implements PollingSource.PollFn<KeyedContextItem> {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOG = LoggerFactory.getLogger(Source.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PostgresPollFn.class);
 
     private final String jdbcUrl;
     private final String username;
     private final String password;
     private final long pollIntervalMs;
 
-    private volatile boolean running = true;
+    private transient ObjectMapper mapper;
+    private transient ArrayDeque<KeyedContextItem> buffer;
+    private transient Timestamp watermark;
+    private transient long lastQueryMs;
 
-    Source(String jdbcUrl, String username, String password, long pollIntervalMs) {
+    PostgresPollFn(String jdbcUrl, String username, String password, long pollIntervalMs) {
       this.jdbcUrl = jdbcUrl;
       this.username = username;
       this.password = password;
@@ -89,8 +103,8 @@ public final class PostgresChangeChannel implements Channel<KeyedContextItem> {
     }
 
     @Override
-    public void run(SourceContext<KeyedContextItem> ctx) throws Exception {
-      ObjectMapper mapper = new ObjectMapper();
+    public void open(int subtaskIndex) {
+      mapper = new ObjectMapper();
       mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
       mapper.registerModule(new ParameterNamesModule());
       mapper.setVisibility(
@@ -101,40 +115,44 @@ public final class PostgresChangeChannel implements Channel<KeyedContextItem> {
               .withGetterVisibility(JsonAutoDetect.Visibility.PUBLIC_ONLY)
               .withSetterVisibility(JsonAutoDetect.Visibility.PUBLIC_ONLY)
               .withCreatorVisibility(JsonAutoDetect.Visibility.PUBLIC_ONLY));
-
-      Timestamp watermark = new Timestamp(0L);
-      while (running) {
-        try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password)) {
-          try (PreparedStatement ps =
-              conn.prepareStatement(
-                  "SELECT flow_id, fact_id, fact_json, created_at "
-                      + "FROM agent_facts WHERE created_at > ? ORDER BY created_at ASC")) {
-            ps.setTimestamp(1, watermark);
-            try (ResultSet rs = ps.executeQuery()) {
-              while (rs.next()) {
-                String flowId = rs.getString("flow_id");
-                String factJson = rs.getString("fact_json");
-                Timestamp createdAt = rs.getTimestamp("created_at");
-                ContextItem item = mapper.readValue(factJson, ContextItem.class);
-                synchronized (ctx.getCheckpointLock()) {
-                  ctx.collect(new KeyedContextItem(flowId, item));
-                }
-                if (createdAt.after(watermark)) {
-                  watermark = createdAt;
-                }
-              }
-            }
-          }
-        } catch (Exception e) {
-          LOG.warn("PostgresChangeChannel poll failed; will retry: {}", e.getMessage());
-        }
-        Thread.sleep(pollIntervalMs);
-      }
+      buffer = new ArrayDeque<>();
+      watermark = new Timestamp(0L);
+      lastQueryMs = 0L;
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    public KeyedContextItem poll(long timeoutMs) {
+      if (!buffer.isEmpty()) {
+        return buffer.poll();
+      }
+      long now = System.currentTimeMillis();
+      if (now - lastQueryMs < pollIntervalMs) {
+        return null; // throttle DB queries to the poll interval
+      }
+      lastQueryMs = now;
+      try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password)) {
+        try (PreparedStatement ps =
+            conn.prepareStatement(
+                "SELECT flow_id, fact_id, fact_json, created_at "
+                    + "FROM agent_facts WHERE created_at > ? ORDER BY created_at ASC")) {
+          ps.setTimestamp(1, watermark);
+          try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+              String flowId = rs.getString("flow_id");
+              String factJson = rs.getString("fact_json");
+              Timestamp createdAt = rs.getTimestamp("created_at");
+              ContextItem item = mapper.readValue(factJson, ContextItem.class);
+              buffer.add(new KeyedContextItem(flowId, item));
+              if (createdAt.after(watermark)) {
+                watermark = createdAt;
+              }
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("PostgresChangeChannel poll failed; will retry: {}", e.getMessage());
+      }
+      return buffer.poll();
     }
   }
 }

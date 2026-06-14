@@ -17,8 +17,8 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.agentic.flink.channel.source.PollingSource;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
-import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,8 +71,11 @@ public class StorageIntegratedFlinkJob {
 
     // Create event source (simulated user interactions)
     DataStream<AgentEvent> events =
-        env.addSource(new ConversationEventSource())
-            .name("ConversationEvents")
+        env.fromSource(
+                new PollingSource<>(new ConversationEventSource()),
+                WatermarkStrategy.noWatermarks(),
+                "ConversationEvents",
+                org.apache.flink.api.common.typeinfo.TypeInformation.of(AgentEvent.class))
             .assignTimestampsAndWatermarks(
                 WatermarkStrategy.<AgentEvent>forMonotonousTimestamps()
                     .withTimestampAssigner(
@@ -326,9 +329,10 @@ public class StorageIntegratedFlinkJob {
    *   <li>Realistic timing between messages
    * </ul>
    */
-  private static class ConversationEventSource implements SourceFunction<AgentEvent> {
+  private static class ConversationEventSource implements PollingSource.PollFn<AgentEvent> {
 
-    private volatile boolean running = true;
+    private transient Random random;
+    private transient int messageCount;
     private static final String[] USERS = {"alice", "bob", "charlie", "diana"};
     private static final String[][] CONVERSATIONS = {
       {
@@ -374,41 +378,32 @@ public class StorageIntegratedFlinkJob {
     };
 
     @Override
-    public void run(SourceContext<AgentEvent> ctx) throws Exception {
-      Random random = new Random();
-      int messageCount = 0;
-
-      while (running && messageCount < 100) {
-        // Select random user
-        String user = USERS[random.nextInt(USERS.length)];
-        String flowId = "flow-" + user;
-        String[] conversation = CONVERSATIONS[random.nextInt(CONVERSATIONS.length)];
-
-        // Select random message from conversation
-        String message = conversation[random.nextInt(conversation.length)];
-
-        // Create event
-        AgentEvent event =
-            new AgentEvent(flowId, user, "conversation-agent", AgentEventType.USER_INPUT_RECEIVED);
-
-        event.putData("userId", user);
-        event.putData("flowId", flowId);
-        event.putData("message", message);
-
-        ctx.collect(event);
-
-        messageCount++;
-
-        // Sleep between messages (100-500ms)
-        Thread.sleep(100 + random.nextInt(400));
-      }
-
-      LOG.info("Event source completed - generated {} messages", messageCount);
+    public void open(int subtaskIndex) {
+      random = new Random();
+      messageCount = 0;
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    public AgentEvent poll(long timeoutMs) throws InterruptedException {
+      if (messageCount >= 100) {
+        Thread.sleep(Math.min(Math.max(1, timeoutMs), 200)); // generated the batch; idle
+        return null;
+      }
+      String user = USERS[random.nextInt(USERS.length)];
+      String flowId = "flow-" + user;
+      String[] conversation = CONVERSATIONS[random.nextInt(CONVERSATIONS.length)];
+      String message = conversation[random.nextInt(conversation.length)];
+
+      AgentEvent event =
+          new AgentEvent(flowId, user, "conversation-agent", AgentEventType.USER_INPUT_RECEIVED);
+      event.putData("userId", user);
+      event.putData("flowId", flowId);
+      event.putData("message", message);
+
+      messageCount++;
+      // Pace between messages (100-500ms), as the original generator did.
+      Thread.sleep(100 + random.nextInt(400));
+      return event;
     }
   }
 }

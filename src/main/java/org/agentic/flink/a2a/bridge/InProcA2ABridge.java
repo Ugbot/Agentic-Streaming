@@ -12,7 +12,6 @@ import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 
 /**
  * In-process {@link A2ABridge}: gateway and Flink job share JVM-static queues keyed by endpoint
@@ -104,8 +103,12 @@ public final class InProcA2ABridge implements A2ABridge {
 
     @Override
     public DataStream<A2ARequest> open(StreamExecutionEnvironment env) {
-      return env.addSource(new InProcRequestSource(endpoint), elementType())
-          .name("a2a-bridge-inproc-requests");
+      return env.fromSource(
+              new org.agentic.flink.channel.source.PollingSource<>(new InProcRequestPollFn(endpoint)),
+              org.apache.flink.api.common.eventtime.WatermarkStrategy.noWatermarks(),
+              "a2a-bridge-inproc-requests",
+              elementType())
+          .setParallelism(1);
     }
 
     @Override
@@ -119,31 +122,24 @@ public final class InProcA2ABridge implements A2ABridge {
     }
   }
 
-  static final class InProcRequestSource implements SourceFunction<A2ARequest> {
+  static final class InProcRequestPollFn
+      implements org.agentic.flink.channel.source.PollingSource.PollFn<A2ARequest> {
     private static final long serialVersionUID = 1L;
     private final String endpoint;
-    private volatile boolean running = true;
+    private transient BlockingQueue<A2ARequest> queue;
 
-    InProcRequestSource(String endpoint) {
+    InProcRequestPollFn(String endpoint) {
       this.endpoint = endpoint;
     }
 
     @Override
-    public void run(SourceContext<A2ARequest> ctx) throws Exception {
-      BlockingQueue<A2ARequest> queue = Hub.requestQueue(endpoint);
-      while (running) {
-        A2ARequest req = queue.poll(200, TimeUnit.MILLISECONDS);
-        if (req != null) {
-          synchronized (ctx.getCheckpointLock()) {
-            ctx.collect(req);
-          }
-        }
-      }
+    public void open(int subtaskIndex) {
+      queue = Hub.requestQueue(endpoint);
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    public A2ARequest poll(long timeoutMs) throws InterruptedException {
+      return queue.poll(Math.max(1, timeoutMs), TimeUnit.MILLISECONDS);
     }
   }
 

@@ -8,8 +8,6 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.legacy.RichSinkFunction;
-import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -84,8 +82,13 @@ public final class RedisA2ABridge implements A2ABridge {
 
     @Override
     public DataStream<A2ARequest> open(StreamExecutionEnvironment env) {
-      return env.addSource(new RedisRequestSource(host, port, channel), elementType())
-          .name("a2a-bridge-redis-requests");
+      return env.fromSource(
+              new org.agentic.flink.channel.source.PollingSource<>(
+                  new RedisRequestPollFn(host, port, channel)),
+              org.apache.flink.api.common.eventtime.WatermarkStrategy.noWatermarks(),
+              "a2a-bridge-redis-requests",
+              elementType())
+          .setParallelism(1);
     }
 
     @Override
@@ -99,59 +102,53 @@ public final class RedisA2ABridge implements A2ABridge {
     }
   }
 
-  static final class RedisRequestSource implements SourceFunction<A2ARequest> {
+  static final class RedisRequestPollFn
+      implements org.agentic.flink.channel.source.PollingSource.PollFn<A2ARequest> {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOG = LoggerFactory.getLogger(RedisRequestSource.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RedisRequestPollFn.class);
     private final String host;
     private final int port;
     private final String channel;
-    private volatile boolean running = true;
+    private transient JedisPool pool;
 
-    RedisRequestSource(String host, int port, String channel) {
+    RedisRequestPollFn(String host, int port, String channel) {
       this.host = host;
       this.port = port;
       this.channel = channel;
     }
 
     @Override
-    public void run(SourceContext<A2ARequest> ctx) {
-      JedisPool pool = new JedisPool(host, port);
-      try {
-        while (running) {
-          try (Jedis jedis = pool.getResource()) {
-            while (running) {
-              // BLPOP blocks up to the timeout, then returns null — so requests queued before we
-              // started are still delivered (no lost messages), and cancel() is seen within ~2s.
-              List<String> res = jedis.blpop(BLPOP_TIMEOUT_SECONDS, channel);
-              if (res == null || res.size() != 2) {
-                continue;
-              }
-              A2ARequest req;
-              try {
-                req = A2AJson.mapper().readValue(res.get(1), A2ARequest.class);
-              } catch (Exception e) {
-                LOG.warn("Dropping malformed A2A request: {}", e.getMessage());
-                continue;
-              }
-              synchronized (ctx.getCheckpointLock()) {
-                ctx.collect(req);
-              }
-            }
-          } catch (RuntimeException e) {
-            if (running) {
-              LOG.warn("Redis request BLPOP loop error, reconnecting: {}", e.getMessage());
-              sleepQuietly();
-            }
-          }
+    public void open(int subtaskIndex) {
+      pool = new JedisPool(host, port);
+    }
+
+    @Override
+    public A2ARequest poll(long timeoutMs) {
+      // BLPOP blocks up to BLPOP_TIMEOUT_SECONDS then returns null — so requests queued before we
+      // started are still delivered (no lost messages), and shutdown is seen within ~2s.
+      try (Jedis jedis = pool.getResource()) {
+        List<String> res = jedis.blpop(BLPOP_TIMEOUT_SECONDS, channel);
+        if (res == null || res.size() != 2) {
+          return null;
         }
-      } finally {
-        pool.close();
+        try {
+          return A2AJson.mapper().readValue(res.get(1), A2ARequest.class);
+        } catch (Exception e) {
+          LOG.warn("Dropping malformed A2A request: {}", e.getMessage());
+          return null;
+        }
+      } catch (RuntimeException e) {
+        LOG.warn("Redis request BLPOP error, will retry: {}", e.getMessage());
+        sleepQuietly();
+        return null;
       }
     }
 
     @Override
-    public void cancel() {
-      running = false;
+    public void close() {
+      if (pool != null) {
+        pool.close();
+      }
     }
   }
 

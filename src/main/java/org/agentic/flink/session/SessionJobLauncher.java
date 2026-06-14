@@ -86,8 +86,11 @@ public final class SessionJobLauncher {
     List<String> products =
         List.of(a.opt("products").orElse("BTC-USD,ETH-USD,SOL-USD").split(","));
     DataStream<Inventory> src =
-        env.addSource(new CoinbaseTickerSource(products), TypeInformation.of(Inventory.class))
-            .name("coinbase-ws[" + String.join(",", products) + "]")
+        env.fromSource(
+                CoinbaseTickerSource.source(products),
+                org.apache.flink.api.common.eventtime.WatermarkStrategy.noWatermarks(),
+                "coinbase-ws[" + String.join(",", products) + "]",
+                TypeInformation.of(Inventory.class))
             .setParallelism(1);
     src.sinkTo(sinkFor(a.require("out"), a, Inventory.class))
         .name("sink[" + a.require("out") + "]")
