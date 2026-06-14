@@ -14,14 +14,26 @@ import java.util.function.BiFunction;
 public final class Retrieval {
   private Retrieval() {}
 
-  /** Deterministic bag-of-words hashing embedder (L2-normalized). */
+  /** FNV-1a 32-bit hash over the UTF-8 bytes of {@code token}. Byte-for-byte identical
+   * to the Python and Go cores, so the embedder produces the same vectors everywhere. */
+  public static int fnv1a32(String token) {
+    long h = 0x811C9DC5L; // FNV offset basis
+    for (byte b : token.getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+      h ^= (b & 0xFF);
+      h = (h * 0x01000193L) & 0xFFFFFFFFL; // FNV prime, kept in 32 bits
+    }
+    return (int) h;
+  }
+
+  /** Deterministic bag-of-words hashing embedder (L2-normalized), FNV-1a bucketed so
+   * it matches the Python/Go cores and is stable across processes. */
   public static float[] embed(String text, int dim) {
     float[] v = new float[dim];
     if (text != null) {
       for (String tok : text.toLowerCase().split("[^a-z0-9]+")) {
         if (tok.isEmpty()) continue;
-        int h = tok.hashCode();
-        v[Math.floorMod(h, dim)] += (h >>> 31) == 0 ? 1.0f : -1.0f;
+        int bucket = (int) (Integer.toUnsignedLong(fnv1a32(tok)) % dim);
+        v[bucket] += 1.0f;
       }
     }
     double n = 0;

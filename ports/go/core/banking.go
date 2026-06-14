@@ -7,7 +7,7 @@ import (
 )
 
 // BankingDim is the embedding dimension used by the banking example.
-const BankingDim = 64
+const BankingDim = 256
 
 // BankingKB is a tiny knowledge base the cards/payments paths retrieve from.
 var BankingKB = map[string]string{
