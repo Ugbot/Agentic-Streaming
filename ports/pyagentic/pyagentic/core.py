@@ -52,10 +52,29 @@ class AgentContext:
     tools: ToolRegistry
     retriever: Optional[TwoTierRetriever] = None
     tool_calls: List[str] = field(default_factory=list)
+    listeners: List[object] = field(default_factory=list)
 
     def call_tool(self, tool_id: str, params: Dict[str, object]) -> object:
         self.tool_calls.append(tool_id)
-        return self.tools.execute(tool_id, params)
+        for ln in self.listeners:
+            _fire(ln, "on_tool_call_start", tool_id, self)
+        try:
+            result = self.tools.execute(tool_id, params)
+        except Exception as exc:
+            for ln in self.listeners:
+                _fire(ln, "on_error", "tool:" + tool_id, exc, self)
+            raise
+        for ln in self.listeners:
+            _fire(ln, "on_tool_call_end", tool_id, result, self)
+        return result
+
+
+def _fire(listener: object, hook: str, *args) -> None:
+    """Call a listener hook if present (listeners need only implement the hooks they care
+    about — duck-typed, so older listeners keep working)."""
+    fn = getattr(listener, hook, None)
+    if callable(fn):
+        fn(*args)
 
 
 class Brain(Protocol):
@@ -117,8 +136,9 @@ class RoutedGraph:
 
     def handle(self, event: Event, ctx: AgentContext) -> TurnResult:
         cid = event.conversation_id
+        ctx.listeners = self.listeners  # so call_tool can fire tool-call hooks
         for ln in self.listeners:
-            ln.on_turn_start(event, ctx)
+            _fire(ln, "on_turn_start", event, ctx)
 
         # Input guardrails: short-circuit a blocked turn before routing.
         for g in self.guardrails:
@@ -127,7 +147,8 @@ class RoutedGraph:
                 ctx.store.put_attribute(cid, PHASE_ATTR, "blocked")
                 blocked = TurnResult(cid, f"[blocked] {reason}", path="blocked", ok=False)
                 for ln in self.listeners:
-                    ln.on_turn_end(blocked, ctx)
+                    _fire(ln, "on_guardrail_block", reason, ctx)
+                    _fire(ln, "on_turn_end", blocked, ctx)
                 return blocked
 
         ctx.store.put_attribute(cid, PHASE_ATTR, "router")
@@ -137,7 +158,7 @@ class RoutedGraph:
         ctx.store.put_attribute(cid, PATH_ATTR, path)
         ctx.store.put_attribute(cid, PHASE_ATTR, "path:" + path)
         for ln in self.listeners:
-            ln.on_routed(path, ctx)
+            _fire(ln, "on_routed", path, ctx)
 
         result = self.paths[path].turn(event, ctx)
         result.path = path
@@ -154,8 +175,10 @@ class RoutedGraph:
             if reason:
                 result.reply = f"[blocked] {reason}"
                 result.ok = False
+                for ln in self.listeners:
+                    _fire(ln, "on_guardrail_block", reason, ctx)
 
         ctx.store.put_attribute(cid, PHASE_ATTR, "done")
         for ln in self.listeners:
-            ln.on_turn_end(result, ctx)
+            _fire(ln, "on_turn_end", result, ctx)
         return result

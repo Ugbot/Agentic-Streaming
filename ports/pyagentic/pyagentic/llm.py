@@ -76,16 +76,21 @@ class LlmBrain:
         system_prompt: str = "",
         tools: Optional[List[str]] = None,
         max_iterations: int = 6,
+        output_schema: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.chat_client = chat_client
         self.name = name
         self.system_prompt = system_prompt
         self.allowed_tools = tools  # None => all registered tools
         self.max_iterations = max(1, max_iterations)
+        self.output_schema = output_schema  # optional structured-output contract
 
     def turn(self, user_text: str, ctx: AgentContext) -> str:
         specs = [s for s in ctx.tools.specs() if self.allowed_tools is None or s["name"] in self.allowed_tools]
         sys_prompt = (self.system_prompt + "\n" + _REACT_SYSTEM + json.dumps(specs)).strip()
+        if self.output_schema is not None:
+            from .structured import schema_instruction
+            sys_prompt += "\n" + schema_instruction(self.output_schema)
         messages: List[Dict[str, str]] = [{"role": "system", "content": sys_prompt}]
         # The agent already appended the user turn; replay the persisted transcript.
         for m in ctx.store.history(ctx.conversation_id):
@@ -100,8 +105,23 @@ class LlmBrain:
                 messages.append({"role": "assistant", "content": json.dumps({"tool": result.tool, "args": result.args})})
                 messages.append({"role": "tool", "content": str(observation)})
                 continue
-            return f"[{self.name}] {result.text}" if result.text else f"[{self.name}] (no answer)"
+            return self._finalize(result.text, ctx)
         return f"[{self.name}] (stopped after {self.max_iterations} steps)"
+
+    def _finalize(self, text: Optional[str], ctx: AgentContext) -> str:
+        if not text:
+            return f"[{self.name}] (no answer)"
+        if self.output_schema is not None:
+            from .structured import parse_structured
+            obj, errors = parse_structured(text, self.output_schema)
+            if errors:
+                for ln in getattr(ctx, "listeners", []):
+                    fn = getattr(ln, "on_error", None)
+                    if callable(fn):
+                        fn("output_schema", ValueError("; ".join(errors)), ctx)
+            elif obj is not None:
+                return f"[{self.name}] {json.dumps(obj)}"
+        return f"[{self.name}] {text}"
 
 
 class StubChatClient:

@@ -26,7 +26,9 @@ from .retrieval import (
 )
 from .embeddings import Embedder, HashingEmbedder, LiteLLMEmbedder, make_embedder
 from .guardrails import Guardrail, RegexGuardrail
-from .listeners import AgentListener, LoggingListener, MetricsListener
+from .listeners import AgentListener, CompositeListener, LoggingListener, MetricsListener
+from .skills import Skill, SkillRegistry
+from .structured import parse_structured, schema_instruction, validate
 from .llm import (
     ChatClient,
     ChatResult,
@@ -78,6 +80,12 @@ __all__ = [
     "LiteLLMEmbedder",
     "make_embedder",
     "LiteLLMChatClient",
+    "CompositeListener",
+    "Skill",
+    "SkillRegistry",
+    "validate",
+    "parse_structured",
+    "schema_instruction",
 ]
 
 __version__ = "0.1.0"

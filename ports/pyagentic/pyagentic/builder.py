@@ -138,16 +138,25 @@ def build(spec: Dict[str, Any], chat_client_factory: Optional[ChatClientFactory]
     tools = _build_tools(spec.get("tools", []))
     retriever, embed = _build_retriever(spec.get("retrieval"))
 
+    from .skills import SkillRegistry
+    skills = SkillRegistry.from_specs(spec.get("skills", []))
+
     paths: Dict[str, Agent] = {}
     for name, ps in path_specs.items():
         brain_kind = ps.get("brain", "rule")
         prompt = ps.get("prompt", f"You answer {name} questions.")
+        # Expand any skills this path declares into extra tools + a prompt fragment.
+        skill_tools, fragment, _facts = skills.expand(ps.get("skills", []))
+        if fragment:
+            prompt = prompt + "\n" + fragment
         if brain_kind == "llm":
             if chat_client_factory is None:
                 raise ValueError("spec uses an llm brain but no chat_client_factory was provided")
             client = chat_client_factory(spec.get("llm", {}))
+            path_tools = list(ps.get("tools", []) or []) + [t for t in skill_tools if t not in (ps.get("tools") or [])]
             brain = LlmBrain(client, name=name, system_prompt=prompt,
-                             tools=ps.get("tools"), max_iterations=int(ps.get("max_iterations", 6)))
+                             tools=path_tools or None, max_iterations=int(ps.get("max_iterations", 6)),
+                             output_schema=ps.get("output_schema"))
         elif brain_kind == "rule":
             brain = KeywordBrain(name, embed, tool_triggers=ps.get("tool_triggers"),
                                  threshold=float(ps.get("threshold", 0.15)))
