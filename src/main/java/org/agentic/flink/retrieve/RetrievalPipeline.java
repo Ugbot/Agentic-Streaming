@@ -89,6 +89,21 @@ public final class RetrievalPipeline {
               .name("retrieve-search[" + corpusSpec.name() + "]");
       return new StageRerank(hits);
     }
+
+    /**
+     * Live two-tier search: merge the {@link HotVectorIndex hot} tier (recent, just-ingested docs)
+     * with the durable cold {@code corpusSpec}, de-duplicated by id, top-{@code k}. A document is
+     * retrievable the instant it lands in the hot window, before the cold index catches up.
+     */
+    public StageRerank searchHotCold(CorpusSpec corpusSpec, HotVectorIndex hot, int k) {
+      Objects.requireNonNull(corpusSpec, "corpusSpec");
+      Objects.requireNonNull(hot, "hot");
+      DataStream<QueryWithHits> hits =
+          upstream.process(new HotColdSearchFn(corpusSpec, hot, k))
+              .returns(QueryWithHits.class)
+              .name("retrieve-search-hotcold[" + corpusSpec.name() + "]");
+      return new StageRerank(hits);
+    }
   }
 
   /** Rerank stage (optional). */
@@ -239,6 +254,50 @@ public final class RetrievalPipeline {
         out.collect(new QueryWithHits(q.getQuestion(), passages));
       } catch (Exception e) {
         LOG.warn("search failed for '{}': {}", q.getQuestion(), e.getMessage());
+      }
+    }
+  }
+
+  /** Two-tier (hot + cold) search operator backing {@link StageSearch#searchHotCold}. */
+  static final class HotColdSearchFn extends ProcessFunction<EmbeddedQuery, QueryWithHits> {
+    private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(HotColdSearchFn.class);
+
+    private final CorpusSpec corpusSpec;
+    private final HotVectorIndex hot;
+    private final int k;
+    private transient Corpus corpus;
+    private transient TwoTierRetriever retriever;
+
+    HotColdSearchFn(CorpusSpec corpusSpec, HotVectorIndex hot, int k) {
+      this.corpusSpec = corpusSpec;
+      this.hot = hot;
+      this.k = Math.max(1, k);
+    }
+
+    @Override
+    public void open(OpenContext openContext) throws Exception {
+      corpus = corpusSpec.bind(getRuntimeContext());
+      TwoTierRetriever.ColdSearch cold = (q, kk) -> corpus.search(q, kk).get();
+      retriever = new TwoTierRetriever(hot, cold, k, k);
+    }
+
+    @Override
+    public void processElement(EmbeddedQuery q, Context ctx, Collector<QueryWithHits> out) {
+      try {
+        List<ScoredItem> hits = retriever.retrieve(q.getEmbedding(), k);
+        List<RetrievedPassage> passages = new ArrayList<>(hits.size());
+        for (ScoredItem si : hits) {
+          String text = si.getItem() == null ? "" : si.getItem().getContent();
+          String url =
+              si.getItem() == null
+                  ? null
+                  : (si.getItem().getMetadata() == null ? null : si.getItem().getMetadata().get("source_url"));
+          passages.add(new RetrievedPassage(si.getId(), text, si.getScore(), url));
+        }
+        out.collect(new QueryWithHits(q.getQuestion(), passages));
+      } catch (Exception e) {
+        LOG.warn("hot+cold search failed for '{}': {}", q.getQuestion(), e.getMessage());
       }
     }
   }
