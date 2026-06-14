@@ -19,12 +19,14 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.channel.source.PollingSource;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.source.legacy.SourceFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,10 +76,11 @@ public final class FlussChannel<T> implements Channel<T> {
 
   @Override
   public DataStream<T> open(StreamExecutionEnvironment env) {
-    return env.addSource(
-            new Source<>(bootstrapServers, database, table, buckets, type, fromBeginning),
-            typeInfo)
-        .name("fluss[" + database + "." + table + "]")
+    PollingSource<T> source =
+        new PollingSource<>(
+            new FlussLogPollFn<>(bootstrapServers, database, table, buckets, type, fromBeginning));
+    return env.fromSource(
+            source, WatermarkStrategy.noWatermarks(), "fluss[" + database + "." + table + "]", typeInfo)
         .setParallelism(1);
   }
 
@@ -140,9 +143,15 @@ public final class FlussChannel<T> implements Channel<T> {
     }
   }
 
-  static final class Source<T> implements SourceFunction<T> {
+  /**
+   * Native FLIP-27 {@link PollingSource.PollFn} that tails a Fluss table's log as a stage-to-stage
+   * stream: opens a {@link LogScanner} subscribed from the beginning of every bucket, and returns one
+   * decoded {@code T} per {@link #poll} (buffering each {@link ScanRecords} batch). This is the
+   * "Fluss logs between stages" boundary — durable, replayable, ordered per bucket.
+   */
+  static final class FlussLogPollFn<T> implements PollingSource.PollFn<T> {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOG = LoggerFactory.getLogger(Source.class);
+    private static final Logger LOG = LoggerFactory.getLogger(FlussLogPollFn.class);
 
     private final String bootstrapServers;
     private final String database;
@@ -151,9 +160,13 @@ public final class FlussChannel<T> implements Channel<T> {
     private final Class<T> type;
     private final boolean fromBeginning;
 
-    private volatile boolean running = true;
+    private transient Connection connection;
+    private transient Table flussTable;
+    private transient LogScanner scanner;
+    private transient ObjectMapper mapper;
+    private transient ArrayDeque<T> buffer;
 
-    Source(
+    FlussLogPollFn(
         String bootstrapServers,
         String database,
         String table,
@@ -169,55 +182,71 @@ public final class FlussChannel<T> implements Channel<T> {
     }
 
     @Override
-    public void run(SourceContext<T> ctx) throws Exception {
-      ObjectMapper mapper =
+    public void open(int subtaskIndex) throws Exception {
+      mapper =
           new ObjectMapper()
               .registerModule(new ParameterNamesModule())
               .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+      buffer = new ArrayDeque<>();
 
       Configuration conf = new Configuration();
       conf.set(ConfigOptions.BOOTSTRAP_SERVERS, List.of(bootstrapServers.split(",")));
+      connection = ConnectionFactory.createConnection(conf);
+      try (Admin admin = connection.getAdmin()) {
+        ensureTable(admin, TablePath.of(database, table));
+      }
+      flussTable = connection.getTable(TablePath.of(database, table));
+      scanner = flussTable.newScan().createLogScanner();
+      for (int b = 0; b < buckets; b++) {
+        // Fluss 0.7 only exposes subscribeFromBeginning; "from latest" lands in a future version.
+        scanner.subscribeFromBeginning(b);
+      }
+      LOG.info(
+          "fluss source open db={} table={} buckets={} fromBeginning={}",
+          database, table, buckets, fromBeginning);
+    }
 
-      try (Connection connection = ConnectionFactory.createConnection(conf);
-          Admin admin = connection.getAdmin()) {
-        TablePath path = TablePath.of(database, table);
-        ensureTable(admin, path);
-        try (Table flussTable = connection.getTable(path);
-            LogScanner scanner = flussTable.newScan().createLogScanner()) {
-          for (int b = 0; b < buckets; b++) {
-            // Fluss 0.7 only exposes subscribeFromBeginning; "from latest" semantics will land
-            // in a future version. The fromBeginning flag is preserved for forward-compat.
-            scanner.subscribeFromBeginning(b);
+    @Override
+    public T poll(long timeoutMs) {
+      if (buffer.isEmpty()) {
+        ScanRecords records = scanner.poll(Duration.ofMillis(Math.max(1, timeoutMs)));
+        if (records == null || records.isEmpty()) {
+          return null;
+        }
+        for (ScanRecord rec : records) {
+          InternalRow row = rec.getRow();
+          String payload = row.getString(FlussSink.COL_PAYLOAD).toString(); // col 0 = key, col 1 = payload
+          try {
+            buffer.add(mapper.readValue(payload, type));
+          } catch (Exception e) {
+            LOG.warn("fluss source: failed to decode payload, skipping: {}", e.getMessage());
           }
-          LOG.info(
-              "fluss source open db={} table={} buckets={} fromBeginning={}",
-              database,
-              table,
-              buckets,
-              fromBeginning);
+        }
+      }
+      return buffer.poll();
+    }
 
-          while (running) {
-            ScanRecords records = scanner.poll(Duration.ofMillis(500));
-            if (records == null || records.isEmpty()) {
-              continue;
-            }
-            for (ScanRecord rec : records) {
-              if (!running) {
-                return;
-              }
-              InternalRow row = rec.getRow();
-              // payload is column 1 (col 0 is the key).
-              String payload = row.getString(FlussSink.COL_PAYLOAD).toString();
-              try {
-                T value = mapper.readValue(payload, type);
-                synchronized (ctx.getCheckpointLock()) {
-                  ctx.collect(value);
-                }
-              } catch (Exception e) {
-                LOG.warn("fluss source: failed to decode payload, skipping: {}", e.getMessage());
-              }
-            }
-          }
+    @Override
+    public void close() {
+      if (scanner != null) {
+        try {
+          scanner.close();
+        } catch (Exception ignored) {
+          // best-effort
+        }
+      }
+      if (flussTable != null) {
+        try {
+          flussTable.close();
+        } catch (Exception ignored) {
+          // best-effort
+        }
+      }
+      if (connection != null) {
+        try {
+          connection.close();
+        } catch (Exception ignored) {
+          // best-effort
         }
       }
     }
@@ -238,11 +267,6 @@ public final class FlussChannel<T> implements Channel<T> {
         admin.createTable(path, descriptor, true).get();
         LOG.info("fluss source created table {} (buckets={})", path, buckets);
       }
-    }
-
-    @Override
-    public void cancel() {
-      running = false;
     }
   }
 }
