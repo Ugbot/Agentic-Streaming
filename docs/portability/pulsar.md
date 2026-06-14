@@ -40,9 +40,9 @@ store and rebalancing for you).
 | **C11** distributed scale | **N** — instances scale per partition; the broker rebalances key ownership. |
 | **C12** topology builder | **N** — chained functions and topics form the DAG. |
 
-With Pekko, Pulsar Functions is one of only two engines besides Flink here to give
-**C1+C2+C3 all natively** — and the only one that does it in Flink's topic-in/topic-out
-streaming shape.
+With Pekko and Temporal, Pulsar Functions is one of only three engines besides Flink
+here to give **C1+C2+C3 all natively** — and the only one of them that does it in
+Flink's topic-in/topic-out streaming shape.
 
 ## 3. The core abstractions on Pulsar Functions
 

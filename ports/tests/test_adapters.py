@@ -9,8 +9,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 _ROOT = Path(__file__).resolve().parents[1]
-for sub in ("pyagentic", "pyagentic/tests", "dask", "airflow", "faust", "ray", "celery"):
+for sub in ("pyagentic", "pyagentic/tests", "dask", "airflow", "faust", "ray", "celery", "nats"):
     sys.path.insert(0, str(_ROOT / sub))
 
 
@@ -90,3 +92,71 @@ def test_celery_propagates_an_extended_core_graph():
         assert rt.submit(Event("c-ok", "what is my balance?", "alice")).path == "payments"
     finally:
         cl.configure()  # restore the default banking deps for other tests
+
+
+def test_nats_adapter_imports_without_engine():
+    import agentic_nats as na
+
+    assert hasattr(na, "NatsRuntime")
+    # Engine-guarded: importable for inspection even when nats-py is absent.
+    assert na.nats is None or hasattr(na.nats, "connect")
+
+
+def test_nats_jetstream_kv_roundtrip_and_extension():
+    """Runs against a live JetStream server when one is reachable (skips otherwise).
+    Exercises the durable-KV state path AND an extended core graph through the same
+    NATS seam — proving a core addition flows through with no adapter change.
+
+    Everything runs in ONE event loop: a nats connection is bound to the loop it was
+    created on, so connect + all ops must share a single ``asyncio.run``.
+    """
+    import asyncio
+    import uuid
+
+    import agentic_nats as na
+    from pyagentic.core import Event
+    from test_extensibility import extended_graph, extended_tools
+
+    if na.nats is None:
+        pytest.skip("nats-py not installed")
+
+    # Unique ids per run — the JetStream KV bucket is durable, so fixed ids would
+    # accumulate transcript across runs.
+    suffix = uuid.uuid4().hex[:8]
+    cid1, cid2, cidf = f"t1-{suffix}", f"t2-{suffix}", f"tf-{suffix}"
+
+    async def _scenario():
+        rt = na.NatsRuntime()
+        try:
+            await asyncio.wait_for(rt.connect(), timeout=2)
+        except Exception as exc:  # no server on AGENTIC_NATS_URL
+            return {"skip": f"no NATS JetStream server reachable: {exc}"}
+
+        out = {}
+        # 1) default banking essence: routing + durable KV state across turns
+        r1 = await rt.submit(Event(cid1, "what card types do you offer?", "demo"))
+        await rt.submit(Event(cid1, "tell me about crypto cash-back", "demo"))
+        r2 = await rt.submit(Event(cid2, "what is my balance?", "demo"))
+        store, _o, _rev = await rt._load(cid1)
+        out["r1_path"] = r1.path
+        out["r2_path"], out["r2_tools"] = r2.path, r2.tool_calls
+        out["t1_count"] = store.message_count(cid1)
+        await rt.close()
+
+        # 2) extended core graph (new path + tool) through the same NATS seam
+        rt2 = na.NatsRuntime(graph=extended_graph(), tools=extended_tools())
+        await rt2.connect()
+        res = await rt2.submit(Event(cidf, "my card was stolen, please freeze it", "alice"))
+        out["fraud_path"], out["fraud_reply"], out["fraud_tools"] = res.path, res.reply, res.tool_calls
+        await rt2.close()
+        return out
+
+    out = asyncio.run(_scenario())
+    if "skip" in out:
+        pytest.skip(out["skip"])
+
+    assert out["r1_path"] == "cards"
+    assert out["r2_path"] == "payments" and "get_balance" in out["r2_tools"]
+    assert out["t1_count"] == 4  # two turns (user+assistant x2) durable in JetStream KV
+    assert out["fraud_path"] == "fraud"
+    assert "freeze_card" in out["fraud_tools"] and "FRZ-alice" in out["fraud_reply"]

@@ -36,10 +36,11 @@ but everything load-bearing maps cleanly and natively.
 | **C11** distributed scale | **N** — cluster + sharding rebalances entities across nodes. |
 | **C12** topology builder | **N** — the actor graph / Pekko Streams graph DSL. |
 
-The standout: Pekko is the **only engine besides Flink** in this series that gives
-**C1 + C2 + C3 all natively** (Kafka Streams does too, in the streaming paradigm; Ray
-does C1+C2 in memory but pushes C3 to an external store). Pekko gets durability for
-free via Persistence.
+The standout: Pekko is one of only **three engines besides Flink** in this series
+(with **Pulsar Functions** and **Temporal**) that give **C1 + C2 + C3 all natively**
+(Kafka Streams does too, in the streaming paradigm; Ray does C1+C2 in memory but pushes
+C3 to an external store). Pekko gets durability for free via Persistence — the
+actor-model peer of Temporal's event-sourced workflows.
 
 ## 3. The core abstractions on Pekko
 
