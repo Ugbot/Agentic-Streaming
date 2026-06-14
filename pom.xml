@@ -494,15 +494,15 @@
                 </executions>
             </plugin>
 
-            <!-- Maven Surefire Plugin - exclude integration tests by default -->
+            <!-- Maven Surefire Plugin - exclude integration + DJL (live-download) tests by default -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <excludedGroups>integration</excludedGroups>
+                    <excludedGroups>integration,djl</excludedGroups>
                     <!--
-                    Flink 1.20 on Java 17: Kryo / Twitter Chill reflective access into JDK
+                    Flink on Java 17: Kryo / Twitter Chill reflective access into JDK
                     internals is blocked by the module system without these opens. Mirrors
                     Flink's own recommended JVM args.
                     -->
@@ -584,6 +584,35 @@
                         <configuration>
                             <excludedGroups>none</excludedGroups>
                             <groups>integration</groups>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+        DJL live profile. The default build pulls the DJL API + pytorch-engine but not the native
+        PyTorch shared library (a no-DL build stays small). Enabling this profile selects the live
+        DJL test group ({@code @Tag("djl")}); DJL's pytorch-engine auto-downloads the
+        platform-matched CPU native + JNI on first model load (cached under ~/.djl.ai), so no
+        platform-specific Maven classifier is needed:
+
+            mvn test -P djl-native -Dtest=DjlRecallIT     # live embed + recall + micro-benchmark
+
+        For a fully offline/air-gapped jar, add ai.djl.pytorch:pytorch-native-cpu with your
+        platform's DJL classifier (osx-aarch64 / linux-x86_64 / …) at the call site.
+        -->
+        <profile>
+            <id>djl-native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <configuration>
+                            <excludedGroups>none</excludedGroups>
+                            <groups>djl</groups>
                         </configuration>
                     </plugin>
                 </plugins>
