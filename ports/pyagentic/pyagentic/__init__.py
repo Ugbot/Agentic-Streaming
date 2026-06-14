@@ -24,6 +24,8 @@ from .retrieval import (
     cosine,
     hashing_embedder,
 )
+from .guardrails import Guardrail, RegexGuardrail
+from .listeners import AgentListener, LoggingListener, MetricsListener
 from .llm import (
     ChatClient,
     ChatResult,
@@ -61,6 +63,11 @@ __all__ = [
     "StubChatClient",
     "OllamaChatClient",
     "OpenAIChatClient",
+    "Guardrail",
+    "RegexGuardrail",
+    "AgentListener",
+    "LoggingListener",
+    "MetricsListener",
 ]
 
 __version__ = "0.1.0"

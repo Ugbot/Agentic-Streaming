@@ -99,28 +99,63 @@ class RoutedGraph:
     routed keyed state.
     """
 
-    def __init__(self, router: Router, paths: Dict[str, Agent], verifier: Optional[Verifier] = None):
+    def __init__(
+        self,
+        router: Router,
+        paths: Dict[str, Agent],
+        verifier: Optional[Verifier] = None,
+        guardrails: Optional[list] = None,
+        listeners: Optional[list] = None,
+    ):
         if not paths:
             raise ValueError("RoutedGraph requires at least one path")
         self.router = router
         self.paths = dict(paths)
         self.verifier = verifier
+        self.guardrails = list(guardrails or [])
+        self.listeners = list(listeners or [])
 
     def handle(self, event: Event, ctx: AgentContext) -> TurnResult:
-        ctx.store.put_attribute(event.conversation_id, PHASE_ATTR, "router")
+        cid = event.conversation_id
+        for ln in self.listeners:
+            ln.on_turn_start(event, ctx)
+
+        # Input guardrails: short-circuit a blocked turn before routing.
+        for g in self.guardrails:
+            reason = g.check_input(event.text)
+            if reason:
+                ctx.store.put_attribute(cid, PHASE_ATTR, "blocked")
+                blocked = TurnResult(cid, f"[blocked] {reason}", path="blocked", ok=False)
+                for ln in self.listeners:
+                    ln.on_turn_end(blocked, ctx)
+                return blocked
+
+        ctx.store.put_attribute(cid, PHASE_ATTR, "router")
         path = self.router(event, ctx)
         if path not in self.paths:
             path = next(iter(self.paths))  # fall back to the first declared path
-        ctx.store.put_attribute(event.conversation_id, PATH_ATTR, path)
-        ctx.store.put_attribute(event.conversation_id, PHASE_ATTR, "path:" + path)
+        ctx.store.put_attribute(cid, PATH_ATTR, path)
+        ctx.store.put_attribute(cid, PHASE_ATTR, "path:" + path)
+        for ln in self.listeners:
+            ln.on_routed(path, ctx)
 
         result = self.paths[path].turn(event, ctx)
         result.path = path
 
         if self.verifier is not None:
-            ctx.store.put_attribute(event.conversation_id, PHASE_ATTR, "verifier")
+            ctx.store.put_attribute(cid, PHASE_ATTR, "verifier")
             ok, annotated = self.verifier(result.reply, ctx)
             result.ok = ok
             result.reply = annotated
-        ctx.store.put_attribute(event.conversation_id, PHASE_ATTR, "done")
+
+        # Output guardrails: redact/replace a disallowed reply.
+        for g in self.guardrails:
+            reason = g.check_output(result.reply)
+            if reason:
+                result.reply = f"[blocked] {reason}"
+                result.ok = False
+
+        ctx.store.put_attribute(cid, PHASE_ATTR, "done")
+        for ln in self.listeners:
+            ln.on_turn_end(result, ctx)
         return result
