@@ -36,6 +36,20 @@
       <artifactId>kafka-streams</artifactId>
       <version>${kafka.version}</version>
     </dependency>
+
+    <!-- TopologyTestDriver: run the topology with no broker. -->
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams-test-utils</artifactId>
+      <version>${kafka.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -47,6 +61,11 @@
         <configuration>
           <release>17</release>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
       </plugin>
 
       <!-- `mvn -f ports/kafka-streams/pom.xml exec:java` prints the topology. -->

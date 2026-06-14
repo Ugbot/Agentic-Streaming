@@ -49,9 +49,17 @@ public final class ConversationActor {
 
   private ConversationActor() {}
 
-  /** Behavior factory — one per {@code conversationId}. Its captured stores ARE the
-   * keyed state for that conversation. */
+  /** Behavior factory — one per {@code conversationId}, over the default banking
+   * essence. */
   public static Behavior<Command> create(String conversationId) {
+    return create(conversationId, Banking.buildGraph(), Banking.defaultTools(), Banking.retriever());
+  }
+
+  /** Injectable behavior factory — run any graph/tools/retriever built from the public
+   * core abstractions (e.g. an extended graph) on the Pekko actor seam. Its captured
+   * stores ARE the keyed state for that conversation. */
+  public static Behavior<Command> create(String conversationId, RoutedGraph graph,
+                                          ToolRegistry tools, Retrieval.TwoTierRetriever retriever) {
     return Behaviors.setup(
         ctx -> {
           // Per-conversation state lives in the actor (single-writer). For durability
@@ -59,9 +67,6 @@ public final class ConversationActor {
           // Persistence) or write through to a Redis/Fluss-backed ConversationStore.
           final ConversationStore store = new ConversationStore.InMemory();
           final KeyedStateStore state = new KeyedStateStore.InMemory();
-          final ToolRegistry tools = Banking.defaultTools();
-          final Retrieval.TwoTierRetriever retriever = Banking.retriever();
-          final RoutedGraph graph = Banking.buildGraph();
 
           return Behaviors.receive(Command.class)
               .onMessage(
