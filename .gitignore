@@ -69,3 +69,8 @@ target/runtime-classpath.txt
 
 # Cloned hackathon template + harness (external repos, not part of this project)
 hackathons/
+
+# Python build artifacts
+*.egg-info/
+__pycache__/
+.pytest_cache/
