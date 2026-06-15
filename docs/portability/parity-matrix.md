@@ -64,6 +64,7 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
 | **Faust** | Python | streamed | Kafka partition | Kafka changelog | core build³ | import‑guarded |
 | **Kafka Streams** | JVM | streamed | partition | txn EOS | engine Runtime⁴ | TopologyTestDriver |
 | **Pekko** | JVM | online/actor | actor mailbox | Persistence | engine Runtime⁴ | ActorTestKit ✅ |
+| **Clojure** (first‑class) | Clojure | online | per‑conv serialize | **Datomic** (immutable) | **✅ EDN+YAML** | runs live ✅ |
 | **Temporal** | JVM/Go | online | one exec/id | event‑sourced | engine Runtime⁴ | testsuite ✅ |
 | **Pulsar Functions** | JVM | streamed | Key_Shared | BookKeeper state | engine Runtime⁴ | in‑mem ctx ✅ |
 | **Ray** | Python | online/actor | actor | external | core build³ | import‑guarded |
@@ -92,6 +93,11 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
 - **Ray** keeps C1+C2 in memory; durability (C3) is write‑through to an external store.
 - **Python wheels**: Faust/Ray can't run on this box's Python 3.14 (import‑guarded); their
   agent logic is the tested core.
+- **Clojure** is the one backend that is *not* core‑backed: it's a **pure‑Clojure
+  reimplementation** of the essence (no `jagentic-core` dep), kept at parity by the same FNV +
+  banking goldens. Single‑writer (C2) is a per‑conversation convention; durability (C3) is
+  **Datomic** — immutable datoms give the conversation log + time‑travel natively. See
+  [`clojure.md`](clojure.md) and [`../../agentic-clj/`](../../agentic-clj/).
 
 ## 3. What stays Flink‑first (by design)
 
