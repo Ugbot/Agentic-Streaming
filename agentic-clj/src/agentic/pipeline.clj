@@ -8,6 +8,8 @@
             [clj-http.client :as http]
             [clojure.data.json :as json]
             [agentic.tools :as tools]
+            [agentic.mcp-client :as mcpc]
+            [agentic.a2a :as a2a]
             [agentic.brain :as brain]
             [agentic.llm :as llm]
             [agentic.retrieval :as r]
@@ -33,6 +35,40 @@
                                                    :body))))
           (throw (ex-info (str "unknown tool kind " kind) {:id id})))))
     reg))
+
+(defn- register-mcp
+  "Read `mcp:` specs (each {name, command [+ args], transport, env}) — for each, spawn a stdio MCP
+   client and register its discovered tools into `reg` under the prefix `<name>_`. Mirrors the
+   Java/Python/Go registerMcp. transport must be \"stdio\". command may be a vector, or a string with
+   a separate args vector. Returns reg."
+  [reg mcp-specs]
+  (doseq [m mcp-specs]
+    (let [transport (get m "transport" "stdio")
+          _ (when-not (= "stdio" transport)
+              (throw (ex-info (str "unsupported MCP transport " transport) {:transport transport})))
+          name (get m "name")
+          raw-command (get m "command")
+          args (get m "args")
+          command (cond
+                    (sequential? raw-command) (vec raw-command)
+                    (some? args) (vec (cons raw-command args))
+                    :else [raw-command])
+          env (get m "env")
+          client (mcpc/mcp-client command env)]
+      (mcpc/register client reg (str name "_"))))
+  reg)
+
+(defn- register-a2a
+  "Read `a2a:` specs (each {id, url, description, retries}) — register each peer as a delegating tool
+   under its `id`. Mirrors the Java/Python/Go registerA2A. Returns reg."
+  [reg a2a-specs]
+  (doseq [a a2a-specs]
+    (let [id (get a "id")
+          url (get a "url")
+          desc (get a "description" id)
+          retries (as-int (get a "retries") 2)]
+      (tools/register reg id desc (a2a/peer-tool url retries))))
+  reg)
 
 (defn- build-retriever [retrieval dim]
   (when retrieval
@@ -134,7 +170,9 @@
         retriever (build-retriever retrieval dim)
         context (get spec "context")
         cc (or chat-client (build-chat-client (get spec "llm")))
-        reg (build-tools (get spec "tools"))
+        reg (-> (build-tools (get spec "tools"))
+                (register-mcp (get spec "mcp"))
+                (register-a2a (get spec "a2a")))
         path-specs (apply-skills (get agent "paths") (get spec "skills"))
         paths (into {} (map (fn [[name pspec]]
                               [name {:name name :prompt (get pspec "prompt" "")
