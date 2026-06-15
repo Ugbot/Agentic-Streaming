@@ -70,6 +70,12 @@ from .longterm import (
     make_long_term_store,
 )
 from .runtime import LocalRuntime, Runtime
+from .suspend import (
+    HumanGate,
+    InMemorySuspensionService,
+    Suspension,
+    SuspensionService,
+)
 from .replay import EventLog, InMemoryEventLog, replay, replay_until
 from .stream import Channel, EventObserver, QueueChannel, SeedChannel, StreamRuntime
 from .timers import (
@@ -116,6 +122,10 @@ __all__ = [
     "hashing_embedder",
     "LocalRuntime",
     "Runtime",
+    "HumanGate",
+    "InMemorySuspensionService",
+    "Suspension",
+    "SuspensionService",
     "Channel",
     "SeedChannel",
     "QueueChannel",
