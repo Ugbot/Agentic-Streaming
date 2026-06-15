@@ -32,7 +32,7 @@ from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.java_gateway import get_gateway
 
 env = StreamExecutionEnvironment.get_execution_environment()
-env.add_jars("file:///path/to/agentic-flink-1.0.0-SNAPSHOT.jar")
+env.add_jars("file:///path/to/agentic-flink-1.0.0-SNAPSHOT-uber.jar")
 
 gw = get_gateway()
 Agent = gw.jvm.org.agentic.flink.dsl.Agent

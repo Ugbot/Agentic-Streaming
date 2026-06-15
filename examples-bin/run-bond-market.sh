@@ -22,7 +22,7 @@ if ! (printf '' >/dev/tcp/${KAFKA_BOOTSTRAP%:*}/${KAFKA_BOOTSTRAP#*:}) 2>/dev/nu
 fi
 ok "Kafka reachable"
 
-JAR="$REPO/target/agentic-flink-1.0.0-SNAPSHOT.jar"
+JAR="$REPO/target/agentic-flink-1.0.0-SNAPSHOT-uber.jar"
 if [[ ! -f "$JAR" ]]; then
   info "building jar..."
   ( cd "$REPO" && mvn -q -DskipTests package )

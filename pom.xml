@@ -24,7 +24,7 @@
         <a2a.version>1.0.0.Alpha3</a2a.version>
         <lombok.version>1.18.38</lombok.version>
         <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
-        <junit.version>5.8.1</junit.version>
+        <junit.version>5.10.2</junit.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -39,6 +39,14 @@
                 <version>${a2a.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- Pin commons-lang3 to the modern version Flink 2.x ships, so neither the uber-jar
+                 nor downstream consumers pick up a stale Range/StringUtils from a transitive dep
+                 (a pre-3.13 commons-lang3 lacks Range.of and breaks Flink's runtime). -->
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+                <version>3.19.0</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -457,6 +465,16 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!--
+                            Attach the fat jar under the `uber` classifier and keep the MAIN
+                            artifact thin. Maven consumers of agentic-flink (a2a-gateway,
+                            banking-job, …) then get the plain classes + correct transitive deps
+                            (e.g. commons-lang3 3.19.0) instead of a 260MB uber-jar that bundles —
+                            and accidentally shadows with — stale third-party classes. Use the
+                            `-uber` jar for `flink run` / cluster upload (see examples-bin/*).
+                            -->
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>uber</shadedClassifierName>
                             <artifactSet>
                                 <excludes>
                                     <exclude>org.apache.flink:flink-shaded-force-shading</exclude>

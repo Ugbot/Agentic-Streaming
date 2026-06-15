@@ -57,8 +57,11 @@ tests/test_vector_memory_spec.py ................... 6 passed
 The skipped pair require `apache-flink` (PyFlink); intentional optional path.
 
 ### 3. Build artifacts
-- `target/agentic-flink-1.0.0-SNAPSHOT.jar` — 127 MB shaded jar (everything but
-  Flink, which stays `provided`).
+- `target/agentic-flink-1.0.0-SNAPSHOT.jar` — thin (~1.3 MB) main artifact: just the
+  framework classes. Maven consumers (a2a-gateway, banking-job, …) depend on this, so they
+  resolve clean transitive dependencies.
+- `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar` — fat shaded jar (~260 MB, everything but
+  Flink which stays `provided`) for `flink run` / cluster upload / `java -cp`.
 - `python/dist/agentic_flink-1.0.0a1-py3-none-any.whl` — 46 KB.
 - `python/dist/agentic_flink-1.0.0a1.tar.gz` — 39 KB.
 - Both Python artifacts pass `twine check` (READMEs render, metadata complete,
@@ -151,7 +154,7 @@ mvn -DskipTests package                                           # produces tar
 # Python facade
 python3 -m venv /tmp/af-venv && source /tmp/af-venv/bin/activate
 pip install -e python/ pytest jupyter
-export AGENTIC_FLINK_JAR="$(pwd)/target/agentic-flink-1.0.0-SNAPSHOT.jar"
+export AGENTIC_FLINK_JAR="$(pwd)/target/agentic-flink-1.0.0-SNAPSHOT-uber.jar"
 pytest python/                                                    # 20 passed
 
 # Notebook

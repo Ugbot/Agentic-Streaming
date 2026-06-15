@@ -132,7 +132,11 @@ mvn clean package
 [INFO] BUILD SUCCESS
 ```
 
-This creates a runnable JAR file with everything bundled.
+This produces **two** jars under `target/`:
+- `agentic-flink-1.0.0-SNAPSHOT.jar` — a thin jar of just the framework classes (what other
+  Maven modules depend on, so they get clean transitive dependencies).
+- `agentic-flink-1.0.0-SNAPSHOT-uber.jar` — the fat, everything-bundled jar you run directly
+  with `java -cp` or submit with `flink run` (used throughout this guide).
 
 **If you get errors:**
 - Check Java version: `java -version` (must be 11+)
@@ -152,7 +156,7 @@ This example shows a basic agent that:
 
 **Run it:**
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.SimpleAgentExample
 ```
 
@@ -301,7 +305,7 @@ request.addParameter("b", 500);
 **Rebuild and run:**
 ```bash
 mvn clean package
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.SimpleAgentExample
 ```
 
@@ -322,7 +326,7 @@ This agent can read documents, remember them, and answer questions.
 
 **Run it:**
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.RagAgentExample
 ```
 
@@ -339,7 +343,7 @@ This shows how agents manage memory.
 
 **Run it:**
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.ContextManagementExample
 ```
 
@@ -455,7 +459,7 @@ public class MyFirstAgentExample {
 ```bash
 mvn clean package
 
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.MyFirstAgentExample
 ```
 

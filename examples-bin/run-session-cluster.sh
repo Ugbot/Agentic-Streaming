@@ -44,7 +44,7 @@ echo
 cat <<EOF
 Next:
   1. Build the jar:           mvn -DskipTests package
-  2. Upload to the cluster:   curl -X POST -F "jarfile=@target/agentic-flink-1.0.0-SNAPSHOT.jar" $FLINK_REST/jars/upload
+  2. Upload to the cluster:   curl -X POST -F "jarfile=@target/agentic-flink-1.0.0-SNAPSHOT-uber.jar" $FLINK_REST/jars/upload
   3. List jars:               curl $FLINK_REST/jars
   4. Run a level:             curl -X POST $FLINK_REST/jars/{id}/run -d '{"entryClass":"org.agentic.flink.session.SessionJobLauncher","programArgsList":["--level","producer","--out","tcp://0.0.0.0:5560"]}'
 

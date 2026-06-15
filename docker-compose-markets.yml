@@ -12,7 +12,7 @@
 #
 # Then either:
 #   python examples-bin/markets/coinbase_producer.py --products BTC-USD,ETH-USD,SOL-USD
-#   flink run target/agentic-flink-1.0.0-SNAPSHOT.jar \
+#   flink run target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
 #       org.agentic.flink.example.markets.CryptoMarketAgentExample
 
 include:

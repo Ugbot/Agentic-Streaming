@@ -20,7 +20,7 @@ This guide walks through each example in detail, explaining what happens at each
 ### Running It
 
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.SimpleAgentExample
 ```
 
@@ -194,7 +194,7 @@ When you run this, you'll see:
 ### Running It
 
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.RagAgentExample
 ```
 
@@ -379,7 +379,7 @@ AgentEvent embeddingEvent = createEmbeddingEvent(
 ### Running It
 
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.ContextManagementExample
 ```
 
@@ -708,7 +708,7 @@ public class WeatherAgentExample {
 ```bash
 mvn clean package
 
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.WeatherAgentExample
 ```
 

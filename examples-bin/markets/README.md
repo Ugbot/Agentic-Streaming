@@ -28,7 +28,7 @@ python examples-bin/markets/bond_trades_producer.py      &
 ### Bond pipeline — Java flavour
 
 ```bash
-JAR=target/agentic-flink-1.0.0-SNAPSHOT.jar
+JAR=target/agentic-flink-1.0.0-SNAPSHOT-uber.jar
 java -cp "$JAR" org.agentic.flink.example.markets.producer.BondSecuritiesProducer --count 50000 --rate 500 &
 java -cp "$JAR" org.agentic.flink.example.markets.producer.BondInventoryProducer  --rate 500 --batch 50 &
 java -cp "$JAR" org.agentic.flink.example.markets.producer.BondTradesProducer     --rate 200 &

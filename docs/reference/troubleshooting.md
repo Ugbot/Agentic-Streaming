@@ -268,13 +268,13 @@ org.agentic.flink.example.SimpleAgentExample
 
 1. **Verify the JAR was built:**
    ```bash
-   ls -lh target/agentic-flink-1.0.0-SNAPSHOT.jar
+   ls -lh target/agentic-flink-1.0.0-SNAPSHOT-uber.jar
    # Should be ~38MB
    ```
 
 2. **Check if class exists in JAR:**
    ```bash
-   jar tf target/agentic-flink-1.0.0-SNAPSHOT.jar | grep SimpleAgentExample
+   jar tf target/agentic-flink-1.0.0-SNAPSHOT-uber.jar | grep SimpleAgentExample
    ```
 
 3. **Rebuild with clean:**
@@ -284,7 +284,7 @@ org.agentic.flink.example.SimpleAgentExample
 
 4. **Run with correct classpath:**
    ```bash
-   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
      org.agentic.flink.example.SimpleAgentExample
    ```
 
@@ -304,16 +304,16 @@ Error: Could not find or load main class org.agentic.flink.example.SimpleAgentEx
 1. **Use correct syntax:**
    ```bash
    # Correct
-   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar org.agentic.flink.example.SimpleAgentExample
+   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample
 
    # Wrong (missing -cp)
-   java target/agentic-flink-1.0.0-SNAPSHOT.jar org.agentic.flink.example.SimpleAgentExample
+   java target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample
    ```
 
 2. **Check package name:**
    ```bash
    # Look inside the JAR
-   unzip -l target/agentic-flink-1.0.0-SNAPSHOT.jar | grep SimpleAgentExample
+   unzip -l target/agentic-flink-1.0.0-SNAPSHOT-uber.jar | grep SimpleAgentExample
    ```
 
 3. **Rebuild:**
@@ -701,7 +701,7 @@ Exception in thread "main"
 1. **Increase heap size:**
    ```bash
    java -Xmx4g -Xms1g \
-     -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+     -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
      org.agentic.flink.example.SimpleAgentExample
    ```
 
@@ -711,7 +711,7 @@ Exception in thread "main"
    java -Xmx4g -Xms1g \
         -XX:+UseG1GC \
         -XX:MaxMetaspaceSize=512m \
-        -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+        -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
         org.agentic.flink.example.SimpleAgentExample
    ```
 
@@ -1066,7 +1066,7 @@ ollama pull llama2:latest
 ollama pull nomic-embed-text
 
 # 7. Test
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.SimpleAgentExample
 ```
 

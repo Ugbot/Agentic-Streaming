@@ -285,7 +285,7 @@ mvn clean package
 
 ### 2. Run Production Job
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
+java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
     org.agentic.flink.example.ProductionFlinkAgentsJob
 ```
 
