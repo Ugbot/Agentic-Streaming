@@ -28,6 +28,9 @@
     <!-- pekko-connectors-kafka has its own version line (not in pekko-bom). -->
     <pekko.connectors.kafka.version>1.1.0</pekko.connectors.kafka.version>
     <scala.binary>2.13</scala.binary>
+    <!-- Default exec main class; override with -Dexec.mainClass=… (e.g. PipelineMain, RecoveryDemo,
+         http.HttpMain). Using a property here keeps the -D override working. -->
+    <exec.mainClass>org.jagentic.pekko.Main</exec.mainClass>
   </properties>
 
   <dependencyManagement>
@@ -167,7 +170,7 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.2.0</version>
         <configuration>
-          <mainClass>org.jagentic.pekko.Main</mainClass>
+          <mainClass>${exec.mainClass}</mainClass>
         </configuration>
       </plugin>
     </plugins>

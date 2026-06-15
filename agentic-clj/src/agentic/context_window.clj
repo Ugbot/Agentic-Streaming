@@ -31,3 +31,15 @@
          (filter (fn [[i _]] (kept i)))
          (map second)
          vec)))
+
+(defn compact-history
+  "Compact a chat transcript [{:role :content}] to fit max-tokens (MoSCoW): the two most-recent
+   messages are MUST, the rest SHOULD; preserves chat order. Returns [{:role :content}]."
+  [history {:keys [max-tokens] :or {max-tokens 512}}]
+  (let [n (count history)
+        items (map-indexed (fn [i m]
+                             {:role (:role m) :text (:content m)
+                              :priority (if (>= i (- n 2)) :must :should)})
+                           history)]
+    (mapv (fn [it] {:role (:role it) :content (:text it)})
+          (compact items max-tokens))))

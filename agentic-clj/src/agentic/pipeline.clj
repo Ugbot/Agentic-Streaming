@@ -35,19 +35,68 @@
 
 (defn- build-retriever [retrieval dim]
   (when retrieval
-    (let [hot (r/hot-index)]
-      (doseq [doc (get retrieval "kb")]
+    (let [kb (get retrieval "kb")
+          vector-store (get retrieval "vector_store")
+          idx (r/hot-index)]
+      (doseq [doc kb]
         (let [text (get doc "text")]
-          (r/upsert hot (get doc "id") (r/embed text dim) text)))
-      (r/two-tier hot nil 4 4))))
+          (r/upsert idx (get doc "id") (r/embed text dim) text)))
+      ;; When a vector_store (cold tier) is declared, the KB lives there and the hot index stays
+      ;; empty for runtime working-memory upserts — mirroring the cores. Clojure's cold tier is exact
+      ;; cosine KNN (a correctness-superset of HNSW ANN); the matrix records that nuance.
+      (if vector-store
+        (r/two-tier (r/hot-index) (fn [q k] (r/search idx q k)) 4 4)
+        (r/two-tier idx nil 4 4)))))
 
-(defn- build-brain [path-name pspec dim chat-client]
+(defn- build-chat-client
+  "Build the ChatClient from the spec's `llm:` section. provider: stub (deterministic, from `script`)
+   | ollama | openai. Returns nil when no `llm:` section (build-brain then uses an 'ok' stub)."
+  [llm-spec]
+  (when llm-spec
+    (case (get llm-spec "provider" "stub")
+      "stub" (apply llm/stub-chat-client
+                    (mapv (fn [step]
+                            (if (contains? step "tool")
+                              {:tool (get step "tool") :args (or (get step "args") {})}
+                              {:text (get step "text" "ok")}))
+                          (get llm-spec "script")))
+      "ollama" (llm/ollama-chat-client (cond-> {}
+                                         (get llm-spec "base_url") (assoc :base-url (get llm-spec "base_url"))
+                                         (get llm-spec "model") (assoc :model (get llm-spec "model"))))
+      "openai" (llm/openai-chat-client (cond-> {}
+                                         (get llm-spec "base_url") (assoc :base-url (get llm-spec "base_url"))
+                                         (get llm-spec "model") (assoc :model (get llm-spec "model"))
+                                         (get llm-spec "api_key") (assoc :api-key (get llm-spec "api_key"))))
+      nil)))
+
+(defn- build-brain [path-name pspec dim chat-client context]
   (if (= "llm" (get pspec "brain"))
     (llm/llm-brain (or chat-client (llm/stub-chat-client {:text "ok"}))
                    {:name path-name :system-prompt (get pspec "prompt" "")
                     :allowed-tools (get pspec "tools")
-                    :max-iterations (as-int (get pspec "max_iterations") 6)})
+                    :max-iterations (as-int (get pspec "max_iterations") 6)
+                    :context-window (when context
+                                      {:max-tokens (as-int (get context "max_tokens") 512)
+                                       :compaction (get context "compaction" "moscow")})})
     (brain/keyword-brain path-name {:tool-triggers (get pspec "tool_triggers") :dim dim})))
+
+(defn- apply-skills
+  "Expand `skills: [name]` on each path: append the skill prompt fragment, union the skill's tools
+   into the path's allowed tools, and record required facts (`_facts`). Mirrors the cores — for the
+   rule brain prompts/facts are inert, but the declaration is honoured (an LLM brain sees the tools)."
+  [path-specs skills-spec]
+  (let [by-name (into {} (map (fn [s] [(get s "name") s]) skills-spec))]
+    (into {}
+          (map (fn [[pname pspec]]
+                 (let [skills (keep by-name (get pspec "skills"))
+                       extra-prompt (str/join " " (keep #(get % "prompt") skills))
+                       extra-tools (vec (mapcat #(get % "tools") skills))
+                       facts (vec (mapcat #(get % "facts") skills))]
+                   [pname (cond-> pspec
+                            (seq extra-prompt) (update "prompt" #(str/trim (str (or % "") " " extra-prompt)))
+                            (seq extra-tools)  (update "tools" #(vec (distinct (concat % extra-tools))))
+                            (seq facts)        (assoc "_facts" facts))]))
+               path-specs))))
 
 (defn- build-router [router-spec default-path]
   (let [default (get router-spec "default" default-path)
@@ -82,11 +131,13 @@
         retrieval (get spec "retrieval")
         dim (as-int (get retrieval "dim") 256)
         retriever (build-retriever retrieval dim)
+        context (get spec "context")
+        cc (or chat-client (build-chat-client (get spec "llm")))
         reg (build-tools (get spec "tools"))
-        path-specs (get agent "paths")
+        path-specs (apply-skills (get agent "paths") (get spec "skills"))
         paths (into {} (map (fn [[name pspec]]
                               [name {:name name :prompt (get pspec "prompt" "")
-                                     :brain (build-brain name pspec dim chat-client)}])
+                                     :brain (build-brain name pspec dim cc context)}])
                             path-specs))
         default-path (or (get-in agent ["router" "default"]) (first (keys path-specs)))
         router (build-router (get agent "router") default-path)

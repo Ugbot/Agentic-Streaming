@@ -7,6 +7,7 @@
             [clj-http.client :as http]
             [agentic.tools :as tools]
             [agentic.context :as ctx]
+            [agentic.context-window :as cw]
             [agentic.store :as store]))
 
 (defprotocol ChatClient
@@ -69,7 +70,7 @@
 (defn llm-brain
   "A brain fn driving a bounded ReAct loop over `chat-client`. opts: :name :system-prompt
    :allowed-tools :max-iterations."
-  [chat-client {:keys [name system-prompt allowed-tools max-iterations]
+  [chat-client {:keys [name system-prompt allowed-tools max-iterations context-window]
                 :or {name "agent" system-prompt "" max-iterations 6}}]
   (fn [_user-text context]
     (let [all-specs (tools/specs (:tools context))
@@ -77,8 +78,10 @@
                   (filterv #(contains? (set allowed-tools) (:name %)) all-specs)
                   all-specs)
           sys {:role "system" :content (str system-prompt "\n" react-system (json/write-str specs))}
-          transcript (mapv (fn [m] {:role (:role m) :content (:content m)})
-                           (store/history (:store context) (:conversation-id context)))]
+          history (store/history (:store context) (:conversation-id context))
+          ;; context-window: compact the replayed transcript to a token budget (MoSCoW) when configured.
+          history (if context-window (cw/compact-history history context-window) history)
+          transcript (mapv (fn [m] {:role (:role m) :content (:content m)}) history)]
       (loop [messages (into [sys] transcript) i 0]
         (if (>= i max-iterations)
           (str "[" name "] (stopped after " max-iterations " steps)")
