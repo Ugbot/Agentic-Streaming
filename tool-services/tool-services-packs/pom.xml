@@ -46,25 +46,28 @@
       <version>${jackson.version}</version>
     </dependency>
 
-    <!-- Web + document pack deps (Phase 2). Declared optional so a build that only uses the
-         utility/RAG/inference packs stays lean; the web pack pulls them in transitively. -->
+    <!-- Web + document pack deps: HTML parsing (Jsoup), document extraction (Tika), robots.txt
+         (crawler-commons). Compile-scope so anyone depending on this library gets a working
+         web pack. -->
     <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
       <version>${jsoup.version}</version>
-      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-core</artifactId>
       <version>${tika.version}</version>
-      <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-parsers-standard-package</artifactId>
       <version>${tika.version}</version>
-      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>com.github.crawler-commons</groupId>
+      <artifactId>crawler-commons</artifactId>
+      <version>1.4</version>
     </dependency>
 
     <dependency>

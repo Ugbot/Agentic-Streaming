@@ -31,7 +31,7 @@ Flink-free: the services depend on the pure-Java `jagentic-core` (tool model + t
 | Pack | name | Tools | Status |
 |------|------|-------|--------|
 | Utility | `util` | calculator + string ops (from `@Tool` methods) | ✅ |
-| Web + document | `web` | `web_fetch`, `web_links`, `doc_extract` (Tika), `web_crawl` | _Phase 2_ |
+| Web + document | `web` | `web_fetch`, `web_links`, `doc_extract` (Tika), `web_crawl` | ✅ |
 | RAG / ingestion | `rag` | `ingest_document`, `semantic_search`, `rag_answer` | _Phase 4_ |
 | Inference | `inference` | `classify_text`, `score_text`, `guardrail_check` | _Phase 4_ |
 

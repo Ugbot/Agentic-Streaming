@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.jagentic.core.ToolRegistry;
 import org.jagentic.tools.util.UtilityPack;
+import org.jagentic.tools.web.WebDocumentPack;
 
 /** Discovery + assembly of {@link ToolPack}s. Build a {@link ToolRegistry} from a set of
  * pack names (e.g. the {@code TOOL_PACKS=util,web} config the service reads). New packs
@@ -20,6 +21,7 @@ public final class ToolPacks {
   public static Map<String, ToolPack> available() {
     Map<String, ToolPack> packs = new LinkedHashMap<>();
     register(packs, new UtilityPack());
+    register(packs, new WebDocumentPack());
     return packs;
   }
 

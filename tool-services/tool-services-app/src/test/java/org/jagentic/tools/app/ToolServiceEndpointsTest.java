@@ -59,6 +59,22 @@ class ToolServiceEndpointsTest {
   }
 
   @Test
+  void webPackIsServedToo() {
+    // the web pack's tools are listed alongside util (default selection = all packs)
+    given().when().get("/tools").then().statusCode(200)
+        .body("name", hasItem("web_fetch"))
+        .body("name", hasItem("doc_extract"));
+    // doc_extract works over REST with no network (inline HTML -> Jsoup extraction)
+    given().contentType(ContentType.JSON)
+        .body("{\"text\":\"<html><head><title>Hi</title></head><body>hello world</body></html>\","
+            + "\"content_type\":\"text/html\"}")
+        .when().post("/tools/doc_extract")
+        .then().statusCode(200)
+        .body("ok", is(true))
+        .body("result.title", equalTo("Hi"));
+  }
+
+  @Test
   void mcpHttpInitializeAdvertisesProtocol() {
     given().contentType(ContentType.JSON)
         .body("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}")
