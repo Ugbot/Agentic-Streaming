@@ -12,6 +12,7 @@
             [agentic.llm :as llm]
             [agentic.retrieval :as r]
             [agentic.guardrail :as guard]
+            [agentic.cep :as cep]
             [agentic.core :as core]
             [agentic.store :as store]
             [agentic.store.datomic :as dat]))
@@ -176,11 +177,21 @@
       [(store/in-memory-conversation-store) (store/in-memory-keyed-state-store)])))
 
 (defn load-system
-  "Load a pipeline.yaml/.edn into a runnable system."
+  "Load a pipeline.yaml/.edn into a runnable system. A declarative `cep:` section is compiled into
+   wirings and attached as :cep — fed by `submit` below."
   [path & [opts]]
   (let [spec (read-spec path)
         {:keys [graph tools retriever]} (build spec opts)
         [conv keyed] (stores-from-spec spec)]
-    (core/local-system graph tools retriever conv keyed)))
+    (assoc (core/local-system graph tools retriever conv keyed)
+           :cep (cep/compile-cep (get spec "cep")))))
 
-(defn submit [system event] (core/submit system event))
+(defn submit
+  "Process one turn, then feed the event to any compiled CEP wirings. Each wiring's action submits via
+   the INNER core submit (`#(core/submit system %)`), which does NOT re-feed CEP — that plus the
+   DERIVED metadata guard keeps CEP submits from recursing. Returns the original turn result."
+  [system event]
+  (let [r (core/submit system event)]
+    (doseq [w (:cep system)]
+      (cep/cep-on-event w event #(core/submit system %) (:tools system)))
+    r))

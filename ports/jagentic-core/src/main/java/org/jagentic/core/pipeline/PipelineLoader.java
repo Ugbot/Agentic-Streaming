@@ -33,8 +33,10 @@ public final class PipelineLoader {
 
   private PipelineLoader() {}
 
-  /** A built, deployed system: a backend {@link Runtime} + the spec that produced it. */
-  public static final class PipelineSystem {
+  /** A built, deployed system: a backend {@link Runtime} + the spec that produced it. Implements
+   * {@link Runtime} so it can sit behind a {@code StreamRuntime} (the stream path drives the same
+   * CEP-bearing submit). */
+  public static final class PipelineSystem implements Runtime {
     public final String backendName;
     public final Runtime runtime;
     public final GraphBuilder.Built built;
@@ -42,18 +44,34 @@ public final class PipelineLoader {
     public final LongTermStore longTerm;
     /** Per-conversation transcript + attributes store wired into the backend runtime. */
     public final ConversationStore conversation;
+    /** Declarative CEP rules from the spec's {@code cep:} section (empty if none). */
+    public final List<org.jagentic.core.cep.CepWiring> cep;
 
     PipelineSystem(String backendName, Runtime runtime, GraphBuilder.Built built,
-                   LongTermStore longTerm, ConversationStore conversation) {
+                   LongTermStore longTerm, ConversationStore conversation,
+                   List<org.jagentic.core.cep.CepWiring> cep) {
       this.backendName = backendName;
       this.runtime = runtime;
       this.built = built;
       this.longTerm = longTerm;
       this.conversation = conversation;
+      this.cep = cep;
     }
 
+    /** Run the turn, then feed the inbound event to every CEP rule (which may fire tool/submit
+     * actions through the inner runtime). CEP runs exactly once per inbound event, on this path. */
+    @Override
     public TurnResult submit(Event event) {
-      return runtime.submit(event);
+      TurnResult result = runtime.submit(event);
+      for (org.jagentic.core.cep.CepWiring wiring : cep) {
+        wiring.onEvent(event, runtime, built.tools());
+      }
+      return result;
+    }
+
+    /** Drive a live event stream through this system (CEP fires on the same submit path). */
+    public org.jagentic.core.stream.StreamRuntime stream() {
+      return new org.jagentic.core.stream.StreamRuntime(this);
     }
   }
 
@@ -76,7 +94,9 @@ public final class PipelineLoader {
     ConversationStore conversation = buildConversationStore((Map<String, Object>) stores.get("conversation"));
 
     Runtime runtime = Backends.create(backend, built, conversation);
-    return new PipelineSystem(backend, runtime, built, longTerm, conversation);
+    List<org.jagentic.core.cep.CepWiring> cep =
+        org.jagentic.core.cep.CepSpec.compile((List<Map<String, Object>>) spec.get("cep"));
+    return new PipelineSystem(backend, runtime, built, longTerm, conversation, cep);
   }
 
   /** Build the long-term store by kind: memory (default) | postgres. A postgres failure

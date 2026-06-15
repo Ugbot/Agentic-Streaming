@@ -14,9 +14,10 @@ event may also start a new partial at stage 0. A completed partial is emitted an
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from .core import Event
 
@@ -202,3 +203,177 @@ class CepObserver:
     def __call__(self, event: Event) -> None:
         for match in self._matcher.match(self._key_fn(event), self._ts_fn(event), event):
             self._on_match(match)
+
+
+# ---------------------------------------------------------------------------
+# Declarative CEP spec compiler — the Python port of org.jagentic.core.cep.CepSpec
+# + CepWiring. Compiles a pipeline's ``cep:`` section into runnable wirings that the
+# loader feeds inbound events to (one match -> one action), mirroring Java exactly.
+# ---------------------------------------------------------------------------
+
+# Metadata flag marking an event injected by a CEP action (so CEP does not re-match it).
+DERIVED = "__cep_derived__"
+
+# A compiled CEP action: ``(match, key, runtime, tools) -> None``. A ``submit`` action
+# injects a derived Event through the inner runtime; a ``tool`` action calls a tool.
+Action = Callable[[Match, str, Any, Any], None]
+
+
+class CepWiring:
+    """One declarative CEP rule: a :class:`CepMatcher` plus key/timestamp extractors and
+    the action to fire on a completed match. The Python port of the Java ``CepWiring``.
+
+    :meth:`on_event` feeds an inbound event to the matcher and fires the action for each
+    completed match. Events the action itself produced are tagged (:data:`DERIVED`) and
+    skipped, so a ``submit`` action cannot recurse.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        matcher: CepMatcher,
+        key_fn: Callable[[Event], str],
+        ts_fn: Callable[[Event], int],
+        action: Action,
+    ) -> None:
+        self.name = name
+        self._matcher = matcher
+        self._key_fn = key_fn
+        self._ts_fn = ts_fn
+        self._action = action
+
+    def on_event(self, event: Event, runtime: Any, tools: Any) -> None:
+        """Feed one inbound event; fire the action for every completed match."""
+        if event.metadata and DERIVED in event.metadata:
+            return  # don't re-match events a CEP action produced
+        key = self._key_fn(event)
+        ts = self._ts_fn(event)
+        for match in self._matcher.match(key, ts, event):
+            self._action(match, key, runtime, tools)
+
+
+def compile_cep(specs: Optional[List[Dict[str, Any]]]) -> List[CepWiring]:
+    """Compile a pipeline's ``cep:`` section into runnable :class:`CepWiring` s.
+
+    Each spec::
+
+        {name, key, ts, within, pattern: [{stage, where, contiguity}], on_match}
+
+    ``where`` mini-language -> :data:`Condition`:
+      * ``any`` (or ``None``) -> always matches
+      * ``{text_contains: s | [..]}`` -> ``event.text`` contains any needle
+      * ``{metadata_equals: {k: v}}`` -> all ``metadata[k] == str(v)``
+      * ``{metadata_gt: {k: n}}`` -> ``float(metadata[k]) > n``
+    """
+    wirings: List[CepWiring] = []
+    for s in specs or []:
+        name = str(s.get("name", "cep"))
+        pattern = _build_pattern(s.get("pattern"), int(s.get("within", 0) or 0))
+        key_fn = _key_fn(str(s.get("key", "conversation_id")))
+        ts_fn = _ts_fn(s.get("ts"))
+        action = _action(s.get("on_match"))
+        wirings.append(CepWiring(name, CepMatcher(pattern), key_fn, ts_fn, action))
+    return wirings
+
+
+def _build_pattern(stages: Optional[List[Dict[str, Any]]], within: int) -> Pattern:
+    if not stages:
+        raise ValueError("cep pattern needs at least one stage")
+    pattern: Optional[Pattern] = None
+    for st in stages:
+        stage = str(st.get("stage", "s"))
+        cond = _condition(st.get("where"))
+        if pattern is None:
+            pattern = Pattern.begin(stage, cond)
+        elif str(st.get("contiguity", "followedBy")).lower() == "next":
+            pattern = pattern.next(stage, cond)
+        else:
+            pattern = pattern.followed_by(stage, cond)
+    return pattern.within(within)
+
+
+def _condition(where: Any) -> Condition:
+    """Compile a ``where`` clause into a :data:`Condition` (mirrors Java ``CepSpec.condition``)."""
+    if where is None or where == "any":
+        return any_()
+    if isinstance(where, dict):
+        if "text_contains" in where:
+            needles = _as_list(where["text_contains"])
+            return simple(lambda e: e.text is not None and any(n in e.text for n in needles))
+        if "metadata_equals" in where:
+            kv = where["metadata_equals"] or {}
+            return simple(lambda e: all(str(v) == _meta(e, str(k)) for k, v in kv.items()))
+        if "metadata_gt" in where:
+            kv = where["metadata_gt"] or {}
+            return simple(lambda e: all(_meta_gt(e, str(k), v) for k, v in kv.items()))
+    raise ValueError(f"unknown cep where: {where!r}")
+
+
+def _meta_gt(event: Event, field: str, bound: Any) -> bool:
+    raw = _meta(event, field)
+    try:
+        return raw is not None and float(raw) > float(bound)
+    except (TypeError, ValueError):
+        return False
+
+
+def _key_fn(key: str) -> Callable[[Event], str]:
+    if key.startswith("metadata."):
+        f = key[len("metadata."):]
+        return lambda e: _meta(e, f)
+    # conversation_id / conversationId / default
+    return lambda e: e.conversation_id
+
+
+def _ts_fn(ts: Optional[Any]) -> Callable[[Event], int]:
+    if ts is not None and str(ts).startswith("metadata."):
+        f = str(ts)[len("metadata."):]
+
+        def from_meta(e: Event) -> int:
+            v = _meta(e, f)
+            try:
+                return int(v) if v is not None else 0
+            except (TypeError, ValueError):
+                return 0
+
+        return from_meta
+    counter = itertools.count()  # no ts -> monotonic arrival order
+    return lambda e: next(counter)
+
+
+def _action(on_match: Optional[Dict[str, Any]]) -> Action:
+    if on_match is None:
+        return lambda match, key, runtime, tools: None  # detect-only
+    kind = str(on_match.get("kind", "submit"))
+    if kind == "tool":
+        tool_id = str(on_match.get("tool"))
+        args = on_match.get("args") or {}
+        return lambda match, key, runtime, tools: tools.execute(tool_id, args)
+    if kind == "submit":
+        text = str(on_match.get("text", "cep match"))
+
+        def submit(match: Match, key: str, runtime: Any, tools: Any) -> None:
+            body = text.replace("{key}", key or "")
+            runtime.submit(Event(
+                conversation_id=key,
+                text=body,
+                user_id="cep",
+                metadata={DERIVED: "true"},
+            ))
+
+        return submit
+    raise ValueError(f"unknown cep on_match kind: {kind!r}")
+
+
+def _meta(event: Event, field: str) -> Optional[str]:
+    if not event.metadata:
+        return None
+    return event.metadata.get(field)
+
+
+def _as_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(v) for v in value]
+    if value is not None:
+        return [str(value)]
+    return []
