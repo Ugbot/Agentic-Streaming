@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.jagentic.pekko</groupId>
+  <artifactId>agentic-pekko</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>Agentic Pekko</name>
+  <description>First-class Apache Pekko agent runtime: an event-sourced, cluster-sharded entity
+    actor per conversation (single-writer + durable), Pekko Streams + Kafka ingress and a Pekko
+    HTTP front door — reusing the Flink-free jagentic-core agent brain.</description>
+
+  <!--
+  Standalone top-level module (no parent), kept out of the core reactor like a2a-gateway.
+  Build after installing the core:
+      mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
+      mvn -f agentic-pekko/pom.xml package
+  -->
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <pekko.version>1.1.3</pekko.version>
+    <scala.binary>2.13</scala.binary>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.apache.pekko</groupId>
+        <artifactId>pekko-bom_${scala.binary}</artifactId>
+        <version>${pekko.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- The Flink-free agent brain: RoutedGraph, tools, brains, RAG, stores, GraphBuilder. -->
+    <dependency>
+      <groupId>org.jagentic</groupId>
+      <artifactId>jagentic-core</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+
+    <!-- Typed actors + cluster sharding: one entity per conversationId (keyed, single-writer). -->
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-actor-typed_${scala.binary}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-cluster-sharding-typed_${scala.binary}</artifactId>
+    </dependency>
+    <!-- Event sourcing: durable, recoverable per-conversation state (C3). -->
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-persistence-typed_${scala.binary}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-serialization-jackson_${scala.binary}</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.5.6</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Tests: ActorTestKit + PersistenceTestKit (event replay/recovery). -->
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-actor-testkit-typed_${scala.binary}</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-persistence-testkit_${scala.binary}</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <excludedGroups>integration</excludedGroups>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <mainClass>org.jagentic.pekko.Main</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
