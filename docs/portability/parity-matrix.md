@@ -39,6 +39,19 @@ The cores are behaviorally identical (enforced by cross-core parity tests:
 | **DL inference SPI** (Classifier/Scorer) | ✅ | ✅ | ✅ |
 | **GraphBuilder** (declarative spec → graph) | ✅ | ✅ | ✅ |
 | **YAML pipeline loader** (full Phase‑F schema) | ✅ | ✅ | ✅ |
+| **EventStream substrate** (Channel + StreamRuntime, ordered per‑key) | ✅ | ✅ | ✅ |
+| **Timer service** (logical time; durable via the store SPI) | ✅ | ✅ | ✅ |
+| **Windows** (sliding / tumbling / session + aggregates) | ✅ | ✅ | ✅ |
+| **Complex event processing** — portable NFA matcher (begin/next/followedBy/within) | ✅ | ✅ | ✅ |
+| **Replay / time‑travel** (event‑log replay + replay‑until / as‑of) | ✅ | ✅ | ✅ |
+| **Human‑in‑the‑loop** (suspend / resume / timeout‑escalate) | ✅ | ✅ | ✅ |
+| **Tracing SPI** (no‑op default · recording · OTel opt‑in) | ✅ | ✅ | ✅ |
+
+The last seven rows are the **stream‑stateful core** (`stream` · `timers` · `windows` · `cep` ·
+`replay` · `suspend` · `trace`) — they also ship in the **Clojure** core (`agentic-clj`) at the same
+cross‑core parity, so **CEP, timers and windows are no longer Flink‑only**: the same "3 anomalies in
+5 minutes → incident" pattern runs on every core. See
+[`stream-stateful-core.md`](stream-stateful-core.md).
 
 All three cores ship the same SPIs **and** one working reference implementation per heavy
 integration (Qdrant vectors, Postgres long‑term, Redis/Valkey conversations, the official
@@ -100,7 +113,10 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
   `com.datomic/local` **or an external Datomic Pro / Cloud** (same client API, selected by config). The
   Clojure loader runs the full shared schema — `banking.yaml`, `banking-llm.yaml` and
   `banking-rag.yaml` (skills, context‑window, classifier guardrail) — with one nuance: its cold tier
-  is **exact cosine KNN** (a correctness‑superset of HNSW ANN), not an approximate index. See
+  is **exact cosine KNN** (a correctness‑superset of HNSW ANN), not an approximate index. It ships the
+  full stream‑stateful core (`stream`/`timers`/`windows`/`cep`/`replay`/`suspend`/`trace`) plus formal
+  Embedder/Classifier SPIs at parity; the one remaining gap vs the other cores is an **MCP/A2A
+  *client*** (it ships an MCP *server*) — the next increment. See
   [`clojure.md`](clojure.md) and [`../../agentic-clj/`](../../agentic-clj/).
 - **Pekko** runs the same specs via `backend: pekko`; the `PipelineMain` CLI drives any `pipeline.yaml`
   through the event‑sourced actor runtime (`banking`, `banking-llm`, `banking-rag` all covered by
@@ -111,7 +127,10 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
 These are genuinely runtime‑native and not meaningfully portable; reimplementing them on
 Airflow/Celery would be pointless, so they remain first‑class‑Flink‑only:
 
-- the **CEP pattern engine** (event‑time pattern matching);
+- **event‑time CEP with watermarks** — the cores now ship a **portable CEP NFA matcher**
+  (`cep`, processing/logical‑time, the same `begin/next/followedBy/within` patterns), so complex
+  event processing itself is no longer Flink‑only; what stays Flink‑native is **event‑time** matching
+  with watermarks + out‑of‑order handling over a distributed stream;
 - **HNSW vector memory backed by *Flink state*** (checkpointed/keyed) — note the cores now
   ship their own in‑process HNSW index (`HnswVectorStore`), so approximate‑nearest‑neighbour
   search itself is portable; what stays Flink‑only is binding that index to Flink's managed,

@@ -20,6 +20,9 @@ the good parts without Flink.
   utilities) decomposed into standalone, framework‑agnostic tools any LLM/framework can run over
   **MCP · REST · gRPC · Kafka/Redis pub‑sub** (Java/Quarkus, Flink‑free).
 - [`choosing-a-backend.md`](choosing-a-backend.md) — the decision guide.
+- [`stream-stateful-core.md`](stream-stateful-core.md) — the **stream-stateful core**: CEP, timers,
+  windows, replay, human-in-the-loop, and tracing, portable across all four cores (CEP is no longer
+  Flink-only).
 - [`parity-matrix.md`](parity-matrix.md) — what each backend can do + its limitations,
   and the full three‑core capability/parity table.
 
