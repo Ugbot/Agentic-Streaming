@@ -123,3 +123,20 @@ func (s *StreamRuntime) Run(channel Channel[Event]) []TurnResult {
 	}
 	return results
 }
+
+// FireDueTimers advances the timer clock to now and processes every due timer as a turn:
+// for each timer from timers.AdvanceTo(now) — in deadline order — it notifies each
+// observer with the payload, then submits the payload to the underlying Runtime. Results
+// come back in deadline order. This is how SLA escalations, retries, and scheduled
+// follow-ups re-enter the stream as ordinary turns.
+func (s *StreamRuntime) FireDueTimers(timers TimerService, now int64) []TurnResult {
+	due := timers.AdvanceTo(now)
+	results := make([]TurnResult, 0, len(due))
+	for _, t := range due {
+		for _, obs := range s.observers {
+			obs(t.Payload)
+		}
+		results = append(results, s.runtime.Submit(t.Payload))
+	}
+	return results
+}

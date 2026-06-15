@@ -8,6 +8,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.jagentic.core.Event;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.TurnResult;
+import org.jagentic.core.timers.Timer;
+import org.jagentic.core.timers.TimerService;
 
 /**
  * Drives a {@link Channel} of events through a backend {@link Runtime} as agent turns — the portable
@@ -43,6 +45,19 @@ public final class StreamRuntime {
         observer.onEvent(event);
       }
       results.add(runtime.submit(event));
+    }
+    return results;
+  }
+
+  /** Fire every timer due at {@code now}, submitting each timer's payload as a turn (observers see it
+   * first), in deadline order. The streaming counterpart of an SLA / escalate-after-N firing. */
+  public List<TurnResult> fireDueTimers(TimerService timers, long now) {
+    List<TurnResult> results = new ArrayList<>();
+    for (Timer timer : timers.advanceTo(now)) {
+      for (EventObserver observer : observers) {
+        observer.onEvent(timer.payload());
+      }
+      results.add(runtime.submit(timer.payload()));
     }
     return results;
   }

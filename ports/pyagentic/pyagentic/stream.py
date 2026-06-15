@@ -15,10 +15,13 @@ from __future__ import annotations
 
 from collections import deque
 from threading import Lock
-from typing import Callable, Generic, Iterable, List, Optional, Protocol, TypeVar
+from typing import TYPE_CHECKING, Callable, Generic, Iterable, List, Optional, Protocol, TypeVar
 
 from .core import Event, TurnResult
 from .runtime import Runtime
+
+if TYPE_CHECKING:
+    from .timers import TimerService
 
 T = TypeVar("T")
 
@@ -99,4 +102,16 @@ class StreamRuntime:
             for observer in self._observers:
                 observer(event)
             results.append(self._runtime.submit(event))
+        return results
+
+    def fire_due_timers(self, timer_service: "TimerService", now: int) -> List[TurnResult]:
+        """Advance ``timer_service`` to ``now`` and fire each due timer's payload through
+        the backend runtime as a turn, in deadline order. Observers see each payload first,
+        exactly as with a channel event — a fired timer is just another event entering the
+        stream. Returns the results in deadline (then schedule) order."""
+        results: List[TurnResult] = []
+        for timer in timer_service.advance_to(now):
+            for observer in self._observers:
+                observer(timer.payload)
+            results.append(self._runtime.submit(timer.payload))
         return results

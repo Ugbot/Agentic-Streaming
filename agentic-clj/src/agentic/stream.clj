@@ -4,7 +4,8 @@
    drives a channel of events through agentic.core/submit as agent turns, in arrival order. Observers
    see each raw event before it becomes a turn — the seam CEP matchers, window aggregators and tracers
    plug into in later phases. Mirror of jagentic-core's org.jagentic.core.stream.*."
-  (:require [agentic.core :as core]))
+  (:require [agentic.core :as core]
+            [agentic.timers :as timers]))
 
 ;; ---- Channel: a pull-based event source ----
 
@@ -74,3 +75,17 @@
         (doseq [obs observers] (obs event))
         (recur (conj! results (core/submit system event))))
       (persistent! results))))
+
+(defn fire-due-timers
+  "Fire every timer due at logical time `now` through the runtime, in deadline order. Pulls the due
+   timers from `timer-service` via agentic.timers/advance-to (ascending by :fire-at, schedule order as
+   the stable tie-break), and for each — exactly like (run) — lets observers see the payload event
+   first, then submits it as a turn. Returns the vector of turn-results in deadline order. This is the
+   seam SLAs / escalate-after-N / scheduled follow-ups fire on. `timer-service` must satisfy the
+   agentic.timers/TimerService protocol."
+  [{:keys [system observers]} timer-service now]
+  (let [due (timers/advance-to timer-service now)]
+    (mapv (fn [{:keys [payload]}]
+            (doseq [obs observers] (obs payload))
+            (core/submit system payload))
+          due)))
