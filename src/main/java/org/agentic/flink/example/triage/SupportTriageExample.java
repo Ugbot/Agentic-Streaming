@@ -15,7 +15,7 @@ import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatClient;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import java.util.List;
 import java.util.Set;
 
@@ -34,7 +34,7 @@ import java.util.Set;
  *       the highest-scoring draft wins.
  *   <li><b>Tone rewrite</b> — for the winning draft, we downcast to
  *       {@link LangChain4jChatClient} and call the underlying
- *       {@link ChatLanguageModel} directly. This shows the documented escape hatch in a real
+ *       {@link ChatModel} directly. This shows the documented escape hatch in a real
  *       situation: we want LangChain4J's two-arg {@code generate(systemPrompt, userPrompt)}
  *       convenience that the vendor-neutral SPI does not expose.
  * </ol>
@@ -233,8 +233,8 @@ public class SupportTriageExample {
     lc.chat(
         List.of(ChatMessage.user("warmup")),
         ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.0).build());
-    ChatLanguageModel raw = lc.getUnderlyingModel();
-    return raw.generate(
+    ChatModel raw = lc.getUnderlyingModel();
+    return raw.chat(
         "Rewrite the reply in a warm, professional tone, keeping the facts intact.\n\n" + draft);
   }
 }

@@ -15,7 +15,21 @@
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <langchain4j.version>1.16.3</langchain4j.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- LangChain4J BOM aligns the optional provider modules to one version. -->
+      <dependency>
+        <groupId>dev.langchain4j</groupId>
+        <artifactId>langchain4j-bom</artifactId>
+        <version>${langchain4j.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <!-- JSON for the LLM brain's HTTP chat clients (Ollama/OpenAI). The essence
@@ -38,13 +52,11 @@
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-ollama</artifactId>
-      <version>0.35.0</version>
       <optional>true</optional>
     </dependency>
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-open-ai</artifactId>
-      <version>0.35.0</version>
       <optional>true</optional>
     </dependency>
 

@@ -8,7 +8,8 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 
@@ -20,9 +21,9 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
  */
 public final class LangChain4jChatClient implements ChatClient {
 
-  private final ChatLanguageModel model;
+  private final ChatModel model;
 
-  private LangChain4jChatClient(ChatLanguageModel model) {
+  private LangChain4jChatClient(ChatModel model) {
     this.model = model;
   }
 
@@ -38,10 +39,10 @@ public final class LangChain4jChatClient implements ChatClient {
       }
       return new LangChain4jChatClient(b.build());
     }
-    ChatLanguageModel m = OllamaChatModel.builder()
+    ChatModel m = OllamaChatModel.builder()
         .baseUrl(baseUrl == null || baseUrl.isBlank() ? "http://localhost:11434" : baseUrl)
         .modelName(modelName == null || modelName.isBlank() ? "llama3.2" : modelName)
-        .format("json")
+        .responseFormat(ResponseFormat.JSON)
         .build();
     return new LangChain4jChatClient(m);
   }
@@ -63,7 +64,7 @@ public final class LangChain4jChatClient implements ChatClient {
         default -> lc.add(UserMessage.from(content)); // user + tool observations
       }
     }
-    String text = model.generate(lc).content().text();
+    String text = model.chat(lc).aiMessage().text();
     return AbstractHttpChatClient.parseChatJson(text);
   }
 }

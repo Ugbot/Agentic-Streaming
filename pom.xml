@@ -14,7 +14,7 @@
         <flink.version>2.2.1</flink.version>
         <java.version>17</java.version>
         <log4j.version>2.17.1</log4j.version>
-        <langchain4j.version>0.35.0</langchain4j.version>
+        <langchain4j.version>1.16.3</langchain4j.version>
         <!--
         A2A (Agent2Agent) Java SDK. groupId io.github.a2asdk. The 1.0 protocol line is
         currently published only as alphas on Maven Central (newest stable Final is 0.3.x);
@@ -37,6 +37,15 @@
                 <groupId>io.github.a2asdk</groupId>
                 <artifactId>a2a-java-sdk-bom</artifactId>
                 <version>${a2a.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- LangChain4J BOM — aligns langchain4j-core + every provider module (open-ai,
+                 ollama, anthropic, google-ai-gemini) to one version. -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-bom</artifactId>
+                <version>${langchain4j.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -97,28 +106,24 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
-            <version>${langchain4j.version}</version>
         </dependency>
 
         <!-- LangChain4J Ollama Integration -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-ollama</artifactId>
-            <version>${langchain4j.version}</version>
         </dependency>
 
         <!-- LangChain4J OpenAI Integration -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
-            <version>${langchain4j.version}</version>
         </dependency>
 
         <!-- LangChain4J Anthropic (Claude) Integration -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-anthropic</artifactId>
-            <version>${langchain4j.version}</version>
         </dependency>
 
         <!-- LangChain4J Google Gemini Integration (API-key auth; required by the A2A banking demo,
@@ -127,7 +132,6 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-google-ai-gemini</artifactId>
-            <version>${langchain4j.version}</version>
         </dependency>
 
         <!-- Apache Fluss streaming storage client (backs FlussVectorStore; optional) -->

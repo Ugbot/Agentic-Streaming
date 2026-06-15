@@ -5,12 +5,11 @@ import org.agentic.flink.llm.ChatConnection;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.output.Response;
 import java.time.Duration;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.slf4j.Logger;
@@ -24,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * {@link ChatConnection} directly or by registering a different SPI via {@link
  * java.util.ServiceLoader}.
  *
- * <p>The actual {@link dev.langchain4j.model.chat.ChatLanguageModel} is constructed lazily inside
+ * <p>The actual {@link dev.langchain4j.model.chat.ChatModel} is constructed lazily inside
  * each {@link org.agentic.flink.llm.ChatSetup} call — model name / temperature live in
  * the setup, not the connection, so a single connection can serve many setups with different
  * model parameters. We cache a per-setup-signature client to avoid re-building on every event.
@@ -112,13 +111,13 @@ public final class LangChain4jChatConnection implements ChatConnection {
   }
 
   /**
-   * Builds a LangChain4J {@link ChatLanguageModel} for the given setup signature.
+   * Builds a LangChain4J {@link ChatModel} for the given setup signature.
    *
    * <p>Public on this concrete class as part of the LangChain4J-specific surface: users who
    * downcast a {@link ChatConnection} to this type may want to construct a model directly without
    * going through {@link #bind} / {@code chat}.
    */
-  public ChatLanguageModel buildModel(String modelName, double temperature, int maxTokens) {
+  public ChatModel buildModel(String modelName, double temperature, int maxTokens) {
     switch (provider) {
       case OLLAMA:
         return OllamaChatModel.builder()
@@ -167,25 +166,25 @@ public final class LangChain4jChatConnection implements ChatConnection {
       org.agentic.flink.llm.ChatMessage m) {
     switch (m.getRole()) {
       case SYSTEM:
-        return new SystemMessage(m.getContent());
+        return SystemMessage.from(m.getContent());
       case USER:
-        return new UserMessage(m.getContent());
+        return UserMessage.from(m.getContent());
       case ASSISTANT:
-        return new AiMessage(m.getContent());
+        return AiMessage.from(m.getContent());
       case TOOL:
-        // LangChain4J 0.35 has no first-class tool-result role here; fold it into an assistant
-        // turn tagged with the tool name so the model can see the result.
-        return new AiMessage(
+        // No first-class tool-result role here; fold it into an assistant turn tagged with the
+        // tool name so the model can see the result.
+        return AiMessage.from(
             "[tool=" + (m.getToolName() == null ? "?" : m.getToolName()) + "] " + m.getContent());
       default:
-        return new UserMessage(m.getContent());
+        return UserMessage.from(m.getContent());
     }
   }
 
   /** Extract a {@link org.agentic.flink.llm.ChatResponse} from a LangChain4J response. */
   static org.agentic.flink.llm.ChatResponse fromLangChainResponse(
-      Response<AiMessage> response, String modelName) {
-    String text = response.content() != null ? response.content().text() : "";
+      dev.langchain4j.model.chat.response.ChatResponse response, String modelName) {
+    String text = response.aiMessage() != null ? response.aiMessage().text() : "";
     Long tokens =
         response.tokenUsage() == null ? null : (long) response.tokenUsage().totalTokenCount();
     org.agentic.flink.llm.ChatResponse.FinishReason fr =

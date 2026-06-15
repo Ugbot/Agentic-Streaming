@@ -1,7 +1,7 @@
 package org.agentic.flink.llm.langchain4j;
 
 import org.agentic.flink.llm.ChatClient;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 
 /**
  * Escape hatch interface implemented by {@code ChatClient}s backed by LangChain4J.
@@ -13,7 +13,7 @@ import dev.langchain4j.model.chat.ChatLanguageModel;
  * <pre>{@code
  * ChatClient client = connection.bind(ctx);
  * if (client instanceof LangChain4jChatClient lc) {
- *     ChatLanguageModel raw = lc.getUnderlyingModel();
+ *     ChatModel raw = lc.getUnderlyingModel();
  *     // ... LangChain4J-specific code here ...
  * }
  * }</pre>
@@ -24,5 +24,5 @@ import dev.langchain4j.model.chat.ChatLanguageModel;
 public interface LangChain4jChatClient extends ChatClient {
 
   /** The underlying LangChain4J chat model for the most recently invoked setup. */
-  ChatLanguageModel getUnderlyingModel();
+  ChatModel getUnderlyingModel();
 }

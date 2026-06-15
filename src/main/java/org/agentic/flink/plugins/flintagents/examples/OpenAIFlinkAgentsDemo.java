@@ -6,11 +6,10 @@ import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsEventAdapter;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsToolAdapter;
 import org.agentic.flink.tools.ToolExecutor;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import org.apache.flink.agents.api.Agent;
@@ -83,7 +82,7 @@ public class OpenAIFlinkAgentsDemo {
 
     System.out.println(ANSI_CYAN + "Creating OpenAI chat model..." + ANSI_RESET);
     // gpt-5.x reasoning models reject max_tokens / custom temperature (see OpenAiModels) — omit them.
-    ChatLanguageModel model = OpenAiChatModel.builder()
+    ChatModel model = OpenAiChatModel.builder()
         .apiKey(apiKey)
         .modelName("gpt-5.4-mini")
         .build();
@@ -95,8 +94,8 @@ public class OpenAIFlinkAgentsDemo {
     System.out.println(ANSI_BOLD + "Question:" + ANSI_RESET + " " + question);
     System.out.println(ANSI_CYAN + "Asking OpenAI..." + ANSI_RESET);
 
-    Response<AiMessage> response = model.generate(UserMessage.from(question));
-    String answer = response.content().text();
+    ChatResponse response = model.chat(UserMessage.from(question));
+    String answer = response.aiMessage().text();
 
     System.out.println(ANSI_BOLD + "Answer:" + ANSI_RESET + " " + answer);
     System.out.println();
@@ -191,7 +190,7 @@ public class OpenAIFlinkAgentsDemo {
 
     // Create OpenAI model
     // gpt-5.x reasoning models reject max_tokens / custom temperature (see OpenAiModels) — omit them.
-    ChatLanguageModel model = OpenAiChatModel.builder()
+    ChatModel model = OpenAiChatModel.builder()
         .apiKey(apiKey)
         .modelName("gpt-5.4-mini")
         .build();
@@ -204,8 +203,8 @@ public class OpenAIFlinkAgentsDemo {
     System.out.println(ANSI_BOLD + "Question:" + ANSI_RESET + " " + question);
     System.out.println(ANSI_CYAN + "Asking OpenAI via Flink Agents integration..." + ANSI_RESET);
 
-    Response<AiMessage> response = model.generate(UserMessage.from(question));
-    String answer = response.content().text();
+    ChatResponse response = model.chat(UserMessage.from(question));
+    String answer = response.aiMessage().text();
 
     System.out.println(ANSI_BOLD + "Answer:" + ANSI_RESET + " " + answer);
     System.out.println();

@@ -314,12 +314,12 @@ Location: `docs/archive/`
 <dependency>
     <groupId>dev.langchain4j</groupId>
     <artifactId>langchain4j</artifactId>
-    <version>0.35.0</version>
+    <version>1.16.3</version>
 </dependency>
 <dependency>
     <groupId>dev.langchain4j</groupId>
     <artifactId>langchain4j-ollama</artifactId>
-    <version>0.35.0</version>
+    <version>1.16.3</version>
 </dependency>
 
 <!-- Storage -->

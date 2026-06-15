@@ -3,9 +3,7 @@ package org.agentic.flink.llm.langchain4j;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.chat.ChatModel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,7 +12,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * Default {@link org.agentic.flink.llm.ChatClient} backed by LangChain4J.
  *
- * <p>Caches LangChain4J {@link ChatLanguageModel} instances per {@code (modelName, temperature,
+ * <p>Caches LangChain4J {@link ChatModel} instances per {@code (modelName, temperature,
  * maxTokens)} signature so repeated calls reuse the same client. The cache lives for the
  * lifetime of the Flink task; cleanup happens automatically when the task closes.
  *
@@ -24,8 +22,8 @@ import java.util.concurrent.ConcurrentMap;
 final class ChatClientImpl implements LangChain4jChatClient {
 
   private final LangChain4jChatConnection connection;
-  private final ConcurrentMap<String, ChatLanguageModel> modelCache = new ConcurrentHashMap<>();
-  private volatile ChatLanguageModel lastModel;
+  private final ConcurrentMap<String, ChatModel> modelCache = new ConcurrentHashMap<>();
+  private volatile ChatModel lastModel;
 
   ChatClientImpl(LangChain4jChatConnection connection) {
     this.connection = connection;
@@ -33,12 +31,12 @@ final class ChatClientImpl implements LangChain4jChatClient {
 
   @Override
   public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
-    ChatLanguageModel model = modelFor(setup);
+    ChatModel model = modelFor(setup);
     List<dev.langchain4j.data.message.ChatMessage> lcMessages = new ArrayList<>(messages.size());
     for (ChatMessage m : messages) {
       lcMessages.add(LangChain4jChatConnection.toLangChainMessage(m));
     }
-    Response<AiMessage> response = model.generate(lcMessages);
+    dev.langchain4j.model.chat.response.ChatResponse response = model.chat(lcMessages);
     return LangChain4jChatConnection.fromLangChainResponse(response, setup.getModelName());
   }
 
@@ -48,8 +46,8 @@ final class ChatClientImpl implements LangChain4jChatClient {
   }
 
   @Override
-  public ChatLanguageModel getUnderlyingModel() {
-    ChatLanguageModel m = lastModel;
+  public ChatModel getUnderlyingModel() {
+    ChatModel m = lastModel;
     if (m == null) {
       throw new IllegalStateException(
           "No model has been built yet — call chat() at least once before reaching for the "
@@ -64,10 +62,10 @@ final class ChatClientImpl implements LangChain4jChatClient {
     lastModel = null;
   }
 
-  private ChatLanguageModel modelFor(ChatSetup setup) {
+  private ChatModel modelFor(ChatSetup setup) {
     String signature =
         setup.getModelName() + "|" + setup.getTemperature() + "|" + setup.getMaxResponseTokens();
-    ChatLanguageModel m =
+    ChatModel m =
         modelCache.computeIfAbsent(
             signature,
             sig ->

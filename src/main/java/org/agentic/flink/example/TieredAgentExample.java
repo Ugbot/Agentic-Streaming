@@ -4,12 +4,11 @@ import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.tools.builtin.CalculatorTools;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.ollama.OllamaChatModel;
-import dev.langchain4j.model.output.Response;
 import java.time.Duration;
 import java.util.*;
 import org.apache.flink.api.common.functions.OpenContext;
@@ -126,7 +125,7 @@ public class TieredAgentExample {
    */
   public static class ValidationAgent extends RichFlatMapFunction<AgentEvent, AgentEvent> {
 
-    private transient ChatLanguageModel model;
+    private transient ChatModel model;
 
     @Override
     public void open(OpenContext openContext) throws Exception {
@@ -162,12 +161,12 @@ public class TieredAgentExample {
       );
 
       try {
-        Response<AiMessage> response = model.generate(
+        ChatResponse response = model.chat(
             SystemMessage.from("You are a helpful validation assistant. Respond with only 'VALID' or 'INVALID'."),
             UserMessage.from(prompt)
         );
 
-        String validation = response.content().text().trim().toUpperCase();
+        String validation = response.aiMessage().text().trim().toUpperCase();
         boolean isValid = validation.contains("VALID") && !validation.contains("INVALID");
 
         System.out.println("[ValidationAgent] Validation result: " + (isValid ? "VALID" : "INVALID"));
@@ -216,7 +215,7 @@ public class TieredAgentExample {
    */
   public static class ExecutionAgent extends RichFlatMapFunction<AgentEvent, AgentEvent> {
 
-    private transient ChatLanguageModel model;
+    private transient ChatModel model;
     private transient CalculatorTools calculator;
 
     @Override
@@ -268,8 +267,8 @@ public class TieredAgentExample {
 
         } else {
           // Use LLM for general questions
-          Response<AiMessage> response = model.generate(UserMessage.from(request));
-          String answer = response.content().text();
+          ChatResponse response = model.chat(UserMessage.from(request));
+          String answer = response.aiMessage().text();
 
           AgentEvent completedEvent = new AgentEvent(
               event.getFlowId(),
@@ -340,7 +339,7 @@ public class TieredAgentExample {
    */
   public static class SupervisorAgent extends RichFlatMapFunction<AgentEvent, AgentEvent> {
 
-    private transient ChatLanguageModel model;
+    private transient ChatModel model;
 
     @Override
     public void open(OpenContext openContext) throws Exception {
@@ -388,12 +387,12 @@ public class TieredAgentExample {
       );
 
       try {
-        Response<AiMessage> response = model.generate(
+        ChatResponse response = model.chat(
             SystemMessage.from("You are a quality reviewer. Respond with only 'APPROVED' or 'NEEDS_REVIEW'."),
             UserMessage.from(reviewPrompt)
         );
 
-        String review = response.content().text().trim().toUpperCase();
+        String review = response.aiMessage().text().trim().toUpperCase();
         boolean approved = review.contains("APPROVED");
 
         System.out.println("[SupervisorAgent] Review: " + (approved ? "APPROVED" : "NEEDS_REVIEW"));

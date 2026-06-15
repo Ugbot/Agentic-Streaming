@@ -9,8 +9,8 @@ Go under `ports/`, with design docs under `docs/portability/`.
 
 This main module is the Flink framework: a standalone agentic framework for Apache Flink
 with LangChain4J integration. Java 17 target, Flink 2.2.1 (native FLIP-27 sources /
-FLIP-143 sinks), LangChain4J 0.35.0. PyFlink path targets apache-flink 2.x (see
-docs/python.md).
+FLIP-143 sinks), LangChain4J 1.16.3 (managed via the langchain4j-bom). PyFlink path targets
+apache-flink 2.x (see docs/python.md).
 
 The multi-engine ports + gateways live under `ports/` (their own `ports/README.md`); the
 engine-agnostic "essence" and per-engine design notes are in `docs/portability/`.

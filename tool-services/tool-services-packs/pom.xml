@@ -20,7 +20,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.17.2</jackson.version>
-    <langchain4j.version>0.35.0</langchain4j.version>
+    <langchain4j.version>1.16.3</langchain4j.version>
     <tika.version>2.9.2</tika.version>
     <jsoup.version>1.18.1</jsoup.version>
   </properties>
