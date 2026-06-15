@@ -221,6 +221,7 @@ value, in order, durably, per key** — see the
 | **Portability pack** | the same essence on **12 engines** across **3 pure cores** (`pyagentic` / `jagentic-core` / `goagentic`) + 2 HTTP gateways; a new tool/path in a core propagates to every port. The cores are now **near-complete standalone agent frameworks** — real LLM/embedding libs, structured output, skills, MCP + A2A clients, saga, context-window mgmt, an in-process **HNSW** index, vector/long-term/conversation store SPIs (Qdrant/Postgres/Redis), web toolkit, DL-inference SPI | [`ports/`](ports/) |
 | **Declarative pipelines** | one `pipeline.yaml` → any backend; loaders in Python, JVM, and Go | [`pipelines.md`](docs/portability/pipelines.md) |
 | **Tool services** | the toolkit (web scraping, **Tika**, RAG, inference, utilities) as standalone, framework-agnostic tools any LLM/framework runs over **MCP · REST · gRPC · Kafka/Redis** (Quarkus, Flink-free) | [`tool-services/`](tool-services/) · [`tool-services.md`](docs/portability/tool-services.md) |
+| **Agentic Pekko** *(first-class)* | the agent essence on **Apache Pekko** actors — one event-sourced, cluster-sharded entity per conversation (single-writer + durable + recoverable), async turns, `backend: pekko`, Pekko HTTP + Kafka-Streams front doors, durability on memory/Postgres/Cassandra/Redis | [`agentic-pekko/`](agentic-pekko/) |
 | **Design docs** | per-engine mapping, parity matrix, choosing-a-backend | [`docs/portability/`](docs/portability/) |
 
 ---

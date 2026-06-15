@@ -1,4 +1,10 @@
-# agentic-pekko — Agentic-Flink on Apache Pekko
+# ports/pekko — superseded by the first-class `agentic-pekko/` module
+
+> **This was the proof-of-concept.** It has graduated to a full first-class runtime at the
+> top-level [`agentic-pekko/`](../../agentic-pekko/) module — event-sourced + cluster-sharded
+> entities, async turns with recovery + dedupe, `backend: pekko`, a Pekko HTTP front door, Pekko
+> Streams + Kafka ingress, and pluggable durability (memory/Postgres/Cassandra/Redis). Use that.
+> The files here remain only as the original minimal PoC.
 
 The agent essence on the **actor model** (Pekko, the Apache fork of Akka), reusing
 the Flink-free `org.jagentic:jagentic-core`. See the design in
