@@ -26,6 +26,17 @@ from .retrieval import (
 )
 from .embeddings import Embedder, HashingEmbedder, LiteLLMEmbedder, make_embedder
 from .a2a import A2AClient, peer_tool
+from .cep import (
+    CepMatcher,
+    CepObserver,
+    Condition,
+    Contiguity,
+    Match,
+    Pattern,
+    Stage,
+    any_,
+    simple,
+)
 from .context import ContextItem, ContextWindowManager, Priority
 from .guardrails import Guardrail, RegexGuardrail
 from .inference import (
@@ -174,6 +185,15 @@ __all__ = [
     "SlidingWindow",
     "TumblingWindow",
     "SessionWindow",
+    "CepMatcher",
+    "CepObserver",
+    "Condition",
+    "Contiguity",
+    "Match",
+    "Pattern",
+    "Stage",
+    "any_",
+    "simple",
 ]
 
 __version__ = "0.1.0"
