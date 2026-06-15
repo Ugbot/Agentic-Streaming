@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.jagentic.core.ToolRegistry;
+import org.jagentic.tools.inference.InferencePack;
+import org.jagentic.tools.rag.RagPack;
 import org.jagentic.tools.util.UtilityPack;
 import org.jagentic.tools.web.WebDocumentPack;
 
@@ -22,6 +24,8 @@ public final class ToolPacks {
     Map<String, ToolPack> packs = new LinkedHashMap<>();
     register(packs, new UtilityPack());
     register(packs, new WebDocumentPack());
+    register(packs, new RagPack());
+    register(packs, new InferencePack());
     return packs;
   }
 
