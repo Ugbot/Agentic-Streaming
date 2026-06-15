@@ -59,6 +59,7 @@ from .longterm import (
     make_long_term_store,
 )
 from .runtime import LocalRuntime, Runtime
+from .stream import Channel, EventObserver, QueueChannel, SeedChannel, StreamRuntime
 from .stores import RedisConversationStore, make_conversation_store
 from .hnsw import HnswIndex
 from .vectorstores import (
@@ -89,6 +90,11 @@ __all__ = [
     "hashing_embedder",
     "LocalRuntime",
     "Runtime",
+    "Channel",
+    "SeedChannel",
+    "QueueChannel",
+    "EventObserver",
+    "StreamRuntime",
     "Tool",
     "ToolRegistry",
     "ChatClient",
