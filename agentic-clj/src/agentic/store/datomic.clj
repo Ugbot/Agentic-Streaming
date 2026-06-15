@@ -36,6 +36,30 @@
    {:db/ident :lt/content :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :lt/position :db/valueType :db.type/long :db/cardinality :db.cardinality/one}])
 
+;; ---- time-travel: the transcript is immutable datoms, so any past state is a query `as-of` a point ----
+
+(defn basis-t
+  "The current basis-t of the connection's database — a monotonic point in the log. Capture this
+   after a turn to replay the transcript exactly as it was then."
+  [conn]
+  (:t (d/db conn)))
+
+(defn- transcript-from-db
+  "Run the transcript query against any immutable database value."
+  [db cid]
+  (->> (d/q '[:find ?role ?content ?pos :in $ ?cid :where
+              [?m :message/conversation ?cid] [?m :message/role ?role]
+              [?m :message/content ?content] [?m :message/position ?pos]]
+            db cid)
+       (sort-by #(nth % 2))
+       (mapv (fn [[role content _]] {:role role :content content}))))
+
+(defn history-as-of
+  "The conversation transcript exactly as it stood at basis-t `t` — Datomic time-travel via `d/as-of`.
+   Because datoms are immutable, later turns never mutate this view; it is the durable event log."
+  [conn cid t]
+  (transcript-from-db (d/as-of (d/db conn) t) cid))
+
 (defn- msg-count [conn cid]
   (or (ffirst (d/q '[:find (count ?m) :in $ ?cid :where [?m :message/conversation ?cid]]
                    (d/db conn) cid))

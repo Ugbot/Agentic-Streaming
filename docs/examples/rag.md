@@ -1,5 +1,11 @@
 # RAG research assistant walkthrough
 
+> **Flink-runtime showcase** — exercises Flink-only capabilities (**Flink-state keyed HNSW vector
+> memory**). The portable cores ship their own in-process HNSW index, so RAG itself runs everywhere
+> (see [`banking-rag.yaml`](../../examples/pipelines/banking-rag.yaml) and
+> [the banking agent on every runtime](banking-everywhere.md)); what's Flink-specific here is binding
+> the index to Flink's checkpointed state.
+
 > Source: `src/main/java/org/agentic/flink/example/rag/RagResearchExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/rag/README.md`
 

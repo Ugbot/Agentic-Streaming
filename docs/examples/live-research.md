@@ -1,5 +1,9 @@
 # Live-research walkthrough
 
+> **Flink-runtime showcase** — a crawler frontier + LLM-steered crawl composed as **Flink operators**
+> over an HNSW corpus. Not the portable baseline; for the agent that runs unchanged on every runtime
+> see [the banking agent on every runtime](banking-everywhere.md).
+
 > Source: `src/main/java/org/agentic/flink/example/research/LiveResearchExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/research/README.md`
 

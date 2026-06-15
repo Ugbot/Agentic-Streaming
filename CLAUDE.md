@@ -52,7 +52,7 @@ engine-agnostic "essence" and per-engine design notes are in `docs/portability/`
 ## Build
 
 ```
-mvn clean test                        # unit tests
+mvn clean test                        # unit tests (Flink framework)
 mvn test -P integration-tests         # integration tests (requires containers)
 mvn clean package -P flink-agents     # build with optional Flink Agents plugin
 mvn install -DskipTests && mvn -f a2a-gateway/pom.xml package   # build the A2A gateway
@@ -60,6 +60,25 @@ mvn install -DskipTests && mvn -f a2a-gateway/pom.xml package   # build the A2A 
 
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
 Enable it with `-P flink-agents` after building Flink Agents from source.
+
+### Other first-class runtimes (built separately, after `mvn -f ports/jagentic-core/pom.xml install -DskipTests`)
+
+```
+# Agentic Pekko (actors)
+mvn -f agentic-pekko/pom.xml test
+mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"   # any spec on the actor runtime
+mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.RecoveryDemo  # durability/recovery
+
+# Agentic Clojure (Datomic) — in agentic-clj/
+clojure -X:test          # full suite
+clojure -M:run           # banking demo
+clojure -M:time-travel   # Datomic transcript time-travel (as-of)
+```
+
+The cross-runtime parity story (one `pipeline.yaml`, every runtime) is documented in
+`docs/examples/banking-everywhere.md`; the Flink-only examples under `docs/examples/` are labelled
+"Flink-runtime showcase".
 
 ## Key Patterns
 

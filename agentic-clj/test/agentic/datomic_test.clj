@@ -12,6 +12,20 @@
          (println "datomic-local unavailable, skipping:" (.getMessage t))
          nil)))
 
+(deftest datomic-transcript-time-travel
+  ;; the transcript is immutable datoms — history-as-of replays an earlier basis-t exactly.
+  (when-let [{:keys [conn conversation]} (try-stores)]
+    (store/append conversation "c1" {:role "user" :content "first"})
+    (let [t1 (dat/basis-t conn)]
+      (store/append conversation "c1" {:role "assistant" :content "second"})
+      (store/append conversation "c1" {:role "user" :content "third"})
+      (testing "current view has all three"
+        (is (= 3 (count (store/history conversation "c1")))))
+      (testing "as-of t1 is the strict one-message prefix"
+        (let [back (dat/history-as-of conn "c1" t1)]
+          (is (= 1 (count back)))
+          (is (= [{:role "user" :content "first"}] back)))))))
+
 (deftest datomic-conversation-store-roundtrip
   (when-let [{:keys [conversation keyed long-term]} (try-stores)]
     (testing "transcript append/history/count"

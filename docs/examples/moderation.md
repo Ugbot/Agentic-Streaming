@@ -1,5 +1,9 @@
 # Content-moderation walkthrough
 
+> **Flink-runtime showcase** — exercises Flink-only capabilities (**OutputTag side outputs** + a
+> classifier hard-gate). Not the portable baseline; for the agent that runs unchanged on every
+> runtime see [the banking agent on every runtime](banking-everywhere.md).
+
 > Source: `src/main/java/org/agentic/flink/example/moderation/ContentModerationExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/moderation/README.md`
 

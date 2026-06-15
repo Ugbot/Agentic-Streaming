@@ -1,5 +1,10 @@
 # Support triage walkthrough
 
+> **Flink-runtime showcase** — composes guardrails + inference + a scorer over **Flink keyed state**.
+> The guardrail/inference/scorer pieces are portable SPIs; this walkthrough wires them on the Flink
+> runtime. For the runs-everywhere baseline see
+> [the banking agent on every runtime](banking-everywhere.md).
+
 > Source: `src/main/java/org/agentic/flink/example/triage/SupportTriageExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/triage/README.md`
 

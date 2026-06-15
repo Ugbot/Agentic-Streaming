@@ -58,3 +58,14 @@
     (is (contains? prios :should))
     (is (not (contains? prios :could)))
     (is (not (contains? prios :wont)))))
+
+(deftest context-window-compacts-transcript
+  ;; compact-history keeps the two most-recent messages (MUST) and drops older ones under budget.
+  (let [history (mapv (fn [i] {:role (if (even? i) "user" "assistant")
+                               :content (apply str (repeat 40 (char (+ 97 i))))})
+                      (range 6))
+        kept (cw/compact-history history {:max-tokens 22})] ; ~10 tokens each → ~2 kept
+    (is (<= (count kept) 3))
+    (is (every? #(and (:role %) (:content %)) kept))
+    ;; the final (most-recent) message survives — it is MUST
+    (is (= (:content (last history)) (:content (last kept))))))
