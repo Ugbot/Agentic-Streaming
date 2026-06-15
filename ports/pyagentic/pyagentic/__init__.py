@@ -70,6 +70,7 @@ from .longterm import (
     make_long_term_store,
 )
 from .runtime import LocalRuntime, Runtime
+from .replay import EventLog, InMemoryEventLog, replay, replay_until
 from .stream import Channel, EventObserver, QueueChannel, SeedChannel, StreamRuntime
 from .timers import (
     DurableTimerService,
@@ -120,6 +121,10 @@ __all__ = [
     "QueueChannel",
     "EventObserver",
     "StreamRuntime",
+    "EventLog",
+    "InMemoryEventLog",
+    "replay",
+    "replay_until",
     "Timer",
     "TimerService",
     "InMemoryTimerService",
