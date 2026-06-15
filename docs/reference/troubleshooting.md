@@ -38,9 +38,9 @@ $ java -version
    where java
    ```
 
-2. **Install Java 11 or higher:**
+2. **Install Java 17 or higher:**
    - Download from https://adoptium.net/
-   - Choose your OS and Java 11+
+   - Choose your OS and Java 17+
    - Run the installer
 
 3. **Verify installation:**
@@ -1012,10 +1012,10 @@ public void testOllamaConnection() {
 **If you're still stuck:**
 
 1. **Read the docs:**
-   - [GETTING_STARTED.md](GETTING_STARTED.md) - Setup guide
-   - [CONCEPTS.md](CONCEPTS.md) - How things work
-   - [EXAMPLES.md](EXAMPLES.md) - Working examples
-   - [AGENT_FRAMEWORK.md](AGENT_FRAMEWORK.md) - Complete reference
+   - [../getting-started.md](../getting-started.md) - Setup guide
+   - [../concepts.md](../concepts.md) - How things work
+   - [examples.md](examples.md) - Working examples
+   - [agent-framework.md](agent-framework.md) - Complete reference
 
 2. **Check the examples:**
    - `SimpleAgentExample.java` - Basic workflow

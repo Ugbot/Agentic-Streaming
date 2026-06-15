@@ -1,8 +1,6 @@
-# Agentic-Flink & Apache Flink Agents: Integration Guide
+# Agentic Streaming & Apache Flink Agents: Integration Guide
 
-**Last Updated:** October 2025
-**Document Version:** 1.0
-**Project Version:** Agentic-Flink 1.0.0-SNAPSHOT | Apache Flink Agents 0.1.0
+**Project Version:** Agentic Streaming 1.0.0-SNAPSHOT | Apache Flink Agents (optional plugin, built from source)
 
 ---
 
@@ -954,9 +952,9 @@ Benchmarks will be published when Flink Agents v1.0 releases.
 
 ### Resources
 
-**Agentic-Flink:**
-- Repository: [GitHub URL]
-- Documentation: README.md, STATUS.md, ROADMAP.md
+**Agentic Streaming:**
+- Repository: https://github.com/Ugbot/Agentic-Streaming
+- Documentation: README.md, docs/portability/, docs/reference/
 - Examples: `src/main/java/org/agentic/flink/example/`
 
 **Apache Flink Agents:**
