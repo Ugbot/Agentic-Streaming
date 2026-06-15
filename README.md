@@ -525,6 +525,10 @@ Need a recipe rather than a full example? See [docs/cookbook.md](docs/cookbook.m
 | [docs/portability/pipelines.md](docs/portability/pipelines.md) | Declarative `pipeline.yaml` schema + loaders (Python/JVM/Go) |
 | [docs/portability/parity-matrix.md](docs/portability/parity-matrix.md) | What each backend can do + limitations; three-core parity |
 | [docs/portability/choosing-a-backend.md](docs/portability/choosing-a-backend.md) | Decision guide across Flink + 12 engines |
+| [docs/portability/stream-stateful-core.md](docs/portability/stream-stateful-core.md) | The **stream-stateful core** — CEP · timers · windows · replay · suspend/resume · tracing, on every core |
+| [docs/concepts.md](docs/concepts.md) | Core concepts — agents, events, tools, memory, the routed graph |
+| [docs/configuration.md](docs/configuration.md) | Configuration reference (env vars, resolution order) |
+| [docs/a2a.md](docs/a2a.md) | Agent-to-Agent (A2A) protocol — peer-as-tool, gateway, bridges |
 | [docs/memory.md](docs/memory.md) | Flink-state-first memory model, vector memory, feeds |
 | [docs/inference.md](docs/inference.md) | DL models as tools, guardrails, scorers, embedders |
 | [docs/channels.md](docs/channels.md) | `Channel<T>` SPI: Kafka, Postgres CDC, Redis, webhook, tool transport |
