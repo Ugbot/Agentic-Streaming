@@ -2,6 +2,7 @@ package org.jagentic.pekko.runtime;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -23,14 +24,21 @@ public final class ConversationManager {
 
   private ConversationManager() {}
 
+  /** Default: event-sourced entities. */
   public static Behavior<Command> create(AgentDeps deps) {
+    return create(cid -> ConversationEntity.create(cid, deps));
+  }
+
+  /** Route to entities built by {@code entityFactory} — lets the durability profile choose the
+   * entity flavour (event-sourced vs Redis write-through) without changing the routing/protocol. */
+  public static Behavior<Command> create(Function<String, Behavior<ConversationEntity.Command>> entityFactory) {
     return Behaviors.setup(ctx -> {
       Map<String, ActorRef<ConversationEntity.Command>> children = new HashMap<>();
       return Behaviors.receive(Command.class)
           .onMessage(Envelope.class, env -> {
             ActorRef<ConversationEntity.Command> child =
                 children.computeIfAbsent(env.conversationId(),
-                    cid -> ctx.spawn(ConversationEntity.create(cid, deps), "conv-" + sanitize(cid)));
+                    cid -> ctx.spawn(entityFactory.apply(cid), "conv-" + sanitize(cid)));
             child.tell(env.command());
             return Behaviors.same();
           })
