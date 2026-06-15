@@ -26,6 +26,30 @@ class PekkoBackendPipelineTest {
   private static final Path BANKING = PIPELINES.resolve("banking.yaml");
 
   @Test
+  void backendPekkoRunsDeclarativeCepFromIncidentYaml() {
+    Path yaml = PIPELINES.resolve("incident.yaml");
+    if (!Files.exists(yaml)) {
+      org.junit.jupiter.api.Assumptions.abort("incident.yaml not found at " + yaml.toAbsolutePath());
+    }
+    PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
+    try {
+      assertEquals("pekko", sys.backendName);
+      assertEquals(1, sys.cep.size(), "the cep: rule is wired on the actor runtime");
+      // Feed three anomalies for one host; each is a turn on the event-sourced entity, and the CEP
+      // wiring fires the escalation submit through the PekkoRuntime on the third (synchronously, so
+      // any failure on the actor path would surface here). Escalation routing itself is asserted by
+      // the jagentic-core local golden (same CepWiring code).
+      for (long ts : new long[] {0, 60_000, 120_000}) {
+        org.jagentic.core.TurnResult r =
+            sys.submit(new Event("host-7", "monitor", "anomaly: cpu high", Map.of("ts", Long.toString(ts))));
+        assertEquals("monitor", r.path, "anomalies route to the monitor path");
+      }
+    } finally {
+      close(sys.runtime);
+    }
+  }
+
+  @Test
   void backendPekkoRunsTheSharedBankingYaml() {
     if (!Files.exists(BANKING)) {
       org.junit.jupiter.api.Assumptions.abort("banking.yaml not found at " + BANKING.toAbsolutePath());

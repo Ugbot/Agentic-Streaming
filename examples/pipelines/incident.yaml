@@ -1,0 +1,42 @@
+# Agentic Streaming — declarative CEP woven into the pipeline. Anomaly events stream in; a `cep:`
+# rule detects 3 anomalies on one host within 5 minutes and escalates to an agent path that opens a
+# ticket. The same spec runs on every core (portable CEP) and on Flink (native CEP via CepSpecTranslator).
+#
+# All model-free/offline: rule brains + a constant tool. Feed anomaly events keyed by host:
+#   python -m agentic_pipeline run examples/pipelines/incident.yaml --text "anomaly: cpu high"
+#
+# (CEP is event-driven: feed several anomalies for one conversation/host to trigger the incident.)
+
+backend: local
+
+agent:
+  router:
+    kind: keyword
+    default: monitor
+    rules:
+      escalate: [incident]          # the derived "incident ..." event routes here
+  paths:
+    monitor:
+      brain: rule
+      prompt: You acknowledge incoming anomaly signals.
+    escalate:
+      brain: rule
+      prompt: You open an incident ticket and summarize.
+      tool_triggers: {incident: open_ticket}
+
+tools:
+  - {id: open_ticket, kind: constant, description: Open an incident ticket, value: "TICKET-OPENED"}
+
+# Complex event processing — the headline weave. 3 anomalies on one host within 5 minutes -> escalate.
+cep:
+  - name: host_incident
+    key: conversation_id            # partition by host (the conversation id)
+    ts: metadata.ts                 # logical timestamps from event metadata
+    within: 300000                  # 5 minutes
+    pattern:
+      - {stage: first,  where: {text_contains: anomaly}}
+      - {stage: second, where: {text_contains: anomaly}, contiguity: followedBy}
+      - {stage: third,  where: {text_contains: anomaly}, contiguity: followedBy}
+    on_match:
+      kind: submit                  # inject a derived event that routes through the graph
+      text: "incident: 3 anomalies on {key}"

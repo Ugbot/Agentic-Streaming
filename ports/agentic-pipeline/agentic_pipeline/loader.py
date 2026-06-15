@@ -44,22 +44,41 @@ def _chat_client_factory(llm_spec: Dict[str, Any]):
 
 
 class PipelineSystem:
-    """A built, deployed agentic system: a backend runtime + the spec that produced it."""
+    """A built, deployed agentic system: a backend runtime + the spec that produced it.
 
-    def __init__(self, spec: Dict[str, Any], backend, graph, tools, retriever, long_term=None):
+    Implements ``submit(Event) -> TurnResult`` so it can sit behind a ``StreamRuntime``
+    (the stream path drives the same CEP-bearing submit)."""
+
+    def __init__(self, spec: Dict[str, Any], backend, graph, tools, retriever, long_term=None, cep=None):
         self.spec = spec
         self.backend = backend
         self.graph = graph
         self.tools = tools
         self.retriever = retriever
         self.long_term = long_term  # optional LongTermStore for resumption + fact archive
+        # Declarative CEP rules from the spec's ``cep:`` section (empty if none).
+        self.cep = list(cep or [])
 
     @property
     def backend_name(self) -> str:
         return self.backend.name
 
     def submit(self, event: Event):
-        return self.backend.submit(event)
+        """Run the turn, then feed the inbound event to every CEP rule (which may fire
+        tool/submit actions through the inner backend runtime). CEP runs exactly once per
+        inbound event, on this path; submit actions tag their derived events so they can't
+        recurse."""
+        result = self.backend.submit(event)
+        for wiring in self.cep:
+            wiring.on_event(event, self.backend, self.tools)
+        return result
+
+    def stream(self):
+        """Drive a live event stream through this system (CEP fires on the same submit
+        path). Returns a ``StreamRuntime`` over this system."""
+        from pyagentic.stream import StreamRuntime
+
+        return StreamRuntime(self)
 
 
 def build_system(spec: Dict[str, Any], backend: Optional[str] = None) -> PipelineSystem:
@@ -67,6 +86,7 @@ def build_system(spec: Dict[str, Any], backend: Optional[str] = None) -> Pipelin
     overridden). A ``stores.conversation`` section hot-swaps the durable store (e.g.
     Redis/Valkey) behind the ConversationStore SPI; ``stores.long_term`` selects the
     resumption + fact archive (memory/postgres) behind the LongTermStore SPI."""
+    from pyagentic.cep import compile_cep
     from pyagentic.longterm import make_long_term_store
     from pyagentic.stores import make_conversation_store
 
@@ -77,7 +97,8 @@ def build_system(spec: Dict[str, Any], backend: Optional[str] = None) -> Pipelin
     store = make_conversation_store(store_spec) if store_spec else None
     long_term = make_long_term_store(stores_spec.get("long_term")) if stores_spec.get("long_term") else None
     rt = backends.make_backend(name, graph, tools, retriever, store=store)
-    return PipelineSystem(spec, rt, graph, tools, retriever, long_term=long_term)
+    cep = compile_cep(spec.get("cep"))
+    return PipelineSystem(spec, rt, graph, tools, retriever, long_term=long_term, cep=cep)
 
 
 def load(path: str, backend: Optional[str] = None) -> PipelineSystem:

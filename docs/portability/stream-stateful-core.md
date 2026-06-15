@@ -47,6 +47,37 @@ Wire it onto the stream with `CepObserver` (key + timestamp extractors + an on-m
 matcher sees the live event stream and fires the agent only on a confirmed incident — the portable
 equivalent of routing Flink CEP matches to a `PatternProcessFunction`.
 
+## Declarative `cep:` in the pipeline
+
+You rarely build matchers by hand — declare them. A `cep:` section in `pipeline.yaml`
+([`examples/pipelines/incident.yaml`](../../examples/pipelines/incident.yaml)) compiles to wired
+matchers whose matches fire actions, on every core:
+
+```yaml
+cep:
+  - name: incident
+    key: conversation_id          # conversation_id | metadata.<field>
+    ts: metadata.ts               # metadata.<field> (else a per-rule arrival counter)
+    within: 300000
+    pattern:
+      - { stage: first,  where: { text_contains: anomaly } }
+      - { stage: second, where: { text_contains: anomaly }, contiguity: followedBy }
+      - { stage: third,  where: { text_contains: anomaly }, contiguity: followedBy }
+    on_match:
+      kind: submit                # submit a derived event that routes through the graph (e.g. escalate)
+      text: "incident: 3 anomalies on {key}"
+      # or  kind: tool, tool: open_ticket, args: {...}   (call any registered tool — incl. an A2A peer / MCP tool)
+```
+
+`where`: `any` · `{text_contains: s|[..]}` · `{metadata_equals: {k: v}}` · `{metadata_gt: {k: n}}`.
+
+**Run model.** The loader builds the rules and `PipelineSystem.submit` feeds every inbound event to
+them *after* the turn; a match fires its action through the **inner** runtime. `submit` actions inject
+a derived event tagged so CEP never re-matches it (no recursion); the stream path is a `StreamRuntime`
+over the system, so CEP fires **exactly once** on either entry point. The same spec runs on Pekko
+(`backend: pekko`) unchanged, and translates to **native Flink CEP** via `CepSpecTranslator` (the same
+declarative pattern → a watermarked Flink `Pattern`, wired with `CEP.pattern(...).process(...)`).
+
 ## How it composes with the engines
 
 The portable impls are the **default and the cross-engine reference**; engines replace them behind the

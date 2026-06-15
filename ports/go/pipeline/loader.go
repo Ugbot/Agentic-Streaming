@@ -23,11 +23,35 @@ type System struct {
 	// LongTerm is the durable long-term store (conversation resumption + fact archive),
 	// built from stores.long_term. Defaults to an in-memory store.
 	LongTerm core.LongTermStore
-	rt       Runtime
+	// cep holds the declarative CEP rules from the spec's cep: section (empty if none).
+	cep []*core.CepWiring
+	rt  Runtime
 }
 
-// Submit runs a turn on the backend.
-func (s *System) Submit(e core.Event) core.TurnResult { return s.rt.Submit(e) }
+// Submit runs the turn on the backend, then feeds the inbound event to every CEP rule
+// (which may fire tool/submit actions through the inner runtime). CEP runs exactly once per
+// inbound event, on this path; submit actions tag their derived events so they don't
+// recurse. The System itself satisfies core.Runtime, so it can sit behind a StreamRuntime.
+func (s *System) Submit(e core.Event) core.TurnResult {
+	result := s.rt.Submit(e)
+	for _, wiring := range s.cep {
+		wiring.OnEvent(e, s.rt, s.Built.Tools)
+	}
+	return result
+}
+
+// Stream drives a live event stream through this system: CEP fires on the same Submit
+// path because the StreamRuntime submits to the System (not the raw backend).
+func (s *System) Stream() *core.StreamRuntime { return core.NewStreamRuntime(s) }
+
+// Store exposes the backend's conversation store when the backend is the in-process local
+// runtime (the only backend that keeps state in-JVM); it returns nil otherwise.
+func (s *System) Store() core.ConversationStore {
+	if lb, ok := s.rt.(localBackend); ok {
+		return lb.rt.Store()
+	}
+	return nil
+}
 
 // Load reads a pipeline.yaml and builds the system (backend from YAML unless overridden).
 func Load(path, backend string) (*System, error) {
@@ -60,7 +84,11 @@ func BuildSystem(spec map[string]any, backend string) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &System{BackendName: name, Built: built, LongTerm: longTerm, rt: rt}, nil
+	cep, err := compileCep(asList(spec["cep"]))
+	if err != nil {
+		return nil, err
+	}
+	return &System{BackendName: name, Built: built, LongTerm: longTerm, cep: cep, rt: rt}, nil
 }
 
 // buildLongTerm builds the durable long-term store by kind: memory (default) | postgres.
