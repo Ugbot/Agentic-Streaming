@@ -19,7 +19,7 @@ same agent on Flink or a dozen other engines.**
 [Docs](#reference)
 
 <sub>Formerly **Agentic Flink**. It began as an agent framework *for* Apache Flink and outgrew the name —
-the same essence now runs across Python, the JVM, and Go. Flink is still the first-class, most
+the same essence now runs across Python, the JVM, Go, and Clojure. Flink is still the first-class, most
 feature-complete runtime; it's just no longer the only one.</sub>
 
 </div>
@@ -222,6 +222,7 @@ value, in order, durably, per key** — see the
 | **Declarative pipelines** | one `pipeline.yaml` → any backend; loaders in Python, JVM, and Go | [`pipelines.md`](docs/portability/pipelines.md) |
 | **Tool services** | the toolkit (web scraping, **Tika**, RAG, inference, utilities) as standalone, framework-agnostic tools any LLM/framework runs over **MCP · REST · gRPC · Kafka/Redis** (Quarkus, Flink-free) | [`tool-services/`](tool-services/) · [`tool-services.md`](docs/portability/tool-services.md) |
 | **Agentic Pekko** *(first-class)* | the agent essence on **Apache Pekko** actors — one event-sourced, cluster-sharded entity per conversation (single-writer + durable + recoverable), async turns, `backend: pekko`, Pekko HTTP + Kafka-Streams front doors, durability on memory/Postgres/Cassandra/Redis | [`agentic-pekko/`](agentic-pekko/) |
+| **Agentic Clojure** *(first-class)* | the agent essence as **pure, idiomatic Clojure** (no Java-core dep) on **Datomic** — each message an immutable datom, so the transcript *is* an event log with time-travel; functions for brains/routers/verifiers, the FNV embedder at byte-parity, EDN+YAML pipeline loader, http-kit + MCP-stdio front doors | [`agentic-clj/`](agentic-clj/) |
 | **Design docs** | per-engine mapping, parity matrix, choosing-a-backend | [`docs/portability/`](docs/portability/) |
 
 ---

@@ -35,6 +35,7 @@ the good parts without Flink.
 | [`faust.md`](faust.md) | Faust (faust-streaming) | Python | Native fit: faust *agents* + *Tables* ≈ our agent + ConversationStore. |
 | [`kafka-streams.md`](kafka-streams.md) | Kafka Streams | Java | Closest analog: state stores + partitions + EOS; bridge async I/O. |
 | [`pekko.md`](pekko.md) | Apache Pekko | Java | Actor-per-conversation via Cluster Sharding (C1+C2) + Persistence (C3) — all native. |
+| [`clojure.md`](clojure.md) | Clojure (Datomic) | Clojure | **First-class, pure-Clojure** reimplementation; immutable datoms = the conversation log + time-travel (C3 native). |
 | [`temporal.md`](temporal.md) | Temporal | Java | Entity workflow per conversation; event-sourced C1+C2+C3 — strongest durability. |
 | [`pulsar.md`](pulsar.md) | Apache Pulsar Functions | Java | State store (C1+C3) + Key_Shared (C2) — native, in Flink's topic-in/topic-out shape. |
 | [`ray.md`](ray.md) | Ray | Python | Actor-per-conversation = stateful agent; durability + streaming are external. |
