@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.jagentic</groupId>
+  <artifactId>tool-services-packs</artifactId>
+  <version>0.1.0</version>
+  <name>Agentic Tool Services — Packs</name>
+  <description>Flink-free library of self-describing tool packs (web/Tika, RAG, inference, utility)
+    that register into a jagentic-core ToolRegistry and can be served over MCP/REST/gRPC/pub-sub.</description>
+
+  <!--
+  Standalone module (no parent). Build after installing jagentic-core:
+      mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
+      mvn -f tool-services/tool-services-packs/pom.xml install
+  Kept out of the core reactor (mirrors the a2a-gateway module pattern).
+  -->
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <jackson.version>2.17.2</jackson.version>
+    <langchain4j.version>0.35.0</langchain4j.version>
+    <tika.version>2.9.2</tika.version>
+    <jsoup.version>1.18.1</jsoup.version>
+  </properties>
+
+  <dependencies>
+    <!-- The Flink-free core: ToolRegistry, ToolServer, Embedder/VectorStore/inference SPIs. -->
+    <dependency>
+      <groupId>org.jagentic</groupId>
+      <artifactId>jagentic-core</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+
+    <!-- @Tool / @P annotations for the utility pack's annotated tools. -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-core</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+
+    <!-- Web + document pack deps (Phase 2). Declared optional so a build that only uses the
+         utility/RAG/inference packs stays lean; the web pack pulls them in transitively. -->
+    <dependency>
+      <groupId>org.jsoup</groupId>
+      <artifactId>jsoup</artifactId>
+      <version>${jsoup.version}</version>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>${tika.version}</version>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-parsers-standard-package</artifactId>
+      <version>${tika.version}</version>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <!-- emit parameter names so the @Tool reflection binder can read them -->
+          <parameters>true</parameters>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
