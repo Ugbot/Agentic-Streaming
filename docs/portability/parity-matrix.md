@@ -97,8 +97,14 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
   reimplementation** of the essence (no `jagentic-core` dep), kept at parity by the same FNV +
   banking goldens. Single‑writer (C2) is a per‑conversation convention; durability (C3) is
   **Datomic** — immutable datoms give the conversation log + time‑travel natively, on the in‑process
-  `com.datomic/local` **or an external Datomic Pro / Cloud** (same client API, selected by config). See
+  `com.datomic/local` **or an external Datomic Pro / Cloud** (same client API, selected by config). The
+  Clojure loader runs the full shared schema — `banking.yaml`, `banking-llm.yaml` and
+  `banking-rag.yaml` (skills, context‑window, classifier guardrail) — with one nuance: its cold tier
+  is **exact cosine KNN** (a correctness‑superset of HNSW ANN), not an approximate index. See
   [`clojure.md`](clojure.md) and [`../../agentic-clj/`](../../agentic-clj/).
+- **Pekko** runs the same specs via `backend: pekko`; the `PipelineMain` CLI drives any `pipeline.yaml`
+  through the event‑sourced actor runtime (`banking`, `banking-llm`, `banking-rag` all covered by
+  `PekkoBackendPipelineTest`).
 
 ## 3. What stays Flink‑first (by design)
 

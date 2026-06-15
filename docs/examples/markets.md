@@ -1,5 +1,9 @@
 # Markets — classic Flink upstream + inline agentic downstream
 
+> **Flink-runtime showcase** — **Kafka + Flink streaming** (Coinbase/bond feeds → agentic enrichment).
+> Genuinely streaming-native; not the portable baseline. For the agent that runs unchanged on every
+> runtime see [the banking agent on every runtime](banking-everywhere.md).
+
 A single Flink job that wires four classic DataStream operators feeding an inline agentic
 operator. Two domain examples share the same operator graph: an **anonymised bond markets**
 pipeline and a **live Coinbase crypto** pipeline.

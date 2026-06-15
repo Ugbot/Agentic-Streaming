@@ -1,6 +1,16 @@
-# 🚀 Getting Started with Agentic Flink
+# 🚀 Getting Started with the Flink runtime
 
-**Welcome!** This guide will take you from zero to running your first AI agent in about 15 minutes.
+**Welcome!** This guide takes you from zero to running your first AI agent on the **Flink runtime** in
+about 15 minutes.
+
+> **Pick your runtime.** Agentic Streaming runs the same agent on several first-class runtimes. The
+> fastest path (no JVM, no infra) is the Python one-liner:
+> ```bash
+> python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+> ```
+> For the same banking agent on **Flink · Pekko · Clojure · Python · Go** (and a dozen backends), see
+> [the banking agent on every runtime](examples/banking-everywhere.md). The rest of *this* page is the
+> Flink-runtime path.
 
 ## 📋 What You'll Learn
 
