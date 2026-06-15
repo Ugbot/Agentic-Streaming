@@ -25,6 +25,8 @@
     <pekko.version>1.1.3</pekko.version>
     <!-- pekko-http has its own version line (not in pekko-bom); 1.1.x targets Pekko 1.1.x. -->
     <pekko.http.version>1.1.0</pekko.http.version>
+    <!-- pekko-connectors-kafka has its own version line (not in pekko-bom). -->
+    <pekko.connectors.kafka.version>1.1.0</pekko.connectors.kafka.version>
     <scala.binary>2.13</scala.binary>
   </properties>
 
@@ -72,6 +74,17 @@
       <groupId>org.apache.pekko</groupId>
       <artifactId>pekko-http_${scala.binary}</artifactId>
       <version>${pekko.http.version}</version>
+    </dependency>
+
+    <!-- Pekko Streams (in pekko-bom) + Connectors Kafka: backpressured source→ask→sink ingress. -->
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-stream_${scala.binary}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-connectors-kafka_${scala.binary}</artifactId>
+      <version>${pekko.connectors.kafka.version}</version>
     </dependency>
 
     <dependency>
