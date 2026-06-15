@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.typesafe.config.ConfigFactory;
 
@@ -44,9 +46,35 @@ class ConversationEntityTest {
   }
 
   private TurnReply ask(ActorRef<Command> actor, String cid, String text) {
+    return askWithId(actor, UUID.randomUUID().toString(), cid, text);
+  }
+
+  private TurnReply askWithId(ActorRef<Command> actor, String turnId, String cid, String text) {
     TestProbe<TurnReply> probe = TESTKIT.createTestProbe(TurnReply.class);
-    actor.tell(new ProcessTurn(new Event(cid, "alice", text), probe.getRef()));
+    actor.tell(new ProcessTurn(turnId, new Event(cid, "alice", text), probe.getRef()));
     return probe.receiveMessage();
+  }
+
+  private StateSnapshot state(ActorRef<Command> actor) {
+    TestProbe<StateSnapshot> probe = TESTKIT.createTestProbe(StateSnapshot.class);
+    actor.tell(new GetState(probe.getRef()));
+    return probe.receiveMessage();
+  }
+
+  /** Single-path graph whose brain counts invocations — to prove the pipeline is NOT re-run on
+   * recovery and IS skipped on a deduped turn. */
+  private static AgentDeps countingDeps(AtomicInteger counter) {
+    Brain counting = (text, ctx) -> {
+      counter.incrementAndGet();
+      return "[count] " + text;
+    };
+    Map<String, Agent> paths = new LinkedHashMap<>();
+    paths.put("count", new Agent("count", "counts turns", counting));
+    RoutedGraph g = new RoutedGraph(
+        (ev, ctx) -> "count",
+        paths,
+        (reply, ctx) -> new RoutedGraph.Verifier.Result(true, reply));
+    return new AgentDeps(g, Banking.defaultTools(), Banking.retriever());
   }
 
   @Test
@@ -62,12 +90,36 @@ class ConversationEntityTest {
     ActorRef<Command> actor = TESTKIT.spawn(ConversationEntity.create("c2", AgentDeps.banking()));
     ask(actor, "c2", "what card types do you offer?");
     ask(actor, "c2", "tell me about crypto cash-back");
-
-    TestProbe<StateSnapshot> probe = TESTKIT.createTestProbe(StateSnapshot.class);
-    actor.tell(new GetState(probe.getRef()));
-    StateSnapshot snap = probe.receiveMessage();
     // 2 turns × (user + assistant) = 4 messages, durably committed via TurnCommitted events
-    assertEquals(4, snap.messageCount());
+    assertEquals(4, state(actor).messageCount());
+  }
+
+  @Test
+  void recoversTranscriptWithoutReplayingThePipeline() {
+    AtomicInteger turns = new AtomicInteger();
+    AgentDeps deps = countingDeps(turns);
+
+    ActorRef<Command> first = TESTKIT.spawn(ConversationEntity.create("rec", deps));
+    ask(first, "rec", "one");
+    ask(first, "rec", "two");
+    assertEquals(2, turns.get());
+    assertEquals(4, state(first).messageCount());
+    TESTKIT.stop(first);
+
+    // Same persistenceId → the entity recovers by replaying TurnCommitted events.
+    ActorRef<Command> recovered = TESTKIT.spawn(ConversationEntity.create("rec", deps));
+    assertEquals(4, state(recovered).messageCount(), "transcript must survive restart");
+    assertEquals(2, turns.get(), "the LLM-calling pipeline must NOT re-run during recovery");
+  }
+
+  @Test
+  void duplicateTurnIdIsDeduped() {
+    AtomicInteger turns = new AtomicInteger();
+    ActorRef<Command> actor = TESTKIT.spawn(ConversationEntity.create("dedupe", countingDeps(turns)));
+    TurnReply r1 = askWithId(actor, "fixed-turn-1", "dedupe", "hello");
+    TurnReply r2 = askWithId(actor, "fixed-turn-1", "dedupe", "hello again");
+    assertEquals(1, turns.get(), "the second (same turnId) must be deduped, not re-run");
+    assertEquals(r1.reply(), r2.reply());
   }
 
   @Test

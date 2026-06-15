@@ -1,6 +1,7 @@
 package org.jagentic.pekko.runtime;
 
 import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 
@@ -33,7 +34,7 @@ public final class PekkoRuntime implements Runtime {
         system,
         (ActorRef<ConversationEntity.TurnReply> replyTo) ->
             new ConversationManager.Envelope(event.conversationId(),
-                new ConversationEntity.ProcessTurn(event, replyTo)),
+                new ConversationEntity.ProcessTurn(UUID.randomUUID().toString(), event, replyTo)),
         timeout,
         system.scheduler());
     try {
