@@ -16,7 +16,9 @@ ports/
   jagentic-core/  pure-Java essence + LocalRuntime       ← Kafka Streams/Pekko/Temporal/Pulsar/Spring/Quarkus build on this
   go/             pure-Go essence (core/) + gateway + NATS + Temporal + cmds, one module
   faust/ ray/ nats/ celery/ dask/ airflow/                       (Python adapters)
-  kafka-streams/ pekko/ temporal/ pulsar/ spring/ quarkus/       (JVM adapters)
+  kafka-streams/ pekko/ temporal/ pulsar/ spring/ quarkus/       (JVM adapters; pekko/ is the original
+                                                                  POC — superseded by the first-class
+                                                                  top-level ../agentic-pekko/ module)
   gateway-fastapi/   FastAPI HTTP gateway over pyagentic (local/celery/nats backends)
   go/gateway/        stdlib net/http gateway over the Go core
   agentic-pipeline/  declarative pipeline.yaml loader + backend shim (Python); Java in

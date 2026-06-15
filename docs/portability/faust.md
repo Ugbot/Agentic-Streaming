@@ -1,4 +1,4 @@
-# Agentic-Flink on Faust (faust-streaming) — pure Python, no JVM
+# Agentic Streaming on Faust (faust-streaming) — pure Python, no JVM
 
 > Per-engine doc in the `docs/portability/` series. Read
 > [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)
@@ -9,7 +9,7 @@
 ## 1. Verdict
 
 Faust is the **most natural pure-Python target** for the live keyed-stateful
-essence of Agentic-Flink. The mapping is almost embarrassing: our central idea —
+essence of Agentic Streaming. The mapping is almost embarrassing: our central idea —
 "an agent is a keyed, stateful, event-driven processor, one logical instance per
 conversation, processing its events in order" — is *literally* what Faust calls
 an **agent** (`@app.agent`, a coroutine consuming a keyed Kafka stream). Our C1

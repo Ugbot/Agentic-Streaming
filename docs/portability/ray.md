@@ -1,4 +1,4 @@
-# Agentic-Flink on Ray — pure Python, no JVM
+# Agentic Streaming on Ray — pure Python, no JVM
 
 > Per-engine doc in the `docs/portability/` series. Read
 > [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)

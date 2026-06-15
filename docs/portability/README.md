@@ -1,14 +1,18 @@
-# Portability — Agentic Streaming on any backend (Flink is just the first‑class one)
+# Portability — Agentic Streaming on any backend (Flink is one of three first‑class runtimes)
 
 What would this project be on a *different* engine? These notes name the
 engine-agnostic essence, the capabilities Flink was providing, and an honest
 per-engine mapping (what fits, what's awkward, what to drop). The essence is now
-implemented: three Flink‑free cores + 12 engine adapters + a declarative YAML pipeline.
+implemented: three Flink‑free cores (`pyagentic` · `jagentic-core` · `goagentic`) + 12
+engine adapters + a declarative YAML pipeline. Three runtimes are **first‑class** — the
+Flink framework, [`agentic-pekko/`](../../agentic-pekko/) (actors), and
+[`agentic-clj/`](../../agentic-clj/) (pure Clojure on Datomic).
 The cores are now **near‑complete standalone agent frameworks** — real LLM/embedding
 libraries, structured output, skills, MCP + A2A clients, saga/compensation, context‑window
 management, an in‑process **HNSW** vector index, vector/long‑term/conversation store SPIs
-(Qdrant/Postgres/Redis reference impls), a web toolkit and a DL‑inference SPI — so you get
-the good parts without Flink.
+(Qdrant/Postgres/Redis reference impls), a web toolkit, a DL‑inference SPI, and the
+**stream‑stateful core** (CEP · timers · windows · replay · suspend/resume · tracing — see
+[`stream-stateful-core.md`](stream-stateful-core.md)) — so you get the good parts without Flink.
 
 **Build & deploy (start here if you just want to use it):**
 - [`pipelines.md`](pipelines.md) — define an agent in `pipeline.yaml` (prompts, tools,
@@ -37,7 +41,7 @@ the good parts without Flink.
 |-----|--------|------|---------------------|
 | [`faust.md`](faust.md) | Faust (faust-streaming) | Python | Native fit: faust *agents* + *Tables* ≈ our agent + ConversationStore. |
 | [`kafka-streams.md`](kafka-streams.md) | Kafka Streams | Java | Closest analog: state stores + partitions + EOS; bridge async I/O. |
-| [`pekko.md`](pekko.md) | Apache Pekko | Java | Actor-per-conversation via Cluster Sharding (C1+C2) + Persistence (C3) — all native. |
+| [`pekko.md`](pekko.md) | Apache Pekko | Java | **First-class** ([`agentic-pekko/`](../../agentic-pekko/)) — event-sourced, cluster-sharded entity per conversation (C1+C2+C3 native). |
 | [`clojure.md`](clojure.md) | Clojure (Datomic) | Clojure | **First-class, pure-Clojure** reimplementation; immutable datoms = the conversation log + time-travel (C3 native). |
 | [`temporal.md`](temporal.md) | Temporal | Java | Entity workflow per conversation; event-sourced C1+C2+C3 — strongest durability. |
 | [`pulsar.md`](pulsar.md) | Apache Pulsar Functions | Java | State store (C1+C3) + Key_Shared (C2) — native, in Flink's topic-in/topic-out shape. |

@@ -1,4 +1,4 @@
-# The Essence of Agentic-Flink — and How to Port It Off Flink
+# The Essence of Agentic Streaming — and How to Port It Off Flink
 
 > Keystone design note for the `docs/portability/` series. Read this first; every
 > per-engine doc (`kafka-streams.md`, `pekko.md`, `temporal.md`, `pulsar.md`,
@@ -8,7 +8,7 @@
 
 ## 1. Why this exists
 
-Agentic-Flink is built *on* Apache Flink, but very little of what makes it
+Agentic Streaming is built *on* Apache Flink, but very little of what makes it
 **useful** is intrinsically Flink. Flink supplies a set of runtime *capabilities*
 (durable keyed state, partitioned ordered processing, checkpointing, async I/O,
 backpressure, a connector model). The agentic value — agents as stateful

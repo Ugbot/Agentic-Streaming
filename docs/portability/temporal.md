@@ -1,4 +1,4 @@
-# Agentic-Flink on Temporal
+# Agentic Streaming on Temporal
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Temporal is a **durable execution** engine: workflow code whose state and progress

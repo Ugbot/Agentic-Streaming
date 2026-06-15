@@ -1,4 +1,4 @@
-# Agentic-Flink on Dask — pure Python, no JVM
+# Agentic Streaming on Dask — pure Python, no JVM
 
 > Per-engine portability doc. Read [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)
 > first — this doc is written against its essence (§2), capability inventory

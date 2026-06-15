@@ -1,4 +1,4 @@
-# Agentic-Flink on Apache Pulsar Functions
+# Agentic Streaming on Apache Pulsar Functions
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Pulsar Functions is Apache Pulsar's lightweight serverless compute: a function

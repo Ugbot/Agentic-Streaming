@@ -1,4 +1,4 @@
-# Agentic-Flink on Quarkus (JVM, reactive)
+# Agentic Streaming on Quarkus (JVM, reactive)
 
 > Per-engine doc in the `docs/portability/` series. Read
 > [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)

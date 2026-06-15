@@ -1,4 +1,4 @@
-# Agentic-Flink on Celery
+# Agentic Streaming on Celery
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Celery is the ubiquitous Python distributed **task queue** (on Redis/RabbitMQ). A

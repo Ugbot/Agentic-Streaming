@@ -1,8 +1,14 @@
-# Agentic-Flink on Apache Pekko
+# Agentic Streaming on Apache Pekko
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Apache Pekko is the open-source fork of Akka — a JVM actor/streams/cluster toolkit.
-> A working port lives in [`../../ports/pekko/`](../../ports/pekko/) (compiles **and runs**).
+>
+> **Pekko is now a first-class runtime: [`agentic-pekko/`](../../agentic-pekko/)** — an event-sourced,
+> cluster-sharded entity per conversation with HTTP + Kafka front doors, pluggable durability
+> (memory · Postgres · Cassandra · Redis), `backend: pekko` for any `pipeline.yaml`, and a
+> durability/recovery demo. This doc is the design rationale (C1..C12); the original
+> [`../../ports/pekko/`](../../ports/pekko/) proof-of-concept it was written against is superseded by
+> that module.
 
 ## 1. Verdict
 
@@ -83,9 +89,8 @@ actor-model peer of Temporal's event-sourced workflows.
 
 ## 4. Worked example — banking router→path→verifier
 
-The runnable [`LocalDemo`](../../ports/pekko/src/main/java/org/jagentic/ports/pekko/LocalDemo.java)
-(single-node, no cluster) spawns one child actor per conversation under a guardian and
-routes turns to it; output:
+The first-class module's `Main` (single-node) and `ConversationSharding` (cluster) run the banking
+graph as one event-sourced entity per conversation:
 
 ```
 [c1] path=cards    reply=[cards] We offer three card types: classic, gold, and platinum...
@@ -94,20 +99,22 @@ routes turns to it; output:
 [c3] path=general  reply=[general] ...
 ```
 
-`c1`'s two turns hit the *same* actor (its state persists between turns); `c2`/`c3` are
-separate entities. In production, swap the guardian for
-[`BankingSharding`](../../ports/pekko/src/main/java/org/jagentic/ports/pekko/BankingSharding.java)
-— `ClusterSharding.get(system).init(Entity.of(TYPE_KEY, ctx -> ConversationActor.create(ctx.getEntityId())))`
-— and entities distribute across the cluster, addressed by `entityRefFor(TYPE_KEY, conversationId).ask(...)`.
+`c1`'s two turns hit the *same* entity (its event-sourced state persists between turns, and survives
+restart — see `RecoveryDemo`); `c2`/`c3` are separate entities, distributed across the cluster by
+`ConversationSharding` and addressed by `entityRefFor(TYPE_KEY, conversationId).ask(...)`. Any shared
+`pipeline.yaml` runs unchanged via `PipelineMain` (`backend: pekko`), including a declarative `cep:`
+section (see [`stream-stateful-core.md`](stream-stateful-core.md)). See
+[`agentic-pekko/README.md`](../../agentic-pekko/README.md).
 
 ## 5. What doesn't fit
 
 - **Kafka-topology streaming.** Pekko isn't a "topic-in, topic-out" stream processor;
   you wire ingress (Pekko Connectors Kafka, HTTP) yourself. Fine for agents, but if your
   mental model is a Kafka Streams `Topology`, that's Kafka Streams' or Flink's shape.
-- **Event-time / windowing / CEP.** Pekko Streams has time operators but not Flink's
-  event-time+watermarks+windows engine; the streaming-analytics flows (markets/CEP) are a
-  weak fit.
+- **Event-time / windowing.** Pekko Streams has time operators but not Flink's
+  event-time+watermarks+windows engine; the streaming-analytics flows (markets) are a weak fit.
+  (Complex event processing itself is *not* a gap — the portable `cep:` weave runs on Pekko via the
+  core loader; only event-time-with-watermarks stays Flink-native.)
 - **Operational weight.** A cluster (seed nodes, split-brain resolver, serialization
   bindings, persistence journal) is real ops surface — more than a single Faust/Kafka
   Streams app for small deployments. Single-node (as in `LocalDemo`) avoids it but gives
