@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package jagentic.tools;
+
+option java_package = "org.jagentic.tools.grpc";
+option java_multiple_files = true;
+
+// A minimal tool-service surface. Argument and result payloads travel as JSON strings so
+// the proto stays free of a protobuf Struct dependency and mirrors exactly what the REST and
+// MCP transports already exchange (Jackson maps in / out).
+service ToolService {
+  rpc ListTools (ListToolsRequest) returns (ListToolsResponse);
+  rpc CallTool (CallToolRequest) returns (CallToolResponse);
+}
+
+message ListToolsRequest {}
+
+message ToolDescriptor {
+  string name = 1;
+  string description = 2;
+  // The tool's input JSON-schema, serialized as a JSON object string.
+  string input_schema_json = 3;
+}
+
+message ListToolsResponse {
+  repeated ToolDescriptor tools = 1;
+}
+
+message CallToolRequest {
+  string name = 1;
+  // The argument map, serialized as a JSON object string (e.g. {"a":40,"b":2}).
+  string args_json = 2;
+}
+
+message CallToolResponse {
+  bool ok = 1;
+  // The tool result, serialized as JSON (any JSON value). Empty when ok=false.
+  string result_json = 2;
+  // Error message when ok=false. Empty when ok=true.
+  string error = 3;
+}

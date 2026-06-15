@@ -61,6 +61,26 @@
       <artifactId>quarkus-smallrye-openapi</artifactId>
     </dependency>
 
+    <!-- gRPC transport: serves ToolService on the HTTP port (use-separate-server=false). -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-grpc</artifactId>
+    </dependency>
+
+    <!-- Async Kafka pub-sub bridge. The bean is build-time gated (tools.kafka.enabled);
+         with no mp.messaging.* channel config the connector never starts by default. -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-messaging-kafka</artifactId>
+    </dependency>
+
+    <!-- Async Redis pub-sub bridge (Jedis). Build-time gated (tools.redis.enabled). -->
+    <dependency>
+      <groupId>redis.clients</groupId>
+      <artifactId>jedis</artifactId>
+      <version>5.1.5</version>
+    </dependency>
+
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5</artifactId>
