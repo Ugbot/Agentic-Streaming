@@ -75,8 +75,14 @@ cep:
 them *after* the turn; a match fires its action through the **inner** runtime. `submit` actions inject
 a derived event tagged so CEP never re-matches it (no recursion); the stream path is a `StreamRuntime`
 over the system, so CEP fires **exactly once** on either entry point. The same spec runs on Pekko
-(`backend: pekko`) unchanged, and translates to **native Flink CEP** via `CepSpecTranslator` (the same
-declarative pattern → a watermarked Flink `Pattern`, wired with `CEP.pattern(...).process(...)`).
+(`backend: pekko`) unchanged.
+
+**On Flink it becomes a real job.** `FlinkPipelineRunner` reads the *same* `pipeline.yaml` and
+assembles a Flink streaming job: source → native CEP (each `cep:` rule → a watermarked Flink
+`Pattern` via `CepSpecTranslator`; a `submit` match emits a derived event unioned back into the agent
+input) → `keyBy(conversation)` → the portable graph in a keyed operator → sink. So the declarative
+agent — CEP and all — runs as the code-first DSL's equal, from YAML:
+`mvn exec:java -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner -Dexec.args="examples/pipelines/incident.yaml"`.
 
 ## How it composes with the engines
 

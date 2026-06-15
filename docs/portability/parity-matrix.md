@@ -73,7 +73,7 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
 
 | Backend | Lang | Delivery | C2 (ordering) | C3 (durability) | YAML loader wired | Verified here |
 |---------|:----:|:--------:|---------------|-----------------|:-----------------:|---------------|
-| **Flink** (first‑class) | JVM/Py | streamed | native keyBy | native checkpoints | n/a² | full framework |
+| **Flink** (first‑class) | JVM/Py | streamed | native keyBy | native checkpoints | **✅ runner²** | full framework |
 | **Faust** | Python | streamed | Kafka partition | Kafka changelog | core build³ | import‑guarded |
 | **Kafka Streams** | JVM | streamed | partition | txn EOS | engine Runtime⁴ | TopologyTestDriver |
 | **Pekko** | JVM | online/actor | actor mailbox | Persistence | engine Runtime⁴ | ActorTestKit ✅ |
@@ -89,7 +89,11 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
 | **Airflow** | Python | batch/sched | — | retry/idempotent | core build³ | simulate ✅ |
 | **Local** (in‑proc) | all 3 | online | per‑key lock | in‑mem/Redis | **✅ all 3** | runs live ✅ |
 
-² Flink stays code‑first (its rich DSL); a YAML→Flink‑job target is deferred.
+² Flink keeps its rich code‑first DSL, **and** now ships a YAML→Flink‑job runner
+   (`FlinkPipelineRunner`): the same `pipeline.yaml` assembles a real Flink job — source →
+   (native CEP from a `cep:` section, via `CepSpecTranslator`) → keyBy → the portable graph in a
+   keyed operator → sink. (Per‑conversation memory uses the portable in‑memory store, not yet
+   Flink‑checkpointed state.)
 ³ "core build" = the GraphBuilder builds the graph; the engine hosts it via its own
    injectable seam (`configure(...)` / constructor), not yet a one‑line loader backend.
 ⁴ The JVM `GraphBuilder.Built` is constructed by the engine module's entrypoint (each

@@ -83,6 +83,16 @@
             <version>${flink.version}</version>
         </dependency>
 
+        <!-- The Flink-free portable agent brain (RoutedGraph, GraphBuilder, PipelineLoader, tools,
+             CEP spec). Lets the YAML->Flink-job runner reuse the same pipeline.yaml the cores use,
+             running the portable graph inside a Flink keyed operator. Build it first:
+                 mvn -f ports/jagentic-core/pom.xml install -DskipTests -->
+        <dependency>
+            <groupId>org.jagentic</groupId>
+            <artifactId>jagentic-core</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+
         <!--
         Apache Flink Agents - OPTIONAL Plugin (Experimental)
 
