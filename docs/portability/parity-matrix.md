@@ -96,7 +96,8 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
 - **Clojure** is the one backend that is *not* core‑backed: it's a **pure‑Clojure
   reimplementation** of the essence (no `jagentic-core` dep), kept at parity by the same FNV +
   banking goldens. Single‑writer (C2) is a per‑conversation convention; durability (C3) is
-  **Datomic** — immutable datoms give the conversation log + time‑travel natively. See
+  **Datomic** — immutable datoms give the conversation log + time‑travel natively, on the in‑process
+  `com.datomic/local` **or an external Datomic Pro / Cloud** (same client API, selected by config). See
   [`clojure.md`](clojure.md) and [`../../agentic-clj/`](../../agentic-clj/).
 
 ## 3. What stays Flink‑first (by design)

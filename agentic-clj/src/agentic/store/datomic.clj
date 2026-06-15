@@ -1,8 +1,13 @@
 (ns agentic.store.datomic
   "Datomic-backed storage — the first-class storage engine. Implements the agentic.store protocols
-   over datomic.client.api against com.datomic/local (in-process: :mem for tests, a dir for dev; the
-   same client API targets Datomic Pro/Cloud unchanged). Each message is an immutable datom, so the
-   conversation transcript is a true event log — Datomic's history/as-of give time-travel for free."
+   over datomic.client.api. The SAME code runs against three deployments, selected purely by config:
+
+     - in-process  com.datomic/local      :server-type :datomic-local  (:mem for tests, a dir for dev)
+     - Datomic Pro  external Peer Server   :server-type :peer-server    (:endpoint/:access-key/:secret)
+     - Datomic Cloud                       :server-type :cloud          (:region/:system/:endpoint)
+
+   Each message is an immutable datom, so the conversation transcript is a true event log — Datomic's
+   history/as-of give time-travel for free, on the in-process and the external engines alike."
   (:require [datomic.client.api :as d]
             [agentic.store :as store]))
 
@@ -117,13 +122,49 @@
                 (d/db conn) uid)
            (map first) distinct vec))))
 
+(defn- ->server-type [st]
+  (cond (keyword? st) st (string? st) (keyword st) :else :datomic-local))
+
+(defn client-config
+  "Resolve the datomic.client.api/client config from store opts.
+
+   Pass `:client` to hand a full config map straight through (any deployment). Otherwise the config
+   is built from `:server-type` (default :datomic-local):
+     - :datomic-local — {:system :storage-dir} (defaults system \"agentic\", storage-dir :mem; the
+       string \"mem\" is also accepted and coerced to the :mem keyword).
+     - :peer-server / :cloud / other — every key except our control keys (:db-name, :create-database?,
+       :client) is forwarded verbatim to d/client, so callers supply exactly what that engine wants
+       (:endpoint/:access-key/:secret/:validate-hostnames, or :region/:system/:endpoint)."
+  [opts]
+  (if-let [c (:client opts)]
+    c
+    (let [st (->server-type (:server-type opts))]
+      (if (= st :datomic-local)
+        (let [sd (or (:storage-dir opts) :mem)]
+          {:server-type :datomic-local
+           :system (or (:system opts) "agentic")
+           :storage-dir (if (= sd "mem") :mem sd)})
+        (-> (dissoc opts :db-name :create-database? :client)
+            (assoc :server-type st))))))
+
 (defn datomic-stores
-  "Create in-process Datomic stores. opts: {:system :db-name :storage-dir} (storage-dir :mem for
-   tests, a path string for dev). Returns {:conn :conversation :keyed :long-term}."
+  "Open Datomic stores against any deployment (see `client-config`). Returns
+   {:conn :conversation :keyed :long-term}.
+
+   opts (all optional): :server-type (:datomic-local | :peer-server | :cloud), :db-name (default
+   \"agentic\"), :system, :storage-dir (local), :endpoint/:access-key/:secret/:validate-hostnames
+   (peer-server), :region/:endpoint (cloud), :client (verbatim config override), :create-database?
+   (override the default, which is true except for :peer-server, where the DB is provisioned out of
+   band). The schema is transacted on every open — idempotent (upsert by :db/ident), so it is safe to
+   point many app instances at one shared external database."
   ([] (datomic-stores {}))
-  ([{:keys [system db-name storage-dir] :or {system "agentic" db-name "agentic" storage-dir :mem}}]
-   (let [client (d/client {:server-type :datomic-local :system system :storage-dir storage-dir})]
-     (d/create-database client {:db-name db-name})
+  ([opts]
+   (let [db-name (or (:db-name opts) "agentic")
+         cfg (client-config opts)
+         st (->server-type (:server-type cfg))
+         create? (get opts :create-database? (not= :peer-server st))
+         client (d/client cfg)]
+     (when create? (d/create-database client {:db-name db-name}))
      (let [conn (d/connect client {:db-name db-name})]
        (d/transact conn {:tx-data schema})
        {:conn conn

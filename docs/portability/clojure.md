@@ -60,7 +60,11 @@ don't replay to rebuild; the old value was never overwritten.
   `KeyedStateStore` / `LongTermStore` with atom-backed in-memory defaults; `agentic.store.datomic`
   reifies them over `datomic.client.api` (datalog `d/q` + `d/transact`). Each message is an immutable
   datom keyed by conversation id + position; attributes/keyed/facts upsert via composite unique
-  identities.
+  identities. The **same code targets three deployments** by config (`client-config`): in-process
+  `com.datomic/local` (`:datomic-local`), **external Datomic Pro** via a Peer Server (`:peer-server` +
+  `:endpoint/:access-key/:secret`), and **Datomic Cloud** (`:cloud`). The schema transaction is
+  idempotent, so many app instances safely share one external database; `create-database` is skipped
+  for peer-server (provisioned out of band).
 - **Retrieval (parity-critical).** `agentic.retrieval` reproduces the FNV-1a hashing embedder with
   the exact constants (offset `0x811C9DC5`, prime `0x01000193`, 32-bit mask, token regex
   `[a-z0-9]+` lowercased, dim 256, L2-normalize) so vectors are byte-identical to the other cores.
@@ -89,8 +93,11 @@ byte-for-byte agreement.
 - **Blocking I/O.** clj-http calls block; for high concurrency move LLM calls onto `core.async` /
   a thread pool (the http-kit server already pools request threads).
 - **Datomic licensing/footprint.** `com.datomic/local` is in-process and resolves from Maven Central;
-  Datomic Pro/Cloud is the same client API but a separate deployment. Live-Datomic tests skip if the
-  dependency can't be resolved (the in-memory store is the model-free default).
+  **Datomic Pro (peer server) and Cloud are the same client API**, selected by config (`:server-type`)
+  with no code change — see the deployment table in the [module README](../../agentic-clj/README.md).
+  The file-backed persist-and-reconnect test always runs; the live external (peer-server) round-trip
+  runs when `AGENTIC_DATOMIC_ENDPOINT` is set and skips otherwise (the in-memory store is the
+  model-free default).
 
 ## 6. When to choose Clojure
 
