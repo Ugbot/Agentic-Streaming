@@ -1,6 +1,9 @@
 package core
 
-import "sync"
+import (
+	"strconv"
+	"sync"
+)
 
 // Channel is a pull-based event source: Poll returns the next event and an ok flag.
 // ok=false means "nothing available right now" — Poll never blocks. This is the seam an
@@ -93,17 +96,48 @@ type EventObserver func(Event)
 type StreamRuntime struct {
 	runtime   Runtime
 	observers []EventObserver
+	tracer    Tracer
 }
 
-// NewStreamRuntime wraps a Runtime so a Channel of events can drive it.
+// NewStreamRuntime wraps a Runtime so a Channel of events can drive it. The tracer
+// defaults to the no-op tracer, so instrumentation is free until a real one is wired in.
 func NewStreamRuntime(runtime Runtime) *StreamRuntime {
-	return &StreamRuntime{runtime: runtime}
+	return &StreamRuntime{runtime: runtime, tracer: NoopTracerInstance}
 }
 
 // Observe registers an event observer and returns the runtime for chaining.
 func (s *StreamRuntime) Observe(observer EventObserver) *StreamRuntime {
 	s.observers = append(s.observers, observer)
 	return s
+}
+
+// WithTracer sets the tracer used to span every turn and timer fire, returning the
+// runtime for chaining. A nil tracer resets to the no-op default.
+func (s *StreamRuntime) WithTracer(t Tracer) *StreamRuntime {
+	if t == nil {
+		t = NoopTracerInstance
+	}
+	s.tracer = t
+	return s
+}
+
+// submitTraced notifies every observer in registration order, opens a span named
+// spanName, submits the event to the underlying Runtime, and records the outcome
+// (conversation, path, ok, and one event per tool call) on the span before closing it.
+// Behavior is identical to a plain observe+submit when the tracer is the no-op.
+func (s *StreamRuntime) submitTraced(spanName string, event Event) TurnResult {
+	for _, obs := range s.observers {
+		obs(event)
+	}
+	span := s.tracer.Start(spanName)
+	span.Attr("conversation", event.ConversationID)
+	r := s.runtime.Submit(event)
+	span.Attr("path", r.Path).Attr("ok", strconv.FormatBool(r.OK))
+	for _, tc := range r.ToolCalls {
+		span.Event("tool:" + tc)
+	}
+	span.End()
+	return r
 }
 
 // Run drains the channel: for each available event it calls every observer in order, then
@@ -116,10 +150,7 @@ func (s *StreamRuntime) Run(channel Channel[Event]) []TurnResult {
 		if !ok {
 			break
 		}
-		for _, obs := range s.observers {
-			obs(event)
-		}
-		results = append(results, s.runtime.Submit(event))
+		results = append(results, s.submitTraced("turn", event))
 	}
 	return results
 }
@@ -133,10 +164,7 @@ func (s *StreamRuntime) FireDueTimers(timers TimerService, now int64) []TurnResu
 	due := timers.AdvanceTo(now)
 	results := make([]TurnResult, 0, len(due))
 	for _, t := range due {
-		for _, obs := range s.observers {
-			obs(t.Payload)
-		}
-		results = append(results, s.runtime.Submit(t.Payload))
+		results = append(results, s.submitTraced("timer.fire", t.Payload))
 	}
 	return results
 }

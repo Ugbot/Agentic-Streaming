@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Callable, Generic, Iterable, List, Optional, P
 
 from .core import Event, TurnResult
 from .runtime import Runtime
+from .trace import NoopTracer, Tracer
 
 if TYPE_CHECKING:
     from .timers import TimerService
@@ -84,11 +85,32 @@ class StreamRuntime:
     def __init__(self, runtime: Runtime) -> None:
         self._runtime = runtime
         self._observers: List[EventObserver] = []
+        self._tracer: Tracer = NoopTracer()
 
     def observe(self, observer: EventObserver) -> "StreamRuntime":
         """Register an observer of the raw event stream (chainable)."""
         self._observers.append(observer)
         return self
+
+    def with_tracer(self, tracer: Optional[Tracer]) -> "StreamRuntime":
+        """Trace turns and timer fires through this tracer (chainable; default no-op)."""
+        self._tracer = tracer if tracer is not None else NoopTracer()
+        return self
+
+    def _submit_traced(self, span_name: str, event: Event) -> TurnResult:
+        """Notify observers, then submit ``event`` as a turn inside a trace span. The span
+        carries the conversation id, chosen path, and ok flag (``"true"``/``"false"`` to
+        mirror Java's ``Boolean.toString``), and one ``tool:<id>`` event per tool call."""
+        for observer in self._observers:
+            observer(event)
+        span = self._tracer.start(span_name)
+        span.attr("conversation", event.conversation_id)
+        r = self._runtime.submit(event)
+        span.attr("path", r.path).attr("ok", str(r.ok).lower())
+        for tc in r.tool_calls:
+            span.event("tool:" + tc)
+        span.end()
+        return r
 
     def run(self, channel: Channel[Event]) -> List[TurnResult]:
         """Drain every currently-available event from the channel as a turn, in arrival
@@ -99,9 +121,7 @@ class StreamRuntime:
             event = channel.poll()
             if event is None:
                 break
-            for observer in self._observers:
-                observer(event)
-            results.append(self._runtime.submit(event))
+            results.append(self._submit_traced("turn", event))
         return results
 
     def fire_due_timers(self, timer_service: "TimerService", now: int) -> List[TurnResult]:
@@ -111,7 +131,5 @@ class StreamRuntime:
         stream. Returns the results in deadline (then schedule) order."""
         results: List[TurnResult] = []
         for timer in timer_service.advance_to(now):
-            for observer in self._observers:
-                observer(timer.payload)
-            results.append(self._runtime.submit(timer.payload))
+            results.append(self._submit_traced("timer.fire", timer.payload))
         return results

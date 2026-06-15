@@ -10,6 +10,8 @@ import org.jagentic.core.Runtime;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.timers.Timer;
 import org.jagentic.core.timers.TimerService;
+import org.jagentic.core.trace.Span;
+import org.jagentic.core.trace.Tracer;
 
 /**
  * Drives a {@link Channel} of events through a backend {@link Runtime} as agent turns — the portable
@@ -24,6 +26,7 @@ public final class StreamRuntime {
 
   private final Runtime runtime;
   private final List<EventObserver> observers = new CopyOnWriteArrayList<>();
+  private Tracer tracer = Tracer.NOOP;
 
   public StreamRuntime(Runtime runtime) {
     this.runtime = runtime;
@@ -35,16 +38,33 @@ public final class StreamRuntime {
     return this;
   }
 
+  /** Trace turns and timer fires through this tracer (chainable; default no-op). */
+  public StreamRuntime withTracer(Tracer tracer) {
+    this.tracer = tracer == null ? Tracer.NOOP : tracer;
+    return this;
+  }
+
+  private TurnResult submitTraced(String spanName, Event event) {
+    for (EventObserver observer : observers) {
+      observer.onEvent(event);
+    }
+    Span span = tracer.start(spanName);
+    span.attr("conversation", event.conversationId());
+    TurnResult r = runtime.submit(event);
+    span.attr("path", r.path).attr("ok", Boolean.toString(r.ok));
+    for (String tool : r.toolCalls) {
+      span.event("tool:" + tool);
+    }
+    span.end();
+    return r;
+  }
+
   /** Drain every currently-available event from the channel as a turn, in arrival order, and return
    * the results. Observers see each event first. Returns when the channel next reports empty. */
   public List<TurnResult> run(Channel<Event> channel) {
     List<TurnResult> results = new ArrayList<>();
     for (Optional<Event> next = channel.poll(); next.isPresent(); next = channel.poll()) {
-      Event event = next.get();
-      for (EventObserver observer : observers) {
-        observer.onEvent(event);
-      }
-      results.add(runtime.submit(event));
+      results.add(submitTraced("turn", next.get()));
     }
     return results;
   }
@@ -54,10 +74,7 @@ public final class StreamRuntime {
   public List<TurnResult> fireDueTimers(TimerService timers, long now) {
     List<TurnResult> results = new ArrayList<>();
     for (Timer timer : timers.advanceTo(now)) {
-      for (EventObserver observer : observers) {
-        observer.onEvent(timer.payload());
-      }
-      results.add(runtime.submit(timer.payload()));
+      results.add(submitTraced("timer.fire", timer.payload()));
     }
     return results;
   }

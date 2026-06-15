@@ -78,6 +78,7 @@ from .suspend import (
 )
 from .replay import EventLog, InMemoryEventLog, replay, replay_until
 from .stream import Channel, EventObserver, QueueChannel, SeedChannel, StreamRuntime
+from .trace import NOOP, NoopTracer, Recorded, RecordingTracer, Span, Tracer
 from .timers import (
     DurableTimerService,
     InMemoryTimerService,
@@ -131,6 +132,12 @@ __all__ = [
     "QueueChannel",
     "EventObserver",
     "StreamRuntime",
+    "Span",
+    "Tracer",
+    "NoopTracer",
+    "RecordingTracer",
+    "Recorded",
+    "NOOP",
     "EventLog",
     "InMemoryEventLog",
     "replay",

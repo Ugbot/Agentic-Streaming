@@ -5,7 +5,8 @@
    see each raw event before it becomes a turn — the seam CEP matchers, window aggregators and tracers
    plug into in later phases. Mirror of jagentic-core's org.jagentic.core.stream.*."
   (:require [agentic.core :as core]
-            [agentic.timers :as timers]))
+            [agentic.timers :as timers]
+            [agentic.trace :as trace]))
 
 ;; ---- Channel: a pull-based event source ----
 
@@ -54,7 +55,7 @@
 
 (defn stream-runtime
   "Build a stream-runtime over a `system` (what agentic.core/submit takes). Modelled as plain data —
-   {:system :observers} — so observe/run are ordinary functions."
+   {:system :observers :tracer} — so observe/run/with-tracer are ordinary functions."
   [system]
   {:system system :observers []})
 
@@ -64,16 +65,36 @@
   [sr observer-fn]
   (update sr :observers conj observer-fn))
 
+(defn with-tracer
+  "Trace turns and timer fires through this tracer (chainable; default no-op when :tracer absent).
+   Returns the updated stream-runtime so calls chain."
+  [sr tracer]
+  (assoc sr :tracer tracer))
+
+(defn- submit-traced
+  "Run observers for `event`, then start a span named `span-name`, set conversation/path/ok attrs and
+   tool: events, submit through the system, end the span, and return the turn-result. With no tracer
+   configured the noop tracer makes this identical in behaviour to a bare observe-then-submit."
+  [{:keys [system observers tracer]} span-name event]
+  (doseq [obs observers] (obs event))
+  (let [tracer (or tracer (trace/noop-tracer))
+        span (trace/start tracer span-name)]
+    (trace/span-attr span "conversation" (:conversation-id event))
+    (let [r (core/submit system event)]
+      (trace/span-attr span "path" (:path r))
+      (trace/span-attr span "ok" (str (:ok r)))
+      (doseq [tc (:tool-calls r)] (trace/span-event span (str "tool:" tc)))
+      (trace/span-end span)
+      r)))
+
 (defn run
   "Drain every currently-available event from the channel as a turn, in arrival order, and return the
    vector of turn-results. Each observer sees the event first, then (core/submit system event) runs.
    Returns when the channel next reports nil (empty)."
-  [{:keys [system observers]} channel]
+  [sr channel]
   (loop [results (transient [])]
     (if-let [event (poll channel)]
-      (do
-        (doseq [obs observers] (obs event))
-        (recur (conj! results (core/submit system event))))
+      (recur (conj! results (submit-traced sr "turn" event)))
       (persistent! results))))
 
 (defn fire-due-timers
@@ -83,9 +104,8 @@
    first, then submits it as a turn. Returns the vector of turn-results in deadline order. This is the
    seam SLAs / escalate-after-N / scheduled follow-ups fire on. `timer-service` must satisfy the
    agentic.timers/TimerService protocol."
-  [{:keys [system observers]} timer-service now]
+  [sr timer-service now]
   (let [due (timers/advance-to timer-service now)]
     (mapv (fn [{:keys [payload]}]
-            (doseq [obs observers] (obs payload))
-            (core/submit system payload))
+            (submit-traced sr "timer.fire" payload))
           due)))
