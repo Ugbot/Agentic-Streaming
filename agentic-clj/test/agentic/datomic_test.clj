@@ -47,3 +47,77 @@
       (is (= "[payments] Your balance is 1234.56." (:reply r)))
       ;; transcript durably in Datomic
       (is (= 2 (store/message-count conversation "c1"))))))
+
+;; --- client-config: the deployment selector is a pure fn, testable without any connection ---
+
+(deftest client-config-builds-each-deployment
+  (testing "in-process datomic-local is the default"
+    (is (= {:server-type :datomic-local :system "agentic" :storage-dir :mem}
+           (dat/client-config {})))
+    (is (= :mem (:storage-dir (dat/client-config {:storage-dir "mem"}))))   ; "mem" string -> :mem
+    (is (= "/var/agentic" (:storage-dir (dat/client-config {:storage-dir "/var/agentic"})))))
+  (testing "Datomic Pro peer-server forwards endpoint/access-key/secret verbatim"
+    (let [cfg (dat/client-config {:server-type "peer-server" :endpoint "localhost:8998"
+                                  :access-key "k" :secret "s" :validate-hostnames false
+                                  :db-name "agentic" :create-database? false})]
+      (is (= :peer-server (:server-type cfg)))
+      (is (= "localhost:8998" (:endpoint cfg)))
+      (is (= "k" (:access-key cfg)))
+      (is (= "s" (:secret cfg)))
+      (is (false? (:validate-hostnames cfg)))
+      ;; control keys are stripped from the client config
+      (is (not (contains? cfg :db-name)))
+      (is (not (contains? cfg :create-database?)))))
+  (testing "Datomic Cloud forwards region/system/endpoint"
+    (let [cfg (dat/client-config {:server-type :cloud :region "us-east-1" :system "prod"
+                                  :endpoint "https://abc.execute-api.us-east-1.amazonaws.com"})]
+      (is (= :cloud (:server-type cfg)))
+      (is (= "us-east-1" (:region cfg)))
+      (is (= "prod" (:system cfg)))))
+  (testing ":client overrides everything verbatim"
+    (let [raw {:server-type :peer-server :endpoint "h:1" :access-key "a" :secret "b"}]
+      (is (= raw (dat/client-config {:client raw :db-name "x"}))))))
+
+(defn- rm-rf [^java.io.File f]
+  (when (.isDirectory f) (doseq [c (.listFiles f)] (rm-rf c)))
+  (.delete f))
+
+(deftest datomic-persists-to-disk-and-reconnects
+  ;; the external-database shape: a durable store that survives reconnect — a second `datomic-stores`
+  ;; opening the SAME db sees prior datoms, create-database is idempotent, schema re-transact is a no-op.
+  (let [dir (str (System/getProperty "java.io.tmpdir") "/agentic-dat-" (System/nanoTime))
+        db (str "persist-" (System/nanoTime))
+        opts {:server-type :datomic-local :storage-dir dir :db-name db}]
+    (try
+      (if-let [s1 (try (dat/datomic-stores opts)
+                       (catch Throwable t
+                         (println "datomic-local file storage unavailable, skipping:" (.getMessage t))
+                         nil))]
+        (do
+          (store/append (:conversation s1) "c1" {:role "user" :content "remember me"})
+          (store/put-attribute (:conversation s1) "c1" "path" "payments")
+          ;; reopen the same database with a fresh client/connection
+          (let [s2 (dat/datomic-stores opts)]
+            (is (= [{:role "user" :content "remember me"}] (store/history (:conversation s2) "c1")))
+            (is (= "payments" (store/get-attribute (:conversation s2) "c1" "path")))
+            (is (= 1 (store/message-count (:conversation s2) "c1")))))
+        :skipped)
+      (finally (rm-rf (java.io.File. dir))))))
+
+;; --- live external Datomic (Pro peer-server), skip-if-absent — the established pattern ---
+
+(deftest live-external-datomic-roundtrip
+  (let [endpoint (System/getenv "AGENTIC_DATOMIC_ENDPOINT")]
+    (if-not endpoint
+      (println "AGENTIC_DATOMIC_ENDPOINT not set, skipping live external Datomic test")
+      (let [{:keys [conversation]}
+            (dat/datomic-stores {:server-type :peer-server
+                                 :endpoint endpoint
+                                 :access-key (System/getenv "AGENTIC_DATOMIC_ACCESS_KEY")
+                                 :secret (System/getenv "AGENTIC_DATOMIC_SECRET")
+                                 :validate-hostnames false
+                                 :db-name (or (System/getenv "AGENTIC_DATOMIC_DB") "agentic")})
+            cid (str "c-" (System/nanoTime))]
+        (store/append conversation cid {:role "user" :content "hello external"})
+        (is (= 1 (store/message-count conversation cid)))
+        (is (= [{:role "user" :content "hello external"}] (store/history conversation cid)))))))

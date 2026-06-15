@@ -101,12 +101,26 @@
       (edn/read-string content)
       (yaml/parse-string content :keywords false))))
 
+(defn- datomic-opts
+  "Map a YAML/EDN stores.conversation section (string keys) onto datomic-stores opts. Supports the
+   in-process and the external (peer-server / cloud) deployments — only the keys present are forwarded."
+  [conv]
+  (let [g #(get conv %)]
+    (cond-> {:db-name (or (g "db-name") "agentic")}
+      (g "server-type")              (assoc :server-type (keyword (g "server-type")))
+      (g "system")                   (assoc :system (g "system"))
+      (g "storage-dir")              (assoc :storage-dir (g "storage-dir"))
+      (g "endpoint")                 (assoc :endpoint (g "endpoint"))
+      (g "access-key")               (assoc :access-key (g "access-key"))
+      (g "secret")                   (assoc :secret (g "secret"))
+      (g "region")                   (assoc :region (g "region"))
+      (some? (g "validate-hostnames")) (assoc :validate-hostnames (g "validate-hostnames"))
+      (some? (g "create-database"))    (assoc :create-database? (g "create-database")))))
+
 (defn- stores-from-spec [spec]
   (let [conv (get-in spec ["stores" "conversation"])]
     (if (= "datomic" (get conv "kind"))
-      (let [{:keys [conversation keyed]} (dat/datomic-stores
-                                          {:db-name (or (get conv "db-name") "agentic")
-                                           :storage-dir (or (get conv "storage-dir") :mem)})]
+      (let [{:keys [conversation keyed]} (dat/datomic-stores (datomic-opts conv))]
         [conversation keyed])
       [(store/in-memory-conversation-store) (store/in-memory-keyed-state-store)])))
 

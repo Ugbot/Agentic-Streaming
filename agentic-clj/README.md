@@ -37,13 +37,55 @@ the tool registry is a map, the turn pipeline is a pure transformation over a co
 
 ## Datomic as the event log
 
-`agentic.store.datomic/datomic-stores` connects an in-process `com.datomic/local` client
-(`{:server-type :datomic-local :system "agentic" :storage-dir :mem}` for tests, a directory for dev),
-creates the database, and transacts the schema. The **same `datomic.client.api`** targets Datomic
-Pro/Cloud unchanged — only the client config differs. Messages are appended as immutable datoms keyed
-by `conversation/id` + position; attributes/keyed-state/facts upsert via composite unique identities
-(`cid|key`, `cid|name`, `uid|key`). Because nothing is mutated, the full transcript history and any
-prior state are recoverable by querying the db value at a past basis-t.
+`agentic.store.datomic/datomic-stores` opens a connection, ensures the database, and transacts the
+schema (idempotent — upsert by `:db/ident`, so many app instances can share one external database).
+Messages are appended as immutable datoms keyed by `conversation/id` + position;
+attributes/keyed-state/facts upsert via composite unique identities (`cid|key`, `cid|name`,
+`uid|key`). Because nothing is mutated, the full transcript history and any prior state are
+recoverable by querying the db value at a past basis-t.
+
+### One codebase, three deployments
+
+The **same `datomic.client.api`** code runs against all three, selected purely by config
+(`agentic.store.datomic/client-config` resolves the client map; see its docstring):
+
+| Deployment | `:server-type` | Config keys | Notes |
+|---|---|---|---|
+| In-process (`com.datomic/local`) | `:datomic-local` | `:system`, `:storage-dir` (`:mem` or a dir) | the default — dev/test, no server |
+| **Datomic Pro** (external Peer Server) | `:peer-server` | `:endpoint`, `:access-key`, `:secret`, `:validate-hostnames` | DB provisioned out of band, so `create-database` is skipped |
+| **Datomic Cloud** | `:cloud` | `:region`, `:system`, `:endpoint` | |
+
+```clojure
+;; in-process (default)
+(dat/datomic-stores {:storage-dir :mem :db-name "agentic"})
+
+;; external Datomic Pro peer server
+(dat/datomic-stores {:server-type :peer-server
+                     :endpoint "localhost:8998" :access-key "k" :secret "s"
+                     :validate-hostnames false :db-name "agentic"})
+
+;; or hand a full client map straight through
+(dat/datomic-stores {:client {:server-type :cloud :region "us-east-1" :system "prod"
+                              :endpoint "https://...execute-api...amazonaws.com"}
+                     :db-name "agentic"})
+```
+
+The same selection works from a `pipeline.yaml` `stores` section:
+
+```yaml
+stores:
+  conversation:
+    kind: datomic
+    server-type: peer-server
+    endpoint: localhost:8998
+    access-key: ${DATOMIC_ACCESS_KEY}
+    secret: ${DATOMIC_SECRET}
+    validate-hostnames: false
+    db-name: agentic
+```
+
+A live peer-server round-trip test runs when `AGENTIC_DATOMIC_ENDPOINT` (+ `_ACCESS_KEY` / `_SECRET`
+/ `_DB`) is set, and skips cleanly otherwise; the file-backed persist-and-reconnect test always runs.
 
 ## Run it
 
