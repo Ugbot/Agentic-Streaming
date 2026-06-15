@@ -54,9 +54,22 @@ curl localhost:8080/.well-known/agent-card.json
 curl -XPOST localhost:8080/agent -H 'content-type: application/json' \
   -d '{"conversation_id":"c1","user_id":"u","text":"what is my balance?"}'
 
-# the same pipeline.yaml on the actor runtime
-#   backend: pekko   (resolved via the BackendProvider SPI)
+# run ANY shared pipeline.yaml on the actor runtime (backend: pekko, via the BackendProvider SPI)
+mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
+
+# durability / recovery showcase: run turns, passivate the entity, watch it rehydrate
+# its transcript from the event journal (no LLM re-run)
+mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.RecoveryDemo
 ```
+
+`PipelineMain` proves the declarative parity: `banking.yaml`, `banking-llm.yaml` (stub ReAct),
+and `banking-rag.yaml` (HNSW cold-tier recall, skills, context-window, classifier guardrail) all
+run unchanged on the event-sourced actor runtime — see `PekkoBackendPipelineTest`.
+
+`RecoveryDemo` passivates a conversation entity and shows the message count survive the restart:
+on the default in-memory journal the events live for the `ActorSystem` lifetime; for cross-process
+restart use a durable journal (below).
 
 Production profiles: `-Dconfig.resource=application-cluster-jdbc.conf` (+ `AGENTIC_PG_URL` etc.),
 `application-cluster-cassandra.conf`, or `application-redis.conf` (+ `AGENTIC_REDIS_URL`).

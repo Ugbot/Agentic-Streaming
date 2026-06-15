@@ -18,4 +18,6 @@
   ;; clojure -M:http  — HTTP front door (Agent Card + POST /agent) on :8080
   :http {:main-opts ["-m" "agentic.http"]}
   ;; clojure -M:mcp   — MCP stdio server exposing the tool registry
-  :mcp {:main-opts ["-m" "agentic.mcp"]}}}
+  :mcp {:main-opts ["-m" "agentic.mcp"]}
+  ;; clojure -M:time-travel — Datomic transcript time-travel showcase (as-of replay)
+  :time-travel {:main-opts ["-m" "agentic.example.time-travel"]}}}

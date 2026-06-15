@@ -92,11 +92,20 @@ A live peer-server round-trip test runs when `AGENTIC_DATOMIC_ENDPOINT` (+ `_ACC
 Requires the [Clojure CLI](https://clojure.org/guides/install_clojure) (tools.deps).
 
 ```bash
-clojure -X:test          # the full suite (16 tests / 64 assertions)
+clojure -X:test          # the full suite (23 tests / 96 assertions)
 clojure -M:run           # the banking demo — a multi-turn conversation with persisted state
 clojure -M:http          # HTTP front door on :8080  (GET /.well-known/agent-card.json, POST /agent)
 clojure -M:mcp           # MCP stdio server over the tool registry
+clojure -M:time-travel   # Datomic transcript time-travel — replay the conversation `as-of` an earlier point
 ```
+
+### Time-travel over the transcript
+
+Because every message is an immutable datom, any past state of a conversation is just a query `as-of`
+a point in the log — no event-replay machinery. `clojure -M:time-travel` runs a multi-turn banking
+conversation, captures the basis-`t` after turn 1, keeps talking, then replays the transcript exactly
+as it stood back then (a strict prefix of the current one). The helpers are
+`agentic.store.datomic/basis-t` and `history-as-of`.
 
 `POST /agent` example:
 
