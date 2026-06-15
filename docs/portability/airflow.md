@@ -1,4 +1,4 @@
-# Agentic-Flink on Apache Airflow — pure Python, no JVM
+# Agentic Streaming on Apache Airflow — pure Python, no JVM
 
 > Per-engine portability doc. Read [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)
 > first — this doc is written against its essence (§2), capability inventory
@@ -423,7 +423,7 @@ Choose Airflow when the workload is **a workflow, not a conversation**:
   your data engineers can see, retry, and backfill it alongside everything else.
 
 Do **not** choose Airflow as the home of the live agent. It is the orchestration
-and batch-data plane of an Agentic-Flink deployment — the scheduler, the
+and batch-data plane of an Agentic Streaming deployment — the scheduler, the
 ingestion engine, the eval harness, the approval gate — sitting *beside* a
 streaming engine (Faust/Ray/Kafka Streams) that hosts the per-conversation loop.
 Picked for that role, it is excellent and idiomatic; picked as the runtime for a

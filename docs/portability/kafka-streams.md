@@ -1,4 +1,4 @@
-# Agentic-Flink on Kafka Streams (JVM)
+# Agentic Streaming on Kafka Streams (JVM)
 
 > Per-engine doc in the `docs/portability/` series. Read
 > [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)

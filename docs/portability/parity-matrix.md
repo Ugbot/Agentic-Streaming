@@ -7,6 +7,10 @@ same everywhere — what differs per backend is the **delivery model** (online t
 streamed vs batch) and where **durability / ordering** come from. Nothing agentic is
 locked to Flink.
 
+(Two groupings, don't conflate them: the **three cores** above are *where the features live*;
+the **three first-class runtimes** are Flink, **Pekko** [core-backed actors] and **Clojure**
+[a pure-Clojure reimplementation of the essence] — each a polished, batteries-included deployment.)
+
 ## 1. The three cores are at parity
 
 The cores are behaviorally identical (enforced by cross-core parity tests:

@@ -1,4 +1,4 @@
-# Agentic-Flink on Spring (Boot / Cloud Stream / AI / Integration / StateMachine)
+# Agentic Streaming on Spring (Boot / Cloud Stream / AI / Integration / StateMachine)
 
 > Per-engine portability doc. Read `00-essence-and-core-abstractions.md` first — this
 > doc is written against its essence (§2), capability inventory (§3, C1..C12), Engine

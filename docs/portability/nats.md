@@ -1,4 +1,4 @@
-# Agentic-Flink on NATS JetStream
+# Agentic Streaming on NATS JetStream
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > NATS JetStream adds persistent streams + a durable **key-value store** on top of the
