@@ -18,14 +18,22 @@ import org.jagentic.pekko.entity.ConversationEntity;
  * conversation entity for the turn and blocks for the reply (the {@code Runtime.submit} contract
  * is synchronous, like {@code LocalRuntime}'s per-conversation lock). The entity itself is never
  * blocked — turns run inside the actor; concurrency is bounded by the ask timeout. */
-public final class PekkoRuntime implements Runtime {
+public final class PekkoRuntime implements Runtime, AutoCloseable {
 
   private final ActorSystem<ConversationManager.Command> system;
   private final Duration timeout;
+  private final boolean ownsSystem;
 
   public PekkoRuntime(ActorSystem<ConversationManager.Command> system, Duration timeout) {
+    this(system, timeout, false);
+  }
+
+  /** {@code ownsSystem=true} when this runtime created the actor system (e.g. via the backend
+   * provider) and should terminate it on {@link #close()}. */
+  public PekkoRuntime(ActorSystem<ConversationManager.Command> system, Duration timeout, boolean ownsSystem) {
     this.system = system;
     this.timeout = timeout;
+    this.ownsSystem = ownsSystem;
   }
 
   @Override
@@ -46,6 +54,13 @@ public final class PekkoRuntime implements Runtime {
       return tr;
     } catch (Exception e) {
       throw new RuntimeException("pekko submit failed for " + event.conversationId() + ": " + e.getMessage(), e);
+    }
+  }
+
+  @Override
+  public void close() {
+    if (ownsSystem) {
+      system.terminate();
     }
   }
 }

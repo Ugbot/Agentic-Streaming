@@ -1,5 +1,7 @@
 package org.jagentic.core.pipeline;
 
+import java.util.ServiceLoader;
+
 import org.jagentic.core.ConversationStore;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LocalRuntime;
@@ -26,8 +28,16 @@ public final class Backends {
           conversationStore == null ? new ConversationStore.InMemory() : conversationStore,
           new KeyedStateStore.InMemory(), built.tools(), built.retriever());
     }
+    // Engine modules (pekko/kafka-streams/temporal/pulsar) register a BackendProvider on the
+    // classpath via ServiceLoader, so `backend: <name>` resolves without the core knowing them.
+    ConversationStore store = conversationStore == null ? new ConversationStore.InMemory() : conversationStore;
+    for (BackendProvider provider : ServiceLoader.load(BackendProvider.class)) {
+      if (key.equals(provider.name().trim().toLowerCase())) {
+        return provider.create(built, store);
+      }
+    }
     throw new IllegalArgumentException(
-        "backend '" + key + "' is provided by its engine module (kafka-streams/pekko/temporal/pulsar); "
-            + "construct that module's Runtime with GraphBuilder.Built. Core ships 'local'.");
+        "backend '" + key + "' is not available: the core ships 'local', and no BackendProvider "
+            + "on the classpath claims it. Add the engine module (e.g. agentic-pekko) as a dependency.");
   }
 }
