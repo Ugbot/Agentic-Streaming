@@ -16,6 +16,9 @@ the good parts without Flink.
   management, hot‑swappable stores) and run it on any backend, in Python / JVM / Go.
 - [`using-a-real-model.md`](using-a-real-model.md) — swap the model‑free defaults for real
   chat + embeddings (Ollama / OpenAI / Anthropic) per language.
+- [`tool-services.md`](tool-services.md) — the toolkit (web scraping, **Tika**, RAG, inference,
+  utilities) decomposed into standalone, framework‑agnostic tools any LLM/framework can run over
+  **MCP · REST · gRPC · Kafka/Redis pub‑sub** (Java/Quarkus, Flink‑free).
 - [`choosing-a-backend.md`](choosing-a-backend.md) — the decision guide.
 - [`parity-matrix.md`](parity-matrix.md) — what each backend can do + its limitations,
   and the full three‑core capability/parity table.

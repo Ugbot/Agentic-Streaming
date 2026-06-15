@@ -1,0 +1,46 @@
+# Closing the loop: an agent that consumes the standalone Tool Services over MCP.
+#
+# The tool packs (web/Tika, RAG, inference, utility) run as a separate, framework-agnostic
+# MCP server (tool-services-app). Any agent — in any language, on any backend — pulls those
+# tools in via the `mcp:` section. Here the agent spawns the tool-services stdio MCP server
+# and exposes its `util_*` / `web_*` tools to the LLM brain.
+#
+# Build the tool-services app first (see tool-services/README.md), then point the command at it:
+#   mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
+#   mvn -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
+#   mvn -f tool-services/tool-services-app/pom.xml package
+#
+# This is a documentation example (it needs the built tool-services jar + a real LLM), not part
+# of the offline suite.
+
+backend: local
+
+llm:
+  provider: ollama
+  model: qwen2.5:3b
+  base_url: http://localhost:11434
+
+# Spawn the tool-services stdio MCP server and register its tools (id-prefixed `tools_`).
+# TOOL_PACKS selects which packs the server exposes.
+mcp:
+  - name: tools
+    transport: stdio
+    command: [java, "-cp", "tool-services/tool-services-app/target/quarkus-app/app/*:tool-services/tool-services-app/target/quarkus-app/lib/main/*",
+              "org.jagentic.tools.app.mcp.StdioMain", "util,web"]
+
+agent:
+  router:
+    kind: keyword
+    default: assistant
+    rules:
+      assistant: [add, sum, fetch, url, page, upper, lower]
+  paths:
+    assistant:
+      brain: llm
+      prompt: "You are a helpful assistant. Use the available tools (math, string, web fetch) to answer."
+      # the MCP tools arrive as tools_util_add, tools_web_fetch, ... — allow them all by leaving tools unset
+  verifier:
+    kind: prefix
+
+guardrails:
+  - {kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection"}

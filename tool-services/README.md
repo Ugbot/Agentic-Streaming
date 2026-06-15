@@ -23,8 +23,12 @@ Flink-free: the services depend on the pure-Java `jagentic-core` (tool model + t
 | MCP (Streamable-HTTP) | `POST /mcp` (JSON-RPC 2.0) | ✅ |
 | MCP (stdio) | `org.jagentic.tools.app.mcp.StdioMain` (subprocess) | ✅ |
 | REST / OpenAPI | `GET /tools`, `POST /tools/{name}`, spec at `/q/openapi` | ✅ |
-| gRPC | `ToolService` (ListTools/CallTool) | _Phase 3_ |
-| Kafka / Redis pub-sub | request→result topics | _Phase 3_ |
+| gRPC | `ToolService` (ListTools/CallTool); rides the HTTP port | ✅ |
+| Kafka pub-sub | `tool-requests` → `tool-results` (`-Dtools.kafka.enabled=true`) | ✅ (opt-in) |
+| Redis pub-sub | request → reply channels (`-Dtools.redis.enabled=true`) | ✅ (opt-in) |
+
+The Kafka/Redis bridges are **build-time gated off by default** so the service boots with no
+broker; enable per deployment. `{id, tool, args}` in → `{id, ok, result|error}` out, by `id`.
 
 ## Packs
 
