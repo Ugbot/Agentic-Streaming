@@ -60,6 +60,7 @@ not one-shot chatbot calls.
 | 💾 **Keep state & survive failure** | first-class per-conversation memory + keyed state; durability from the engine — Flink checkpoints, Kafka Streams transactions, Pulsar/BookKeeper, Pekko persistence, Temporal history |
 | ✅ **Exactly-once where the engine gives it** | Flink checkpointed state · Kafka Streams `exactly_once_v2`; **idempotent / effectively-once** everywhere else (the `ConversationStore` is the source of truth) |
 | 🔄 **Resolve long work with the saga pattern** | compensation/rollback handlers unwind a multi-step flow when a later step fails; Temporal/Pekko add durable, retried, human-in-the-loop workflows |
+| ⏱️ **Detect patterns across events (CEP)** | a declarative [`cep:`](docs/portability/stream-stateful-core.md) block — "3 anomalies on one host within 5 min → escalate" — fires a tool or a derived event; **portable on every core** ([`incident.yaml`](examples/pipelines/incident.yaml)) and **native on Flink**, with timers · windows · replay · suspend/resume alongside |
 | 🔌 **Reach almost any data system** | memory, vectors, and long-term storage are SPIs — Postgres · Redis/Valkey · Fluss · pgvector/Qdrant · NATS KV — chosen by a connection link and **hot-swappable** without touching agent code |
 | 📦 **Build once, deploy anywhere** | define the whole agent in a [`pipeline.yaml`](docs/portability/pipelines.md) and run the *same* spec on Flink, Pekko, Clojure, or a dozen other backends (Python / JVM / Go / Clojure) |
 

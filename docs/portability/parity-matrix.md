@@ -114,9 +114,9 @@ Legend — Delivery: **online** (synchronous turn) · **streamed** (keyed stream
   Clojure loader runs the full shared schema — `banking.yaml`, `banking-llm.yaml` and
   `banking-rag.yaml` (skills, context‑window, classifier guardrail) — with one nuance: its cold tier
   is **exact cosine KNN** (a correctness‑superset of HNSW ANN), not an approximate index. It ships the
-  full stream‑stateful core (`stream`/`timers`/`windows`/`cep`/`replay`/`suspend`/`trace`) plus formal
-  Embedder/Classifier SPIs at parity; the one remaining gap vs the other cores is an **MCP/A2A
-  *client*** (it ships an MCP *server*) — the next increment. See
+  full stream‑stateful core (`stream`/`timers`/`windows`/`cep`/`replay`/`suspend`/`trace`), the
+  declarative `cep:` weave, formal Embedder/Classifier SPIs, **and an MCP client + A2A client** (with
+  `mcp:`/`a2a:` wired into the loader) — now at full parity with the other three cores. See
   [`clojure.md`](clojure.md) and [`../../agentic-clj/`](../../agentic-clj/).
 - **Pekko** runs the same specs via `backend: pekko`; the `PipelineMain` CLI drives any `pipeline.yaml`
   through the event‑sourced actor runtime (`banking`, `banking-llm`, `banking-rag` all covered by
@@ -128,9 +128,11 @@ These are genuinely runtime‑native and not meaningfully portable; reimplementi
 Airflow/Celery would be pointless, so they remain first‑class‑Flink‑only:
 
 - **event‑time CEP with watermarks** — the cores now ship a **portable CEP NFA matcher**
-  (`cep`, processing/logical‑time, the same `begin/next/followedBy/within` patterns), so complex
-  event processing itself is no longer Flink‑only; what stays Flink‑native is **event‑time** matching
-  with watermarks + out‑of‑order handling over a distributed stream;
+  (`cep`, processing/logical‑time, the same `begin/next/followedBy/within` patterns), woven into the
+  declarative pipeline via a **`cep:` section** (matches fire `tool`/`submit` actions) on every core;
+  the *same* `cep:` spec also translates to **native Flink CEP** (`CepSpecTranslator`). So complex
+  event processing is no longer Flink‑only — what stays Flink‑native is **event‑time** matching with
+  watermarks + out‑of‑order handling over a distributed stream;
 - **HNSW vector memory backed by *Flink state*** (checkpointed/keyed) — note the cores now
   ship their own in‑process HNSW index (`HnswVectorStore`), so approximate‑nearest‑neighbour
   search itself is portable; what stays Flink‑only is binding that index to Flink's managed,
