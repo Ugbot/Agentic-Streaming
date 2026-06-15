@@ -335,7 +335,7 @@ Once your infrastructure is running:
 1. Build the project: `mvn clean compile`
 2. Run tests: `mvn test` (once implemented)
 3. Try the examples in `src/main/java/org/agentic/flink/example/`
-4. Read [GETTING_STARTED.md](GETTING_STARTED.md) for usage guide
+4. Read [getting-started.md](getting-started.md) for usage guide
 
 ---
 
@@ -349,4 +349,4 @@ Once your infrastructure is running:
 
 ---
 
-**Questions?** Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) or open an issue!
+**Questions?** Check [reference/troubleshooting.md](reference/troubleshooting.md) or open an issue!

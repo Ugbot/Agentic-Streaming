@@ -657,9 +657,9 @@ if (policyContainsRequiredInfo(policy)) {
 
 Now that you understand the concepts:
 
-1. **Try the examples** - See these concepts in action ([EXAMPLES.md](EXAMPLES.md))
+1. **Try the examples** - See these concepts in action ([reference/examples.md](reference/examples.md))
 2. **Build your own** - Create a simple agent with what you learned
-3. **Explore advanced topics** - Read the full framework docs ([AGENT_FRAMEWORK.md](AGENT_FRAMEWORK.md))
-4. **Get help** - Check troubleshooting if you get stuck ([TROUBLESHOOTING.md](TROUBLESHOOTING.md))
+3. **Explore advanced topics** - Read the full framework docs ([reference/agent-framework.md](reference/agent-framework.md))
+4. **Get help** - Check troubleshooting if you get stuck ([reference/troubleshooting.md](reference/troubleshooting.md))
 
 **You now understand how Agentic Flink works!** 🎉

@@ -477,18 +477,18 @@ java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
 
 Now that you've got the basics, you can:
 
-1. **Learn the concepts** - Read [CONCEPTS.md](CONCEPTS.md) to understand how everything works
-2. **Study examples** - Check out [EXAMPLES.md](EXAMPLES.md) for detailed walkthroughs
+1. **Learn the concepts** - Read [concepts.md](concepts.md) to understand how everything works
+2. **Study examples** - Check out [reference/examples.md](reference/examples.md) for detailed walkthroughs
 3. **Build more tools** - Create tools that connect to your systems
 4. **Add validation** - Make your agents check their work
 5. **Enable memory** - Give your agents long-term memory with RAG
 
 ## 📚 Additional Resources
 
-- **[CONCEPTS.md](CONCEPTS.md)** - Deep dive into core concepts
-- **[EXAMPLES.md](EXAMPLES.md)** - Detailed example walkthroughs
-- **[AGENT_FRAMEWORK.md](AGENT_FRAMEWORK.md)** - Complete framework documentation
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[concepts.md](concepts.md)** - Deep dive into core concepts
+- **[reference/examples.md](reference/examples.md)** - Detailed example walkthroughs
+- **[reference/agent-framework.md](reference/agent-framework.md)** - Complete framework documentation
+- **[reference/troubleshooting.md](reference/troubleshooting.md)** - Common issues and solutions
 
 ## ❓ Common Questions
 
@@ -549,4 +549,4 @@ You've successfully:
 
 ---
 
-**Next:** Read [CONCEPTS.md](CONCEPTS.md) to understand how agents work under the hood.
+**Next:** Read [concepts.md](concepts.md) to understand how agents work under the hood.

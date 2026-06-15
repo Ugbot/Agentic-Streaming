@@ -775,6 +775,6 @@ You've now seen:
 1. **Experiment** - Modify the examples
 2. **Combine** - Use RAG + Context + Your Tools together
 3. **Build** - Create your own agent for your use case
-4. **Read** - Check [AGENT_FRAMEWORK.md](AGENT_FRAMEWORK.md) for advanced topics
+4. **Read** - Check [agent-framework.md](agent-framework.md) for advanced topics
 
 **Happy building!** 🚀
