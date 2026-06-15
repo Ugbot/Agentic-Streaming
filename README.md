@@ -97,6 +97,9 @@ cd agentic-clj && clojure -M:run && cd ..
 docker compose up -d && docker compose exec ollama ollama pull qwen2.5:3b   # optional infra (or `podman compose`)
 mvn clean test
 mvn exec:java -Dexec.mainClass="org.agentic.flink.example.QuickStartExample"
+# …or run the SAME pipeline.yaml as a real Flink job (source → native CEP → keyBy → agent → sink):
+mvn exec:java -Dexec.mainClass="org.agentic.flink.pipeline.FlinkPipelineRunner" \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
 ```
 
 Every one answers with path `payments` and a balance of `1234.56`. The full walkthrough — including
