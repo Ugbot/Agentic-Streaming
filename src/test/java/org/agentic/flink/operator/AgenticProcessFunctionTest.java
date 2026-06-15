@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.ControlState;
 import org.agentic.flink.control.DebugControl;
@@ -16,6 +17,7 @@ import org.agentic.flink.control.DebugEvent;
 import org.agentic.flink.operator.wiring.AgenticPipeline;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -100,7 +102,25 @@ final class AgenticProcessFunctionTest {
     out.addSink(new CollectMain());
     AgenticPipeline.debugStream(out).addSink(new CollectDebug());
 
-    env.execute("agentic-process-function-test-seeded");
+    // AgenticPipeline.seededControl is a CONTINUOUS_UNBOUNDED control channel — it stays open
+    // for the job's lifetime (as in production, so later control flips can land), so the job
+    // never finishes on its own. Run it asynchronously, wait for the expected debug events to
+    // arrive, then cancel — the canonical way to test a continuous streaming job. (A blocking
+    // env.execute() here would hang forever.)
+    JobClient client = env.executeAsync("agentic-process-function-test-seeded");
+    try {
+      int expected = dataSeq.size();
+      long deadline = System.currentTimeMillis() + 30_000L;
+      while (DEBUG_EVENTS.size() < expected && System.currentTimeMillis() < deadline) {
+        Thread.sleep(50);
+      }
+    } finally {
+      try {
+        client.cancel().get(30, TimeUnit.SECONDS);
+      } catch (Exception ignore) {
+        // best-effort cancel; the minicluster tears down with the env
+      }
+    }
   }
 
   static final class NkTestOp extends AgenticProcessFunction<Integer, String> {
