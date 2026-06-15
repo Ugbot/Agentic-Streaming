@@ -26,6 +26,17 @@ from .retrieval import (
 )
 from .embeddings import Embedder, HashingEmbedder, LiteLLMEmbedder, make_embedder
 from .a2a import A2AClient, peer_tool
+from .cep import (
+    CepMatcher,
+    CepObserver,
+    Condition,
+    Contiguity,
+    Match,
+    Pattern,
+    Stage,
+    any_,
+    simple,
+)
 from .context import ContextItem, ContextWindowManager, Priority
 from .guardrails import Guardrail, RegexGuardrail
 from .inference import (
@@ -59,6 +70,21 @@ from .longterm import (
     make_long_term_store,
 )
 from .runtime import LocalRuntime, Runtime
+from .suspend import (
+    HumanGate,
+    InMemorySuspensionService,
+    Suspension,
+    SuspensionService,
+)
+from .replay import EventLog, InMemoryEventLog, replay, replay_until
+from .stream import Channel, EventObserver, QueueChannel, SeedChannel, StreamRuntime
+from .trace import NOOP, NoopTracer, Recorded, RecordingTracer, Span, Tracer
+from .timers import (
+    DurableTimerService,
+    InMemoryTimerService,
+    Timer,
+    TimerService,
+)
 from .stores import RedisConversationStore, make_conversation_store
 from .hnsw import HnswIndex
 from .vectorstores import (
@@ -70,6 +96,14 @@ from .vectorstores import (
     make_vector_store,
 )
 from .tools import Tool, ToolRegistry
+from .windows import (
+    Bucket,
+    Session,
+    SessionWindow,
+    SlidingWindow,
+    TumblingWindow,
+    WindowState,
+)
 
 __all__ = [
     "Agent",
@@ -89,6 +123,29 @@ __all__ = [
     "hashing_embedder",
     "LocalRuntime",
     "Runtime",
+    "HumanGate",
+    "InMemorySuspensionService",
+    "Suspension",
+    "SuspensionService",
+    "Channel",
+    "SeedChannel",
+    "QueueChannel",
+    "EventObserver",
+    "StreamRuntime",
+    "Span",
+    "Tracer",
+    "NoopTracer",
+    "RecordingTracer",
+    "Recorded",
+    "NOOP",
+    "EventLog",
+    "InMemoryEventLog",
+    "replay",
+    "replay_until",
+    "Timer",
+    "TimerService",
+    "InMemoryTimerService",
+    "DurableTimerService",
     "Tool",
     "ToolRegistry",
     "ChatClient",
@@ -144,6 +201,21 @@ __all__ = [
     "EmbeddingClassifier",
     "ClassifierScorer",
     "ClassifierGuardrail",
+    "WindowState",
+    "Bucket",
+    "Session",
+    "SlidingWindow",
+    "TumblingWindow",
+    "SessionWindow",
+    "CepMatcher",
+    "CepObserver",
+    "Condition",
+    "Contiguity",
+    "Match",
+    "Pattern",
+    "Stage",
+    "any_",
+    "simple",
 ]
 
 __version__ = "0.1.0"
