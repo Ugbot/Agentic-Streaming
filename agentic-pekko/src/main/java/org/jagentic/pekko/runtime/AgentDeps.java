@@ -1,6 +1,7 @@
 package org.jagentic.pekko.runtime;
 
 import org.jagentic.core.Banking;
+import org.jagentic.core.Policies;
 import org.jagentic.core.Retrieval;
 import org.jagentic.core.RoutedGraph;
 import org.jagentic.core.ToolRegistry;
@@ -36,5 +37,10 @@ public final class AgentDeps {
 
   public Retrieval.TwoTierRetriever retriever() {
     return retriever;
+  }
+
+  /** The turn policies (idempotency, retry, verification) declared by the compiled graph. */
+  public Policies policies() {
+    return graph.policies();
   }
 }
