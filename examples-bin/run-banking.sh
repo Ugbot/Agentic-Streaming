@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # Run the Rho-Bank A2A demo locally: two A2A agents (personal :9001, cs :9002) on the Agentic-Flink
 # gateway, each running the bounded ReAct brain + safety stack in-process.
 #
@@ -14,6 +15,10 @@
 #
 # ENV_API_URL is optional: without it the agents run chat/RAG only (no env tools). With the harness
 # running, set ENV_API_URL/ENV_API_TOKEN so the agents can call the bank/user environment tools.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=examples-bin/jvm-opts.sh
+source "$SCRIPT_DIR/jvm-opts.sh"
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -45,7 +50,7 @@ A2A_MODE=banking A2A_BANKING_ROLE=cs QUARKUS_HTTP_PORT=9002 \
   KB_PATH="$KB_DIR" KB_POLICY_PATH="$KB_POLICY" \
   LLM_PROVIDER="$PROVIDER" MODEL="${MODEL:-}" OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
   GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" ENV_API_URL="${ENV_API_URL:-}" ENV_API_TOKEN="${CS_ENV_API_TOKEN:-${ENV_API_TOKEN:-}}" \
-  java -jar "$JAR" > /tmp/banking-cs.log 2>&1 &
+  java $AGENTIC_ADD_OPENS -jar "$JAR" > /tmp/banking-cs.log 2>&1 &
 CS_PID=$!
 
 echo "==> Starting personal agent on :9001 (CS_AGENT_URL=http://localhost:9002)"
@@ -55,7 +60,7 @@ A2A_MODE=banking A2A_BANKING_ROLE=personal QUARKUS_HTTP_PORT=9001 \
   CS_AGENT_URL="${CS_AGENT_URL:-http://localhost:9002}" \
   LLM_PROVIDER="$PROVIDER" MODEL="${MODEL:-}" OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
   GOOGLE_API_KEY="${GOOGLE_API_KEY:-}" ENV_API_URL="${ENV_API_URL:-}" ENV_API_TOKEN="${PERSONAL_ENV_API_TOKEN:-${ENV_API_TOKEN:-}}" \
-  java -jar "$JAR" > /tmp/banking-personal.log 2>&1 &
+  java $AGENTIC_ADD_OPENS -jar "$JAR" > /tmp/banking-personal.log 2>&1 &
 PERSONAL_PID=$!
 
 trap 'kill $CS_PID $PERSONAL_PID 2>/dev/null || true' INT TERM EXIT

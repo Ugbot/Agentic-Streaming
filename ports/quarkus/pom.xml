@@ -14,7 +14,7 @@
     no Flink dependency.</description>
 
   <properties>
-    <maven.compiler.release>17</maven.compiler.release>
+    <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
@@ -72,12 +72,12 @@
 
   <build>
     <plugins>
-      <!-- Plain javac compile is the hard requirement; release 17. -->
+      <!-- Plain javac compile is the hard requirement; release 21. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
-          <release>17</release>
+          <release>21</release>
         </configuration>
       </plugin>
     </plugins>
