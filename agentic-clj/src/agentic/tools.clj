@@ -11,6 +11,16 @@
    (swap! reg assoc id {:description description :schema schema :fn f})
    reg))
 
+(defn tag
+  "Attach metadata to a registered tool (its spec `:kind`, a saga `:compensation` tool id, ...)."
+  [reg id k v]
+  (swap! reg assoc-in [id k] v)
+  reg)
+
+(defn kind [reg id] (get-in @reg [id :kind] "constant"))
+
+(defn compensation [reg id] (get-in @reg [id :compensation]))
+
 (defn ids [reg] (vec (keys @reg)))
 
 (defn execute [reg id params]

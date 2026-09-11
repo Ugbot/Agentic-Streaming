@@ -13,7 +13,7 @@
         (is (= "payments" (:path res)))
         (is (= "[payments] Your balance is 1234.56." (:reply res)))
         (is (true? (:ok res)))
-        (is (= ["get_balance"] (:tool-calls res)))))
+        (is (= ["get_balance"] (mapv :tool (:tool-calls res))))))
     (testing "card → cards path (fallback reply)"
       (is (= "cards" (:path (core/submit sys (ev/event "c2" "u" "what card types do you offer?"))))))
     (testing "crypto cash-back → cards path → retrieval hit"

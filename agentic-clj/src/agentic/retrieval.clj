@@ -49,10 +49,15 @@
 (defn upsert [idx id vec text]
   (swap! idx assoc id {:vec vec :text text}))
 
+(defn- by-score-then-id
+  "Highest score first; equal scores in id order, so hit order is deterministic across runtimes."
+  [hits]
+  (sort-by (juxt (comp - :score) :id) hits))
+
 (defn search [idx query k]
   (->> @idx
        (map (fn [[id {:keys [vec text]}]] {:id id :score (cosine query vec) :text text}))
-       (sort-by :score >)
+       by-score-then-id
        (take (max 1 k))
        vec))
 
@@ -67,6 +72,6 @@
         merged (->> (concat hot-hits cold-hits)
                     (group-by :id)
                     (map (fn [[_ hits]] (apply max-key :score hits)))  ; hot wins ties via max score
-                    (sort-by :score >)
+                    by-score-then-id
                     (take (max 1 k)))]
     (vec merged)))
