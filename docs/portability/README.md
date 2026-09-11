@@ -28,7 +28,10 @@ management, an in-process **HNSW** vector index, vector/long-term/conversation s
   windows, replay, human-in-the-loop, and tracing, portable across all four cores (CEP is no longer
   Flink-only).
 - [`parity-matrix.md`](parity-matrix.md), what each backend can do + its limitations,
-  and the full three-core capability/parity table.
+  and the full three-core capability/parity table (hand-maintained).
+- [`../capabilities.md`](../capabilities.md), the **generated** agentic/v1 capability matrix:
+  per-runtime `supported` / `partial` / `unsupported` / `not_tested`, derived by
+  `spec/tools/conformance_matrix.py` from the shared conformance fixtures.
 
 **Design (the why):**
 - [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md),
