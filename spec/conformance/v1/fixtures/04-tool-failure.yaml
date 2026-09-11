@@ -1,0 +1,30 @@
+id: tool-failure
+description: "A failing tool with policies.on_tool_error=fail ends the turn as failed with error class tool, and records tool_failed rather than a silent empty result."
+requires: [tools, retry]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: failing
+    router: {kind: keyword, default: main, rules: {main: [charge]}}
+    paths:
+      main:
+        brain: rule
+        prompt: You answer charge questions.
+        tool_triggers: {charge: broken_tool}
+    verifier: {kind: none}
+  policies:
+    on_tool_error: fail
+    retry: {kind: none, max_attempts: 1}
+  tools:
+    - {id: broken_tool, kind: failing, description: Always raises}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "look up this charge"}
+expect:
+  - turn_id: t1
+    status: failed
+    error_class: tool
+    tool_calls:
+      - {tool: broken_tool, index: 0, attempt: 1, failed: true}
+    events_include: [turn_received, routed, tool_failed, turn_failed]
+    events_exclude: [turn_completed]

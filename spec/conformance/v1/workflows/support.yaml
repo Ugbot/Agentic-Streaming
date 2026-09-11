@@ -1,0 +1,40 @@
+# The shared conformance workflow: deterministic, offline, no model and no external service.
+# Every fixture that does not need a special shape runs against this document.
+
+spec_version: agentic/v1
+backend: local
+
+agent:
+  id: support
+  router:
+    kind: keyword
+    default: general
+    rules:
+      billing: [refund, charge, balance]
+      account: [password, login]
+  paths:
+    billing:
+      brain: rule
+      prompt: You answer billing questions.
+      tools: [lookup_charge, issue_refund]
+      tool_triggers: {balance: lookup_charge}
+    account:
+      brain: rule
+      prompt: You answer account questions.
+    general:
+      brain: rule
+      prompt: You answer general questions.
+  verifier:
+    kind: prefix
+
+policies:
+  ordering: per-conversation
+  idempotency: turn-id
+
+tools:
+  - {id: lookup_charge, kind: constant, description: Look up a charge, value: 42.5}
+  - {id: issue_refund, kind: constant, description: Issue a refund, value: "refunded", compensation: reverse_refund}
+  - {id: reverse_refund, kind: constant, description: Reverse a refund, value: "reversed"}
+
+guardrails:
+  - {kind: regex, stage: input, deny: ["ignore (all|previous)"], reason: "prompt injection"}

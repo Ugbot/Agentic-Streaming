@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-streaming.dev/spec/v1/workflow.schema.json",
+  "title": "Agentic Streaming workflow IR, v1",
+  "description": "The portable workflow representation. The same document is expressed as YAML, JSON, or EDN; this schema is normative for all three. Unknown keys are rejected except under the documented extension points (x-* and runtime:).",
+  "type": "object",
+  "required": ["agent"],
+  "properties": {
+    "spec_version": {
+      "description": "Spec version this document targets. Absent means agentic/v1 for backward compatibility with pre-spec pipeline files; new documents must set it.",
+      "const": "agentic/v1",
+      "default": "agentic/v1"
+    },
+    "backend": {
+      "description": "Runtime selector. A runtime that does not recognise the value must fail loudly.",
+      "type": "string"
+    },
+    "runtime": {
+      "description": "Runtime-specific settings, keyed by runtime name. Opaque to the portable model; a runtime ignores blocks that are not its own.",
+      "type": "object",
+      "additionalProperties": { "type": "object" }
+    },
+    "agent": { "$ref": "#/$defs/agent" },
+    "policies": { "$ref": "#/$defs/policies" },
+    "tools": { "type": "array", "items": { "$ref": "#/$defs/tool" } },
+    "skills": { "type": "array", "items": { "$ref": "#/$defs/skill" } },
+    "guardrails": { "type": "array", "items": { "$ref": "#/$defs/guardrail" } },
+    "llm": { "$ref": "#/$defs/llm" },
+    "embeddings": { "$ref": "#/$defs/embeddings" },
+    "retrieval": { "$ref": "#/$defs/retrieval" },
+    "context": { "$ref": "#/$defs/context" },
+    "stores": { "$ref": "#/$defs/stores" },
+    "mcp": { "type": "array", "items": { "type": "object" } },
+    "a2a": { "type": "array", "items": { "$ref": "#/$defs/peer" } },
+    "cep": { "type": "array", "items": { "type": "object" } },
+    "saga": { "$ref": "#/$defs/saga" },
+    "timers": { "type": "array", "items": { "$ref": "#/$defs/timer" } },
+    "channels": { "type": "array", "items": { "$ref": "#/$defs/channel" } },
+    "backend_config": { "type": "object" }
+  },
+  "patternProperties": { "^x-": {} },
+  "additionalProperties": false,
+
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$" },
+
+    "agent": {
+      "type": "object",
+      "required": ["paths"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "router": { "$ref": "#/$defs/router" },
+        "paths": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/identifier" },
+          "additionalProperties": { "$ref": "#/$defs/path" }
+        },
+        "verifier": { "$ref": "#/$defs/verifier" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "router": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["keyword", "llm", "classifier", "static"] },
+        "default": { "$ref": "#/$defs/identifier" },
+        "rules": {
+          "description": "path name -> keywords that select it. Matching is case-insensitive substring on the turn text, first path in declaration order wins.",
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        },
+        "prompt": { "type": "string" },
+        "classifier": { "type": "string" },
+        "threshold": { "type": "number" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "path": {
+      "type": "object",
+      "properties": {
+        "brain": { "enum": ["rule", "llm"], "default": "rule" },
+        "prompt": { "type": "string" },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "tool_triggers": {
+          "description": "keyword -> tool id, used by the deterministic rule brain.",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "guardrails": { "type": "array", "items": { "type": "string" } },
+        "verifier": { "$ref": "#/$defs/verifier" },
+        "max_iterations": { "type": "integer", "minimum": 1, "default": 6 },
+        "threshold": { "type": "number" },
+        "output_schema": { "type": "object" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "verifier": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["prefix", "schema", "regex", "llm", "none"], "default": "prefix" },
+        "pattern": { "type": "string" },
+        "schema": { "type": "object" },
+        "prompt": { "type": "string" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "policies": {
+      "description": "Execution semantics. Defaults are normative: omitting the block means per-conversation ordering, turn-id idempotency, and no retries.",
+      "type": "object",
+      "properties": {
+        "ordering": { "enum": ["per-conversation", "none"], "default": "per-conversation" },
+        "idempotency": { "enum": ["turn-id", "none"], "default": "turn-id" },
+        "retry": {
+          "type": "object",
+          "properties": {
+            "kind": { "enum": ["none", "fixed", "exponential"], "default": "none" },
+            "max_attempts": { "type": "integer", "minimum": 1, "default": 1 },
+            "initial_delay_ms": { "type": "integer", "minimum": 0, "default": 100 },
+            "multiplier": { "type": "number", "minimum": 1, "default": 2.0 },
+            "max_delay_ms": { "type": "integer", "minimum": 0, "default": 5000 },
+            "jitter": { "type": "boolean", "default": false }
+          },
+          "additionalProperties": false
+        },
+        "verification": {
+          "type": "object",
+          "properties": {
+            "max_attempts": { "type": "integer", "minimum": 1, "default": 1 },
+            "on_exhausted": { "enum": ["unverified", "fail"], "default": "unverified" }
+          },
+          "additionalProperties": false
+        },
+        "on_tool_error": { "enum": ["fail", "continue"], "default": "fail" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "tool": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing"], "default": "constant" },
+        "description": { "type": "string" },
+        "value": {},
+        "url": { "type": "string" },
+        "method": { "enum": ["GET", "POST"], "default": "POST" },
+        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "parameters": {
+          "description": "JSON Schema for the tool's arguments. Arguments are structured objects; a runtime must not parse them out of reply text.",
+          "type": "object"
+        },
+        "compensation": { "type": "string", "description": "tool id that undoes this tool, used by saga compensation" }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "skill": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "prompt": { "type": "string" },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "facts": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+
+    "guardrail": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "kind": { "enum": ["regex", "classifier", "schema"] },
+        "stage": { "enum": ["input", "output", "both"], "default": "input" },
+        "deny": { "type": "array", "items": { "type": "string" } },
+        "allow": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": "string" },
+        "classifier": { "type": "string" },
+        "blocked": { "type": "array", "items": { "type": "string" } },
+        "threshold": { "type": "number" },
+        "lexicon": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "llm": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "base_url": { "type": "string" },
+        "temperature": { "type": "number" },
+        "max_tokens": { "type": "integer", "minimum": 1 },
+        "script": {
+          "description": "stub provider only. A deterministic scripted turn sequence: either a tool call or a final text.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tool": { "type": "string" },
+              "args": { "type": "object" },
+              "text": { "type": "string" }
+            },
+            "oneOf": [{ "required": ["tool"] }, { "required": ["text"] }],
+            "additionalProperties": false
+          }
+        }
+      },
+      "patternProperties": { "^x-": {} },
+      "additionalProperties": false
+    },
+
+    "embeddings": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "default": "hashing" },
+        "model": { "type": "string" },
+        "base_url": { "type": "string" },
+        "dim": { "type": "integer", "minimum": 1, "default": 256 }
+      },
+      "additionalProperties": false
+    },
+
+    "retrieval": {
+      "type": "object",
+      "properties": {
+        "embedder": { "type": "string" },
+        "dim": { "type": "integer", "minimum": 1 },
+        "top_k": { "type": "integer", "minimum": 1, "default": 4 },
+        "vector_store": {
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string" },
+            "url": { "type": "string" },
+            "m": { "type": "integer" },
+            "ef_search": { "type": "integer" }
+          },
+          "additionalProperties": true
+        },
+        "kb": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "metadata": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "context": {
+      "type": "object",
+      "properties": {
+        "max_tokens": { "type": "integer", "minimum": 1 },
+        "max_items": { "type": "integer", "minimum": 1 },
+        "compaction": { "enum": ["none", "moscow", "window"], "default": "none" }
+      },
+      "additionalProperties": false
+    },
+
+    "store": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string" },
+        "url": { "type": "string" },
+        "jdbc_url": { "type": "string" },
+        "user": { "type": "string" },
+        "password": { "type": "string" },
+        "schema": { "type": "string" },
+        "on_unavailable": {
+          "description": "fail (default) aborts the build when the store is unreachable; degrade falls back to memory and records the degradation.",
+          "enum": ["fail", "degrade"],
+          "default": "fail"
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "stores": {
+      "type": "object",
+      "properties": {
+        "conversation": { "$ref": "#/$defs/store" },
+        "keyed_state": { "$ref": "#/$defs/store" },
+        "long_term": { "$ref": "#/$defs/store" },
+        "vector": { "$ref": "#/$defs/store" }
+      },
+      "additionalProperties": false
+    },
+
+    "peer": {
+      "description": "A peer agent exposed as a tool. The tool id is `name`, or `id` for documents written before the spec settled on `name`.",
+      "type": "object",
+      "anyOf": [{ "required": ["name"] }, { "required": ["id"] }],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "id": { "$ref": "#/$defs/identifier" },
+        "url": { "type": "string" },
+        "transport": { "enum": ["inproc", "http", "grpc"], "default": "http" },
+        "description": { "type": "string" },
+        "retries": { "type": "integer", "minimum": 0 },
+        "timeout_ms": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "saga": {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["tool"],
+            "properties": {
+              "name": { "$ref": "#/$defs/identifier" },
+              "tool": { "type": "string" },
+              "args": { "type": "object" },
+              "compensate_with": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "timer": {
+      "type": "object",
+      "required": ["id", "after_ms"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "after_ms": { "type": "integer", "minimum": 0 },
+        "tool": { "type": "string" },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+
+    "channel": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "kind": { "type": "string" },
+        "direction": { "enum": ["in", "out"], "default": "in" },
+        "config": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

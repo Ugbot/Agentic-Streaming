@@ -1,0 +1,16 @@
+id: ordered-concurrent-turns
+description: "Turns delivered concurrently on one conversation are applied serially in arrival order; sequence numbers are dense and the second turn observes the first turn's state."
+requires: [ordering, memory]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "refund this charge", concurrent_with: [t2]}
+  - {conversation_id: c1, turn_id: t2, text: "what is my balance?", concurrent_with: [t1]}
+expect:
+  - turn_id: t1
+    status: completed
+    path: billing
+    state_includes: {turn_count: 1}
+  - turn_id: t2
+    status: completed
+    path: billing
+    state_includes: {turn_count: 2}
