@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -38,11 +39,12 @@ class DurabilityProfileTest {
     assertEquals(DurabilityProfile.MEMORY, DurabilityProfile.from("  "));
     assertEquals(DurabilityProfile.POSTGRES, DurabilityProfile.from("postgres"));
     assertEquals(DurabilityProfile.CASSANDRA, DurabilityProfile.from(" Cassandra "));
+    assertEquals(DurabilityProfile.REDIS, DurabilityProfile.from("Redis"));
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> DurabilityProfile.from("redis-" + UUID.randomUUID()));
+        () -> DurabilityProfile.from("journal-" + UUID.randomUUID()));
     assertTrue(e.getMessage().contains("MEMORY"));
-    assertEquals(List.of(DurabilityProfile.MEMORY, DurabilityProfile.POSTGRES, DurabilityProfile.CASSANDRA),
-        List.of(DurabilityProfile.values()), "only event-sourced journal profiles exist");
+    assertEquals(List.of(DurabilityProfile.MEMORY, DurabilityProfile.POSTGRES, DurabilityProfile.CASSANDRA,
+        DurabilityProfile.REDIS), List.of(DurabilityProfile.values()), "only event-sourced journal profiles exist");
   }
 
   @Test
@@ -91,6 +93,38 @@ class DurabilityProfileTest {
     Config c = DurabilityProfile.CASSANDRA.config();
     assertEquals("pekko.persistence.cassandra.journal", c.getString("pekko.persistence.journal.plugin"));
     assertTrue(c.hasPath("datastax-java-driver.basic.contact-points"));
+  }
+
+  @Test
+  void redisProfileRefusesToStartWithoutAConnection() {
+    if (System.getenv("AGENTIC_REDIS_URL") != null) {
+      assertEquals("agentic-redis-journal", DurabilityProfile.REDIS.config().getString("pekko.persistence.journal.plugin"));
+      return;
+    }
+    IllegalStateException e = assertThrows(IllegalStateException.class, DurabilityProfile.REDIS::config);
+    assertTrue(e.getMessage().contains("AGENTIC_REDIS_URL"), e.getMessage());
+  }
+
+  @Test
+  void redisProfileResolvesTheInModuleJournalAndSnapshotStoreWhenTheUrlIsSupplied() {
+    String key = "agentic-redis-journal.url";
+    String url = "redis://cache-" + UUID.randomUUID().toString().substring(0, 6) + ":6379/"
+        + ThreadLocalRandom.current().nextInt(0, 16);
+    System.setProperty(key, url);
+    ConfigFactory.invalidateCaches();
+    try {
+      Config c = DurabilityProfile.REDIS.config();
+      assertEquals("agentic-redis-journal", c.getString("pekko.persistence.journal.plugin"));
+      assertEquals("agentic-redis-snapshot-store", c.getString("pekko.persistence.snapshot-store.plugin"));
+      assertEquals(url, c.getString(key));
+      assertEquals(url, c.getString("agentic-redis-snapshot-store.url"), "snapshot store shares the journal's Redis");
+      assertEquals("org.jagentic.pekko.persistence.redis.RedisJournal", c.getString("agentic-redis-journal.class"));
+      assertTrue(c.getBoolean("agentic-redis-journal.durability-check"), "appendonly is verified by default");
+      assertEquals("cluster", c.getString("pekko.actor.provider"));
+    } finally {
+      System.clearProperty(key);
+      ConfigFactory.invalidateCaches();
+    }
   }
 
   @Test

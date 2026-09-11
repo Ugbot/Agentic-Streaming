@@ -36,12 +36,48 @@ event journal gives durability + recovery; Cluster Sharding gives one live entit
 | `memory` | event-sourced | in-memory journal (dev/test), `application.conf` |
 | `postgres` | event-sourced | `pekko-persistence-jdbc`, `application-cluster-jdbc.conf` |
 | `cassandra` | event-sourced | `pekko-persistence-cassandra`, `application-cluster-cassandra.conf` |
+| `redis` | event-sourced | in-module `RedisJournal` + `RedisSnapshotStore` (`persistence/redis/`), `application-redis.conf` |
 
 All profiles are config-only (the entity is journal-agnostic) and every one is a real event
 journal. `DurabilityProfile.config()` validates the selected plugin and its required settings
-(`AGENTIC_PG_URL`, Cassandra contact points) and refuses to start otherwise; there is no silent
-fallback. The former Redis write-through profile was removed: it kept a transcript rather than the
-spec's event log and could not satisfy replay or dense-sequence guarantees.
+(`AGENTIC_PG_URL`, Cassandra contact points, `AGENTIC_REDIS_URL`) and refuses to start otherwise;
+there is no silent fallback. The former Redis write-through profile (a transcript kept outside the
+journal) is gone; Redis is now a journal like the others.
+
+### Redis journal
+
+No maintained Pekko persistence plugin for Redis exists (the Akka-era ones are archived and never
+got a Pekko build), so this module ships one: `RedisJournal` (`AsyncWriteJournal`) and
+`RedisSnapshotStore`, selected purely by `pekko.persistence.journal.plugin = agentic-redis-journal`.
+Both pass the Pekko persistence TCK (`RedisJournalTckSpec`, `RedisSnapshotStoreTckSpec`).
+
+Layout, per `persistenceId`: a hash `{prefix}:j:{id}` (field = sequenceNr, value = serialized
+`PersistentRepr`), a string `{prefix}:hi:{id}` holding the highest sequenceNr ever written (kept
+across `deleteMessagesTo`, so numbers are never reused), and a hash `{prefix}:s:{id}` of snapshots.
+Each `AtomicWrite` is one Lua script: all events land together or not at all, and an already
+present sequence number fails the write instead of overwriting the log.
+
+**Durability is verified, not assumed.** At start (`DurabilityProfile.preflight`, before the actor
+system boots, and again in the plugin actors) the journal runs `CONFIG GET appendonly` and refuses
+to start with an actionable message when it is not `yes`: a cache-only Redis would lose every
+conversation on restart. `appendfsync` is reported, not enforced; what you get:
+
+| `appendfsync` | Acknowledged events lost on power failure / kernel panic |
+|---------------|-----------------------------------------------------------|
+| `always`      | none: the write is fsynced before Redis replies, so before the entity treats it as persisted |
+| `everysec` (Redis default with AOF on) | up to ~1 s of acknowledged events |
+| `no`          | OS-dependent, typically up to ~30 s |
+
+None of these lose data on a Redis *process* crash alone (the kernel still holds the written
+bytes); the window is about the machine dying. Set `agentic-redis-journal.durability-check = off`
+only for managed deployments (Redis Enterprise, Valkey with persistence) that forbid `CONFIG`; it
+is logged at WARN on every start.
+
+```bash
+AGENTIC_REDIS_URL=redis://localhost:6379/0 \
+  java -Dconfig.resource=application-redis.conf -cp ... org.jagentic.pekko.Main
+# the server must run with:  redis-server --appendonly yes --appendfsync always
+```
 
 ## Run
 
@@ -76,7 +112,7 @@ on the default in-memory journal the events live for the `ActorSystem` lifetime;
 restart use a durable journal (below).
 
 Production profiles: `-Dconfig.resource=application-cluster-jdbc.conf` (+ `AGENTIC_PG_URL` etc.),
-or `application-cluster-cassandra.conf`.
+`application-cluster-cassandra.conf`, or `application-redis.conf` (+ `AGENTIC_REDIS_URL`).
 
 ## Conformance
 
@@ -98,3 +134,19 @@ fatal error → restart with journal intact), single-node Cluster Sharding, prof
 and Pekko Streams/Kafka front doors, `backend: pekko` pipeline parity, and the shared conformance
 fixtures. Live Postgres/Kafka round trips run when `AGENTIC_PEKKO_INTEGRATION=true` and fail
 clearly if the backing service is not configured.
+
+The default in-memory journal runs with `test-serialization = on`, so every event is round-tripped
+through `jackson-cbor` exactly as a durable journal would store it.
+
+### Integration tests (real Redis via Testcontainers on Podman)
+
+```bash
+DOCKER_HOST=unix:///run/user/1000/podman/podman.sock TESTCONTAINERS_RYUK_DISABLED=true \
+  mvn -f agentic-pekko/pom.xml test -P integration-tests
+```
+
+Runs everything tagged `integration`: `RedisJournalIT` (profile selection, dense sequences and
+what lives in Redis, whole-system restart replaying without brain/tool/guardrail, duplicate
+`turn_id` after restart, durable timer surviving a restart and firing once, refusal of a
+cache-only server and of a missing URL) plus the Pekko persistence TCK for the journal and the
+snapshot store. They fail, never skip, when no container runtime is reachable.

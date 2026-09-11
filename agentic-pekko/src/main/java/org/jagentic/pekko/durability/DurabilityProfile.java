@@ -5,6 +5,8 @@ import java.util.Locale;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
+import org.jagentic.pekko.persistence.redis.RedisJournal;
+
 /**
  * Where the conversation journal durably lives. Every profile is event-sourced: the entity is
  * journal-agnostic, so a profile is exactly a Pekko configuration selecting
@@ -18,7 +20,12 @@ public enum DurabilityProfile {
   POSTGRES("application-cluster-jdbc.conf", "jdbc-journal", "pekko.persistence.jdbc.shared-databases.default.db.url"),
   /** Cluster + Cassandra via pekko-persistence-cassandra. */
   CASSANDRA("application-cluster-cassandra.conf", "pekko.persistence.cassandra.journal",
-      "datastax-java-driver.basic.contact-points");
+      "datastax-java-driver.basic.contact-points"),
+  /**
+   * Cluster + Redis via this module's {@code RedisJournal}; needs {@code AGENTIC_REDIS_URL} and a
+   * Redis with {@code appendonly yes} (verified at start, see {@code RedisDurabilityCheck}).
+   */
+  REDIS("application-redis.conf", "agentic-redis-journal", "agentic-redis-journal.url");
 
   public static final String ENV_VAR = "AGENTIC_PEKKO_DURABILITY";
 
@@ -66,10 +73,27 @@ public enum DurabilityProfile {
     return c;
   }
 
+  /**
+   * Profile-specific checks that must pass before the actor system boots, run against the
+   * configuration that will actually be used. The journal plugins repeat these checks when they
+   * start; running them here first turns a misconfigured store into a synchronous, actionable
+   * failure instead of an actor-initialization error followed by a recovery timeout.
+   *
+   * @throws IllegalStateException when the store is unreachable or not durable (REDIS: server
+   *     has {@code appendonly no}, or {@code CONFIG} is forbidden and the check was not explicitly
+   *     disabled)
+   */
+  public void preflight(Config resolved) {
+    if (this == REDIS) {
+      RedisJournal.preflight(resolved.getConfig(journalPlugin), journalPlugin);
+    }
+  }
+
   private String connectionHint() {
     return switch (this) {
       case POSTGRES -> "AGENTIC_PG_URL, AGENTIC_PG_USER and AGENTIC_PG_PASSWORD";
       case CASSANDRA -> "datastax-java-driver.basic.contact-points";
+      case REDIS -> "AGENTIC_REDIS_URL, e.g. redis://localhost:6379/0";
       case MEMORY -> "nothing";
     };
   }
