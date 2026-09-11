@@ -36,7 +36,14 @@ import org.agentic.flink.llm.ChatMessage;
  *
  * <p>Methods do not declare checked exceptions: the transcript is a hot path, and remote-backed
  * implementations should degrade gracefully (log + return empty/no-op) rather than fail a turn.
+ *
+ * @deprecated on the spec runtime a conversation's state is the fold of its event log, held in
+ *     Flink keyed state by {@link org.agentic.flink.runtime.WorkflowTurnFunction}; the transcript is
+ *     {@link org.jagentic.core.ConversationState#transcript()} and the core's
+ *     {@link org.jagentic.core.ConversationStore} is the materialized-view SPI. This store remains
+ *     the memory layer of the deprecated {@link org.agentic.flink.dsl.Agent} DSL.
  */
+@Deprecated
 public interface ConversationStore extends Serializable {
 
   /** Append one message to a conversation's transcript (in arrival order). No-op if id is null. */
