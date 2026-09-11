@@ -38,39 +38,39 @@ jobs:
       # module and is not published anywhere, so it has to be installed first.
       # AGS-10 tracks replacing this with a real parent pom.
       - name: jagentic-core (shared JVM core)
-        run: mvn -B -ntp -f ports/jagentic-core/pom.xml install
+        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install
 
       # `install` rather than `test`: runs the main suite AND publishes the
       # artifact that a2a-gateway and banking-job depend on.
       - name: agentic-flink (main module)
-        run: mvn -B -ntp install
+        run: ./mvnw -B -ntp install
 
       - name: ports/kafka-streams
-        run: mvn -B -ntp -f ports/kafka-streams/pom.xml test
+        run: ./mvnw -B -ntp -f ports/kafka-streams/pom.xml test
       - name: ports/spring
-        run: mvn -B -ntp -f ports/spring/pom.xml test
+        run: ./mvnw -B -ntp -f ports/spring/pom.xml test
       - name: ports/quarkus
-        run: mvn -B -ntp -f ports/quarkus/pom.xml test
+        run: ./mvnw -B -ntp -f ports/quarkus/pom.xml test
       - name: ports/temporal
-        run: mvn -B -ntp -f ports/temporal/pom.xml test
+        run: ./mvnw -B -ntp -f ports/temporal/pom.xml test
       - name: ports/pekko
-        run: mvn -B -ntp -f ports/pekko/pom.xml test
+        run: ./mvnw -B -ntp -f ports/pekko/pom.xml test
       - name: ports/pulsar
-        run: mvn -B -ntp -f ports/pulsar/pom.xml test
+        run: ./mvnw -B -ntp -f ports/pulsar/pom.xml test
 
       - name: agentic-pekko (actor runtime)
-        run: mvn -B -ntp -f agentic-pekko/pom.xml test
+        run: ./mvnw -B -ntp -f agentic-pekko/pom.xml test
 
       - name: tool-services (packs, then app)
         run: |
-          mvn -B -ntp -f tool-services/tool-services-packs/pom.xml install
-          mvn -B -ntp -f tool-services/tool-services-app/pom.xml test
+          ./mvnw -B -ntp -f tool-services/tool-services-packs/pom.xml install
+          ./mvnw -B -ntp -f tool-services/tool-services-app/pom.xml test
 
       - name: a2a-gateway
-        run: mvn -B -ntp -f a2a-gateway/pom.xml test
+        run: ./mvnw -B -ntp -f a2a-gateway/pom.xml test
 
       - name: banking-job (uber-jar assembly)
-        run: mvn -B -ntp -f banking-job/pom.xml test
+        run: ./mvnw -B -ntp -f banking-job/pom.xml test
 
       - name: Collect surefire reports
         if: always()

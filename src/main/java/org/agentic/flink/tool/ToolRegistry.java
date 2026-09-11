@@ -35,7 +35,12 @@ import java.util.Optional;
  * }</pre>
  *
  * @author Agentic Flink Team
+ * @deprecated tools bound to a workflow document are registered in the canonical core's
+ *     {@link org.jagentic.core.ToolRegistry} (built by {@code GraphBuilder}) and invoked with
+ *     structured arguments through {@code AgentContext.callTool}; this registry serves only the
+ *     pre-spec {@link org.agentic.flink.dsl.Agent} DSL.
  */
+@Deprecated
 public class ToolRegistry implements Serializable {
 
   private static final long serialVersionUID = 1L;

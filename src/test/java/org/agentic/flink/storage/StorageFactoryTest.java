@@ -89,19 +89,21 @@ class StorageFactoryTest {
   }
 
   @Test
-  @DisplayName("Should create Redis long-term store when configured")
-  void testCreateRedisLongTermStore() throws Exception {
-    config.put("redis.host", "localhost");
-    config.put("redis.port", "6379");
+  @DisplayName("A configured but unreachable Redis long-term store fails loudly, not silently")
+  void testUnreachableRedisLongTermStoreFailsLoudly() throws Exception {
+    int closedPort;
+    try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+      closedPort = socket.getLocalPort();
+    }
+    config.put("redis.host", "127.0.0.1");
+    config.put("redis.port", Integer.toString(closedPort));
     config.put("redis.database", "1");
 
-    LongTermMemoryStore store = StorageFactory.createLongTermStore("redis", config);
-
-    assertNotNull(store);
-    assertEquals(StorageTier.WARM, store.getTier());
-    assertTrue(store.getProviderName().contains("Redis"));
-
-    store.close();
+    IllegalStateException e =
+        assertThrows(
+            IllegalStateException.class,
+            () -> StorageFactory.createLongTermStore("redis", config));
+    assertTrue(e.getMessage().contains("127.0.0.1:" + closedPort), e.getMessage());
   }
 
   @Test

@@ -46,16 +46,19 @@ public final class PipelineLoader {
     public final ConversationStore conversation;
     /** Declarative CEP rules from the spec's {@code cep:} section (empty if none). */
     public final List<org.jagentic.core.cep.CepWiring> cep;
+    /** Configured stores that fell back to memory under {@code on_unavailable: degrade}. */
+    public final List<String> degradations;
 
     PipelineSystem(String backendName, Runtime runtime, GraphBuilder.Built built,
                    LongTermStore longTerm, ConversationStore conversation,
-                   List<org.jagentic.core.cep.CepWiring> cep) {
+                   List<org.jagentic.core.cep.CepWiring> cep, List<String> degradations) {
       this.backendName = backendName;
       this.runtime = runtime;
       this.built = built;
       this.longTerm = longTerm;
       this.conversation = conversation;
       this.cep = cep;
+      this.degradations = List.copyOf(degradations);
     }
 
     /** Run the turn, then feed the inbound event to every CEP rule (which may fire tool/submit
@@ -90,18 +93,26 @@ public final class PipelineLoader {
     String backend = backendOverride != null ? backendOverride : (String) spec.getOrDefault("backend", "local");
 
     Map<String, Object> stores = (Map<String, Object>) spec.getOrDefault("stores", Map.of());
-    LongTermStore longTerm = buildLongTermStore((Map<String, Object>) stores.get("long_term"));
-    ConversationStore conversation = buildConversationStore((Map<String, Object>) stores.get("conversation"));
+    StoreAvailability availability = new StoreAvailability();
+    LongTermStore longTerm = buildLongTermStore((Map<String, Object>) stores.get("long_term"), availability);
+    ConversationStore conversation =
+        buildConversationStore((Map<String, Object>) stores.get("conversation"), availability);
 
     Runtime runtime = Backends.create(backend, built, conversation);
     List<org.jagentic.core.cep.CepWiring> cep =
         org.jagentic.core.cep.CepSpec.compile((List<Map<String, Object>>) spec.get("cep"));
-    return new PipelineSystem(backend, runtime, built, longTerm, conversation, cep);
+    List<String> degradations = new java.util.ArrayList<>(built.degradations());
+    degradations.addAll(availability.degradations());
+    return new PipelineSystem(backend, runtime, built, longTerm, conversation, cep, degradations);
   }
 
-  /** Build the long-term store by kind: memory (default) | postgres. A postgres failure
-   * (no reachable server) degrades to an in-memory store rather than failing the build. */
   static LongTermStore buildLongTermStore(Map<String, Object> spec) {
+    return buildLongTermStore(spec, new StoreAvailability());
+  }
+
+  /** Build the long-term store by kind: memory (default) | postgres. An unreachable postgres fails
+   * the build unless the section sets {@code on_unavailable: degrade} (spec rule 7). */
+  static LongTermStore buildLongTermStore(Map<String, Object> spec, StoreAvailability availability) {
     if (spec == null) {
       return new InMemoryLongTermStore();
     }
@@ -110,23 +121,26 @@ public final class PipelineLoader {
       case "memory":
         return new InMemoryLongTermStore();
       case "postgres":
-        try {
-          return new org.jagentic.core.store.PostgresLongTermStore(
-              GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("url", spec.get("jdbc_url")))),
-              GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("user", "postgres"))),
-              GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("password", ""))),
-              (String) spec.get("schema"));
-        } catch (RuntimeException e) {
-          return new InMemoryLongTermStore();
-        }
+        return availability.connect("stores.long_term", spec,
+            () -> new org.jagentic.core.store.PostgresLongTermStore(
+                GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("url", spec.get("jdbc_url")))),
+                GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("user", "postgres"))),
+                GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("password", ""))),
+                (String) spec.get("schema")),
+            InMemoryLongTermStore::new);
       default:
-        throw new IllegalArgumentException("unknown long_term store kind " + kind + "; choose memory|postgres");
+        throw new WorkflowValidator.WorkflowValidationException("stores.long_term.kind",
+            "unknown kind " + kind + "; choose memory|postgres");
     }
   }
 
-  /** Build the conversation store by kind: memory (default) | redis. A redis failure
-   * degrades to in-memory rather than failing the build. */
   static ConversationStore buildConversationStore(Map<String, Object> spec) {
+    return buildConversationStore(spec, new StoreAvailability());
+  }
+
+  /** Build the conversation store by kind: memory (default) | redis. An unreachable redis fails
+   * the build unless the section sets {@code on_unavailable: degrade} (spec rule 7). */
+  static ConversationStore buildConversationStore(Map<String, Object> spec, StoreAvailability availability) {
     if (spec == null) {
       return new ConversationStore.InMemory();
     }
@@ -135,15 +149,14 @@ public final class PipelineLoader {
       case "memory":
         return new ConversationStore.InMemory();
       case "redis":
-        try {
-          String url = GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("url", "redis://localhost:6379")));
-          int max = ((Number) spec.getOrDefault("max_messages", 200)).intValue();
-          return new org.jagentic.core.store.RedisConversationStore(url, max);
-        } catch (RuntimeException e) {
-          return new ConversationStore.InMemory();
-        }
+        String url = GraphBuilder.resolveEnv(String.valueOf(spec.getOrDefault("url", "redis://localhost:6379")));
+        int max = ((Number) spec.getOrDefault("max_messages", 200)).intValue();
+        return availability.connect("stores.conversation", spec,
+            () -> new org.jagentic.core.store.RedisConversationStore(url, max),
+            ConversationStore.InMemory::new);
       default:
-        throw new IllegalArgumentException("unknown conversation store kind " + kind + "; choose memory|redis");
+        throw new WorkflowValidator.WorkflowValidationException("stores.conversation.kind",
+            "unknown kind " + kind + "; choose memory|redis");
     }
   }
 

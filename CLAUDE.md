@@ -8,7 +8,7 @@ module); the same essence is ported to a dozen other engines across Python, the 
 Go under `ports/`, with design docs under `docs/portability/`.
 
 This main module is the Flink framework: a standalone agentic framework for Apache Flink
-with LangChain4J integration. Java 17 target, Flink 2.2.1 (native FLIP-27 sources /
+with LangChain4J integration. Java 21 target, Flink 2.2.1 (native FLIP-27 sources /
 FLIP-143 sinks), LangChain4J 1.16.3 (managed via the langchain4j-bom). PyFlink path targets
 apache-flink 2.x (see docs/python.md).
 
