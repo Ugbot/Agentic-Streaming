@@ -1,4 +1,4 @@
-# agentic-pipeline — declarative YAML → the agentic system of your choice
+# agentic-pipeline: declarative YAML → the agentic system of your choice
 
 Build the agentic system you want in a `pipeline.yaml`, choose a backend, and the rest
 falls into place. The same spec runs on **any** backend because every engine adapter is
@@ -12,7 +12,7 @@ PYTHONPATH=ports/agentic-pipeline:ports/pyagentic \
 # reply: [payments] get_balance returned 1234.56
 # tools: ['get_balance']
 
-# same YAML, different backend — nothing else changes:
+# same YAML, different backend - nothing else changes:
 ... run examples/pipelines/banking.yaml --backend celery --text "tell me about crypto cash-back"
 ... run examples/pipelines/banking.yaml --backend nats   --text "what is my balance?"
 ```
@@ -30,8 +30,8 @@ embedder + KB), `guardrails` (regex deny-lists).
 
 | Module | Role |
 |--------|------|
-| `pyagentic.builder` | `build(spec, chat_client_factory) -> (graph, tools, retriever)` — the core GraphBuilder (engine-agnostic) |
-| `agentic_pipeline.backends` | `make_backend(name, graph, tools, retriever)` — the shim: `local` / `celery` / `nats` (all injectable, uniform `submit(Event)`) |
+| `pyagentic.builder` | `build(spec, chat_client_factory) -> (graph, tools, retriever)`, the core GraphBuilder (engine-agnostic) |
+| `agentic_pipeline.backends` | `make_backend(name, graph, tools, retriever)`, the shim: `local` / `celery` / `nats` (all injectable, uniform `submit(Event)`) |
 | `agentic_pipeline.loader` | `load(path)` / `build_system(spec)` → a `PipelineSystem` with `submit(Event)` on the chosen backend |
 | `agentic_pipeline.__main__` | the `run` CLI |
 

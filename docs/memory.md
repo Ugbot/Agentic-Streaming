@@ -1,6 +1,6 @@
 # Memory in Agentic Flink
 
-Agentic Flink is **Flink-state-first**. The short-term memory of an agent — its conversation context, active reasoning chain, recent tool results — lives in Flink keyed state, durably checkpointed alongside the rest of the job. External stores (Postgres, Redis, Kafka) are optional and play specific, narrow roles. There is no separate "HOT cache" in front of Flink state.
+Agentic Flink is **Flink-state-first**. The short-term memory of an agent, its conversation context, active reasoning chain, recent tool results, lives in Flink keyed state, durably checkpointed alongside the rest of the job. External stores (Postgres, Redis, Kafka) are optional and play specific, narrow roles. There is no separate "HOT cache" in front of Flink state.
 
 ## Layout
 
@@ -26,7 +26,7 @@ In your `RichFunction.open()`:
 ShortTermMemory memory = spec.bind(getRuntimeContext());
 ```
 
-Then in `processElement`, the memory is implicitly scoped to the operator's current key — no `flowId` arg, because Flink supplies it.
+Then in `processElement`, the memory is implicitly scoped to the operator's current key, no `flowId` arg, because Flink supplies it.
 
 TTL is set per agent via `AgentBuilder.withShortTermTtl(Duration)` and falls back to the config key `memory.shortterm.ttl.seconds`. State cleanup is incremental and runs alongside the state-backend's own work.
 
@@ -55,7 +55,7 @@ For larger graphs (10⁵+ vectors per key), drop in a JVector- or Lucene-HNSW-ba
 
 ## Memory feeds (now `Channel<KeyedContextItem>`)
 
-A memory feed is just a `Channel<KeyedContextItem>` — the framework's unified
+A memory feed is just a `Channel<KeyedContextItem>`, the framework's unified
 continuous-input primitive. External producers push `KeyedContextItem`
 records on any channel transport; the agent operator union-connects them so
 the records land in Flink state through the same write path as in-band

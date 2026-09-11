@@ -1,4 +1,4 @@
-# Test Report — 2026-05-26
+# Test Report: 2026-05-26
 
 End-to-end test pass following the package rename (`com.ververica.flink.agent`
 → `org.agentic.flink`) and the history reset.
@@ -12,7 +12,7 @@ End-to-end test pass following the package rename (`com.ververica.flink.agent`
 | Maven | bundled wrapper |
 | Python | 3.14.4 |
 | Podman | 5.8.2 |
-| Ollama | 0.24.0 (brew) — see "Ollama daemon bug" below |
+| Ollama | 0.24.0 (brew), see "Ollama daemon bug" below |
 | JPype1 | 1.7.1 |
 | Jupyter | 1.1.1 |
 
@@ -25,13 +25,13 @@ End-to-end test pass following the package rename (`com.ververica.flink.agent`
 | Framework jar build (`mvn package`) | **127 MB shaded jar produced** |
 | Pip artifact build (`python -m build` in `python/`) | **wheel + sdist pass `twine check`** |
 | Jupyter notebook (`01_quickstart.ipynb`) | **10 / 10 code cells executed clean** |
-| Java examples (sample) | mixed — see "Examples" below |
+| Java examples (sample) | mixed, see "Examples" below |
 | Java integration tests | skipped (Ollama API broken on this host) |
 
 ## What ran
 
 ### 1. Unit tests
-`mvn test` — 487 tests, 0 failures, 0 errors, 0 skipped. Covers:
+`mvn test`. 487 tests, 0 failures, 0 errors, 0 skipped. Covers:
 - DSL (`AgentBuilder`, `Agent`, validators)
 - Memory (`FlinkStateShortTermMemory`, `FlinkStateVectorMemory`, HNSW)
 - Storage (`InMemoryLongTermStore`, `PostgresConversationStore` via embedded mode,
@@ -57,35 +57,35 @@ tests/test_vector_memory_spec.py ................... 6 passed
 The skipped pair require `apache-flink` (PyFlink); intentional optional path.
 
 ### 3. Build artifacts
-- `target/agentic-flink-1.0.0-SNAPSHOT.jar` — thin (~1.3 MB) main artifact: just the
-  framework classes. Maven consumers (a2a-gateway, banking-job, …) depend on this, so they
+- `target/agentic-flink-1.0.0-SNAPSHOT.jar`, thin (~1.3 MB) main artifact: just the
+  framework classes. Maven consumers (a2a-gateway, banking-job, ...) depend on this, so they
   resolve clean transitive dependencies.
-- `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar` — fat shaded jar (~260 MB, everything but
+- `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar`, fat shaded jar (~260 MB, everything but
   Flink which stays `provided`) for `flink run` / cluster upload / `java -cp`.
-- `python/dist/agentic_flink-1.0.0a1-py3-none-any.whl` — 46 KB.
-- `python/dist/agentic_flink-1.0.0a1.tar.gz` — 39 KB.
+- `python/dist/agentic_flink-1.0.0a1-py3-none-any.whl`. 46 KB.
+- `python/dist/agentic_flink-1.0.0a1.tar.gz`. 39 KB.
 - Both Python artifacts pass `twine check` (READMEs render, metadata complete,
   license file shipped).
 
 ### 4. Notebook walkthrough
 
 `notebooks/01_quickstart.ipynb` runs top-to-bottom in ~5 s on cold cache,
-~3 s warm. Executed via `jupyter nbconvert --execute --inplace` — all cells
+~3 s warm. Executed via `jupyter nbconvert --execute --inplace`, all cells
 green. Covers:
 
 1. JVM bootstrap (auto-discovers framework jar, loads 236 runtime jars via
    `mvn dependency:build-classpath`)
-2. Framework class resolution — 7 representative FQCNs verified
+2. Framework class resolution. 7 representative FQCNs verified
 3. Live web fetch against `https://example.com` (Jsoup pulls 230-char body,
    1 outbound link)
-4. Document extraction — HTML via Jsoup, plain text via Tika
-5. Recursive text chunking — 800-char input → 13 chunks at 200-char target
-6. Vector ops — 500 random unit vectors at d=64, planted nearest neighbour
+4. Document extraction. HTML via Jsoup, plain text via Tika
+5. Recursive text chunking. 800-char input → 13 chunks at 200-char target
+6. Vector ops. 500 random unit vectors at d=64, planted nearest neighbour
    recovered at rank 1 by cosine
-7. Vector memory specs — both `FlinkStateVectorMemory` (brute force) and
+7. Vector memory specs, both `FlinkStateVectorMemory` (brute force) and
    `FlinkStateHnswVectorMemory` (M=16, beam=64) construct cleanly
 8. Agent end-to-end build with two Python `@tool` decorated functions
-9. Live LLM call (conditional — gracefully skipped when Ollama unreachable)
+9. Live LLM call (conditional, gracefully skipped when Ollama unreachable)
 
 The notebook handles missing Ollama gracefully (URL probe + `models` API
 check before attempting any chat call).
@@ -96,15 +96,15 @@ Ran via `mvn exec:java -Dexec.classpathScope=test`:
 
 | Example | Result |
 |---|---|
-| `ToolAnnotationExample` | ✓ ran to "=== Example Complete ===" — tool registry, annotation discovery, async execution, metadata schema |
-| `CompensationExample` | ✓ ran (saga compensation logic) |
-| `SimpleAgentExample` | ✗ non-serializable lambda — example bug, not framework |
-| `ContextManagementExample` | ✗ "Generic types have been disabled" — example needs `env.getConfig().enableForceKryo()` |
-| `DeclarativeAgentExample` | ✗ "Initial state has no outgoing transitions" — example state-machine config bug |
-| `StorageIntegratedFlinkJob` | ✗ Flink runtime ClassNotFoundException — needs `flink run`, not `mvn exec:java` |
+| `ToolAnnotationExample` | yes ran to "=== Example Complete ===", tool registry, annotation discovery, async execution, metadata schema |
+| `CompensationExample` | yes ran (saga compensation logic) |
+| `SimpleAgentExample` | no, non-serializable lambda, example bug, not framework |
+| `ContextManagementExample` | no "Generic types have been disabled", example needs `env.getConfig().enableForceKryo()` |
+| `DeclarativeAgentExample` | no "Initial state has no outgoing transitions", example state-machine config bug |
+| `StorageIntegratedFlinkJob` | no Flink runtime ClassNotFoundException, needs `flink run`, not `mvn exec:java` |
 
 These failures are in **example code or the way `mvn exec:java` runs Flink
-jobs**, not the framework — the underlying logic is covered by the 487
+jobs**, not the framework, the underlying logic is covered by the 487
 passing unit tests.
 
 ## Issues discovered

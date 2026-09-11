@@ -1,7 +1,7 @@
 # Incident-detection agent example
 
 Combines streaming anomaly detection (Generic inference model) with Flink CEP
-pattern matching so the LLM is only invoked on confirmed incidents — not on
+pattern matching so the LLM is only invoked on confirmed incidents, not on
 every metric sample.
 
 ```
@@ -9,7 +9,7 @@ MetricSample (host, metric, value, ts)
   │
   ▼  keyBy(host)
   │
-  ▼  AnomalyDetectFn — GenericInferenceModel emits AnomalyEvent on z-score outliers
+  ▼  AnomalyDetectFn - GenericInferenceModel emits AnomalyEvent on z-score outliers
   │
   ▼  Flink CEP pattern: three anomalies within 5 minutes on the same host
   │
@@ -20,14 +20,14 @@ MetricSample (host, metric, value, ts)
   ▼  IncidentAgentFn:
   │      runbook lookup (tool) → LLM remediation plan → ticket creation (tool)
   │
-  ▼  output: "incident#N ticket=INC-1 plan=…"
+  ▼  output: "incident#N ticket=INC-1 plan=..."
 ```
 
 ## What's interesting
 
 | Piece | API used |
 |-------|----------|
-| Anomaly detector | `GenericInferenceModel` — the SPI's escape hatch for non-typed I/O |
+| Anomaly detector | `GenericInferenceModel`, the SPI's escape hatch for non-typed I/O |
 | Pattern matching | Flink CEP, `Pattern.begin("first").next("second").next("third").within(...)` |
 | Runbook lookup | Plain `ToolExecutor` returning a runbook excerpt |
 | Ticket creation | Plain `ToolExecutor` printing the ticket and returning its id |
@@ -35,7 +35,7 @@ MetricSample (host, metric, value, ts)
 
 The anomaly detector here is a sliding-window z-score implemented in-process.
 Swap it for an autoencoder loaded through DJL or ONNX without touching the
-rest of the pipeline — that's the point of the SPI shape.
+rest of the pipeline, that's the point of the SPI shape.
 
 ## Prerequisites
 

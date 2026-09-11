@@ -3,18 +3,18 @@
 Every scenario uses the same external podman network `agentic-flink-network`.
 Create it once with `bash examples-bin/setup-network.sh`, then layer on the
 scenario-specific compose. The "umbrella" composes use Compose's `include`
-directive to pull in the per-service files — no duplication.
+directive to pull in the per-service files, no duplication.
 
 | Scenario                                  | Compose file                 | Services                                                         | Helper                                  |
 |-------------------------------------------|------------------------------|------------------------------------------------------------------|-----------------------------------------|
-| Base infra (LLM + KV + DB)                | `docker-compose.yml`         | Postgres, Redis, Ollama                                          | —                                       |
-| Kafka broker                              | `docker-compose-kafka.yml`   | Kafka, ZooKeeper                                                 | —                                       |
-| Fluss cluster                             | `docker-compose-fluss.yml`   | Fluss coordinator, Fluss tablet, ZooKeeper                       | —                                       |
-| Flink session cluster                     | `docker-compose-session.yml` | Flink JobManager (REST :8081), TaskManager (16 slots)            | —                                       |
+| Base infra (LLM + KV + DB)                | `docker-compose.yml`         | Postgres, Redis, Ollama                                          | - |
+| Kafka broker                              | `docker-compose-kafka.yml`   | Kafka, ZooKeeper                                                 | - |
+| Fluss cluster                             | `docker-compose-fluss.yml`   | Fluss coordinator, Fluss tablet, ZooKeeper                       | - |
+| Flink session cluster                     | `docker-compose-session.yml` | Flink JobManager (REST :8081), TaskManager (16 slots)            | - |
 | **RAG + Fluss** (notebooks 02 / 03)       | `docker-compose-rag.yml`     | base + Fluss                                                     | `examples-bin/run-rag-stack.sh`         |
 | **Session cluster** (notebook 09)         | `docker-compose-cluster.yml` | Fluss + Flink session                                            | `examples-bin/run-session-cluster.sh`   |
 | **Markets via Kafka** (`run-*-market.sh`) | `docker-compose-markets.yml` | Kafka + Flink session                                            | `examples-bin/run-crypto-market.sh`     |
-| **Everything**                            | `docker-compose-all.yml`     | All of the above                                                 | —                                       |
+| **Everything**                            | `docker-compose-all.yml`     | All of the above                                                 | - |
 | **Jupyter + cluster** (zero host Python)  | `docker-compose-notebook.yml`| Fluss + Flink session + Jupyter Lab in a container               | `podman compose -f docker-compose-notebook.yml up -d` |
 
 ## Ports the host sees
@@ -31,7 +31,7 @@ directive to pull in the per-service files — no duplication.
 | 5557  | L5 alerts PUB (notebook 09 live tail)              |
 | 5558  | L5 debug PUB                                       |
 | 5559  | L5 control PULL (DebugFlipper push target)         |
-| 5560–5564 | ZeroMQ chain hops L0→L5                        |
+| 5560-5564 | ZeroMQ chain hops L0→L5                        |
 
 ## Common commands
 
@@ -59,8 +59,8 @@ modes from `AGENTIC_FLINK_MODE` in `.env`:
 
 | Mode       | Where work runs                            | Cluster needed?                            | Use when                                |
 |------------|--------------------------------------------|--------------------------------------------|-----------------------------------------|
-| `inproc`   | JVM in this Python process (JPype)         | No                                         | Notebooks 07 / 08 — operator called directly, no Flink job |
-| `session`  | A Flink session cluster over REST          | Yes (local podman or remote)               | Notebook 09 — multi-job session-cluster demos |
+| `inproc`   | JVM in this Python process (JPype)         | No                                         | Notebooks 07 / 08, operator called directly, no Flink job |
+| `session`  | A Flink session cluster over REST          | Yes (local podman or remote)               | Notebook 09, multi-job session-cluster demos |
 | `embedded` | JPype JVM + in-process MiniCluster         | No                                         | Offline testing of the full job graph (slower than `inproc`, no docker) |
 
 Copy-paste-ready `.env` files at the repo root:
@@ -68,7 +68,7 @@ Copy-paste-ready `.env` files at the repo root:
 ```bash
 cp .env.inproc.example          .env    # JVM in-process, no cluster
 cp .env.cluster.local.example   .env    # session mode, local cluster (run-session-cluster.sh)
-cp .env.cluster.remote.example  .env    # session mode, REMOTE cluster — edit FLINK_REST_URL
+cp .env.cluster.remote.example  .env    # session mode, REMOTE cluster - edit FLINK_REST_URL
 cp .env.embedded.example        .env    # MiniCluster in-process
 ```
 
@@ -93,7 +93,7 @@ podman compose -f docker-compose-notebook.yml up -d
 ```
 
 The notebook container shares the `agentic-flink-network` with the cluster, so
-`FLINK_REST_URL=http://flink-jobmanager:8081` works automatically — no `.env`
+`FLINK_REST_URL=http://flink-jobmanager:8081` works automatically, no `.env`
 edit needed unless you're pointing at a remote cluster instead.
 
 ## Which notebook needs what

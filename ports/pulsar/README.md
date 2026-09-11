@@ -1,4 +1,4 @@
-# agentic-pulsar — Agentic-Flink as an Apache Pulsar Function
+# agentic-pulsar: Agentic-Flink as an Apache Pulsar Function
 
 The agent essence as a **Pulsar Function**, reusing the Flink-free
 `org.jagentic:jagentic-core`. See the design in
@@ -8,15 +8,15 @@ The agent essence as a **Pulsar Function**, reusing the Flink-free
 state*. Consume the request topic with a `Key_Shared` subscription keyed by
 `conversationId` and Pulsar delivers one conversation to one instance, in order
 (**C2**); the built-in **state store** (BookKeeper-backed, replicated) is durable keyed
-state (**C1** + **C3**) — supplied by the runtime, no external database. With Pekko it
+state (**C1** + **C3**), supplied by the runtime, no external database. With Pekko it
 is one of only two engines besides Flink that give C1+C2+C3 natively, and the closest
 of the two to Flink's topic-in/topic-out shape.
 
 | File | Role |
 |------|------|
 | `BankingFunction.java` | the Pulsar `Function<String,String>`; runs `Banking.buildGraph().handle(...)` over Pulsar-state-backed stores. Injectable with any core graph/tools/retriever. |
-| `PulsarStateConversationStore.java` | `ConversationStore` over the Pulsar state API — durable per-conversation transcript + attributes + user index (C1) |
-| `PulsarStateKeyedStore.java` | `KeyedStateStore` over the Pulsar state API — the Flink `ValueState` analogue |
+| `PulsarStateConversationStore.java` | `ConversationStore` over the Pulsar state API, durable per-conversation transcript + attributes + user index (C1) |
+| `PulsarStateKeyedStore.java` | `KeyedStateStore` over the Pulsar state API, the Flink `ValueState` analogue |
 | `StateBytes.java` | the narrow byte-keyed seam onto `Context.getState/putState` (keeps the stores testable + Context-decoupled) |
 | `InMemoryContext.java` | an in-memory `Context`/`Record` (dynamic proxies) so the function runs with no cluster |
 | `LocalDemo.java` | runnable single-node demo (state persists across turns, proving C1) |

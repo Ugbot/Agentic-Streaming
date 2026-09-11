@@ -1,6 +1,6 @@
 # Content-moderation walkthrough
 
-> **Flink-runtime showcase** — exercises Flink-only capabilities (**OutputTag side outputs** + a
+> **Flink-runtime showcase**, exercises Flink-only capabilities (**OutputTag side outputs** + a
 > classifier hard-gate). Not the portable baseline; for the agent that runs unchanged on every
 > runtime see [the banking agent on every runtime](banking-everywhere.md).
 
@@ -11,7 +11,7 @@
 
 Moderation has the opposite cost shape from triage: most content is fine, a
 small fraction needs to be blocked. The classifier has to be the first thing
-each post sees — running an LLM and *then* throwing the output away would be
+each post sees, running an LLM and *then* throwing the output away would be
 indefensible at scale.
 
 The pipeline is therefore "classifier first, LLM second, audit always":
@@ -19,7 +19,7 @@ The pipeline is therefore "classifier first, LLM second, audit always":
 ```
 Post
   │
-  ▼  Classifier — Toxic-BERT (~50 ms CPU per post)
+  ▼  Classifier - Toxic-BERT (~50 ms CPU per post)
   │
   ├──── unsafe  ─►  side output  ─►  AuditingListener (HTTP / Postgres / Kafka)
   │
@@ -34,7 +34,7 @@ call.
 
 A `DataStream<Post>` filter would silently drop the blocked posts. We want the
 audit trail. Flink's `OutputTag<BlockedPost>` keeps the blocked stream
-addressable as a separate sink — straightforward to write to Postgres via the
+addressable as a separate sink, straightforward to write to Postgres via the
 framework's `LongTermMemoryStore`, push to Kafka with a `KafkaSink`, or hit an
 audit HTTP endpoint (the demo's choice, for zero infra).
 
@@ -42,18 +42,18 @@ audit HTTP endpoint (the demo's choice, for zero infra).
 
 Two listeners are wired in the example:
 
-- `MetricsAgentEventListener` — in-memory counters for `getInferences()`,
+- `MetricsAgentEventListener`, in-memory counters for `getInferences()`,
   `getGuardrailBlocks()`, etc. Hook these to Flink's `MetricGroup` for
   Prometheus / OpenTelemetry.
-- `AuditingListener` — POSTs each block to an HTTP audit endpoint. In
-  production, replace this with a `LongTermMemoryStore`-backed listener — see
+- `AuditingListener`. POSTs each block to an HTTP audit endpoint. In
+  production, replace this with a `LongTermMemoryStore`-backed listener, see
   cookbook recipe #9.
 
 The listeners fire from inside the per-key `ProcessFunction`, not the SPI's
 own emission sites, because this example wires the classifier directly rather
 than through a guardrail. To use the framework's built-in guardrail emission
 instead, register a `ClassifierGuardrail` on the agent and call the LLM via
-`LLMClient.withGuardrails(...)` — see the support-triage example.
+`LLMClient.withGuardrails(...)`, see the support-triage example.
 
 ## Kafka source
 
@@ -80,7 +80,7 @@ Zookeeper pair for local testing.
 Toxic-BERT inference dominates the per-record cost (~50 ms). LLM calls only
 happen for safe posts (~80%+ of the stream typically) and are async-friendly.
 If you find the operator buffering up, raise parallelism on the keyBy and
-consider a smaller classifier — `unitary/unbiased-toxic-roberta` is 2× faster
+consider a smaller classifier, `unitary/unbiased-toxic-roberta` is 2× faster
 on CPU at a tiny recall cost.
 
 ## Compose snippet for Kafka

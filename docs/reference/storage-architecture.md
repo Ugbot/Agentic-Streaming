@@ -132,7 +132,7 @@ This codebase implements a multi-tier storage architecture where every storage l
 
 ## Implementation Status
 
-### Completed ✅
+### Completed
 - Base `StorageProvider` interface
 - `StorageTier` enum with tier classifications
 - `ShortTermMemoryStore` interface (HOT tier)
@@ -145,11 +145,11 @@ This codebase implements a multi-tier storage architecture where every storage l
 - `StorageFactory` with tier-specific factory methods
 - `StorageConfiguration` with YAML support (requires Jackson dependency)
 
-### In Progress 🚧
+### In Progress
 - Integration with `ContextManagementAction`
 - Storage metrics and monitoring
 
-### Planned 📋
+### Planned
 - Additional backend implementations (DynamoDB, Cassandra, MongoDB, PostgreSQL, S3, ClickHouse)
 - Vector store implementations (Qdrant, Pinecone, Weaviate, pgvector)
 - Steering store implementations

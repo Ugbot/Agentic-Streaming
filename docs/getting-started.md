@@ -1,4 +1,4 @@
-# 🚀 Getting Started with the Flink runtime
+# Getting Started with the Flink runtime
 
 **Welcome!** This guide takes you from zero to running your first AI agent on the **Flink runtime** in
 about 15 minutes.
@@ -12,14 +12,14 @@ about 15 minutes.
 > [the banking agent on every runtime](examples/banking-everywhere.md). The rest of *this* page is the
 > Flink-runtime path.
 
-## 📋 What You'll Learn
+## What You'll Learn
 
 By the end of this guide, you'll:
-- ✅ Have all tools installed
-- ✅ Run your first AI agent
-- ✅ Understand what's happening
-- ✅ Know how to modify the agent
-- ✅ Be ready to build your own
+- Have all tools installed
+- Run your first AI agent
+- Understand what's happening
+- Know how to modify the agent
+- Be ready to build your own
 
 ## Part 1: Setup (10 minutes)
 
@@ -40,7 +40,7 @@ java -version
 3. Run the installer
 4. Verify: `java -version`
 
-💡 **Tip:** You should see something like `openjdk version "11.0.20"`
+**Tip:** You should see something like `openjdk version "11.0.20"`
 
 ### Step 2: Install Maven
 
@@ -104,7 +104,7 @@ ollama pull nomic-embed-text
 
 This might take 5-10 minutes depending on your internet speed. The models are a few GB each.
 
-💡 **What's happening?** You're downloading AI models to your computer so you don't need internet or paid APIs to run agents!
+**What's happening?** You're downloading AI models to your computer so you don't need internet or paid APIs to run agents!
 
 ### Step 4: (Optional) Install Qdrant
 
@@ -118,7 +118,7 @@ docker run -d -p 6333:6333 qdrant/qdrant
 **Without Docker:**
 Download from https://qdrant.tech/documentation/guides/installation/
 
-💡 **Skip this if you just want to try the basic agent first!**
+**Skip this if you just want to try the basic agent first!**
 
 ## Part 2: Build the Project (2 minutes)
 
@@ -143,9 +143,9 @@ mvn clean package
 ```
 
 This produces **two** jars under `target/`:
-- `agentic-flink-1.0.0-SNAPSHOT.jar` — a thin jar of just the framework classes (what other
+- `agentic-flink-1.0.0-SNAPSHOT.jar`, a thin jar of just the framework classes (what other
   Maven modules depend on, so they get clean transitive dependencies).
-- `agentic-flink-1.0.0-SNAPSHOT-uber.jar` — the fat, everything-bundled jar you run directly
+- `agentic-flink-1.0.0-SNAPSHOT-uber.jar`, the fat, everything-bundled jar you run directly
   with `java -cp` or submit with `flink run` (used throughout this guide).
 
 **If you get errors:**
@@ -324,7 +324,7 @@ java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
 [INFO] Tool execution result: 600
 ```
 
-🎉 **Congratulations!** You just modified an agent!
+**Congratulations!** You just modified an agent!
 
 ## Part 6: Try Other Examples
 
@@ -473,7 +473,7 @@ java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
   org.agentic.flink.example.MyFirstAgentExample
 ```
 
-## 🎯 Next Steps
+## Next Steps
 
 Now that you've got the basics, you can:
 
@@ -483,14 +483,14 @@ Now that you've got the basics, you can:
 4. **Add validation** - Make your agents check their work
 5. **Enable memory** - Give your agents long-term memory with RAG
 
-## 📚 Additional Resources
+## Additional Resources
 
 - **[concepts.md](concepts.md)** - Deep dive into core concepts
 - **[reference/examples.md](reference/examples.md)** - Detailed example walkthroughs
 - **[reference/agent-framework.md](reference/agent-framework.md)** - Complete framework documentation
 - **[reference/troubleshooting.md](reference/troubleshooting.md)** - Common issues and solutions
 
-## ❓ Common Questions
+## Common Questions
 
 ### Why is my agent not responding?
 
@@ -536,16 +536,16 @@ logger.agent.name = org.agentic.flink
 logger.agent.level = DEBUG
 ```
 
-## 🎉 You Did It!
+## You Did It!
 
 You've successfully:
-- ✅ Set up the development environment
-- ✅ Built the project
-- ✅ Run your first AI agent
-- ✅ Modified an agent
-- ✅ Understood the code structure
+- Set up the development environment
+- Built the project
+- Run your first AI agent
+- Modified an agent
+- Understood the code structure
 
-**Now go build something amazing!** 🚀
+**Now go build something amazing!**
 
 ---
 

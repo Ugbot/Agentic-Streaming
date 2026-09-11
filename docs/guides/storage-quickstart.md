@@ -5,12 +5,12 @@ This guide shows how to run the complete storage-integrated Flink job with diffe
 ## Overview
 
 The `StorageIntegratedFlinkJob` demonstrates:
-- ✅ Multi-tier storage (HOT + WARM)
-- ✅ Configurable backends (in-memory, Redis, or PostgreSQL)
-- ✅ Context hydration from persistent storage
-- ✅ Metrics collection and reporting
-- ✅ Multi-user conversation handling
-- ✅ Realistic event processing
+- Multi-tier storage (HOT + WARM)
+- Configurable backends (in-memory, Redis, or PostgreSQL)
+- Context hydration from persistent storage
+- Metrics collection and reporting
+- Multi-user conversation handling
+- Realistic event processing
 
 ## Quick Start
 
@@ -209,12 +209,12 @@ mvn exec:java -Dexec.mainClass="org.agentic.flink.example.StorageIntegratedFlink
 ```
 
 **Advantages:**
-- ✅ Full ACID transactions
-- ✅ Relational data model with SQL queries
-- ✅ Long-term persistence (survives container restarts)
-- ✅ Connection pooling for production workloads
-- ✅ Industry-standard database (PostgreSQL)
-- ✅ Easy to integrate with existing data infrastructure
+- Full ACID transactions
+- Relational data model with SQL queries
+- Long-term persistence (survives container restarts)
+- Connection pooling for production workloads
+- Industry-standard database (PostgreSQL)
+- Easy to integrate with existing data infrastructure
 
 **Use Cases:**
 - Long-term conversation storage
@@ -509,27 +509,27 @@ See also:
 ## Performance Tips
 
 ### In-Memory Backend
-- ✅ Fastest possible (<1ms)
-- ❌ No persistence across restarts
-- ❌ Limited to single JVM
-- ✅ Perfect for development/testing
+- Fastest possible (<1ms)
+- No persistence across restarts
+- Limited to single JVM
+- Perfect for development/testing
 
 ### Redis Backend
-- ✅ Distributed - shared across all Flink tasks
-- ✅ Persistence with RDB/AOF
-- ✅ Scales horizontally with Redis Cluster
-- ✅ Fast enough for production (1-10ms)
-- ⚠️  Requires Redis infrastructure
+- Distributed - shared across all Flink tasks
+- Persistence with RDB/AOF
+- Scales horizontally with Redis Cluster
+- Fast enough for production (1-10ms)
+- Requires Redis infrastructure
 
 ### PostgreSQL Backend
-- ✅ Full ACID transactions and data integrity
-- ✅ Relational model - complex queries with SQL
-- ✅ Industry-standard database with broad tooling support
-- ✅ Long-term persistence and archival
-- ✅ Connection pooling via HikariCP
-- ⚠️  Slower than Redis (10-50ms) but acceptable for WARM tier
-- ⚠️  Requires PostgreSQL infrastructure
-- ✅ Best for: compliance, audit trails, long-term storage
+- Full ACID transactions and data integrity
+- Relational model - complex queries with SQL
+- Industry-standard database with broad tooling support
+- Long-term persistence and archival
+- Connection pooling via HikariCP
+- Slower than Redis (10-50ms) but acceptable for WARM tier
+- Requires PostgreSQL infrastructure
+- Best for: compliance, audit trails, long-term storage
 
 ### Backend Comparison
 
@@ -538,10 +538,10 @@ See also:
 | **Setup Complexity** | None | Medium | Medium |
 | **HOT Tier Latency** | <1ms | 1-5ms | N/A (WARM only) |
 | **WARM Tier Latency** | <1ms | 2-10ms | 5-50ms |
-| **Persistence** | ❌ | ✅ (RDB/AOF) | ✅ (ACID) |
-| **Distributed** | ❌ | ✅ | ✅ |
-| **SQL Queries** | ❌ | ❌ | ✅ |
-| **Transactions** | ❌ | ⚠️ (limited) | ✅ (full ACID) |
+| **Persistence** | no | yes (RDB/AOF) | yes (ACID) |
+| **Distributed** | no | yes | yes |
+| **SQL Queries** | no | no | yes |
+| **Transactions** | no | partial (limited) | yes (full ACID) |
 | **Best For** | Dev/Test | Production HOT+WARM | Production WARM/archive |
 | **Cost** | Free | Infrastructure | Infrastructure |
 | **Scalability** | Single JVM | Horizontal (cluster) | Vertical + replication |

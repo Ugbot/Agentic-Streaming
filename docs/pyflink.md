@@ -23,7 +23,7 @@ Every Java primitive this framework relies on has a 1:1 PyFlink equivalent:
 
 A native port of `FlinkStateShortTermMemory` is a straight translation. The hard parts (TTL config, descriptor names, state scoping) carry over without conceptual change.
 
-## Adoption path A — reuse Java operators from Python
+## Adoption path A: reuse Java operators from Python
 
 The simplest way to use Agentic Flink today:
 
@@ -50,16 +50,16 @@ agent = (Agent.builder()
 
 The agent operator runs in the JVM under the same checkpoint guarantees as a Java job. Python is only used as the job-graph driver. This is the recommended path until there is a real need for native Python operators (e.g. arbitrary Python pre-processing inside the agent loop).
 
-## Adoption path B — native PyFlink port (future)
+## Adoption path B: native PyFlink port (future)
 
 A native port would mean reimplementing:
 
-1. `ShortTermMemory` / `FlinkStateShortTermMemory` — straightforward translation.
-2. `VectorMemory` / `FlinkStateVectorMemory` — brute-force KNN in NumPy; trivial.
-3. `Channel<T>` — wraps `KafkaSource`, `JdbcSource`, etc. directly (this is
+1. `ShortTermMemory` / `FlinkStateShortTermMemory`, straightforward translation.
+2. `VectorMemory` / `FlinkStateVectorMemory`, brute-force KNN in NumPy; trivial.
+3. `Channel<T>`, wraps `KafkaSource`, `JdbcSource`, etc. directly (this is
    what `MemoryFeed` became after the rename).
 4. The agent process function (compaction, relevancy scoring, sync-to-long-term).
 
-The LangChain4J `@Tool` bridge has no direct Python equivalent. Substitute LangChain Python or pydantic-ai for tool calling — the rest of the framework is provider-agnostic.
+The LangChain4J `@Tool` bridge has no direct Python equivalent. Substitute LangChain Python or pydantic-ai for tool calling, the rest of the framework is provider-agnostic.
 
 No native Python code ships in this repository yet. The decision deliberately defers the cost of maintaining a second codebase until the user demand is clear.

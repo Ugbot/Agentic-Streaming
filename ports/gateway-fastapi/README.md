@@ -1,11 +1,11 @@
-# gateway-fastapi — Agentic-Flink HTTP gateway
+# gateway-fastapi: Agentic-Flink HTTP gateway
 
 A **FastAPI** HTTP front door for the pure-Python ports, reusing the Flink-free
 `pyagentic` core. It exposes the banking `router -> path -> verifier` agent
 (cards / payments / general) over HTTP with an A2A-style **Agent Card**, a turn
 endpoint, and conversation-transcript inspection.
 
-**The fit:** the gateway is the *online request/response* edge — the same role as the
+**The fit:** the gateway is the *online request/response* edge, the same role as the
 sibling A2A gateway, but pure Python. The agent logic, tools, and retrieval are reused
 **verbatim** from `pyagentic`; this module only adds the HTTP seam and a pluggable
 **backend runtime** so the same endpoints run over different substrates.
@@ -13,7 +13,7 @@ sibling A2A gateway, but pure Python. The agent logic, tools, and retrieval are 
 | Symbol | Role |
 |--------|------|
 | `create_app(backend=None)` | builds the FastAPI app; backend defaults to the env-selected one |
-| `LocalBackend` | default — `LocalRuntime` over the banking graph + a shared `InMemoryConversationStore`. Zero third-party deps |
+| `LocalBackend` | default, `LocalRuntime` over the banking graph + a shared `InMemoryConversationStore`. Zero third-party deps |
 | `CeleryBackend` | wraps the Celery adapter (`ports/celery`) in eager (in-process) mode; needs `celery` |
 | `NatsBackend` | wraps the NATS adapter (`ports/nats`); one persistent asyncio loop in a background thread (a NATS connection is loop-bound). Needs a JetStream server |
 | `make_backend(name)` | factory: `local` (default) \| `celery` \| `nats`, selected by `AGENTIC_GATEWAY_BACKEND` |
@@ -27,7 +27,7 @@ sibling A2A gateway, but pure Python. The agent logic, tools, and retrieval are 
 | `POST` | `/agent` | `{conversation_id, text, user_id?}` -> `{conversation_id, reply, path, ok, tool_calls}` |
 | `GET`  | `/conversations/{conversation_id}` | `{conversation_id, messages: [{role, content}], message_count}` |
 
-Request bodies are validated with Pydantic — bad input returns `422` automatically.
+Request bodies are validated with Pydantic, bad input returns `422` automatically.
 Internal errors are sanitized to clean JSON (`{"error", "detail"}`), never a stack trace.
 
 ## Run
@@ -83,12 +83,12 @@ input. The `local` backend runs without `celery`/`nats` installed.
 
 ## Backend caveats
 
-- **local** — always available, single-process, in-memory transcript. Transcript is
+- **local**: always available, single-process, in-memory transcript. Transcript is
   fully inspectable via `/conversations/{id}`.
-- **celery** — eager mode runs the task body in-process (no broker); a shared
+- **celery**: eager mode runs the task body in-process (no broker); a shared
   `InMemoryConversationStore` is injected via the adapter's `configure(...)` so history
   works. For distributed Celery the store would be Redis-backed (see `ports/celery`).
-- **nats** — requires a reachable JetStream server (`AGENTIC_NATS_URL`, default
+- **nats**: requires a reachable JetStream server (`AGENTIC_NATS_URL`, default
   `nats://127.0.0.1:4222`); construction raises a clear `RuntimeError` if the server is
   unreachable or `nats-py` is missing. History is read back from the durable JetStream
   KV envelope. All `connect`/`submit` calls share one event loop (a NATS connection is

@@ -1,4 +1,4 @@
-# agentic-celery — Agentic-Flink on Celery
+# agentic-celery: Agentic-Flink on Celery
 
 The agent essence on the Python **distributed task queue**, reusing the Flink-free
 `pyagentic` core. See the design in
@@ -8,15 +8,15 @@ The agent essence on the Python **distributed task queue**, reusing the Flink-fr
 request/response turn (unlike Dask/Airflow's batch). It has no native keyed ordering
 or keyed state, so the port recovers them: route a conversation to a stable queue
 (`conversation_queue(cid)`) consumed by one worker + a per-conversation lock
-(**C2**); keep durable state in an external `ConversationStore` (Redis — which Celery
+(**C2**); keep durable state in an external `ConversationStore` (Redis, which Celery
 already runs on) so a redelivered turn is idempotent; `acks_late` + retries give
 **C3**; a `chord`/`chain` gives the async stage (**C4**).
 
 | Symbol | Role |
 |--------|------|
-| `process_turn` | the Celery task — one conversational turn; routed to the conversation's queue, retried with backoff |
+| `process_turn` | the Celery task, one conversational turn; routed to the conversation's queue, retried with backoff |
 | `CeleryRuntime` | `pyagentic.Runtime` over Celery; `eager=True` runs in-process (no broker), `eager=False` sends to a worker |
-| `conversation_queue(cid)` | the C2 seam — stable conversation→queue mapping (single-writer per conversation) |
+| `conversation_queue(cid)` | the C2 seam, stable conversation→queue mapping (single-writer per conversation) |
 | `configure(...)` | inject a production `ConversationStore` (Redis/Fluss) or an extended graph/tool set; the portable logic stays in the core |
 
 The portable router→path→verifier graph + tools + retrieval are reused verbatim from
@@ -25,7 +25,7 @@ The portable router→path→verifier graph + tools + retrieval are reused verba
 ## Run
 
 ```bash
-# live, in-process (eager mode, no broker) — what the test uses:
+# live, in-process (eager mode, no broker) - what the test uses:
 python ports/celery/agentic_celery.py
 # ->
 # [c1] queue=agentic.conv.0 path=cards    ok=True reply=...

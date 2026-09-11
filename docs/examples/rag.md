@@ -1,6 +1,6 @@
 # RAG research assistant walkthrough
 
-> **Flink-runtime showcase** — exercises Flink-only capabilities (**Flink-state keyed HNSW vector
+> **Flink-runtime showcase**, exercises Flink-only capabilities (**Flink-state keyed HNSW vector
 > memory**). The portable cores ship their own in-process HNSW index, so RAG itself runs everywhere
 > (see [`banking-rag.yaml`](../../examples/pipelines/banking-rag.yaml) and
 > [the banking agent on every runtime](banking-everywhere.md)); what's Flink-specific here is binding
@@ -13,11 +13,11 @@
 
 A retrieval-augmented assistant has four levers that all matter:
 
-1. **Embedder quality** — bad embeddings ≡ retrieving the wrong passages.
-2. **Vector store latency** — every query embeds + searches; cost compounds.
-3. **Rerank precision** — embedding similarity is a coarse signal. A
+1. **Embedder quality**: bad embeddings ≡ retrieving the wrong passages.
+2. **Vector store latency**: every query embeds + searches; cost compounds.
+3. **Rerank precision**: embedding similarity is a coarse signal. A
    cross-encoder over the top-k catches "looks similar, is wrong" cases.
-4. **Citations** — the LLM has to ground its answer or the system is just a
+4. **Citations**: the LLM has to ground its answer or the system is just a
    confident summarizer.
 
 The example wires all four with the framework's primitives:
@@ -25,13 +25,13 @@ The example wires all four with the framework's primitives:
 ```
 Query
   │
-  ▼  keyBy(topic)       — each topic gets its own KB scope
+  ▼  keyBy(topic)       - each topic gets its own KB scope
   │
   ▼  EmbeddingClient.embed(question)
   │
-  ▼  VectorMemory.search(queryVec, k=4)   — brute-force over MapState
+  ▼  VectorMemory.search(queryVec, k=4)   - brute-force over MapState
   │
-  ▼  Scorer.scorePair(passage, question)  — cross-encoder rerank
+  ▼  Scorer.scorePair(passage, question)  - cross-encoder rerank
   │
   ▼  LLM answers using top-3 passages, cites [1] [2] [3]
 ```
@@ -41,7 +41,7 @@ Query
 The framework ships brute-force KNN backed by `MapState<String, VectorEntry>`.
 For a few thousand vectors per key (the typical "conversation-local recall"
 use case), exact search at d=384 is sub-millisecond. The state itself rides
-in Flink checkpoints, so a job restart picks up where it left off — no
+in Flink checkpoints, so a job restart picks up where it left off, no
 "rebuild the index" boot sequence.
 
 When you outgrow that (10⁵+ vectors per key), drop in an HNSW-backed
@@ -62,9 +62,9 @@ Topics are independent corpora. Keying by topic gives each topic its own
 The demo seeds 4 documents per topic on the first event using a
 `ValueState<Boolean>` flag. In production you'd either:
 
-- **Hydrate from a `LongTermMemoryStore`** on cold-start — the framework's
+- **Hydrate from a `LongTermMemoryStore`** on cold-start, the framework's
   standard pattern.
-- **Stream new documents in via a `Channel<KeyedContextItem>`** —
+- **Stream new documents in via a `Channel<KeyedContextItem>`**,
   `KafkaContextChannel`, `PostgresChangeChannel`, `RedisPubSubChannel`, or
   any custom transport. The channel produces `KeyedContextItem` records that
   the agent operator union-connects with its main input.
@@ -100,7 +100,7 @@ try (McpClient client = new McpClient(everything)) {
 }
 ```
 
-Each discovered tool surfaces as a regular `ToolExecutor` — the LLM doesn't
+Each discovered tool surfaces as a regular `ToolExecutor`, the LLM doesn't
 know or care that it's MCP under the hood.
 
 ## Performance shape

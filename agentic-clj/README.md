@@ -1,6 +1,6 @@
-# Agentic Clojure — a first-class, pure-Clojure agent runtime on Datomic
+# Agentic Clojure: a first-class, pure-Clojure agent runtime on Datomic
 
-A complete, idiomatic Clojure realization of the agent essence — **not** a JVM-interop wrapper around
+A complete, idiomatic Clojure realization of the agent essence. **not** a JVM-interop wrapper around
 the Java core. The whole pipeline (router → path → verifier, tools, RAG, guardrails, LLM brains, the
 declarative loader) is reimplemented in plain Clojure data + protocols + functions, with **Datomic**
 as the first-class storage engine: each message is an immutable datom, so the conversation transcript
@@ -10,7 +10,7 @@ Agentic Pekko, at byte-for-byte parity with the other cores (the FNV embedder + 
 ## Why Clojure + Datomic fits the essence
 
 The essence is *an agent's state is a materialized view over an ordered, immutable log of events.*
-That is precisely Datomic's data model: facts (datoms) are never updated in place — they accumulate,
+That is precisely Datomic's data model: facts (datoms) are never updated in place, they accumulate,
 and any past state is a query against a database value `as-of` a point in time. Modelling the
 transcript as datoms means the "event-sourced agent" is the natural shape, not a bolt-on. Clojure's
 values-and-functions style maps the rest cleanly: brains/routers/verifiers are just functions,
@@ -21,24 +21,24 @@ the tool registry is a map, the turn pipeline is a pure transformation over a co
 | Namespace | What |
 |-----------|------|
 | `agentic.event` / `agentic.context` | The inbound message map `{:conversation-id :user-id :text :metadata}` and the per-turn context `{:store :state :tools :retriever :listeners ...}`. |
-| `agentic.graph` | `handle` — the turn pipeline (input guardrails → router → path brain → verifier → output guardrails → listeners), reproducing jagentic-core's `RoutedGraph.handle` exactly, writing `phase`/`path` attributes at each step. |
-| `agentic.brain` | `keyword-brain` (tool-trigger / retrieval / echo) — the generic rule brain. |
-| `agentic.llm` | `ChatClient` protocol + `stub-chat-client` (offline) + `ollama`/`openai` clients (clj-http); `llm-brain` — the JSON-mode ReAct loop (`{"tool":..,"args":..}` \| `{"text":..}`) mirroring `LlmBrain`. |
-| `agentic.tools` | The tool registry — an atom of `id -> {:description :schema :fn}`; `register` / `execute` / `specs` / `tool-descriptors`. |
-| `agentic.retrieval` | The **FNV-1a hashing embedder** with the exact cross-core constants, `cosine`, and the two-tier (hot+cold) retriever — vectors are byte-identical to the Python/Java/Go cores. |
+| `agentic.graph` | `handle`, the turn pipeline (input guardrails → router → path brain → verifier → output guardrails → listeners), reproducing jagentic-core's `RoutedGraph.handle` exactly, writing `phase`/`path` attributes at each step. |
+| `agentic.brain` | `keyword-brain` (tool-trigger / retrieval / echo), the generic rule brain. |
+| `agentic.llm` | `ChatClient` protocol + `stub-chat-client` (offline) + `ollama`/`openai` clients (clj-http); `llm-brain`, the JSON-mode ReAct loop (`{"tool":..,"args":..}` \| `{"text":..}`) mirroring `LlmBrain`. |
+| `agentic.tools` | The tool registry, an atom of `id -> {:description :schema :fn}`; `register` / `execute` / `specs` / `tool-descriptors`. |
+| `agentic.retrieval` | The **FNV-1a hashing embedder** with the exact cross-core constants, `cosine`, and the two-tier (hot+cold) retriever, vectors are byte-identical to the Python/Java/Go cores. |
 | `agentic.guardrail` | `regex-guardrail` + `classifier-guardrail` (lexicon) → `{:check-input :check-output}`. |
 | `agentic.saga` / `agentic.context-window` | Reverse-order compensation; MoSCoW context compaction. |
 | `agentic.store` | The `ConversationStore` / `KeyedStateStore` / `LongTermStore` protocols + atom-backed in-memory impls (the model-free default). |
 | `agentic.store.datomic` | The same three protocols reified over `datomic.client.api` (datalog + `transact`); composite unique identities for upsert. The first-class storage engine. |
-| `agentic.pipeline` | `build` (spec map → `{:graph :tools :retriever}`) + `load-system` — the **same** declarative schema as the other cores, as EDN (native) or YAML (clj-yaml). `banking.yaml` loads and runs unchanged. |
-| `agentic.banking` | The worked example — KB, router rules, rule-brain, `get_balance` (1234.56), reproducing the shared goldens. |
-| `agentic.http` | http-kit front door: Agent Card + `POST /agent` — A2A-interoperable. |
-| `agentic.mcp` | JSON-RPC 2.0 stdio server over the tool registry (`initialize` / `tools/list` / `tools/call`) — Clojure tools callable by any MCP client. |
+| `agentic.pipeline` | `build` (spec map → `{:graph :tools :retriever}`) + `load-system`, the **same** declarative schema as the other cores, as EDN (native) or YAML (clj-yaml). `banking.yaml` loads and runs unchanged. |
+| `agentic.banking` | The worked example. KB, router rules, rule-brain, `get_balance` (1234.56), reproducing the shared goldens. |
+| `agentic.http` | http-kit front door: Agent Card + `POST /agent`. A2A-interoperable. |
+| `agentic.mcp` | JSON-RPC 2.0 stdio server over the tool registry (`initialize` / `tools/list` / `tools/call`). Clojure tools callable by any MCP client. |
 
 ## Datomic as the event log
 
 `agentic.store.datomic/datomic-stores` opens a connection, ensures the database, and transacts the
-schema (idempotent — upsert by `:db/ident`, so many app instances can share one external database).
+schema (idempotent, upsert by `:db/ident`, so many app instances can share one external database).
 Messages are appended as immutable datoms keyed by `conversation/id` + position;
 attributes/keyed-state/facts upsert via composite unique identities (`cid|key`, `cid|name`,
 `uid|key`). Because nothing is mutated, the full transcript history and any prior state are
@@ -51,7 +51,7 @@ The **same `datomic.client.api`** code runs against all three, selected purely b
 
 | Deployment | `:server-type` | Config keys | Notes |
 |---|---|---|---|
-| In-process (`com.datomic/local`) | `:datomic-local` | `:system`, `:storage-dir` (`:mem` or a dir) | the default — dev/test, no server |
+| In-process (`com.datomic/local`) | `:datomic-local` | `:system`, `:storage-dir` (`:mem` or a dir) | the default, dev/test, no server |
 | **Datomic Pro** (external Peer Server) | `:peer-server` | `:endpoint`, `:access-key`, `:secret`, `:validate-hostnames` | DB provisioned out of band, so `create-database` is skipped |
 | **Datomic Cloud** | `:cloud` | `:region`, `:system`, `:endpoint` | |
 
@@ -93,16 +93,16 @@ Requires the [Clojure CLI](https://clojure.org/guides/install_clojure) (tools.de
 
 ```bash
 clojure -X:test          # the full suite (23 tests / 96 assertions)
-clojure -M:run           # the banking demo — a multi-turn conversation with persisted state
+clojure -M:run           # the banking demo - a multi-turn conversation with persisted state
 clojure -M:http          # HTTP front door on :8080  (GET /.well-known/agent-card.json, POST /agent)
 clojure -M:mcp           # MCP stdio server over the tool registry
-clojure -M:time-travel   # Datomic transcript time-travel — replay the conversation `as-of` an earlier point
+clojure -M:time-travel   # Datomic transcript time-travel - replay the conversation `as-of` an earlier point
 ```
 
 ### Time-travel over the transcript
 
 Because every message is an immutable datom, any past state of a conversation is just a query `as-of`
-a point in the log — no event-replay machinery. `clojure -M:time-travel` runs a multi-turn banking
+a point in the log, no event-replay machinery. `clojure -M:time-travel` runs a multi-turn banking
 conversation, captures the basis-`t` after turn 1, keeps talking, then replays the transcript exactly
 as it stood back then (a strict prefix of the current one). The helpers are
 `agentic.store.datomic/basis-t` and `history-as-of`.
@@ -129,5 +129,5 @@ cleanly if Datomic can't be resolved in the environment.
 
 The default brains are rule-based and the default embedder is the deterministic FNV hasher, so the
 offline suite is fully green with no network or API keys. Real LLMs/embeddings are opt-in via the
-`ollama`/`openai` `ChatClient`s (clj-http) — point a pipeline's `llm`/`embeddings` section at a live
+`ollama`/`openai` `ChatClient`s (clj-http), point a pipeline's `llm`/`embeddings` section at a live
 provider to use them.
