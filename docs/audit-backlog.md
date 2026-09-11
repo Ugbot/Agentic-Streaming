@@ -218,7 +218,7 @@ the A2A wire format rests on a 1.0 line with three alphas and no final.
 
 # AGS-2: Java 21 baseline (P1)
 
-## AGS-13: Bump all 13 poms 17 → 21, using `release` not `source`/`target` (P1)
+## AGS-13: Bump all 13 poms 17 to 21, using `release` not `source`/`target` DONE
 
 All 13 declare 17: root (`pom.xml:15`), `agentic-pekko`, `a2a-gateway`,
 `banking-job`, `ports/{jagentic-core,kafka-streams,pekko,pulsar,quarkus,spring,temporal}`,
@@ -230,26 +230,38 @@ against the *host* JDK's API, so code can reference post-baseline APIs and still
 compile, producing a jar that `NoSuchMethodError`s on a real baseline JVM.
 `ports/quarkus:80` and `ports/kafka-streams:62` already do this correctly.
 
-Expected to be mechanical: the main module already builds and passes all 770
-tests on JDK 21.
+Was mechanical, as expected. All 13 poms now declare `21` and every one uses
+`release` (the two that already did, `ports/quarkus` and `ports/kafka-streams`,
+were left as-is). No literal `17` remains in any pom.
 
-## AGS-14: Enforce the baseline (P2)
+## AGS-14: Enforce the baseline DONE
 
-Nothing enforces the Java version: no `maven-toolchains-plugin`, no
+Nothing enforced the Java version: no `maven-toolchains-plugin`, no
 `~/.m2/toolchains.xml`, no `.mvn/jvm.config`, no enforcer `requireJavaVersion`,
-**and no Maven wrapper**. Add enforcer `[21,)`, optionally a toolchain, and
-commit a wrapper so the build is reproducible without a preinstalled mvn. (The
-maintainer's own machine had no `mvn` on PATH at all, only a cached wrapper
-dist, which the 2026-07-26 home-directory loss then destroyed. A committed
-wrapper would have made that a non-event.)
+**and no Maven wrapper**. The maintainer's own machine had no `mvn` on PATH at
+all, only a cached wrapper dist under `~/.m2`, which the 2026-07-26
+home-directory loss then destroyed, taking the build tool with the cache.
 
-Bump Lombok to ≥ 1.18.40 so a future JDK 25 evaluation isn't blocked by
-annotation-processor failure.
+Delivered:
+- **`mvnw` / `mvnw.cmd` / `.mvn/wrapper/`** committed, pinned to Maven 3.9.16.
+  The build no longer depends on a preinstalled mvn, which is exactly the
+  failure mode that cost a reinstall on 2026-07-26.
+- **`maven-enforcer-plugin`** with `requireJavaVersion [21,)` and
+  `requireMavenVersion [3.9,)`, each with an actionable message, so a
+  contributor on JDK 17 is told the baseline rather than handed an obscure
+  compiler error.
+- **Lombok 1.18.38 → 1.18.46** (1.18.40 was the first release supporting JDK 25),
+  so a future baseline bump isn't blocked by annotation processing.
+- **Runtime `--add-opens`**, which surefire had but no launcher did:
+  `.mvn/jvm.config` covers every `mvn exec:java` path (`_common.sh`,
+  `run-demo.sh`) because `exec:java` runs in the Maven JVM, and a new
+  `examples-bin/jvm-opts.sh` holds the single flag list that the two bare
+  `java -jar` launchers source. Also made `run-banking-local.sh` executable
+  (it was 100644 while all 14 siblings were 100755).
 
-Related: surefire supplies 13 `--add-opens` flags (`pom.xml:541-555`) for
-Flink's reflective access, but **no runtime launcher does**,
-`examples-bin/run-banking.sh`, `run-banking-local.sh`, `_common.sh` and
-`run-demo.sh` all invoke bare `java -jar` / `mvn exec:java`.
+A `maven-toolchains-plugin` was considered and skipped: with the enforcer plus a
+pinned wrapper, it would add a `toolchains.xml` prerequisite for no additional
+guarantee on this project.
 
 ---
 

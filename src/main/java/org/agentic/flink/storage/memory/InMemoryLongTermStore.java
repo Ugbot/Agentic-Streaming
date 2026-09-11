@@ -3,6 +3,7 @@ package org.agentic.flink.storage.memory;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.LongTermMemoryStore;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
 import java.util.*;
@@ -36,9 +37,10 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
-public class InMemoryLongTermStore implements LongTermMemoryStore {
+public class InMemoryLongTermStore extends ReopenableStore implements LongTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryLongTermStore.class);
+  private static final long serialVersionUID = 1L;
 
   private transient ConcurrentHashMap<String, AgentContext> contexts;
   private transient ConcurrentHashMap<String, Map<String, ContextItem>> facts;
@@ -50,7 +52,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
   private int maxSize = 5000;
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) {
     this.contexts = new ConcurrentHashMap<>();
     this.facts = new ConcurrentHashMap<>();
     this.metadata = new ConcurrentHashMap<>();
@@ -69,16 +71,19 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public void put(String key, AgentContext value) throws Exception {
+    ensureOpen();
     saveContext(key, value);
   }
 
   @Override
   public Optional<AgentContext> get(String key) throws Exception {
+    ensureOpen();
     return loadContext(key);
   }
 
   @Override
   public void saveContext(String flowId, AgentContext context) throws Exception {
+    ensureOpen();
     if (flowId == null || context == null) {
       throw new IllegalArgumentException("flowId and context cannot be null");
     }
@@ -106,6 +111,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public Optional<AgentContext> loadContext(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -116,11 +122,13 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public boolean conversationExists(String flowId) throws Exception {
+    ensureOpen();
     return flowId != null && contexts.containsKey(flowId);
   }
 
   @Override
   public void deleteConversation(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -138,6 +146,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public void saveFacts(String flowId, Map<String, ContextItem> factsMap) throws Exception {
+    ensureOpen();
     if (flowId == null || factsMap == null) {
       throw new IllegalArgumentException("flowId and facts cannot be null");
     }
@@ -148,6 +157,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public Map<String, ContextItem> loadFacts(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -158,6 +168,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public void addFact(String flowId, String factId, ContextItem fact) throws Exception {
+    ensureOpen();
     if (flowId == null || factId == null || fact == null) {
       throw new IllegalArgumentException("flowId, factId, and fact cannot be null");
     }
@@ -168,6 +179,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public void removeFact(String flowId, String factId) throws Exception {
+    ensureOpen();
     if (flowId == null || factId == null) {
       throw new IllegalArgumentException("flowId and factId cannot be null");
     }
@@ -181,11 +193,13 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public List<String> listActiveConversations() throws Exception {
+    ensureOpen();
     return new ArrayList<>(activeConversations);
   }
 
   @Override
   public List<String> listConversationsForUser(String userId) throws Exception {
+    ensureOpen();
     if (userId == null) {
       throw new IllegalArgumentException("userId cannot be null");
     }
@@ -196,6 +210,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public Map<String, Object> getConversationMetadata(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -206,6 +221,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public void setConversationTTL(String flowId, long ttlSeconds) throws Exception {
+    ensureOpen();
     // In-memory implementation doesn't enforce TTL
     LOG.debug("Set TTL for conversation {} to {} seconds (no-op in memory)", flowId, ttlSeconds);
   }
@@ -213,6 +229,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
   @Override
   public void archiveConversation(
       String flowId, StorageProvider<String, AgentContext> coldStore) throws Exception {
+    ensureOpen();
     if (flowId == null || coldStore == null) {
       throw new IllegalArgumentException("flowId and coldStore cannot be null");
     }
@@ -227,11 +244,13 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
 
   @Override
   public void delete(String key) throws Exception {
+    ensureOpen();
     deleteConversation(key);
   }
 
   @Override
   public boolean exists(String key) throws Exception {
+    ensureOpen();
     return conversationExists(key);
   }
 
@@ -252,6 +271,7 @@ public class InMemoryLongTermStore implements LongTermMemoryStore {
     if (userConversations != null) {
       userConversations.clear();
     }
+    markClosed();
     LOG.info("InMemoryLongTermStore closed");
   }
 

@@ -1,6 +1,7 @@
 package org.agentic.flink.storage.memory;
 
 import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.ShortTermMemoryStore;
 import org.agentic.flink.storage.StorageTier;
 import java.util.*;
@@ -49,9 +50,10 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
-public class InMemoryShortTermStore implements ShortTermMemoryStore {
+public class InMemoryShortTermStore extends ReopenableStore implements ShortTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryShortTermStore.class);
+  private static final long serialVersionUID = 1L;
 
   // Using ConcurrentHashMap as base storage
   // ConcurrentHashMap is sufficient for development and testing.
@@ -69,7 +71,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
   private transient long putCount = 0;
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) {
     this.storage = new ConcurrentHashMap<>();
     this.expirationTimes = new ConcurrentHashMap<>();
 
@@ -94,17 +96,20 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public void put(String key, List<ContextItem> value) throws Exception {
+    ensureOpen();
     putItems(key, value);
   }
 
   @Override
   public Optional<List<ContextItem>> get(String key) throws Exception {
+    ensureOpen();
     List<ContextItem> items = getItems(key);
     return items.isEmpty() ? Optional.empty() : Optional.of(items);
   }
 
   @Override
   public void putItems(String flowId, List<ContextItem> items) throws Exception {
+    ensureOpen();
     if (flowId == null || items == null) {
       throw new IllegalArgumentException("flowId and items cannot be null");
     }
@@ -125,6 +130,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public List<ContextItem> getItems(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -154,6 +160,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public void addItem(String flowId, ContextItem item) throws Exception {
+    ensureOpen();
     if (flowId == null || item == null) {
       throw new IllegalArgumentException("flowId and item cannot be null");
     }
@@ -168,6 +175,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public void removeItem(String flowId, String itemId) throws Exception {
+    ensureOpen();
     if (flowId == null || itemId == null) {
       throw new IllegalArgumentException("flowId and itemId cannot be null");
     }
@@ -182,6 +190,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public int getItemCount(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -198,6 +207,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public void clearItems(String flowId) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -209,11 +219,13 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public void delete(String key) throws Exception {
+    ensureOpen();
     clearItems(key);
   }
 
   @Override
   public boolean exists(String key) throws Exception {
+    ensureOpen();
     if (key == null) {
       return false;
     }
@@ -229,6 +241,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public Map<String, Object> getStatistics() throws Exception {
+    ensureOpen();
     Map<String, Object> stats = new HashMap<>();
 
     int totalItems = storage.values().stream().mapToInt(List::size).sum();
@@ -255,6 +268,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
 
   @Override
   public void setTTL(String flowId, long ttlSeconds) throws Exception {
+    ensureOpen();
     if (flowId == null) {
       throw new IllegalArgumentException("flowId cannot be null");
     }
@@ -272,6 +286,7 @@ public class InMemoryShortTermStore implements ShortTermMemoryStore {
     if (expirationTimes != null) {
       expirationTimes.clear();
     }
+    markClosed();
     LOG.info("InMemoryShortTermStore closed");
   }
 

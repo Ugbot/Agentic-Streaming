@@ -7,6 +7,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Pre-spec tool descriptor of the Flink-only DSL.
+ *
+ * @deprecated a workflow's {@code tools[]} entries are described by the canonical core's
+ *     {@link org.jagentic.core.ToolRegistry} and invoked as structured
+ *     {@link org.jagentic.core.ToolCall}s; kept for the deprecated
+ *     {@link org.agentic.flink.dsl.Agent} DSL.
+ */
+@Deprecated
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
