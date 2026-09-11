@@ -1,0 +1,13 @@
+id: tool-invocation
+description: "A tool trigger produces exactly one structured tool call, recorded in order with its arguments."
+requires: [routing, rule_brain, tools, structured_tool_args]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
+expect:
+  - turn_id: t1
+    status: completed
+    path: billing
+    tool_calls:
+      - {tool: lookup_charge, index: 0, args: {user: anonymous}}
+    events_include: [turn_received, routed, tool_called, reply_drafted, turn_completed]

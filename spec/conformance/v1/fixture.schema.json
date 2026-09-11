@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-streaming.dev/spec/conformance/v1/fixture.schema.json",
+  "title": "Conformance fixture, v1",
+  "description": "A language-neutral test case: a workflow, a sequence of turns, and the expected normalized results. Every runtime binding reads these files; no runtime ships its own copy.",
+  "type": "object",
+  "required": ["id", "requires", "turns", "expect"],
+  "oneOf": [
+    { "required": ["workflow"] },
+    { "required": ["workflow_ref"] }
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "description": { "type": "string" },
+    "requires": {
+      "description": "capability ids the runtime must declare as supported to run this fixture. A runtime that declares any of them unsupported skips the fixture and records skipped, never a pass.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": [
+          "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args",
+          "guardrails", "verifier", "ordering", "idempotency", "retry", "memory",
+          "retrieval", "context_window", "replay", "suspend_resume", "timers",
+          "saga", "a2a", "cep", "event_time", "checkpoint_recovery", "parallelism",
+          "durable_store"
+        ]
+      }
+    },
+    "workflow": { "type": "object", "description": "inline workflow document" },
+    "workflow_ref": { "type": "string", "description": "path to a workflow document, relative to the fixture file" },
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["conversation_id", "turn_id"],
+        "properties": {
+          "conversation_id": { "type": "string" },
+          "turn_id": { "type": "string" },
+          "text": { "type": "string" },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" } },
+          "signal": {
+            "description": "resumes a suspended turn instead of starting a new one",
+            "type": "object"
+          },
+          "advance_time_ms": {
+            "description": "advance the runtime's logical clock before this turn; runtimes without logical time declare timers unsupported",
+            "type": "integer",
+            "minimum": 0
+          },
+          "restart_runtime": {
+            "description": "restart or recover the runtime before this turn, exercising replay and recovery",
+            "type": "boolean",
+            "default": false
+          },
+          "concurrent_with": {
+            "description": "turn ids delivered concurrently with this one; the runtime must still apply them in the declared order",
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "expect": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["turn_id", "status"],
+        "properties": {
+          "turn_id": { "type": "string" },
+          "conversation_id": { "type": "string" },
+          "status": { "enum": ["completed", "rejected", "unverified", "failed", "suspended", "duplicate"] },
+          "path": { "type": ["string", "null"] },
+          "reply": { "type": ["string", "null"] },
+          "reply_matches": { "type": "string", "description": "ECMA-262 regular expression, matched with search semantics" },
+          "tool_calls": {
+            "description": "exact sequence of tool calls, compared on tool id, index, args, and attempt",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["tool"],
+              "properties": {
+                "tool": { "type": "string" },
+                "index": { "type": "integer", "minimum": 0 },
+                "args": { "type": "object" },
+                "attempt": { "type": "integer", "minimum": 1 },
+                "failed": { "type": "boolean", "default": false }
+              },
+              "additionalProperties": false
+            }
+          },
+          "events_include": {
+            "description": "event types that must appear, in this relative order",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "events_exclude": { "type": "array", "items": { "type": "string" } },
+          "state_includes": { "type": "object" },
+          "error_class": { "enum": ["validation", "guardrail", "verification", "tool", "transient", "fatal"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

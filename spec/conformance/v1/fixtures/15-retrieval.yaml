@@ -1,0 +1,27 @@
+id: retrieval
+description: "Retrieval over the declared knowledge base is deterministic for the hashing embedder: the same query returns the same passages in the same order on every runtime."
+requires: [retrieval]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  embeddings: {provider: hashing, dim: 256}
+  agent:
+    id: kb
+    router: {kind: keyword, default: main, rules: {main: [dispute]}}
+    paths:
+      main: {brain: rule, prompt: You answer from the knowledge base.}
+    verifier: {kind: none}
+  retrieval:
+    dim: 256
+    top_k: 2
+    kb:
+      - {id: kb_dispute, text: "To dispute a charge, open the transaction and tap Dispute within 60 days."}
+      - {id: kb_limits, text: "Daily transfer limits are 10,000 by default; raise them in settings."}
+      - {id: kb_cards, text: "We offer three card types: classic, gold, and platinum."}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "how do I dispute a charge?"}
+expect:
+  - turn_id: t1
+    status: completed
+    events_include: [retrieved, reply_drafted, turn_completed]
+    state_includes: {last_retrieved_ids: [kb_dispute, kb_cards]}

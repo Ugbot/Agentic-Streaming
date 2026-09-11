@@ -1,0 +1,11 @@
+id: routing-default
+description: "Text matching no rule falls through to router.default; the fallback is deterministic, not model-assisted."
+requires: [routing, rule_brain]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "what are your opening hours?"}
+expect:
+  - turn_id: t1
+    status: completed
+    path: general
+    reply_matches: "^\\[general\\]"

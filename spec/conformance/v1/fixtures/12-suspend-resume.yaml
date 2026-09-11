@@ -1,0 +1,26 @@
+id: suspend-resume
+description: "A turn that awaits an external signal reports suspended, survives a restart, and completes when the signal arrives, carrying the state captured before the pause."
+requires: [suspend_resume, durable_store]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: approval
+    router: {kind: keyword, default: main, rules: {main: [refund]}}
+    paths:
+      main:
+        brain: rule
+        prompt: You handle refunds.
+        x-suspend-until: approval
+    verifier: {kind: none}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+  - {conversation_id: c1, turn_id: t1, restart_runtime: true, signal: {kind: approval, approved: true}}
+expect:
+  - turn_id: t1
+    status: suspended
+    path: main
+    events_include: [turn_received, routed, turn_suspended]
+  - turn_id: t1
+    status: completed
+    events_include: [turn_resumed, turn_completed]

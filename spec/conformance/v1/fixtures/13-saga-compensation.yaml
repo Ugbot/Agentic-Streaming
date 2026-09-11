@@ -1,0 +1,34 @@
+id: saga-compensation
+description: "When a later saga step fails, the compensations of the completed steps run in reverse order and are recorded as events, not merely emitted as an unused signal."
+requires: [saga, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: sagas
+    router: {kind: keyword, default: main, rules: {main: [refund]}}
+    paths:
+      main: {brain: rule, prompt: You handle refunds.}
+    verifier: {kind: none}
+  policies:
+    on_tool_error: fail
+    retry: {kind: none, max_attempts: 1}
+  tools:
+    - {id: reserve_funds, kind: constant, value: "reserved", compensation: release_funds}
+    - {id: release_funds, kind: constant, value: "released"}
+    - {id: post_ledger, kind: failing, description: Always raises}
+  saga:
+    steps:
+      - {name: reserve, tool: reserve_funds, compensate_with: release_funds}
+      - {name: post, tool: post_ledger}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+expect:
+  - turn_id: t1
+    status: failed
+    error_class: tool
+    tool_calls:
+      - {tool: reserve_funds, index: 0}
+      - {tool: post_ledger, index: 1, failed: true}
+      - {tool: release_funds, index: 2}
+    events_include: [compensation_started, compensation_step, compensation_completed, turn_failed]

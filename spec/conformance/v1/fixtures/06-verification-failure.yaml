@@ -1,0 +1,23 @@
+id: verification-failure
+description: "The verifier rejects every draft; after the configured attempts the turn ends unverified, and the brain ran exactly max_attempts times."
+requires: [verifier]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: strict
+    router: {kind: keyword, default: main, rules: {main: [hello]}}
+    paths:
+      main: {brain: rule, prompt: You answer questions.}
+    verifier: {kind: regex, pattern: "^NEVER_MATCHES"}
+  policies:
+    verification: {max_attempts: 2, on_exhausted: unverified}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "hello"}
+expect:
+  - turn_id: t1
+    status: unverified
+    path: main
+    error_class: verification
+    events_include: [routed, reply_drafted, verification_failed, reply_drafted, verification_failed]
+    events_exclude: [turn_completed]
