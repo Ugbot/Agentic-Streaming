@@ -7,7 +7,7 @@ Two Python packages ship in this repository, for two different jobs:
 | **`agentic-pyflink`** | `pyflink/` | Runs the **portable v1 workflow document** (`spec/v1/workflow.schema.json`) on Apache Flink from Python. PyFlink authors the job graph; the operator inside it is the Java Flink adapter of the canonical core (`ports/jagentic-core`), the same code the JVM runtime executes. One document, same normalized result (`spec/v1/result.schema.json`) as the JVM, Pekko and Clojure runtimes. **This is the cross-runtime Python path.** |
 | `agentic-flink` | `python/` | JPype-backed facade over the Java framework's own builder API (`Agent.builder()`, `@tool`, memory/retrieval/crawler wrappers). Notebook and scripting ergonomics for the Flink-specific framework surface; not tied to the portable document. |
 
-Versions, for both: **Java 17**, **Apache Flink 2.2.1**, `apache-flink` (PyFlink) 2.x, CPython 3.10-3.12
+Versions, for both: **Java 21** (`./mvnw`; the enforcer rejects older JDKs and Maven < 3.9), **Apache Flink 2.2.1**, `apache-flink` (PyFlink) 2.x, CPython 3.10-3.12
 (PyFlink's supported interpreters). All paths below are relative to the repository root.
 
 ---
@@ -20,18 +20,18 @@ The Python side never re-implements the workflow semantics; it drives three jars
 
 ```bash
 # 1. canonical core -> ~/.m2
-mvn -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
 # 2. Flink framework incl. the adapter (WorkflowTurnFunction) -> target/agentic-flink-*-uber.jar
-mvn package -DskipTests
+./mvnw package -DskipTests
 # 3. thin PyFlink bridge (JSON turns <-> core Event, result -> JSON) -> pyflink/java/target/agentic-pyflink-*.jar
-mvn -f pyflink/java/pom.xml package
+./mvnw -f pyflink/java/pom.xml package
 # 4. the Python package
 python -m venv ~/.venv-pyflink && ~/.venv-pyflink/bin/pip install -e "pyflink[test]"
 ```
 
 Jar discovery: `AGENTIC_FLINK_UBER_JAR` / `AGENTIC_PYFLINK_JAR` environment variables first, then the
 Maven `target/` directories of the checkout. A missing jar raises `JarNotFoundError` with the exact
-`mvn` command to run; nothing falls back silently.
+`./mvnw` command to run; nothing falls back silently.
 
 ### Run a document
 
@@ -187,7 +187,7 @@ Lint: `ruff check pyflink` (config in `pyflink/pyproject.toml`).
 
 ### Troubleshooting
 
-- `JarNotFoundError`: run the three `mvn` commands under "Build", or set `AGENTIC_FLINK_UBER_JAR` /
+- `JarNotFoundError`: run the three `./mvnw` commands under "Build", or set `AGENTIC_FLINK_UBER_JAR` /
   `AGENTIC_PYFLINK_JAR`.
 - `ValidationException` from `executeAndCollect`: the document failed the shared `WorkflowValidator`;
   the message names the field, identical to what the JVM runtime prints.
@@ -215,7 +215,7 @@ pip install -e "python[pyflink]" # adds apache-flink 2.x (2.2.1 matches the Java
 ```
 
 The framework jar is discovered from `AGENTIC_FLINK_JAR`, the `jar_path=` kwarg to `start_jvm`, the
-checkout's `target/agentic-flink-*.jar` (build with `mvn -DskipTests package`), or bundled package data.
+checkout's `target/agentic-flink-*.jar` (build with `./mvnw -DskipTests package`), or bundled package data.
 
 ### Runtime modes
 
@@ -296,13 +296,13 @@ python -m agentic_flink.examples.quickstart      # calculator tool + agent build
 python -m agentic_flink.examples.rag             # sequential Python RAG
 python -m agentic_flink.examples.live_research   # full PyFlink job: crawler + retrieve
 
-mvn -DskipTests package && pip install -e "python[test]" && pytest python/tests/
+./mvnw -DskipTests package && pip install -e "python[test]" && pytest python/tests/
 ```
 
 ### Troubleshooting
 
-- **`FileNotFoundError: agentic-flink jar not found`**: set `AGENTIC_FLINK_JAR` or run `mvn -DskipTests package`.
+- **`FileNotFoundError: agentic-flink jar not found`**: set `AGENTIC_FLINK_JAR` or run `./mvnw -DskipTests package`.
 - **`NoClassDefFoundError: org/slf4j/LoggerFactory`**: the shaded jar excludes `provided` Flink deps;
-  pass the runtime classpath via `extra_jars=` to `start_jvm` (`mvn dependency:build-classpath -Dmdep.outputFile=cp.txt`).
+  pass the runtime classpath via `extra_jars=` to `start_jvm` (`./mvnw dependency:build-classpath -Dmdep.outputFile=cp.txt`).
 - **`Initial state has no outgoing transitions`**: a custom `.with_state_machine(...)` must cover every non-terminal `AgentState`.
 - **`TypeError: No matching overloads found`**: JPype is strict about boxed types; box explicitly with `af.jclass("java.lang.Long")(int(x))`.

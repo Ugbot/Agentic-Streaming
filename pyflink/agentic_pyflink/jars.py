@@ -1,10 +1,10 @@
 """Locate the two Java artifacts a PyFlink job needs on its classpath.
 
 * ``agentic-flink-<version>-uber.jar`` -- the Flink framework with the canonical core
-  (``jagentic-core``) and its dependencies shaded in; built by ``mvn install -DskipTests``
+  (``jagentic-core``) and its dependencies shaded in; built by ``./mvnw install -DskipTests``
   at the repository root.
 * ``agentic-pyflink-<version>.jar`` -- the JSON-line bridge (``org.agentic.pyflink.PyFlinkJob``)
-  under ``pyflink/java``; built by ``mvn -f pyflink/java/pom.xml package``.
+  under ``pyflink/java``; built by ``./mvnw -f pyflink/java/pom.xml package``.
 
 Resolution order: the ``AGENTIC_FLINK_UBER_JAR`` / ``AGENTIC_PYFLINK_JAR`` environment variables,
 then the Maven ``target/`` directories of a source checkout found by walking up from this file.
@@ -60,7 +60,7 @@ def uber_jar() -> Path:
     if found is None:
         raise JarNotFoundError(
             "agentic-flink uber jar not found. Build it with\n"
-            "  mvn -f ports/jagentic-core/pom.xml install -DskipTests && mvn install -DskipTests\n"
+            "  ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests && ./mvnw install -DskipTests\n"
             f"at the repository root, or point {UBER_JAR_ENV} at an existing jar."
         )
     return found
@@ -75,7 +75,7 @@ def bridge_jar() -> Path:
     if found is None:
         raise JarNotFoundError(
             "agentic-pyflink bridge jar not found. Build it with\n"
-            "  mvn -f pyflink/java/pom.xml package\n"
+            "  ./mvnw -f pyflink/java/pom.xml package\n"
             f"after the framework jar, or point {BRIDGE_JAR_ENV} at an existing jar."
         )
     return found
