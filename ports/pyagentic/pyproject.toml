@@ -4,15 +4,49 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyagentic"
-version = "0.1.0"
-description = "Pure-Python, engine-agnostic essence of Agentic-Flink (the portable core that the Faust/Ray/Dask/Airflow ports build on)"
+version = "1.0.0"
+description = "Agentic Streaming v1 in pure Python: one workflow IR, the `agentic` API surface, and the local reference runtime"
+readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []
+license = {text = "Apache-2.0"}
+dependencies = [
+    "PyYAML>=6.0,<7",
+    "jsonschema>=4.18,<5",
+]
 
 [project.optional-dependencies]
-# PyYAML is needed by tests/test_cep_weave.py, which drives the sibling
-# agentic-pipeline YAML loader. The library itself still has no runtime deps.
-test = ["pytest>=7", "PyYAML>=6"]
+# JVM-backed runtimes register themselves in the `agentic.runtimes` entry-point group.
+flink = ["agentic-flink>=0.1,<1"]
+pyflink = ["apache-flink>=2.0,<3"]
+jvm = ["agentic-flink>=0.1,<1"]
+test = ["pytest>=7,<9"]
+dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "pip-tools>=7,<8"]
+
+[project.entry-points."agentic.runtimes"]
+local = "agentic.runtime:LocalRuntime"
 
 [tool.setuptools.packages.find]
-include = ["pyagentic*"]
+include = ["agentic*", "pyagentic*"]
+
+[tool.setuptools.package-data]
+agentic = ["py.typed", "schemas/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+include = ["agentic/**/*.py", "tests/test_agentic_*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+files = ["agentic"]
+
+[[tool.mypy.overrides]]
+module = ["yaml", "jsonschema", "jsonschema.*"]
+ignore_missing_imports = true
