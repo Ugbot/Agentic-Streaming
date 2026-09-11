@@ -17,7 +17,7 @@
   Kept out of the core reactor (mirrors the a2a-gateway module pattern).
   -->
   <properties>
-    <maven.compiler.release>17</maven.compiler.release>
+    <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.17.2</jackson.version>
     <langchain4j.version>1.16.3</langchain4j.version>

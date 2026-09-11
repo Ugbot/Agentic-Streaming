@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.StorageTier;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +72,8 @@ import org.slf4j.LoggerFactory;
  * <p>The Milvus client is {@code transient} and reconnected in {@link #initialize(Map)} so the
  * store can be serialized and distributed across the Flink cluster.
  */
-public final class MilvusVectorStore implements VectorStore {
+public final class MilvusVectorStore extends ReopenableStore implements VectorStore {
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(MilvusVectorStore.class);
 
@@ -97,7 +99,7 @@ public final class MilvusVectorStore implements VectorStore {
   public MilvusVectorStore() {}
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) throws Exception {
     if (config == null) {
       config = Collections.emptyMap();
     }
@@ -209,7 +211,7 @@ public final class MilvusVectorStore implements VectorStore {
           "embedding dimension " + embedding.length + " != configured " + dimension);
     }
     JsonObject row = toRow(id, embedding, metadata);
-    client.upsert(
+    client().upsert(
         UpsertReq.builder().collectionName(collection).data(List.of(row)).build());
   }
 
@@ -233,7 +235,7 @@ public final class MilvusVectorStore implements VectorStore {
       Map<String, Object> md = metadata == null ? null : metadata.get(e.getKey());
       rows.add(toRow(e.getKey(), vec, md));
     }
-    client.upsert(
+    client().upsert(
         UpsertReq.builder().collectionName(collection).data(rows).build());
   }
 
@@ -264,7 +266,7 @@ public final class MilvusVectorStore implements VectorStore {
       builder.filter(expr);
     }
 
-    SearchResp resp = client.search(builder.build());
+    SearchResp resp = client().search(builder.build());
     List<VectorSearchResult> out = new ArrayList<>();
     List<List<SearchResp.SearchResult>> all = resp.getSearchResults();
     if (all == null || all.isEmpty()) {
@@ -298,7 +300,7 @@ public final class MilvusVectorStore implements VectorStore {
   @Override
   public float[] getEmbedding(String id) throws Exception {
     GetResp resp =
-        client.get(
+        client().get(
             GetReq.builder()
                 .collectionName(collection)
                 .ids(List.of(id))
@@ -314,7 +316,7 @@ public final class MilvusVectorStore implements VectorStore {
   @Override
   public Map<String, Object> getMetadata(String id) throws Exception {
     GetResp resp =
-        client.get(
+        client().get(
             GetReq.builder()
                 .collectionName(collection)
                 .ids(List.of(id))
@@ -329,13 +331,13 @@ public final class MilvusVectorStore implements VectorStore {
 
   @Override
   public void deleteEmbedding(String id) throws Exception {
-    client.delete(
+    client().delete(
         DeleteReq.builder().collectionName(collection).ids(List.of(id)).build());
   }
 
   @Override
   public void deleteByFlowId(String flowId) throws Exception {
-    client.delete(
+    client().delete(
         DeleteReq.builder()
             .collectionName(collection)
             .filter(METADATA_FIELD + "[\"flowId\"] == \"" + escape(flowId) + "\"")
@@ -357,7 +359,7 @@ public final class MilvusVectorStore implements VectorStore {
     Map<String, Object> out = new LinkedHashMap<>();
     try {
       GetCollectionStatsResp stats =
-          client.getCollectionStats(
+          client().getCollectionStats(
               GetCollectionStatsReq.builder().collectionName(collection).build());
       out.put("total_vectors", stats.getNumOfEntities());
     } catch (RuntimeException e) {
@@ -374,12 +376,12 @@ public final class MilvusVectorStore implements VectorStore {
   public void createCollection(String collectionName, int dimension, Map<String, Object> config) {
     boolean exists =
         Boolean.TRUE.equals(
-            client.hasCollection(
+            client().hasCollection(
                 HasCollectionReq.builder().collectionName(collectionName).build()));
     if (!exists) {
       createCollectionInternal(collectionName, dimension);
     }
-    client.loadCollection(LoadCollectionReq.builder().collectionName(collectionName).build());
+    client().loadCollection(LoadCollectionReq.builder().collectionName(collectionName).build());
   }
 
   @Override
@@ -407,7 +409,7 @@ public final class MilvusVectorStore implements VectorStore {
   @Override
   public boolean exists(String key) throws Exception {
     QueryResp resp =
-        client.query(
+        client().query(
             QueryReq.builder()
                 .collectionName(collection)
                 .filter(ID_FIELD + " == \"" + escape(key) + "\"")
@@ -424,7 +426,23 @@ public final class MilvusVectorStore implements VectorStore {
       client.close();
       client = null;
     }
+    markClosed();
   }
+  private MilvusClientV2 client() {
+    ensureOpen();
+    return client;
+  }
+
+  private ObjectMapper mapper() {
+    ensureOpen();
+    return mapper;
+  }
+
+  private Gson gson() {
+    ensureOpen();
+    return gson;
+  }
+
 
   @Override
   public StorageTier getTier() {
@@ -468,8 +486,8 @@ public final class MilvusVectorStore implements VectorStore {
       vec.add(v);
     }
     row.add(VECTOR_FIELD, vec);
-    String json = metadata == null ? "{}" : mapper.writeValueAsString(metadata);
-    row.add(METADATA_FIELD, gson.fromJson(json, JsonElement.class));
+    String json = metadata == null ? "{}" : mapper().writeValueAsString(metadata);
+    row.add(METADATA_FIELD, gson().fromJson(json, JsonElement.class));
     return row;
   }
 
@@ -527,11 +545,11 @@ public final class MilvusVectorStore implements VectorStore {
         return new HashMap<>((Map<String, Object>) raw);
       }
       if (raw instanceof JsonElement) {
-        String json = gson.toJson((JsonElement) raw);
-        return mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        String json = gson().toJson((JsonElement) raw);
+        return mapper().readValue(json, new TypeReference<Map<String, Object>>() {});
       }
       // Fallback: assume it serializes to a JSON string/object.
-      return mapper.readValue(String.valueOf(raw), new TypeReference<Map<String, Object>>() {});
+      return mapper().readValue(String.valueOf(raw), new TypeReference<Map<String, Object>>() {});
     } catch (Exception e) {
       LOG.warn("Failed to parse Milvus metadata field: {}", e.getMessage());
       return new HashMap<>();

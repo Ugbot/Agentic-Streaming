@@ -6,6 +6,7 @@ import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.LongTermMemoryStore;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
 import java.util.*;
@@ -58,9 +59,10 @@ import redis.clients.jedis.JedisPoolConfig;
  *
  * @author Agentic Flink Team
  */
-public class RedisConversationStore implements LongTermMemoryStore {
+public class RedisConversationStore extends ReopenableStore implements LongTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(RedisConversationStore.class);
+  private static final long serialVersionUID = 1L;
 
   // Key prefixes
   private static final String KEY_CONTEXT = "agent:context:";
@@ -83,7 +85,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
   private transient ObjectMapper objectMapper;
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) throws Exception {
     this.host = config.getOrDefault(ConfigKeys.REDIS_HOST, ConfigKeys.DEFAULT_REDIS_HOST);
     this.port = Integer.parseInt(config.getOrDefault(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
     this.password = config.get(ConfigKeys.REDIS_PASSWORD);
@@ -108,6 +110,14 @@ public class RedisConversationStore implements LongTermMemoryStore {
     } else {
       this.jedisPool = new JedisPool(poolConfig, host, port, timeout, null, database);
     }
+    try (Jedis jedis = jedisPool.getResource()) {
+      jedis.ping();
+    } catch (RuntimeException e) {
+      jedisPool.close();
+      jedisPool = null;
+      throw new IllegalStateException(
+          "Redis at " + host + ":" + port + " is unreachable: " + e.getMessage(), e);
+    }
 
     LOG.info(
         "RedisConversationStore initialized: host={}, port={}, database={}, ttl={}s",
@@ -131,9 +141,9 @@ public class RedisConversationStore implements LongTermMemoryStore {
     }
 
     String key = KEY_CONTEXT + flowId;
-    String json = objectMapper.writeValueAsString(context);
+    String json = objectMapper().writeValueAsString(context);
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       // Store context
       jedis.set(key, json);
       jedis.expire(key, defaultTTLSeconds);
@@ -173,10 +183,10 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_CONTEXT + flowId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       String json = jedis.get(key);
       if (json != null) {
-        AgentContext context = objectMapper.readValue(json, AgentContext.class);
+        AgentContext context = objectMapper().readValue(json, AgentContext.class);
         LOG.debug("Loaded context for flow {} from Redis", flowId);
         return Optional.of(context);
       }
@@ -192,7 +202,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_CONTEXT + flowId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       return jedis.exists(key);
     }
   }
@@ -203,7 +213,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
       throw new IllegalArgumentException("flowId cannot be null");
     }
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       // Get metadata first to find userId
       Map<String, String> metadata = jedis.hgetAll(KEY_METADATA + flowId);
       String userId = metadata.get("userId");
@@ -237,11 +247,11 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_FACTS + flowId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       // Convert facts to JSON strings
       Map<String, String> factsJson = new HashMap<>();
       for (Map.Entry<String, ContextItem> entry : facts.entrySet()) {
-        factsJson.put(entry.getKey(), objectMapper.writeValueAsString(entry.getValue()));
+        factsJson.put(entry.getKey(), objectMapper().writeValueAsString(entry.getValue()));
       }
 
       // Store as hash
@@ -262,12 +272,12 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_FACTS + flowId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       Map<String, String> factsJson = jedis.hgetAll(key);
       Map<String, ContextItem> facts = new HashMap<>();
 
       for (Map.Entry<String, String> entry : factsJson.entrySet()) {
-        ContextItem fact = objectMapper.readValue(entry.getValue(), ContextItem.class);
+        ContextItem fact = objectMapper().readValue(entry.getValue(), ContextItem.class);
         facts.put(entry.getKey(), fact);
       }
 
@@ -283,9 +293,9 @@ public class RedisConversationStore implements LongTermMemoryStore {
     }
 
     String key = KEY_FACTS + flowId;
-    String factJson = objectMapper.writeValueAsString(fact);
+    String factJson = objectMapper().writeValueAsString(fact);
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       jedis.hset(key, factId, factJson);
       jedis.expire(key, defaultTTLSeconds);
       LOG.debug("Added fact {} to flow {} in Redis", factId, flowId);
@@ -300,7 +310,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_FACTS + flowId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       jedis.hdel(key, factId);
       LOG.debug("Removed fact {} from flow {} in Redis", factId, flowId);
     }
@@ -308,7 +318,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
   @Override
   public List<String> listActiveConversations() throws Exception {
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       Set<String> flowIds = jedis.smembers(KEY_ACTIVE_CONVERSATIONS);
       return new ArrayList<>(flowIds);
     }
@@ -322,7 +332,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_USER_PREFIX + userId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       Set<String> flowIds = jedis.smembers(key);
       return new ArrayList<>(flowIds);
     }
@@ -336,7 +346,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
 
     String key = KEY_METADATA + flowId;
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       Map<String, String> metadataStr = jedis.hgetAll(key);
       Map<String, Object> metadata = new HashMap<>();
       for (Map.Entry<String, String> entry : metadataStr.entrySet()) {
@@ -352,7 +362,7 @@ public class RedisConversationStore implements LongTermMemoryStore {
       throw new IllegalArgumentException("flowId cannot be null");
     }
 
-    try (Jedis jedis = jedisPool.getResource()) {
+    try (Jedis jedis = jedisPool().getResource()) {
       jedis.expire(KEY_CONTEXT + flowId, ttlSeconds);
       jedis.expire(KEY_FACTS + flowId, ttlSeconds);
       jedis.expire(KEY_METADATA + flowId, ttlSeconds);
@@ -392,12 +402,24 @@ public class RedisConversationStore implements LongTermMemoryStore {
     return conversationExists(key);
   }
 
+  private JedisPool jedisPool() {
+    ensureOpen();
+    return jedisPool;
+  }
+
+  private ObjectMapper objectMapper() {
+    ensureOpen();
+    return objectMapper;
+  }
+
   @Override
   public void close() throws Exception {
     if (jedisPool != null) {
       jedisPool.close();
+      jedisPool = null;
       LOG.info("RedisConversationStore connection pool closed");
     }
+    markClosed();
   }
 
   @Override
