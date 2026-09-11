@@ -83,7 +83,7 @@
     (let [r (core/submit system event)]
       (trace/span-attr span "path" (:path r))
       (trace/span-attr span "ok" (str (:ok r)))
-      (doseq [tc (:tool-calls r)] (trace/span-event span (str "tool:" tc)))
+      (doseq [tc (:tool-calls r)] (trace/span-event span (str "tool:" (:tool tc))))
       (trace/span-end span)
       r)))
 

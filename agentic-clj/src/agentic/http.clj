@@ -4,6 +4,7 @@
   (:require [org.httpkit.server :as hk]
             [clojure.data.json :as json]
             [agentic.core :as core]
+            [agentic.log :as log]
             [agentic.banking :as banking]
             [agentic.event :as ev]))
 
@@ -29,13 +30,14 @@
 
         (and (= method :post) (= uri "/agent"))
         (let [in (json/read-str (slurp (:body req)) :key-fn keyword)
-              e (ev/event (or (:conversation_id in) (:conversationId in) "c")
-                          (or (:user_id in) (:userId in) "anonymous")
-                          (or (:text in) ""))
+              e (cond-> (ev/event (or (:conversation_id in) (:conversationId in) "c")
+                                  (or (:user_id in) (:userId in) "anonymous")
+                                  (or (:text in) ""))
+                  (:turn_id in) (assoc :turn-id (:turn_id in))
+                  (:signal in) (assoc :signal (:signal in)))
               r (core/submit system e)]
           {:status 200 :headers {"Content-Type" "application/json"}
-           :body (json/write-str {:conversation_id (:conversation-id r) :reply (:reply r)
-                                  :path (:path r) :ok (:ok r) :tool_calls (:tool-calls r)})})
+           :body (json/write-str (assoc (log/->wire r) "ok" (:ok r)))})
 
         :else {:status 404 :headers {"Content-Type" "application/json"} :body "{\"error\":\"not found\"}"}))))
 

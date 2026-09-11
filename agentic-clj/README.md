@@ -125,6 +125,41 @@ identically (payments/cards/general + the regex guardrail block). The Datomic st
 (append/history/attributes/keyed/long-term + the user index) run on an in-`mem:` database and skip
 cleanly if Datomic can't be resolved in the environment.
 
+## Agentic v1 conformance
+
+This module is a v1 runtime for the language-neutral contract in `spec/`:
+
+- `agentic.spec` reads a workflow as YAML, JSON or EDN. EDN uses kebab-case keywords
+  (`:spec-version`, `:tool-triggers`, `:x-owner`) per the mapping in `spec/README.md`; every form is
+  canonicalized to that shape, validated against `spec/v1/workflow.schema.json` (read from the repo,
+  never copied) with the schema's defaults applied, and then checked against the seven loader rules.
+  Unknown keys outside `x-` and `runtime:` are a `:validation` error with the offending key path.
+- `agentic.log` is the closed event-type set, the dense per-conversation sequence, the state fold
+  (`turn-count`, `transcript-length`, `last-retrieved-ids`) and the normalized result derived from a
+  turn's events (`->wire` gives the `spec/v1/result.schema.json` shape). Unknown event types survive
+  replay and are ignored by the fold.
+- `agentic.core` gives each conversation one mailbox (a Clojure agent): deliveries are processed one at
+  a time in arrival order, `turn_id` is the idempotency key (a redelivery answers `duplicate` from
+  the log, appending nothing), and a `signal` resumes a suspended turn — including after a restart,
+  because the pending suspension is rebuilt from the log.
+- `agentic.context/call-tool` numbers attempts under `policies.retry`, emitting `tool_failed` per failed
+  attempt and `tool_called`/`delegated` on success with a dense per-turn `index`; `agentic.graph`
+  bounds verification by `policies.verification` and runs `saga.steps` in order, compensating the
+  completed steps in reverse as `compensation_step` events.
+- `agentic.store.datomic` appends transcript positions and event sequences through a unique
+  `<conversation>|<position>` key and retries on `:db.error/unique-conflict`, so concurrent writers
+  produce a gap-free log instead of racing a read-modify-write.
+- `backend` must be one this module runs (`local`, `clojure`, `datomic`); `stores.conversation.kind`
+  selects `memory` or `datomic`, and an unreachable Datomic fails the load unless the section says
+  `on_unavailable: degrade`.
+
+`agentic.conformance` binds the shared fixtures in `spec/conformance/v1/fixtures/*.yaml` directly:
+it builds each workflow, delivers the turns (honouring `restart_runtime`, `signal`, `concurrent_with`),
+validates every normalized result against the result schema and applies the comparison rules from
+`spec/conformance/v1/README.md`. A fixture whose `requires` this runtime does not claim is recorded
+as a skip. `clojure -X:test` runs it with the rest of the suite; from a REPL,
+`(agentic.conformance/report (agentic.conformance/run-all))` prints one line per fixture.
+
 ## Model-free by default
 
 The default brains are rule-based and the default embedder is the deterministic FNV hasher, so the
