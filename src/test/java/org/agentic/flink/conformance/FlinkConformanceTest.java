@@ -44,12 +44,30 @@ class FlinkConformanceTest {
   @TestFactory
   Stream<DynamicTest> fixtures() {
     List<Path> files = FlinkConformanceHarness.fixtureFiles();
-    assertEquals(22, files.size(), "expected the 22 v1 fixtures at " + FlinkConformanceHarness.fixturesDir());
+    assertFalse(files.isEmpty(), "no fixtures found at " + FlinkConformanceHarness.fixturesDir());
     return files.stream().map(p -> DynamicTest.dynamicTest(p.getFileName().toString(), () -> {
       FlinkConformanceHarness.Outcome o = FlinkConformanceHarness.run(p, cluster, savepoints);
-      Assumptions.assumeFalse(o.skipped(), () -> "skip " + o.id() + ": " + o.skipReason());
+      if (o.skipped()) {
+        assertJustifiedSkip(p, o);
+        Assumptions.abort("skip " + o.id() + ": " + o.skipReason());
+      }
       assertTrue(o.problems().isEmpty(), () -> "FAIL " + o.id() + "\n  " + String.join("\n  ", o.problems()));
     }));
+  }
+
+  /**
+   * A skip is legitimate only when the fixture requires a capability this runtime does not declare
+   * and the reason says so; any other skip is a silent gap and fails the suite.
+   */
+  @SuppressWarnings("unchecked")
+  static void assertJustifiedSkip(Path fixture, FlinkConformanceHarness.Outcome o) {
+    String reason = o.skipReason();
+    assertTrue(reason != null && !reason.isBlank(), () -> o.id() + " skipped without a reason");
+    List<String> requires = (List<String>) FlinkConformanceHarness.load(fixture).get("requires");
+    List<String> undeclared = requires.stream().filter(c -> !FlinkConformanceHarness.CAPABILITIES.contains(c)).toList();
+    assertFalse(undeclared.isEmpty(), () -> o.id() + " skipped (" + reason + ") although every required capability is declared");
+    assertTrue(undeclared.stream().allMatch(reason::contains),
+        () -> o.id() + " skip reason '" + reason + "' does not name the undeclared capabilities " + undeclared);
   }
 
   @Test

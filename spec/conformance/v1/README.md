@@ -70,6 +70,10 @@ document listing every fixture in the directory, in file order:
 - `status` is exactly one of `passed`, `failed`, `skipped`. A fixture is `skipped` only
   when a capability in its `requires` is not declared supported by the runtime; the
   `skip_reason` names those capabilities as `requires [a, b]`. A skip is never a pass.
+- The fixture set is discovered, never enumerated: a binding lists every `*.yaml` in the
+  directory and must not assert a fixture count. Its suite fails if the directory is empty
+  or if any fixture was neither executed nor skipped with a reason naming the undeclared
+  capabilities. Adding a fixture must never require editing a runtime's tests.
 - `results` is present for `passed` and `failed` and holds one result per delivered turn,
   each valid against `result.schema.json`, so the runner can re-run the comparison rules
   below and validate the schema independently. `runtime_detail` may be included; it is
