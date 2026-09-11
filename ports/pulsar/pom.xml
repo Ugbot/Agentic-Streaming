@@ -14,7 +14,7 @@
     (Key_Shared = single-writer), reusing the Flink-free jagentic-core.</description>
 
   <properties>
-    <maven.compiler.release>17</maven.compiler.release>
+    <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <pulsar.version>3.3.1</pulsar.version>
   </properties>

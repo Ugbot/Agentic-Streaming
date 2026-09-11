@@ -12,7 +12,9 @@
 
     <properties>
         <flink.version>2.2.1</flink.version>
-        <java.version>17</java.version>
+        <!-- Java 21 is the baseline for every JVM module (AGS-13). Flink 2.x supports
+             17/21; 25 is not yet viable (see the Lombok note below). -->
+        <java.version>21</java.version>
         <log4j.version>2.17.1</log4j.version>
         <langchain4j.version>1.16.3</langchain4j.version>
         <!--
@@ -22,11 +24,15 @@
         bump is a one-module change. See docs/a2a.md.
         -->
         <a2a.version>1.0.0.Alpha3</a2a.version>
-        <lombok.version>1.18.38</lombok.version>
+        <!-- 1.18.40 was the first release to support JDK 25; staying current here keeps a
+             future baseline bump from being blocked by annotation processing. -->
+        <lombok.version>1.18.46</lombok.version>
         <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
         <junit.version>5.10.2</junit.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <!-- `release` rather than source/target: source/target lets javac link against the
+             *host* JDK's API, so code can reference post-baseline methods, compile clean, and
+             then NoSuchMethodError on a real baseline JVM. `release` pins the API too. -->
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -466,14 +472,42 @@
 
     <build>
         <plugins>
+            <!-- Fail fast, with a readable message, if the build JDK or Maven is too old.
+                 Without this a contributor on JDK 17 gets an obscure compiler error instead
+                 of being told the baseline is 21. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-build-environment</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                    <message>This project requires JDK 21 or newer (see docs/audit-backlog.md, AGS-13/AGS-14).</message>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.9,)</version>
+                                    <message>Use the committed wrapper (./mvnw) or Maven 3.9+.</message>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Maven Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
@@ -717,8 +751,7 @@
                         <artifactId>maven-compiler-plugin</artifactId>
                         <version>3.11.0</version>
                         <configuration>
-                            <source>${java.version}</source>
-                            <target>${java.version}</target>
+                            <release>${java.version}</release>
                             <compilerArgs>
                                 <arg>-parameters</arg>
                             </compilerArgs>
