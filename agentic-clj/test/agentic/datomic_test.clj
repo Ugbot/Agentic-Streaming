@@ -4,7 +4,12 @@
             [agentic.store.datomic :as dat]
             [agentic.core :as core]
             [agentic.event :as ev]
-            [agentic.banking :as banking]))
+            [agentic.banking :as banking]
+            [agentic.log]
+            [agentic.spec]
+            [agentic.pipeline]
+            [clojure.java.io]
+            [datomic.client.api]))
 
 (defn- try-stores []
   (try (dat/datomic-stores {:db-name (str "test-" (System/nanoTime)) :storage-dir :mem})
@@ -135,3 +140,52 @@
         (store/append conversation cid {:role "user" :content "hello external"})
         (is (= 1 (store/message-count conversation cid)))
         (is (= [{:role "user" :content "hello external"}] (store/history conversation cid)))))))
+
+(deftest datomic-concurrent-appends-are-dense
+  ;; Regression for the read-modify-write race: many writers appending to one conversation at once
+  ;; must produce positions 0..n-1 with no gap or duplicate, for the transcript and for the event log.
+  (when-let [{:keys [conn conversation log]} (try-stores)]
+    (let [n 40
+          writers (mapv (fn [i] (future (store/append conversation "race" {:role "user" :content (str i)})))
+                        (range n))]
+      (run! deref writers)
+      (is (= n (count (store/history conversation "race"))))
+      (is (= (range n)
+             (sort (map first (datomic.client.api/q '[:find ?pos :in $ ?cid
+                                                     :where [?m :message/conversation ?cid] [?m :message/position ?pos]]
+                                                   (datomic.client.api/db conn) "race"))))))
+    (let [n 40
+          writers (mapv (fn [i] (future (agentic.log/append-event! log "race"
+                                                                   {:turn-id (str "t" i) :type :turn-received
+                                                                    :payload {:i i}})))
+                        (range n))
+          appended (mapv deref writers)]
+      (is (= (range n) (sort (map :sequence appended))))
+      (is (agentic.log/dense? (agentic.log/conversation-events log "race"))))))
+
+(deftest datomic-event-log-time-travel
+  (when-let [{:keys [conn log]} (try-stores)]
+    (agentic.log/append-event! log "c1" {:turn-id "t1" :type :turn-received :payload {}})
+    (let [t (dat/basis-t conn)]
+      (agentic.log/append-event! log "c1" {:turn-id "t1" :type :turn-completed :payload {:reply "ok"}})
+      (is (= 2 (count (agentic.log/conversation-events log "c1"))))
+      (is (= [:turn-received] (mapv :type (dat/events-as-of conn "c1" t)))))))
+
+(deftest datomic-backed-runtime-runs-the-support-workflow
+  (when (try-stores)
+    (let [wf (assoc (agentic.spec/read-document
+                     (.getPath (clojure.java.io/file (agentic.spec/spec-root) "conformance" "v1" "workflows" "support.yaml")))
+                    "stores" {"conversation" {"kind" "datomic" "db_name" (str "rt-" (System/nanoTime)) "storage-dir" "mem"}})
+          canonical (agentic.spec/load-workflow wf)
+          stores (agentic.pipeline/open-stores canonical)
+          sys (agentic.pipeline/system-from canonical stores)
+          r (core/submit sys {:conversation-id "c1" :turn-id "t1" :user-id "u" :text "what is my balance?"})]
+      (is (= :completed (:status r)))
+      (is (= "billing" (:path r)))
+      (is (= ["lookup_charge"] (mapv :tool (:tool-calls r))))
+      (is (= :duplicate (:status (core/submit sys {:conversation-id "c1" :turn-id "t1" :user-id "u" :text "again"}))))
+      (testing "a restart over the same datomic log replays the state"
+        (let [again (agentic.pipeline/system-from canonical stores)
+              r2 (core/submit again {:conversation-id "c1" :turn-id "t2" :user-id "u" :text "I lost my password"})]
+          (is (= 2 (get-in r2 [:state :turn-count])))
+          (is (= [] (:tool-calls r2))))))))

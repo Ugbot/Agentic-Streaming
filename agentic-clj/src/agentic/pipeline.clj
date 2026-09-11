@@ -1,233 +1,300 @@
 (ns agentic.pipeline
-  "Declarative pipeline loader — the same schema as the Python/Go/Java/Pekko loaders, as EDN (native)
-   or YAML (clj-yaml, parsed with string keys to match the shared docs). build → {:graph :tools
-   :retriever}; load → a runnable system. Datomic-backed stores selectable via the stores section."
-  (:require [clojure.edn :as edn]
-            [clojure.string :as str]
-            [clj-yaml.core :as yaml]
+  "Declarative workflow loader: a v1 document (YAML, JSON or EDN) is validated by agentic.spec into
+   the canonical kebab-keyword form and compiled into a runnable system — router, paths, verifier,
+   guardrails, policies, saga, tools (constant / http / failing / MCP / A2A peers) and retrieval.
+   `backend` must name a runtime this module can run; `stores` selects the storage engine, and an
+   unreachable configured store fails the load unless it says `on_unavailable: degrade`."
+  (:require [clojure.string :as str]
             [clj-http.client :as http]
             [clojure.data.json :as json]
+            [agentic.spec :as spec]
             [agentic.tools :as tools]
             [agentic.mcp-client :as mcpc]
             [agentic.a2a :as a2a]
             [agentic.brain :as brain]
+            [agentic.graph :as graph]
             [agentic.llm :as llm]
             [agentic.retrieval :as r]
             [agentic.guardrail :as guard]
             [agentic.cep :as cep]
             [agentic.core :as core]
             [agentic.store :as store]
+            [agentic.log :as log]
             [agentic.store.datomic :as dat]))
+
+(def backends
+  "The `backend` values this module executes. Anything else is a configuration error, never a
+   silent fallback."
+  #{"local" "clojure" "datomic"})
 
 (defn- as-int [x default] (cond (number? x) (int x) (string? x) (Integer/parseInt x) :else default))
 
+;; ---- tools ----
+
+(defn- failing-tool
+  "`kind: failing` — raises on every call, or on the first `x-fail-attempts` calls when set, then
+   returns `value`. The budget counts calls over the tool's life, across turns."
+  [id budget value]
+  (let [calls (atom 0)]
+    (fn [_]
+      (let [seen (swap! calls inc)]
+        (if (or (nil? budget) (<= seen budget))
+          (throw (ex-info (str id " failed") {:tool id :attempt seen}))
+          value)))))
+
 (defn- build-tools [tool-specs]
   (let [reg (tools/registry)]
-    (doseq [t tool-specs]
-      (let [id (get t "id") kind (get t "kind" "constant") desc (get t "description" id)]
+    (doseq [{:keys [id kind description value url compensation] :as t :or {kind "constant"}} tool-specs]
+      (let [desc (or description id)]
         (case kind
-          "constant" (let [v (get t "value")] (tools/register reg id desc (fn [_] v)))
-          ("http" "agent") (let [url (get t "url")]
-                             (tools/register reg id desc
-                                             (fn [params]
-                                               (-> (http/post url {:body (json/write-str (or params {}))
-                                                                   :content-type :json :as :json})
-                                                   :body))))
-          (throw (ex-info (str "unknown tool kind " kind) {:id id})))))
+          "constant" (tools/register reg id desc (fn [_] value))
+          "failing" (tools/register reg id desc (failing-tool id (:x-fail-attempts t) value))
+          ("http" "agent") (tools/register reg id desc
+                                           (fn [params]
+                                             (-> (http/post url {:body (json/write-str (or params {}))
+                                                                 :content-type :json :as :json})
+                                                 :body)))
+          (throw (spec/validation-error (str "unsupported tool kind " kind) ["tools" id "kind"])))
+        (tools/tag reg id :kind kind)
+        (when compensation (tools/tag reg id :compensation compensation))))
     reg))
 
 (defn- register-mcp
-  "Read `mcp:` specs (each {name, command [+ args], transport, env}) — for each, spawn a stdio MCP
-   client and register its discovered tools into `reg` under the prefix `<name>_`. Mirrors the
-   Java/Python/Go registerMcp. transport must be \"stdio\". command may be a vector, or a string with
-   a separate args vector. Returns reg."
+  "For each `mcp:` server spawn a stdio client and register its discovered tools under `<name>_`."
   [reg mcp-specs]
   (doseq [m mcp-specs]
     (let [transport (get m "transport" "stdio")
           _ (when-not (= "stdio" transport)
-              (throw (ex-info (str "unsupported MCP transport " transport) {:transport transport})))
-          name (get m "name")
+              (throw (spec/validation-error (str "unsupported MCP transport " transport) ["mcp" (get m "name")])))
           raw-command (get m "command")
           args (get m "args")
           command (cond
                     (sequential? raw-command) (vec raw-command)
                     (some? args) (vec (cons raw-command args))
                     :else [raw-command])
-          env (get m "env")
-          client (mcpc/mcp-client command env)]
-      (mcpc/register client reg (str name "_"))))
+          client (mcpc/mcp-client command (get m "env"))]
+      (mcpc/register client reg (str (get m "name") "_"))))
   reg)
 
 (defn- register-a2a
-  "Read `a2a:` specs (each {id, url, description, retries}) — register each peer as a delegating tool
-   under its `id`. Mirrors the Java/Python/Go registerA2A. Returns reg."
+  "Register each `a2a:` peer as a delegating tool of kind `agent`, under its name (else id). Without a
+   `url` the peer is a stand-in that answers `[<name>] delegated`, so a workflow can be exercised
+   without the peer running."
   [reg a2a-specs]
-  (doseq [a a2a-specs]
-    (let [id (get a "id")
-          url (get a "url")
-          desc (get a "description" id)
-          retries (as-int (get a "retries") 2)]
-      (tools/register reg id desc (a2a/peer-tool url retries))))
+  (doseq [{:keys [id name url description retries]} a2a-specs]
+    (let [tool-id (or name id)]
+      (tools/register reg tool-id (or description tool-id)
+                      (if url
+                        (a2a/peer-tool url (as-int retries 2))
+                        (fn [_] (str "[" tool-id "] delegated"))))
+      (tools/tag reg tool-id :kind "agent")))
   reg)
 
-(defn- build-retriever [retrieval dim]
+;; ---- retrieval ----
+
+(defn- build-retriever [{:keys [kb vector-store] :as retrieval} dim]
   (when retrieval
-    (let [kb (get retrieval "kb")
-          vector-store (get retrieval "vector_store")
-          idx (r/hot-index)]
-      (doseq [doc kb]
-        (let [text (get doc "text")]
-          (r/upsert idx (get doc "id") (r/embed text dim) text)))
-      ;; When a vector_store (cold tier) is declared, the KB lives there and the hot index stays
-      ;; empty for runtime working-memory upserts — mirroring the cores. Clojure's cold tier is exact
-      ;; cosine KNN (a correctness-superset of HNSW ANN); the matrix records that nuance.
+    (let [idx (r/hot-index)]
+      (doseq [{:keys [id text]} kb]
+        (r/upsert idx id (r/embed text dim) text))
+      ;; With a vector_store the KB is the cold tier (exact cosine KNN here) and the hot index stays
+      ;; free for runtime upserts.
       (if vector-store
         (r/two-tier (r/hot-index) (fn [q k] (r/search idx q k)) 4 4)
         (r/two-tier idx nil 4 4)))))
 
+;; ---- brains ----
+
 (defn- build-chat-client
-  "Build the ChatClient from the spec's `llm:` section. provider: stub (deterministic, from `script`)
-   | ollama | openai. Returns nil when no `llm:` section (build-brain then uses an 'ok' stub)."
-  [llm-spec]
+  "The ChatClient from `llm:`. provider: stub (deterministic, from `script`) | ollama | openai."
+  [{:keys [provider script base-url model api-key] :or {provider "stub"} :as llm-spec}]
   (when llm-spec
-    (case (get llm-spec "provider" "stub")
+    (case provider
       "stub" (apply llm/stub-chat-client
                     (mapv (fn [step]
-                            (if (contains? step "tool")
-                              {:tool (get step "tool") :args (or (get step "args") {})}
-                              {:text (get step "text" "ok")}))
-                          (get llm-spec "script")))
+                            (if (contains? step :tool)
+                              {:tool (:tool step) :args (or (:args step) {})}
+                              {:text (or (:text step) "ok")}))
+                          script))
       "ollama" (llm/ollama-chat-client (cond-> {}
-                                         (get llm-spec "base_url") (assoc :base-url (get llm-spec "base_url"))
-                                         (get llm-spec "model") (assoc :model (get llm-spec "model"))))
+                                         base-url (assoc :base-url base-url)
+                                         model (assoc :model model)))
       "openai" (llm/openai-chat-client (cond-> {}
-                                         (get llm-spec "base_url") (assoc :base-url (get llm-spec "base_url"))
-                                         (get llm-spec "model") (assoc :model (get llm-spec "model"))
-                                         (get llm-spec "api_key") (assoc :api-key (get llm-spec "api_key"))))
+                                         base-url (assoc :base-url base-url)
+                                         model (assoc :model model)
+                                         api-key (assoc :api-key api-key)))
       nil)))
 
-(defn- build-brain [path-name pspec dim chat-client context]
-  (if (= "llm" (get pspec "brain"))
-    (llm/llm-brain (or chat-client (llm/stub-chat-client {:text "ok"}))
-                   {:name path-name :system-prompt (get pspec "prompt" "")
-                    :allowed-tools (get pspec "tools")
-                    :max-iterations (as-int (get pspec "max_iterations") 6)
+(defn- build-brain [path-name {:keys [brain prompt tools max-iterations tool-triggers threshold]} dim top-k chat-client context]
+  (if (= "llm" brain)
+    (llm/llm-brain chat-client
+                   {:name path-name :system-prompt (or prompt "")
+                    :allowed-tools tools
+                    :max-iterations (as-int max-iterations 6)
                     :context-window (when context
-                                      {:max-tokens (as-int (get context "max_tokens") 512)
-                                       :compaction (get context "compaction" "moscow")})})
-    (brain/keyword-brain path-name {:tool-triggers (get pspec "tool_triggers") :dim dim})))
+                                      {:max-tokens (as-int (:max-tokens context) 512)
+                                       :compaction (or (:compaction context) "moscow")})})
+    (brain/keyword-brain path-name (cond-> {:tool-triggers tool-triggers :dim dim :top-k top-k}
+                                     threshold (assoc :threshold threshold)))))
 
 (defn- apply-skills
-  "Expand `skills: [name]` on each path: append the skill prompt fragment, union the skill's tools
-   into the path's allowed tools, and record required facts (`_facts`). Mirrors the cores — for the
-   rule brain prompts/facts are inert, but the declaration is honoured (an LLM brain sees the tools)."
-  [path-specs skills-spec]
-  (let [by-name (into {} (map (fn [s] [(get s "name") s]) skills-spec))]
+  "Expand `skills: [name]` on each path: append the skill prompt, union its tools into the path's,
+   and record its required facts."
+  [paths skills]
+  (let [by-name (into {} (map (juxt :name identity)) skills)]
     (into {}
           (map (fn [[pname pspec]]
-                 (let [skills (keep by-name (get pspec "skills"))
-                       extra-prompt (str/join " " (keep #(get % "prompt") skills))
-                       extra-tools (vec (mapcat #(get % "tools") skills))
-                       facts (vec (mapcat #(get % "facts") skills))]
+                 (let [used (keep by-name (:skills pspec))
+                       extra-prompt (str/join " " (keep :prompt used))
+                       extra-tools (vec (mapcat :tools used))
+                       facts (vec (mapcat :facts used))]
                    [pname (cond-> pspec
-                            (seq extra-prompt) (update "prompt" #(str/trim (str (or % "") " " extra-prompt)))
-                            (seq extra-tools)  (update "tools" #(vec (distinct (concat % extra-tools))))
-                            (seq facts)        (assoc "_facts" facts))]))
-               path-specs))))
+                            (seq extra-prompt) (update :prompt #(str/trim (str (or % "") " " extra-prompt)))
+                            (seq extra-tools) (update :tools #(vec (distinct (concat % extra-tools))))
+                            (seq facts) (assoc :facts facts))])))
+          paths)))
 
-(defn- build-router [router-spec default-path]
-  (let [default (get router-spec "default" default-path)
-        rules (get router-spec "rules")]
+(defn- build-router [{:keys [rules default]} fallback]
+  (let [default (or default fallback)]
     (fn [event _ctx]
-      (let [low (str/lower-case (:text event))]
+      (let [low (str/lower-case (or (:text event) ""))]
         (or (some (fn [[path keywords]]
                     (when (some #(str/includes? low (str/lower-case %)) keywords) path))
                   rules)
-            default)))))
+            default
+            (throw (ex-info "no rule matched and router.default is not set" {:error/class :fatal})))))))
 
-(defn- build-verifier [vspec]
-  (if (= "none" (get vspec "kind"))
-    (fn [reply _] [true reply])
-    (fn [reply _] [(boolean (and reply (str/starts-with? reply "["))) reply])))
+(defn- build-verifier [{:keys [kind pattern] :or {kind "prefix"}}]
+  (case kind
+    "none" (fn [reply _] [true reply])
+    "prefix" graph/prefix-verifier
+    "regex" (let [re (re-pattern pattern)]
+              (fn [reply _] [(boolean (and reply (re-find re reply))) reply]))
+    (throw (spec/validation-error (str "unsupported verifier kind " kind) ["agent" "verifier" "kind"]))))
 
-(defn- build-guardrail [g]
-  (case (get g "kind" "regex")
-    "regex" (guard/regex-guardrail {:deny (get g "deny") :reason (get g "reason" "blocked by policy")
-                                    :check-outputs (get g "check_outputs")})
-    "classifier" (guard/classifier-guardrail {:lexicon (get g "lexicon") :blocked (get g "blocked")
-                                              :threshold (or (get g "threshold") 0.5)
-                                              :reason (get g "reason" "blocked by classifier policy")
-                                              :default-label (get g "default_label" "other")
-                                              :check-outputs (get g "check_outputs")})
-    (throw (ex-info (str "unknown guardrail kind " (get g "kind")) {}))))
+(defn- build-guardrail [{:keys [kind stage deny reason lexicon blocked threshold]
+                         :or {kind "regex" stage "input"}}]
+  (let [outputs? (= "output" stage)
+        rail (case kind
+               "regex" (guard/regex-guardrail {:deny deny :reason (or reason "blocked by policy")
+                                               :check-outputs outputs?})
+               "classifier" (guard/classifier-guardrail {:lexicon lexicon :blocked blocked
+                                                         :threshold (or threshold 0.5)
+                                                         :reason (or reason "blocked by classifier policy")
+                                                         :default-label "other"
+                                                         :check-outputs outputs?})
+               (throw (spec/validation-error (str "unsupported guardrail kind " kind) ["guardrails"])))]
+    (cond-> rail (= "output" stage) (assoc :check-input nil))))
 
 (defn build
-  "Compile a spec map (string keys, like the shared YAML/EDN) into {:graph :tools :retriever}."
-  [spec & [{:keys [chat-client]}]]
-  (let [agent (get spec "agent")
-        retrieval (get spec "retrieval")
-        dim (as-int (get retrieval "dim") 256)
-        retriever (build-retriever retrieval dim)
-        context (get spec "context")
-        cc (or chat-client (build-chat-client (get spec "llm")))
-        reg (-> (build-tools (get spec "tools"))
-                (register-mcp (get spec "mcp"))
-                (register-a2a (get spec "a2a")))
-        path-specs (apply-skills (get agent "paths") (get spec "skills"))
-        paths (into {} (map (fn [[name pspec]]
-                              [name {:name name :prompt (get pspec "prompt" "")
-                                     :brain (build-brain name pspec dim cc context)}])
-                            path-specs))
-        default-path (or (get-in agent ["router" "default"]) (first (keys path-specs)))
-        router (build-router (get agent "router") default-path)
-        verifier (build-verifier (get agent "verifier"))
-        guardrails (mapv build-guardrail (get spec "guardrails"))]
-    {:graph {:router router :paths paths :verifier verifier :guardrails guardrails :listeners []}
-     :tools reg :retriever retriever}))
+  "Compile a workflow (any raw form, or already canonical) into {:graph :tools :retriever :workflow}."
+  [document & [{:keys [chat-client]}]]
+  (let [wf (spec/load-workflow document)
+        _ (when-not (contains? backends (or (:backend wf) "local"))
+            (throw (spec/validation-error (str "backend " (:backend wf) " is not a Clojure runtime; one of "
+                                               (str/join ", " (sort backends)))
+                                          ["backend"])))
+        {:keys [agent retrieval embeddings context llm skills policies saga]} wf
+        dim (or (:dim embeddings) (:dim retrieval) 256)
+        top-k (or (:top-k retrieval) 4)
+        cc (or chat-client (build-chat-client llm)
+               (when (some #(= "llm" (:brain %)) (vals (:paths agent))) (llm/stub-chat-client {:text "ok"})))
+        reg (-> (build-tools (:tools wf))
+                (register-mcp (:mcp wf))
+                (register-a2a (:a2a wf)))
+        paths (apply-skills (:paths agent) skills)
+        graph-paths (into {}
+                          (map (fn [[name pspec]]
+                                 [name (cond-> {:name name :prompt (or (:prompt pspec) "")
+                                                :brain (build-brain name pspec dim top-k cc context)}
+                                         (contains? pspec :x-suspend-until)
+                                         (assoc :suspend-until (:x-suspend-until pspec)))]))
+                          paths)]
+    {:graph {:router (build-router (:router agent) (first (keys paths)))
+             :paths graph-paths
+             :verifier (build-verifier (:verifier agent))
+             :guardrails (mapv build-guardrail (:guardrails wf))
+             :policies policies
+             :saga saga
+             :listeners []}
+     :tools reg
+     :retriever (build-retriever retrieval dim)
+     :workflow wf}))
 
-(defn- read-spec [path]
-  (let [content (slurp path)]
-    (if (str/ends-with? path ".edn")
-      (edn/read-string content)
-      (yaml/parse-string content :keywords false))))
+;; ---- stores (rule 7) ----
+
+(defn- opt
+  "A store option by wire name: canonical keyword for keys the schema declares, string otherwise."
+  [m k]
+  (let [kw (keyword (str/replace k "_" "-"))]
+    (if (contains? m kw) (get m kw) (get m k))))
 
 (defn- datomic-opts
-  "Map a YAML/EDN stores.conversation section (string keys) onto datomic-stores opts. Supports the
-   in-process and the external (peer-server / cloud) deployments — only the keys present are forwarded."
+  "Map a `stores.conversation` section onto datomic-stores opts (in-process, peer-server or cloud);
+   only the keys present are forwarded."
   [conv]
-  (let [g #(get conv %)]
-    (cond-> {:db-name (or (g "db-name") "agentic")}
-      (g "server-type")              (assoc :server-type (keyword (g "server-type")))
-      (g "system")                   (assoc :system (g "system"))
-      (g "storage-dir")              (assoc :storage-dir (g "storage-dir"))
-      (g "endpoint")                 (assoc :endpoint (g "endpoint"))
-      (g "access-key")               (assoc :access-key (g "access-key"))
-      (g "secret")                   (assoc :secret (g "secret"))
-      (g "region")                   (assoc :region (g "region"))
+  (let [g #(opt conv %)]
+    (cond-> {:db-name (or (g "db-name") (g "db_name") "agentic")}
+      (g "server-type")                (assoc :server-type (keyword (g "server-type")))
+      (g "system")                     (assoc :system (g "system"))
+      (g "storage-dir")                (assoc :storage-dir (g "storage-dir"))
+      (g "endpoint")                   (assoc :endpoint (g "endpoint"))
+      (g "access-key")                 (assoc :access-key (g "access-key"))
+      (g "secret")                     (assoc :secret (g "secret"))
+      (g "region")                     (assoc :region (g "region"))
       (some? (g "validate-hostnames")) (assoc :validate-hostnames (g "validate-hostnames"))
       (some? (g "create-database"))    (assoc :create-database? (g "create-database")))))
 
-(defn- stores-from-spec [spec]
-  (let [conv (get-in spec ["stores" "conversation"])]
-    (if (= "datomic" (get conv "kind"))
-      (let [{:keys [conversation keyed]} (dat/datomic-stores (datomic-opts conv))]
-        [conversation keyed])
-      [(store/in-memory-conversation-store) (store/in-memory-keyed-state-store)])))
+(defn- memory-stores []
+  {:store (store/in-memory-conversation-store)
+   :state (store/in-memory-keyed-state-store)
+   :log (log/in-memory-event-log)})
+
+(defn- store-unavailable [kind conv cause]
+  (spec/validation-error (str "configured " kind " conversation store is unreachable: " (ex-message cause)
+                              " (set stores.conversation.on_unavailable: degrade to run in memory)")
+                         ["stores" "conversation"] cause))
+
+(defn open-stores
+  "The stores a workflow asks for. `kind: memory` (or no `stores`) is in-memory; `kind: datomic`
+   opens Datomic and, when it cannot be reached, fails the load — or degrades to in-memory only when
+   the section says `on_unavailable: degrade`. Any other kind is a validation error."
+  [wf]
+  (let [conv (get-in wf [:stores :conversation])
+        kind (or (:kind conv) "memory")]
+    (case kind
+      "memory" (memory-stores)
+      "datomic" (let [opened (try {:ok (dat/datomic-stores (datomic-opts conv))}
+                                  (catch Exception e {:error e}))]
+                  (if-let [{:keys [conversation keyed log]} (:ok opened)]
+                    {:store conversation :state keyed :log log}
+                    (if (= "degrade" (:on-unavailable conv))
+                      (memory-stores)
+                      (throw (store-unavailable kind conv (:error opened))))))
+      (throw (spec/validation-error (str "unsupported conversation store kind " kind
+                                         " for the Clojure runtime (memory, datomic)")
+                                    ["stores" "conversation" "kind"])))))
+
+;; ---- systems ----
+
+(defn system-from
+  "A runnable system from a raw or canonical workflow document plus opened stores."
+  [document stores & [opts]]
+  (let [{:keys [graph tools retriever workflow]} (build document opts)]
+    (assoc (core/local-system graph tools retriever stores)
+           :workflow workflow
+           :cep (cep/compile-cep (:cep workflow)))))
 
 (defn load-system
-  "Load a pipeline.yaml/.edn into a runnable system. A declarative `cep:` section is compiled into
-   wirings and attached as :cep — fed by `submit` below."
+  "Load a workflow .yaml/.json/.edn into a runnable system, with the stores it configures. A
+   declarative `cep:` section is compiled into wirings fed by `submit`."
   [path & [opts]]
-  (let [spec (read-spec path)
-        {:keys [graph tools retriever]} (build spec opts)
-        [conv keyed] (stores-from-spec spec)]
-    (assoc (core/local-system graph tools retriever conv keyed)
-           :cep (cep/compile-cep (get spec "cep")))))
+  (let [wf (spec/load-path path)]
+    (system-from wf (open-stores wf) opts)))
 
 (defn submit
   "Process one turn, then feed the event to any compiled CEP wirings. Each wiring's action submits via
-   the INNER core submit (`#(core/submit system %)`), which does NOT re-feed CEP — that plus the
-   DERIVED metadata guard keeps CEP submits from recursing. Returns the original turn result."
+   the INNER core submit, which does not re-feed CEP, so CEP submits cannot recurse."
   [system event]
   (let [r (core/submit system event)]
     (doseq [w (:cep system)]

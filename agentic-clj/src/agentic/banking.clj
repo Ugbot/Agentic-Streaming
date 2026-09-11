@@ -26,7 +26,7 @@
           (str "[" name "] Your balance is " bal "."))
 
         (:retriever context)
-        (let [hits (r/retrieve (:retriever context) (r/embed user-text dim) 1)]
+        (let [hits (ctx/retrieve context (r/embed user-text dim) 4)]
           (if (and (seq hits) (> (:score (first hits)) 0.15))
             (str "[" name "] " (:text (first hits)))
             (str "[" name "] I can help with " name " questions. You said: \"" user-text "\"")))
@@ -61,4 +61,5 @@
            "general" {:name "general" :prompt "You answer general questions." :brain (rule-brain "general")}}
    :verifier (fn [reply _ctx] [(boolean (and reply (str/starts-with? reply "["))) reply])
    :guardrails []
+   :policies {:ordering "per-conversation" :idempotency "turn-id" :on-tool-error "fail"}
    :listeners []})
