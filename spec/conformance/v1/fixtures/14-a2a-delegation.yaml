@@ -1,0 +1,22 @@
+id: a2a-delegation
+description: "A peer agent registered under a2a is callable as an ordinary tool; the delegation is recorded with the peer name and the call carries the turn's idempotency key."
+requires: [a2a, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: frontline
+    router: {kind: keyword, default: main, rules: {main: [escalate]}}
+    paths:
+      main: {brain: rule, prompt: You escalate., tool_triggers: {escalate: specialist}}
+    verifier: {kind: none}
+  a2a:
+    - {name: specialist, transport: inproc, description: The specialist agent}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "escalate this"}
+expect:
+  - turn_id: t1
+    status: completed
+    tool_calls:
+      - {tool: specialist, index: 0}
+    events_include: [routed, delegated, turn_completed]

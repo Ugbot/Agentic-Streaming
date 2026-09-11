@@ -23,6 +23,7 @@ public final class KeywordBrain implements Brain {
   private final Embedder embedder;
   private final Map<String, String> toolTriggers;
   private final double threshold;
+  private final int topK;
 
   /** Default to the hashing embedder at {@code dim} (byte-for-byte == Retrieval.embed). */
   public KeywordBrain(String name, int dim, Map<String, String> toolTriggers, double threshold) {
@@ -30,10 +31,17 @@ public final class KeywordBrain implements Brain {
   }
 
   public KeywordBrain(String name, Embedder embedder, Map<String, String> toolTriggers, double threshold) {
+    this(name, embedder, toolTriggers, threshold, 4);
+  }
+
+  /** @param topK how many passages one retrieval fetches ({@code retrieval.top_k}); the best one answers */
+  public KeywordBrain(String name, Embedder embedder, Map<String, String> toolTriggers, double threshold,
+                      int topK) {
     this.name = name;
     this.embedder = embedder == null ? new HashingEmbedder(256) : embedder;
     this.toolTriggers = toolTriggers == null ? Map.of() : toolTriggers;
     this.threshold = threshold;
+    this.topK = Math.max(1, topK);
   }
 
   @Override
@@ -41,12 +49,13 @@ public final class KeywordBrain implements Brain {
     String low = userText.toLowerCase();
     for (Map.Entry<String, String> e : toolTriggers.entrySet()) {
       if (low.contains(e.getKey().toLowerCase())) {
-        Object result = ctx.callTool(e.getValue(), Map.of("user", ctx.userId));
+        Object result = ctx.callTool(e.getValue(),
+            Map.of("user", ctx.userId == null ? "anonymous" : ctx.userId));
         return "[" + name + "] " + e.getValue() + " returned " + result;
       }
     }
     if (ctx.retriever != null) {
-      List<Retrieval.Scored> hits = ctx.retriever.retrieve(embedder.embed(userText), 1);
+      List<Retrieval.Scored> hits = ctx.retrieve(embedder.embed(userText), topK);
       if (!hits.isEmpty() && hits.get(0).score() > threshold) {
         return "[" + name + "] " + hits.get(0).text();
       }

@@ -1,0 +1,19 @@
+id: duplicate-turn
+description: "Redelivering a turn_id returns the recorded result with status duplicate. The brain and the tool do not run again, and the conversation log gains no new turn_received."
+requires: [idempotency, tools]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
+  - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
+expect:
+  - turn_id: t1
+    status: completed
+    path: billing
+    tool_calls:
+      - {tool: lookup_charge, index: 0}
+  - turn_id: t1
+    status: duplicate
+    path: billing
+    tool_calls:
+      - {tool: lookup_charge, index: 0}
+    events_exclude: [tool_called]

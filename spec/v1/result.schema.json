@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-streaming.dev/spec/v1/result.schema.json",
+  "title": "Normalized turn result, v1",
+  "description": "What every runtime emits for one turn so results can be compared across runtimes. Runtime-specific detail (checkpoint ids, actor addresses, wall-clock timings, engine metrics) belongs in `runtime_detail`, which is excluded from semantic comparison.",
+  "type": "object",
+  "required": ["conversation_id", "turn_id", "status", "events"],
+  "properties": {
+    "conversation_id": { "type": "string" },
+    "turn_id": { "type": "string" },
+    "status": { "enum": ["completed", "rejected", "unverified", "failed", "suspended", "duplicate"] },
+    "path": { "type": ["string", "null"], "description": "the path the router selected, null when a guardrail rejected before routing" },
+    "reply": { "type": ["string", "null"] },
+    "state": {
+      "description": "the reduced conversation state after this turn, keys sorted by the comparator before comparison",
+      "type": "object"
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool", "index"],
+        "properties": {
+          "tool": { "type": "string" },
+          "index": { "type": "integer", "minimum": 0 },
+          "args": { "type": "object" },
+          "result": {},
+          "error": { "type": ["string", "null"] },
+          "attempt": { "type": "integer", "minimum": 1, "default": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "sequence"],
+        "properties": {
+          "type": {
+            "enum": [
+              "turn_received", "guardrail_rejected", "routed", "brain_started",
+              "tool_called", "tool_failed", "retrieved", "reply_drafted",
+              "verification_failed", "memory_written", "turn_completed", "turn_failed",
+              "turn_suspended", "turn_resumed", "timer_scheduled", "timer_fired",
+              "compensation_started", "compensation_step", "compensation_completed",
+              "delegated"
+            ]
+          },
+          "sequence": { "type": "integer", "minimum": 0 },
+          "payload": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "class": { "enum": ["validation", "guardrail", "verification", "tool", "transient", "fatal"] },
+        "message": { "type": "string" }
+      },
+      "required": ["class"],
+      "additionalProperties": false
+    },
+    "runtime_detail": {
+      "description": "excluded from semantic comparison",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

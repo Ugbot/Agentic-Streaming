@@ -1,0 +1,26 @@
+id: retry-tool
+description: "A transiently failing tool is retried per policies.retry; each attempt is its own event with an incrementing attempt number, and the successful attempt completes the turn."
+requires: [tools, retry]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: retrying
+    router: {kind: keyword, default: main, rules: {main: [charge]}}
+    paths:
+      main: {brain: rule, prompt: You answer charge questions., tool_triggers: {charge: flaky_tool}}
+    verifier: {kind: none}
+  policies:
+    retry: {kind: fixed, max_attempts: 3, initial_delay_ms: 0, jitter: false}
+  tools:
+    - {id: flaky_tool, kind: failing, description: Fails twice then succeeds, x-fail-attempts: 2, value: "ok"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "look up this charge"}
+expect:
+  - turn_id: t1
+    status: completed
+    tool_calls:
+      - {tool: flaky_tool, index: 0, attempt: 1, failed: true}
+      - {tool: flaky_tool, index: 0, attempt: 2, failed: true}
+      - {tool: flaky_tool, index: 0, attempt: 3}
+    events_include: [tool_failed, tool_failed, tool_called, turn_completed]

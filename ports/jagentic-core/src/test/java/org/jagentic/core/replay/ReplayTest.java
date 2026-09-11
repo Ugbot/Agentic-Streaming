@@ -38,8 +38,9 @@ class ReplayTest {
   @Test
   void streamRecordsEveryEventToTheLog() {
     EventLog log = new EventLog.InMemory();
-    new StreamRuntime(banking()).observe(log::record).run(new SeedChannel<>(turns()));
-    assertEquals(turns(), log.events(), "the observer seam records the inbound stream");
+    List<Event> turns = turns();
+    new StreamRuntime(banking()).observe(log::record).run(new SeedChannel<>(turns));
+    assertEquals(turns, log.events(), "the observer seam records the inbound stream");
     assertEquals(2, log.eventsFor("c1").size());
   }
 

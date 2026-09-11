@@ -1,0 +1,13 @@
+id: routing-keyword
+description: "A keyword router selects the declared path and the rule brain prefixes its reply with the path name."
+requires: [routing, rule_brain]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "I want a refund for this charge"}
+expect:
+  - turn_id: t1
+    conversation_id: c1
+    status: completed
+    path: billing
+    reply_matches: "^\\[billing\\]"
+    events_include: [turn_received, routed, reply_drafted, turn_completed]

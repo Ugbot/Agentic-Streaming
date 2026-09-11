@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 public final class InMemoryVectorStore implements VectorStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryVectorStore.class);
+  private static final long serialVersionUID = 1L;
 
   private final ConcurrentHashMap<String, Entry> store = new ConcurrentHashMap<>();
   private int dimension = 0; // 0 = infer from first stored vector
@@ -258,7 +259,8 @@ public final class InMemoryVectorStore implements VectorStore {
     return sum;
   }
 
-  private static final class Entry {
+  private static final class Entry implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     final float[] vector;
     final Map<String, Object> metadata;
 

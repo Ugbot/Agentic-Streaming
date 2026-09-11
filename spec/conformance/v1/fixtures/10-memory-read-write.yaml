@@ -1,0 +1,20 @@
+id: memory-read-write
+description: "The transcript is appended once per turn and is visible to the next turn on the same conversation, and not to a different conversation."
+requires: [memory]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "I lost my password"}
+  - {conversation_id: c1, turn_id: t2, text: "what did I just ask?"}
+  - {conversation_id: c2, turn_id: t3, text: "what did I just ask?"}
+expect:
+  - turn_id: t1
+    status: completed
+    path: account
+    events_include: [memory_written]
+  - turn_id: t2
+    status: completed
+    state_includes: {turn_count: 2, transcript_length: 4}
+  - turn_id: t3
+    conversation_id: c2
+    status: completed
+    state_includes: {turn_count: 1, transcript_length: 2}

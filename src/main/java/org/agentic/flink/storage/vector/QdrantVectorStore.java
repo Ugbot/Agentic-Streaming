@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.StorageTier;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,7 +58,8 @@ import org.slf4j.LoggerFactory;
  *       {@code dot_product})
  * </ul>
  */
-public final class QdrantVectorStore implements VectorStore {
+public final class QdrantVectorStore extends ReopenableStore implements VectorStore {
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(QdrantVectorStore.class);
 
@@ -78,7 +80,7 @@ public final class QdrantVectorStore implements VectorStore {
   public QdrantVectorStore() {}
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) throws Exception {
     this.host = config.getOrDefault("qdrant.host", "localhost");
     this.port = Integer.parseInt(config.getOrDefault("qdrant.port", "6334"));
     this.apiKey = config.get("qdrant.api.key");
@@ -138,7 +140,7 @@ public final class QdrantVectorStore implements VectorStore {
       throw new IllegalArgumentException(
           "embedding dimension " + embedding.length + " != configured " + dimension);
     }
-    client.upsertAsync(collection, List.of(toPoint(id, embedding, metadata))).get();
+    client().upsertAsync(collection, List.of(toPoint(id, embedding, metadata))).get();
   }
 
   @Override
@@ -159,7 +161,7 @@ public final class QdrantVectorStore implements VectorStore {
       points.add(toPoint(e.getKey(), vec, md));
     }
     if (!points.isEmpty()) {
-      client.upsertAsync(collection, points).get();
+      client().upsertAsync(collection, points).get();
     }
   }
 
@@ -189,7 +191,7 @@ public final class QdrantVectorStore implements VectorStore {
       qb.setFilter(filter);
     }
 
-    List<Points.ScoredPoint> scored = client.queryAsync(qb.build()).get();
+    List<Points.ScoredPoint> scored = client().queryAsync(qb.build()).get();
     List<VectorSearchResult> out = new ArrayList<>(scored.size());
     for (Points.ScoredPoint sp : scored) {
       Map<String, Object> payload = payloadToMap(sp.getPayloadMap());
@@ -246,7 +248,7 @@ public final class QdrantVectorStore implements VectorStore {
 
   @Override
   public void deleteEmbedding(String id) throws Exception {
-    client.deleteAsync(collection, List.of(pointId(id))).get();
+    client().deleteAsync(collection, List.of(pointId(id))).get();
   }
 
   @Override
@@ -255,7 +257,7 @@ public final class QdrantVectorStore implements VectorStore {
         Points.Filter.newBuilder()
             .addMust(ConditionFactory.matchKeyword("flowId", flowId))
             .build();
-    client.deleteAsync(collection, filter).get();
+    client().deleteAsync(collection, filter).get();
   }
 
   @Override
@@ -271,7 +273,7 @@ public final class QdrantVectorStore implements VectorStore {
   @Override
   public Map<String, Object> getStatistics() throws Exception {
     Map<String, Object> stats = new LinkedHashMap<>();
-    stats.put("total_vectors", client.countAsync(collection).get());
+    stats.put("total_vectors", client().countAsync(collection).get());
     stats.put("dimension", dimension);
     stats.put("similarity", similarity);
     stats.put("collection", collection);
@@ -324,8 +326,15 @@ public final class QdrantVectorStore implements VectorStore {
   public void close() {
     if (client != null) {
       client.close();
+      client = null;
     }
+    markClosed();
   }
+  private QdrantClient client() {
+    ensureOpen();
+    return client;
+  }
+
 
   // ---------- helpers ----------
 

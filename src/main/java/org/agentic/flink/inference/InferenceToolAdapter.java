@@ -78,6 +78,11 @@ public final class InferenceToolAdapter implements ToolExecutor {
         });
   }
 
+  /** Execute from the raw JSON argument payload of an LLM tool call. */
+  public CompletableFuture<Object> execute(String argumentsJson) {
+    return execute(ToolArguments.parse(argumentsJson));
+  }
+
   @Override
   public String getToolId() {
     return toolId;

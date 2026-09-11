@@ -1,0 +1,18 @@
+id: replay-after-restart
+description: "After a runtime restart the conversation state is rebuilt from the log alone. The replayed turn is not re-executed: no tool runs and no new turn_received is appended."
+requires: [replay, memory, durable_store]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
+  - {conversation_id: c1, turn_id: t2, text: "I lost my password", restart_runtime: true}
+expect:
+  - turn_id: t1
+    status: completed
+    path: billing
+    tool_calls:
+      - {tool: lookup_charge, index: 0}
+  - turn_id: t2
+    status: completed
+    path: account
+    state_includes: {turn_count: 2}
+    tool_calls: []
