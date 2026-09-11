@@ -87,6 +87,14 @@ MVN = shutil.which("mvn")
 CLOJURE = shutil.which("clojure")
 
 
+def maven_command(root: Path) -> Optional[str]:
+    """The repo's committed Maven wrapper when present, else `mvn` from PATH."""
+    wrapper = root / "mvnw"
+    if wrapper.is_file() and os.access(wrapper, os.X_OK):
+        return str(wrapper)
+    return MVN
+
+
 class BindingError(RuntimeError):
     """The binding is present and its toolchain is available, but it did not produce outcomes."""
 
@@ -365,7 +373,7 @@ def ensure_core_installed(root: Path, logs: Path) -> None:
     global _core_installed
     if _core_installed:
         return
-    proc = _run([MVN, "-B", "-ntp", "-f", "ports/jagentic-core/pom.xml", "install", "-DskipTests"], root,
+    proc = _run([maven_command(root), "-B", "-ntp", "-f", "ports/jagentic-core/pom.xml", "install", "-DskipTests"], root,
                 logs / "jagentic-core-install.log")
     if proc.returncode != 0:
         raise BindingError(f"mvn install of ports/jagentic-core failed (exit {proc.returncode}); see {logs / 'jagentic-core-install.log'}")
@@ -377,10 +385,11 @@ def run_maven_suite(suite: MavenSuite, fixtures: Dict[str, Dict[str, Any]], root
     if not _suite_present(root, suite):
         report.status, report.reason = NOT_TESTED, f"binding absent: no {suite.suite}.java under {suite.pom.rsplit('/', 1)[0] or '.'}"
         return report
-    if MVN is None:
-        report.status, report.reason = NOT_TESTED, "toolchain unavailable: mvn not on PATH"
+    mvn = maven_command(root)
+    if mvn is None:
+        report.status, report.reason = NOT_TESTED, "toolchain unavailable: no ./mvnw in the checkout and mvn not on PATH"
         return report
-    cmd = [MVN, "-B", "-ntp", "-f", suite.pom, "test", f"-Dtest={suite.suite}", "-Dsurefire.failIfNoSpecifiedTests=false"]
+    cmd = [mvn, "-B", "-ntp", "-f", suite.pom, "test", f"-Dtest={suite.suite}", "-Dsurefire.failIfNoSpecifiedTests=false"]
     report.command = " ".join(cmd[1:])
     started = _dt.datetime.now()
     try:
@@ -521,7 +530,7 @@ def build_artifact(reports: List[RuntimeReport], fixtures: Dict[str, Dict[str, A
         "generated_at": _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat(),
         "commit": commit,
         "host": {"platform": platform.platform(), "python": platform.python_version(),
-                 "mvn": MVN is not None, "clojure": CLOJURE is not None},
+                 "mvn": maven_command(root) is not None, "clojure": CLOJURE is not None},
         "capabilities": CAPABILITIES,
         "fixtures": [{"id": f["id"], "file": f["_file"], "requires": list(f["requires"])} for f in fixtures.values()],
         "runtimes": [r.to_dict() for r in reports],

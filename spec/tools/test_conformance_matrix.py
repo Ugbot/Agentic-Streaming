@@ -238,3 +238,14 @@ def test_require_present_fails_only_for_missing_toolchains(tmp_path: Path, monke
     assert cm.main(["--runtimes", "reference", "jvm-core", "--root", root]) == 0
     assert cm.main(["--runtimes", "reference", "jvm-core", "--require-present", "--root", root]) == 1
     assert cm.main(["--runtimes", "reference", "clojure", "--require", "clojure", "--root", root]) == 1
+
+
+def test_maven_command_prefers_committed_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cm, "MVN", "/usr/bin/mvn")
+    assert cm.maven_command(tmp_path) == "/usr/bin/mvn"
+    wrapper = tmp_path / "mvnw"
+    wrapper.write_text("#!/bin/sh\n", encoding="utf-8")
+    wrapper.chmod(0o755)
+    assert cm.maven_command(tmp_path) == str(wrapper)
+    monkeypatch.setattr(cm, "MVN", None)
+    assert cm.maven_command(tmp_path) == str(wrapper)
