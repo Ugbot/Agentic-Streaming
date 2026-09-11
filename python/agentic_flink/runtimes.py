@@ -25,8 +25,8 @@ from ._classpath import MissingJarError, flink_jars, has_class, has_flink_classe
 from ._contract import (
     CAPABILITY_IDS,
     Runtime,
-    RuntimeNotAvailable,
-    UnsupportedRequirements,
+    RuntimeNotAvailableError,
+    CapabilityError,
     available_runtimes,
     register_runtime,
 )
@@ -118,11 +118,11 @@ def _bindings(spec: Any) -> Dict[str, Any]:
 def _check_requirements(name: str, capabilities: Mapping[str, str], doc: Mapping[str, Any],
                         extra_unsupported: Mapping[str, str] = {}) -> None:
     required = workflow_requirements(doc)
-    bad = {cap: f"{capabilities.get(cap, 'unsupported')}, needed by {where}"
-           for cap, where in required.items() if capabilities.get(cap, "unsupported") == "unsupported"}
-    bad.update(extra_unsupported)
+    bad = [f"{cap} ({capabilities.get(cap, 'unsupported')}, needed by {where})"
+           for cap, where in required.items() if capabilities.get(cap, "unsupported") == "unsupported"]
+    bad += [f"{k} ({v})" for k, v in extra_unsupported.items()]
     if bad:
-        raise UnsupportedRequirements(name, bad)
+        raise CapabilityError(name, bad)
 
 
 def _java_event(event: Event):
@@ -181,9 +181,9 @@ class _JvmRuntime(Runtime):
         declared = _rewrite_function_tools(doc)
         missing = set(declared) - set(bindings)
         if missing:
-            raise UnsupportedRequirements(self.name, {
-                f"tools[{m}]": "kind=function tool has no Python callable bound (use_tool / load(tools=...))"
-                for m in sorted(missing)})
+            raise CapabilityError(self.name, [
+                f"tools[{m}] (kind=function tool has no Python callable bound; use_tool / load(tools=...))"
+                for m in sorted(missing)])
         JMap = _jvm.jclass("java.util.LinkedHashMap")
         jpeers = JMap()
         for peer_name, peer_rt in peers.items():
@@ -222,7 +222,7 @@ class JvmLocalRuntime(_JvmRuntime):
         self._start_jvm()
         for peer_name, peer in self._peers.items():
             if not isinstance(peer, JvmLocalRuntime) or peer._runtime is None:
-                raise UnsupportedRequirements(self.name, {f"a2a[{peer_name}]": "inproc peers must be deployed JvmLocalRuntime instances"})
+                raise CapabilityError(self.name, [f"a2a[{peer_name}] (inproc peers must be deployed JvmLocalRuntime instances)"])
         self._built = self._build(doc, _bindings(spec), {n: p._runtime for n, p in self._peers.items()})
         self._doc = doc
         ConversationLog = _jvm.jclass("org.jagentic.core.ConversationLog$InMemory")
@@ -315,7 +315,7 @@ class FlinkRuntime(_JvmRuntime):
     def _start_jvm(self) -> None:
         if _jvm.is_started():
             if not has_flink_classes():
-                raise RuntimeNotAvailable(
+                raise RuntimeNotAvailableError(
                     "the JVM is already running without the Flink distribution on its classpath; start it "
                     "with agentic_flink.start_jvm(extra_jars=agentic_flink.flink_jars()) before selecting "
                     "the 'flink' runtime, or select 'flink' first in this process."
@@ -324,10 +324,10 @@ class FlinkRuntime(_JvmRuntime):
         try:
             jars = flink_jars()
         except MissingJarError as e:
-            raise RuntimeNotAvailable(str(e)) from e
+            raise RuntimeNotAvailableError(str(e)) from e
         _jvm.start_jvm(extra_jars=list(jars) + self._extra_jars, jvm_args=self._jvm_args)
         if not has_flink_classes():
-            raise RuntimeNotAvailable(
+            raise RuntimeNotAvailableError(
                 f"Flink classes not loadable from the discovered jars ({jars[:3]}...); "
                 "check AGENTIC_FLINK_CLASSPATH / FLINK_HOME"
             )
@@ -404,13 +404,13 @@ class PekkoRuntime(_JvmRuntime):
         try:
             jars = pekko_jars()
         except MissingJarError as e:
-            raise RuntimeNotAvailable(str(e)) from e
+            raise RuntimeNotAvailableError(str(e)) from e
         if not _jvm.is_started():
             # Pekko's Jackson Scala module needs a newer Jackson than the shaded Flink jar bundles,
             # so the Pekko jars go first on the classpath.
             _jvm.start_jvm(prepend_jars=jars, extra_jars=self._extra_jars, jvm_args=self._jvm_args)
         if not has_class(self.PROVIDER):
-            raise RuntimeNotAvailable(
+            raise RuntimeNotAvailableError(
                 f"{self.PROVIDER} is not on the JVM classpath. Build agentic-pekko "
                 "(`mvn -f agentic-pekko/pom.xml package -DskipTests`) and set AGENTIC_PEKKO_CLASSPATH to its "
                 "jar plus dependencies before the JVM starts; the 'pekko' runtime has no pip extra yet."

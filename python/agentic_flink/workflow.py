@@ -138,6 +138,11 @@ class AgentSpec(MappingABC):
         return self._doc["agent"].get("id")
 
     @property
+    def document(self) -> Dict[str, Any]:
+        """The workflow IR document (the same shape ``agentic.AgentSpec.document`` exposes)."""
+        return self.to_dict()
+
+    @property
     def bindings(self) -> Dict[str, ToolFn]:
         """Python callables for the document's ``kind: function`` tools, by tool id."""
         return dict(self._bindings)

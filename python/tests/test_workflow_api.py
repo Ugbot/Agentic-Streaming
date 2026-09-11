@@ -129,8 +129,18 @@ def test_spec_run_on_local_jvm_returns_normalized_result(af):
 
 
 def test_spec_run_local_alias_and_guardrail(af):
+    from agentic_flink._contract import CONTRACT_SOURCE, available_runtimes
+
+    # `local` is the pure-Python reference runtime when pyagentic is installed; the JVM only
+    # claims the alias when nothing else provides it.
+    if CONTRACT_SOURCE == "agentic.runtime":
+        assert available_runtimes()["local"] != "register_runtime"
+        runtime = "local-jvm"
+    else:
+        assert available_runtimes()["local"] == "register_runtime"
+        runtime = "local"
     spec = _builder("support", "refund").build()
-    result = spec.run(runtime="local", text="my password is hunter2", conversation_id="c2", turn_id="t1")
+    result = spec.run(runtime=runtime, text="my password is hunter2", conversation_id="c2", turn_id="t1")
     jsonschema.Draft202012Validator(RESULT_SCHEMA).validate(result)
     assert result["status"] == "rejected"
     assert result["error"]["class"] == "guardrail"

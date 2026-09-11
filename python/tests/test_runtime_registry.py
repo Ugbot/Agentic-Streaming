@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import random
 import string
+from importlib import metadata
 from pathlib import Path
 
 import pytest
@@ -13,14 +14,14 @@ import pytest
 import agentic_flink as af
 from agentic_flink import _classpath
 from agentic_flink._contract import (
+    KNOWN_EXTRAS,
     CAPABILITY_IDS,
     CAPABILITY_VALUES,
     CONTRACT_SOURCE,
     ENTRY_POINT_GROUP,
     Runtime,
-    RuntimeNotAvailable,
-    UnsupportedRequirements,
-    _entry_points,
+    RuntimeNotAvailableError,
+    CapabilityError,
     available_runtimes,
     get_runtime,
     register_runtime,
@@ -43,7 +44,7 @@ def test_runtime_is_an_abc_with_the_contract_methods():
         assert method in Runtime.__abstractmethods__, method
     with pytest.raises(TypeError):
         Runtime()  # type: ignore[abstract]
-    assert CONTRACT_SOURCE in ("agentic.runtime", "agentic_flink._contract (local shim)")
+    assert CONTRACT_SOURCE.startswith(("agentic.runtime", "agentic_flink._contract"))
 
 
 def test_pyproject_declares_the_entry_point_group_for_every_jvm_runtime():
@@ -57,9 +58,9 @@ def test_pyproject_declares_the_entry_point_group_for_every_jvm_runtime():
 def test_jvm_runtimes_are_selectable_by_name():
     names = available_runtimes()
     assert {"local-jvm", "flink", "pekko", "local"} <= set(names)
-    installed = _entry_points()
+    installed = {ep.name for ep in metadata.entry_points().select(group=ENTRY_POINT_GROUP)}
     if installed:  # pip-installed: discovery through the entry-point group itself
-        assert {"local-jvm", "flink", "pekko"} <= set(installed)
+        assert {"local-jvm", "flink", "pekko"} <= installed
     rt = get_runtime("local-jvm")
     assert isinstance(rt, JvmLocalRuntime) and isinstance(rt, Runtime)
     assert isinstance(get_runtime("flink", parallelism=2), FlinkRuntime)
@@ -75,10 +76,11 @@ def test_capabilities_use_only_spec_vocabulary_and_cover_every_capability():
 
 def test_unknown_runtime_raises_and_names_the_extra_without_falling_back():
     name = f"nope-{_rand()}"
-    with pytest.raises(RuntimeNotAvailable) as ei:
+    with pytest.raises(RuntimeNotAvailableError) as ei:
         get_runtime(name)
     msg = str(ei.value)
-    assert name in msg and f'agentic-flink[{name}]' in msg and "register_runtime" in msg
+    assert name in msg and "install the package" in msg and "register_runtime" in msg
+    assert KNOWN_EXTRAS["flink"] == "agentic-flink[flink]"  # the hint used when `flink` is not installed
 
 
 def test_register_runtime_factory_and_options():
@@ -95,7 +97,7 @@ def test_register_runtime_factory_and_options():
             return {c: "unsupported" for c in CAPABILITY_IDS}
 
         def deploy(self, spec):
-            raise UnsupportedRequirements(name, {"routing": "unsupported"})
+            raise CapabilityError(name, ["routing (unsupported)"])
 
         def submit(self, event):
             raise AssertionError("unreachable")
@@ -107,9 +109,9 @@ def test_register_runtime_factory_and_options():
     try:
         rt = get_runtime(name, parallelism=3)
         assert isinstance(rt, Fake) and seen == {"parallelism": 3}
-        with pytest.raises(UnsupportedRequirements, match="routing"):
+        with pytest.raises(CapabilityError, match="routing"):
             rt.deploy({})
-        with pytest.raises(TypeError):
+        with pytest.raises((TypeError, ValueError)):
             register_runtime(f"bad-{_rand()}", "not-callable")  # type: ignore[arg-type]
     finally:
         unregister_runtime(name)
@@ -124,9 +126,9 @@ def test_deploy_rejects_workflows_needing_unsupported_capabilities(af):
         "timers: [{name: nudge, after: 5s}]\n"
     )
     rt = get_runtime("local-jvm")
-    with pytest.raises(UnsupportedRequirements) as ei:
+    with pytest.raises(CapabilityError) as ei:
         rt.deploy(spec)
-    assert "timers" in ei.value.requirements and ei.value.runtime == "local-jvm"
+    assert any(r.startswith("timers ") for r in ei.value.requirements) and ei.value.runtime == "local-jvm"
 
 
 def test_missing_framework_jar_message_is_actionable(monkeypatch, tmp_path: Path):

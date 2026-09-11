@@ -49,7 +49,7 @@ runtime, get a normalized result (valid against `spec/v1/result.schema.json`).
 
 ```python
 from agentic_flink.workflow import Agent, load          # the shared high-level API
-from agentic_flink._contract import get_runtime         # or `agentic.runtime` once pyagentic ships it
+from agentic_flink._contract import get_runtime         # re-exports `agentic.runtime` when pyagentic is installed
 import agentic_flink  # importing registers local-jvm / flink / pekko (also entry points)
 
 def issue_refund(user: str, amount: float = 10.0) -> dict:
@@ -61,6 +61,7 @@ spec = (Agent("support")
               tool_triggers={"refund": "issue_refund"})
         .path("general", brain="rule", prompt="General.")
         .use_tool("issue_refund", issue_refund)
+        .verify("prefix")                          # verifiers are workflow-level (`agent.verifier`), not per path
         .policies(ordering="per-conversation", idempotency="turn-id", retry="exponential")
         .build())
 spec = load("spec/conformance/v1/workflows/support.yaml")      # same AgentSpec from YAML/JSON
@@ -69,7 +70,7 @@ result = spec.run(runtime="local-jvm", text="refund me", conversation_id="c1", t
 
 rt = get_runtime("flink", parallelism=8)   # full control
 rt.capabilities()                          # {capability: supported|partial|unsupported|not_tested}
-rt.deploy(spec)                            # raises UnsupportedRequirements listing what is missing
+rt.deploy(spec)                            # raises CapabilityError listing what is missing
 rt.submit_all([...])                       # one bounded Flink job per batch
 rt.close()
 ```
