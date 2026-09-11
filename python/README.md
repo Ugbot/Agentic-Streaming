@@ -41,6 +41,58 @@ agent = (
 )
 ```
 
+## Portable workflows (`agentic/v1`)
+
+The package is also the JVM-backed Tier-2 implementation of the shared cross-runtime
+contract: define a workflow once (valid against `spec/v1/workflow.schema.json`), pick a
+runtime, get a normalized result (valid against `spec/v1/result.schema.json`).
+
+```python
+from agentic_flink.workflow import Agent, load          # the shared high-level API
+from agentic_flink._contract import get_runtime         # or `agentic.runtime` once pyagentic ships it
+import agentic_flink  # importing registers local-jvm / flink / pekko (also entry points)
+
+def issue_refund(user: str, amount: float = 10.0) -> dict:
+    return {"ok": True, "user": user, "amount": amount}
+
+spec = (Agent("support")
+        .route(kind="keyword", rules={"billing": ["refund", "charge"]}, default="general")
+        .path("billing", brain="rule", prompt="Billing.", tools=["issue_refund"],
+              tool_triggers={"refund": "issue_refund"})
+        .path("general", brain="rule", prompt="General.")
+        .use_tool("issue_refund", issue_refund)
+        .policies(ordering="per-conversation", idempotency="turn-id", retry="exponential")
+        .build())
+spec = load("spec/conformance/v1/workflows/support.yaml")      # same AgentSpec from YAML/JSON
+
+result = spec.run(runtime="local-jvm", text="refund me", conversation_id="c1", turn_id="t1")
+
+rt = get_runtime("flink", parallelism=8)   # full control
+rt.capabilities()                          # {capability: supported|partial|unsupported|not_tested}
+rt.deploy(spec)                            # raises UnsupportedRequirements listing what is missing
+rt.submit_all([...])                       # one bounded Flink job per batch
+rt.close()
+```
+
+Runtimes and what proves them:
+
+| name | over | jars | conformance (`python -m agentic_flink.conformance --runtime <name>`) |
+|---|---|---|---|
+| `local-jvm` (alias `local`) | `org.jagentic.core.LocalRuntime` | shaded jar | 15/15 pass |
+| `flink` | Flink adapter, bounded local job | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) | 13 pass, 2 skip (`replay`, `suspend_resume`) |
+| `pekko` | `agentic-pekko` `PekkoBackendProvider` | + `mvn -f agentic-pekko/pom.xml package` and `AGENTIC_PEKKO_CLASSPATH` | reachable; every capability `not_tested`, fixtures skip |
+
+Legacy `agentic_flink.Agent` (the LangChain4J `AgentBuilder` proxy) is unchanged; the
+shared-contract builder is `agentic_flink.workflow.Agent` (also exported as
+`agentic_flink.WorkflowAgent`).
+
+### Jars
+
+`start_jvm()` looks for the shaded jar in `AGENTIC_FLINK_JAR`, then a source checkout's
+`target/agentic-flink-*-uber.jar`, then package data under `agentic_flink/jars/`. Wheels that
+bundle the jar copy it there before `python -m build` (see `agentic_flink/jars/README.md`); a
+missing jar raises `MissingJarError` naming those three options.
+
 Full guide: [`docs/python.md`](../docs/python.md).
 Runnable examples: `agentic_flink.examples.quickstart`,
 `agentic_flink.examples.rag`, `agentic_flink.examples.live_research`.

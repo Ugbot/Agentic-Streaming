@@ -16,6 +16,15 @@ Every wrapper resolves Java classes lazily — importing this package does not
 require a running JVM. Call :func:`start_jvm` before invoking any wrapper.
 """
 
+from ._classpath import MissingJarError, flink_jars, framework_jar
+from ._contract import (
+    Runtime as WorkflowRuntime,
+    RuntimeNotAvailable,
+    UnsupportedRequirements,
+    available_runtimes,
+    get_runtime,
+    register_runtime,
+)
 from ._jvm import (
     JvmNotStartedError,
     is_started,
@@ -23,6 +32,9 @@ from ._jvm import (
     shutdown_jvm,
     start_jvm,
 )
+from .workflow import AgentSpec, Event, WorkflowError, load, loads
+from .workflow import Agent as WorkflowAgent
+from .runtimes import FlinkRuntime, JvmLocalRuntime, PekkoRuntime, register_jvm_runtimes
 from .runtime import (
     EmbeddedClusterRuntime,
     EmbeddedJobHandle,
@@ -89,4 +101,24 @@ __all__ = [
     "chat",
     "tool",
     "PythonTool",
+    # Shared cross-runtime contract (agentic/v1 workflow IR + runtime registry).
+    "WorkflowAgent",
+    "AgentSpec",
+    "Event",
+    "WorkflowError",
+    "load",
+    "loads",
+    "WorkflowRuntime",
+    "RuntimeNotAvailable",
+    "UnsupportedRequirements",
+    "available_runtimes",
+    "get_runtime",
+    "register_runtime",
+    "JvmLocalRuntime",
+    "FlinkRuntime",
+    "PekkoRuntime",
+    "register_jvm_runtimes",
+    "MissingJarError",
+    "framework_jar",
+    "flink_jars",
 ]
