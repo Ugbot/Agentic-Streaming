@@ -25,6 +25,10 @@ dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "pip-tools>=7,<8"]
 [project.entry-points."agentic.runtimes"]
 local = "agentic.runtime:LocalRuntime"
 
+# Consumed by spec/tools/conformance_matrix.py: fixture mapping in, normalized results (or {"skip": reason}) out.
+[project.entry-points."agentic.conformance"]
+pyagentic = "agentic.conformance:matrix_binding"
+
 [tool.setuptools.packages.find]
 include = ["agentic*", "pyagentic*"]
 

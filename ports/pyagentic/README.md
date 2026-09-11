@@ -51,7 +51,8 @@ extra (`pip install 'pyagentic[flink]'`); nothing falls back silently.
 - `agentic/runtime.py` -- `Runtime` ABC, registry, `LocalRuntime` (single writer per conversation).
 - `agentic/spec.py` -- `Agent` builder, `AgentSpec`, `load()`; implemented on top of `Runtime`.
 - `agentic/conformance.py` -- runs `spec/conformance/v1/fixtures/*.yaml` in place
-  (`python -m agentic.conformance`).
+  (`python -m agentic.conformance`); `matrix_binding` is the `agentic.conformance` entry point
+  that `spec/tools/conformance_matrix.py` drives.
 - `pyagentic/` -- the earlier engine-agnostic essence kept for the Faust/Ray/Dask/Airflow ports.
 
 ## Develop

@@ -18,7 +18,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
 
 import yaml
 
@@ -138,7 +138,16 @@ RuntimeFactory = Callable[[], Runtime]
 
 def run_fixture(path: Path, make_runtime: RuntimeFactory = LocalRuntime) -> Outcome:
     fixture = load_yaml(path)
+    if fixture.get("workflow") is None:
+        fixture["workflow"] = load_yaml((path.parent / fixture["workflow_ref"]).resolve())
+    return run_fixture_document(fixture, make_runtime, path)
+
+
+def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactory = LocalRuntime,
+                         path: Optional[Path] = None) -> Outcome:
+    """Run one fixture whose `workflow` is already resolved and compare it with `expect`."""
     fixture_id = fixture["id"]
+    path = path or Path(fixture_id)
     runtime = make_runtime()
     declared = runtime.capabilities()
     missing = sorted(cap for cap in fixture["requires"] if declared.get(cap) not in ("supported", "partial"))
@@ -147,10 +156,7 @@ def run_fixture(path: Path, make_runtime: RuntimeFactory = LocalRuntime) -> Outc
         declared_as = ", ".join(f"{m}={declared.get(m, 'absent')}" for m in missing)
         return Outcome(fixture_id, path, "skip", [f"requires {missing}, declared {declared_as}"])
 
-    workflow = fixture.get("workflow")
-    if workflow is None:
-        workflow = load_yaml((path.parent / fixture["workflow_ref"]).resolve())
-
+    workflow = fixture["workflow"]
     results: List[Dict[str, Any]] = []
     try:
         runtime.deploy(workflow)
@@ -175,6 +181,21 @@ def run_fixture(path: Path, make_runtime: RuntimeFactory = LocalRuntime) -> Outc
             continue
         problems += [f"expect[{i}] ({expected['turn_id']}) {p}" for p in check_expectation(expected, results[i])]
     return Outcome(fixture_id, path, "fail" if problems else "pass", problems, results)
+
+
+def matrix_binding(fixture: Mapping[str, Any]) -> Union[List[Dict[str, Any]], Dict[str, str]]:
+    """The `agentic.conformance` entry point for `spec/tools/conformance_matrix.py`.
+
+    Receives a fixture with `workflow` resolved; returns the normalized results in turn order,
+    or `{"skip": reason}` naming the capabilities the local runtime does not claim. The matrix
+    runner does the comparison itself.
+    """
+    outcome = run_fixture_document(fixture)
+    if outcome.status == "skip":
+        return {"skip": outcome.reason}
+    if len(outcome.results) < len(fixture["turns"]):
+        raise AgenticError(outcome.reason)
+    return outcome.results
 
 
 def _restart(runtime: Runtime, workflow: Mapping[str, Any]) -> Runtime:

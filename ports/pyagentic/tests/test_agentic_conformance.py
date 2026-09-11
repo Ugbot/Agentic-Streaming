@@ -72,3 +72,31 @@ def test_every_fixture_declares_requirements_the_runtime_knows():
 
 def test_outcome_reason_joins_problems():
     assert Outcome("x", Path("x"), "fail", ["a", "b"]).reason == "a; b"
+
+
+def test_matrix_binding_entry_point_returns_results_or_a_skip():
+    from importlib.metadata import entry_points
+
+    from agentic.conformance import matrix_binding
+    from agentic.ir import validate_result
+
+    eps = [e for e in entry_points(group="agentic.conformance") if e.value == "agentic.conformance:matrix_binding"]
+    assert eps and eps[0].load() is matrix_binding
+
+    for path in PATHS:
+        fixture = load_yaml(path)
+        if fixture.get("workflow") is None:
+            fixture["workflow"] = load_yaml((path.parent / fixture["workflow_ref"]).resolve())
+        results = matrix_binding(fixture)
+        assert isinstance(results, list) and len(results) == len(fixture["turns"]), path.name
+        for result in results:
+            validate_result(result)
+        for expected, actual in zip(fixture["expect"], results):
+            assert check_expectation(expected, actual) == [], path.name
+
+    fixture = load_yaml(PATHS[0])
+    fixture["workflow"] = load_yaml((PATHS[0].parent / fixture.get("workflow_ref", "")).resolve()) \
+        if fixture.get("workflow") is None else fixture["workflow"]
+    fixture["requires"] = list(fixture["requires"]) + ["cep"]
+    skipped = matrix_binding(fixture)
+    assert isinstance(skipped, dict) and "cep=unsupported" in skipped["skip"]
