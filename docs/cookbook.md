@@ -1,6 +1,6 @@
 # Cookbook
 
-Short recipes for common SPI combinations. Each recipe is self-contained — copy
+Short recipes for common SPI combinations. Each recipe is self-contained, copy
 the snippet, plug in your chat / inference / storage backends, and go.
 
 ## Recipes
@@ -37,7 +37,7 @@ ClassifierGuardrail guard = new ClassifierGuardrail(
 
 Agent agent = Agent.builder()
     .withId("support")
-    .withSystemPrompt("…")
+    .withSystemPrompt("...")
     .withGuardrail(guard)
     .build();
 ```
@@ -51,8 +51,8 @@ suppress the response. Listener hooks fire either way.
 InferenceToolAdapter intent = new InferenceToolAdapter(
     "ticket-intent",
     "Classify a support ticket into billing/technical/refund/general.",
-    DjlInferenceConnection.classification("djl://…/facebook/bart-large-mnli"),
-    InferenceSetup.builder().withModelName("bart-mnli").withModelUri("djl://…/bart-mnli").build(),
+    DjlInferenceConnection.classification("djl://.../facebook/bart-large-mnli"),
+    InferenceSetup.builder().withModelName("bart-mnli").withModelUri("djl://.../bart-mnli").build(),
     InferenceToolAdapter.TaskKind.CLASSIFIER);
 
 Agent agent = Agent.builder()
@@ -75,7 +75,7 @@ InferenceSetup setup = InferenceSetup.builder()
 RelevancyScorer relevancy = new RelevancyScorer(ranker.bind(null).asScorer(), setup);
 ```
 
-`RelevancyScorer` keeps the same `scoreRelevancy(item, intent)` API — existing
+`RelevancyScorer` keeps the same `scoreRelevancy(item, intent)` API, existing
 callers don't change. Output is clamped to `[0, 1]`.
 
 ### 4. Vector recall over Flink keyed state
@@ -201,12 +201,12 @@ Skill research = Skill.builder()
 
 Agent agent = Agent.builder()
     .withId("research-bot")
-    .withSystemPrompt("Base prompt …")
+    .withSystemPrompt("Base prompt ...")
     .withSkill(research)        // tools fan out to allowedTools; prompt is concatenated
     .build();
 ```
 
-Skills are additive over `withTools(...)` — a clean way to package reusable
+Skills are additive over `withTools(...)`, a clean way to package reusable
 capability bundles.
 
 ### 11. HNSW vector memory over Flink state
@@ -278,7 +278,7 @@ CrawlerCore.builder()
 
 LLM calls to `crawl-url` materialize as `UrlRequest` records on a Flink
 side-output that union-joins the crawler's frontier. The crawler doesn't
-know or care that this channel is LLM-driven — it just consumes URLs.
+know or care that this channel is LLM-driven, it just consumes URLs.
 
 ### 15. Broadcast corpus shared across operators
 
@@ -342,6 +342,6 @@ from agentic_flink.pyflink.plan import build_plan
 print(json.dumps(build_plan(TriageAgent()), indent=2))
 ```
 
-No JVM, no PyFlink — just walks the decorated class and dumps the JSON
+No JVM, no PyFlink, just walks the decorated class and dumps the JSON
 that would be sent across the gateway. Handy for diffing schema changes
 and writing unit tests against the plan shape.

@@ -1,13 +1,13 @@
-# Tool Services — the toolkit as framework-agnostic, one-shot tools
+# Tool Services: the toolkit as framework-agnostic, one-shot tools
 
 The agent toolkit (web scraping, **Tika** document extraction, RAG/ingestion, inference,
 utilities) is decomposed into standalone, self-describing tools that **any LLM or framework
-can run** over standard protocols — without depending on Flink or any of the agent cores.
+can run** over standard protocols, without depending on Flink or any of the agent cores.
 The decoupling boundary is the **protocol**: you build a tool pack once (Java/Quarkus-first),
 and every framework consumes it the same way.
 
 Lives under [`tool-services/`](../../tool-services/) (standalone Maven modules, kept out of the
-core reactor like `a2a-gateway`). The deployed service is **Flink-free** — it depends on the
+core reactor like `a2a-gateway`). The deployed service is **Flink-free**, it depends on the
 pure-Java `jagentic-core` (the tool model + the `ToolServer` MCP-server engine), not the Flink
 runtime.
 
@@ -22,8 +22,8 @@ implementation, every consumer.
 
 | Layer | What |
 |-------|------|
-| `jagentic-core` | `ToolRegistry` (tools carry an optional input JSON-schema) + `mcp/server/ToolServer` — "expose any ToolRegistry as an MCP server", the byte-for-byte reverse of the core's `McpStdioClient`. |
-| `tool-services-packs` | Flink-free library of `ToolPack`s — each registers self-describing tools into a `ToolRegistry`. |
+| `jagentic-core` | `ToolRegistry` (tools carry an optional input JSON-schema) + `mcp/server/ToolServer`. "expose any ToolRegistry as an MCP server", the byte-for-byte reverse of the core's `McpStdioClient`. |
+| `tool-services-packs` | Flink-free library of `ToolPack`s, each registers self-describing tools into a `ToolRegistry`. |
 | `tool-services-app` | One configurable Quarkus app serving the selected packs over every transport. |
 
 ## Packs
@@ -31,7 +31,7 @@ implementation, every consumer.
 | Pack | `name` | Tools |
 |------|--------|-------|
 | Utility | `util` | calculator + string ops (from LangChain4j `@Tool` methods, reflected into schemas) |
-| Web + document | `web` | `web_fetch`, `web_links`, `web_crawl` (bounded), `doc_extract` (Tika: PDF/DOCX/PPTX/HTML/…) |
+| Web + document | `web` | `web_fetch`, `web_links`, `web_crawl` (bounded), `doc_extract` (Tika: PDF/DOCX/PPTX/HTML/...) |
 | RAG / ingestion | `rag` | `ingest_document` (chunk→embed→store), `semantic_search`, `rag_answer` (extractive) |
 | Inference | `inference` | `classify_text`, `score_text`, `guardrail_check` (lexicon or fitted nearest-centroid) |
 
@@ -75,7 +75,7 @@ TOOL_PACKS=util,web java -cp '.../quarkus-app/app/*:.../quarkus-app/lib/main/*' 
 ## The closed loop: an agent consuming the tool services
 
 The agent cores already ship an MCP **client** and a declarative `mcp:` pipeline section, so an
-agent pulls these packs in directly — see [`examples/pipelines/tools-mcp.yaml`](../../examples/pipelines/tools-mcp.yaml):
+agent pulls these packs in directly, see [`examples/pipelines/tools-mcp.yaml`](../../examples/pipelines/tools-mcp.yaml):
 
 ```yaml
 mcp:
@@ -84,8 +84,8 @@ mcp:
     command: [java, "-cp", ".../quarkus-app/...", "org.jagentic.tools.app.mcp.StdioMain", "util,web"]
 ```
 
-The tools arrive as `tools_util_add`, `tools_web_fetch`, … and the LLM brain calls them like any
-other tool. Tool packs are MCP **servers**; agents are MCP **clients** — both built here, proven
+The tools arrive as `tools_util_add`, `tools_web_fetch`, ... and the LLM brain calls them like any
+other tool. Tool packs are MCP **servers**; agents are MCP **clients**, both built here, proven
 to interoperate by `ToolServerTest` (a `StdioToolServer` subprocess served to the existing
 `McpStdioClient`).
 
@@ -93,5 +93,5 @@ to interoperate by `ToolServerTest` (a `StdioToolServer` subprocess served to th
 
 All four packs and all six transports are implemented and tested (offline packs tests +
 `@QuarkusTest` REST/MCP-HTTP/gRPC; Kafka/Redis round-trips skip cleanly when no broker is up).
-Python/Go MCP-server helpers (mirroring the Java `ToolServer`) are a future addition — today the
+Python/Go MCP-server helpers (mirroring the Java `ToolServer`) are a future addition, today the
 services are Java/Quarkus-first and consumed cross-language via the protocols.

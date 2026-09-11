@@ -1,4 +1,4 @@
-# 🤖 OpenAI Integration Setup Guide
+# OpenAI Integration Setup Guide
 
 ## Quick Start
 
@@ -81,20 +81,20 @@ echo '.env' >> .gitignore
 
 ## Security Best Practices
 
-### ✅ DO:
-- ✅ Use environment variables
-- ✅ Add `.env` to `.gitignore`
-- ✅ Rotate keys regularly
-- ✅ Use different keys for dev/prod
-- ✅ Set usage limits on OpenAI dashboard
-- ✅ Monitor usage on OpenAI dashboard
+### DO:
+- Use environment variables
+- Add `.env` to `.gitignore`
+- Rotate keys regularly
+- Use different keys for dev/prod
+- Set usage limits on OpenAI dashboard
+- Monitor usage on OpenAI dashboard
 
-### ❌ DON'T:
-- ❌ Hardcode API keys in source code
-- ❌ Commit API keys to git
-- ❌ Share keys in Slack/email
-- ❌ Use production keys in development
-- ❌ Store keys in plain text files (that get committed)
+### DON'T:
+- Hardcode API keys in source code
+- Commit API keys to git
+- Share keys in Slack/email
+- Use production keys in development
+- Store keys in plain text files (that get committed)
 
 ## Running the Demos
 
@@ -395,7 +395,7 @@ public String analyzeDocument(String documentText) {
 
 ---
 
-**⚠️ SECURITY REMINDER:**
+**SECURITY REMINDER:**
 Never commit API keys to git! Always use environment variables.
 
-**🚀 Ready to use OpenAI with Flink Agents!**
+**Ready to use OpenAI with Flink Agents!**

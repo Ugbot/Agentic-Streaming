@@ -1,6 +1,6 @@
 # Agentic Streaming on Spring (Boot / Cloud Stream / AI / Integration / StateMachine)
 
-> Per-engine portability doc. Read `00-essence-and-core-abstractions.md` first — this
+> Per-engine portability doc. Read `00-essence-and-core-abstractions.md` first, this
 > doc is written against its essence (§2), capability inventory (§3, C1..C12), Engine
 > SPI (§4c), matrix (§6, the **Spring** column), and ranked fit (§7, rank 5). It
 > follows the §9 six-section template.
@@ -9,7 +9,7 @@
 
 Spring is the **enterprise-wiring** target, not a streaming-analytics engine. Almost
 everything in the *agentic* half of the essence (§2: agents-as-stateful-processors,
-tiered memory, tools, routing, A2A, RAG) lands cleanly — and several pieces land
+tiered memory, tools, routing, A2A, RAG) lands cleanly, and several pieces land
 *better* than hand-rolled, because Spring already ships first-class equivalents:
 **Spring AI** gives you `ChatClient` + advisors + `@Tool` function-calling +
 `VectorStore` + `ChatMemory`; **Spring Integration** gives you the routed graph as a
@@ -36,24 +36,24 @@ ReAct/TurnBrain logic, RAG pipeline logic.
 Resilience4j annotations.
 **Drop:** event-time/windows, native CEP, checkpoint-managed keyed state.
 
-## 2. Capability mapping (C1..C12 — the §6 Spring column)
+## 2. Capability mapping (C1..C12: the §6 Spring column)
 
 | Cap | §6 | Spring mechanism (concrete) |
 |----|:--:|------------------------------|
-| **C1** keyed durable state | **X** | **External.** `ConversationStore` backed by Spring Data Redis (`RedisTemplate`/`ReactiveRedisTemplate`) or JPA/Postgres. Spring AI `ChatMemory` (`MessageWindowChatMemory` + `JdbcChatMemoryRepository`/`CassandraChatMemoryRepository`) can *be* the transcript tier. No checkpoint-managed state — durability = the store's durability. |
-| **C2** per-key ordered processing | **L** | Kafka partition assignment gives single-consumer-per-partition; key the producer on `conversationId` so one consumer instance owns a conversation. Within a JVM, serialize per-key work with a striped lock or a per-key single-thread executor. *Not* an engine primitive — an idiom you enforce. |
+| **C1** keyed durable state | **X** | **External.** `ConversationStore` backed by Spring Data Redis (`RedisTemplate`/`ReactiveRedisTemplate`) or JPA/Postgres. Spring AI `ChatMemory` (`MessageWindowChatMemory` + `JdbcChatMemoryRepository`/`CassandraChatMemoryRepository`) can *be* the transcript tier. No checkpoint-managed state, durability = the store's durability. |
+| **C2** per-key ordered processing | **L** | Kafka partition assignment gives single-consumer-per-partition; key the producer on `conversationId` so one consumer instance owns a conversation. Within a JVM, serialize per-key work with a striped lock or a per-key single-thread executor. *Not* an engine primitive, an idiom you enforce. |
 | **C3** fault tolerance / EOS | **X** | Broker (Kafka) + external store. Spring Cloud Stream Kafka binder supports `transaction` for producer EOS; consumers lean on **idempotency** + the ConversationStore as source of truth (essence §8). At-least-once + idempotent tools is the realistic posture. |
 | **C4** async I/O | **L** | Reactor (`Mono`/`Flux`) is native across WebFlux + Spring AI's reactive `ChatClient`; `@Async` thread pools or **Java 21 virtual threads** (`spring.threads.virtual.enabled=true`) for blocking calls. Bounded in-flight via `Flux.flatMap(fn, concurrency)` or a `Semaphore`. |
 | **C5** backpressure | **L** | Reactor backpressure end-to-end on the WebFlux/`Flux` path; Kafka binder consumer `max.poll.records` + pause/resume for the messaging path. |
 | **C6** connectors | **N** | **Spring Cloud Stream** binders (Kafka, RabbitMQ, Pulsar) as functional `Supplier`/`Function`/`Consumer` beans. `Channel<T>` maps to a binding. First-class. |
 | **C7** side outputs | **L** | Multiple output bindings (`Function<In, Tuple2<...>>` → multiple destinations) or Spring Integration `PublishSubscribeChannel` / `WireTap`. The debug stream and tool-invocation channel are extra channels. |
 | **C8** broadcast state | **L** | Control-plane directives via a compacted Kafka topic consumed into a shared `@Component` (an in-JVM map refreshed on message), or Spring Cloud Config / `@RefreshScope`. No `GlobalKTable` primitive but the pattern is straightforward. |
-| **C9** event-time / windows | **L** (effectively —) | No native windowing. You'd reach for Kafka Streams *under* Spring (binder supports it) or do micro-batch aggregation by hand. For the agentic core this is rarely needed; the streaming-analytics flows don't port. |
+| **C9** event-time / windows | **L** (effectively -) | No native windowing. You'd reach for Kafka Streams *under* Spring (binder supports it) or do micro-batch aggregation by hand. For the agentic core this is rarely needed; the streaming-analytics flows don't port. |
 | **C10** CEP | **L** | No native CEP. The agent *phase* FSM is far better served by **Spring StateMachine** (declarative states + transitions + guards + actions); genuine multi-event pattern detection would be hand-rolled or delegated to Kafka Streams. |
 | **C11** distributed scale | **N** | Spring Boot on Kubernetes; scale = replicas + Kafka partitions. Mature. |
 | **C12** topology builder | **L** | **Spring Integration** `IntegrationFlow` DSL *is* a topology builder (channels + endpoints), and the bean graph wires the rest. It's a message-flow topology, not a dataflow-operator graph, but it expresses router→path→verifier directly. |
 
-The honest read of the matrix: **C1 and C2 — the heart (§3) — are not native.** That
+The honest read of the matrix: **C1 and C2, the heart (§3), are not native.** That
 is the whole story. Spring hosts the essence well *because the pure core was already
 SPI-shaped*, but the "durable thing per key, processed in order" substrate is bolted
 on from Kafka + Redis/JPA rather than given by the runtime.
@@ -71,7 +71,7 @@ the Engine SPI (§4c) is a plain bean.
 @Component
 public class AgentConsumer {
 
-  private final ConversationStore store;     // §4a pure SPI — Redis/JPA-backed bean
+  private final ConversationStore store;     // §4a pure SPI - Redis/JPA-backed bean
   private final TurnBrain brain;             // §4a pure ReAct loop, unchanged
   private final StreamBridge out;            // Spring Cloud Stream programmatic send
   private final PerKeyExecutor keyed;        // single-writer-per-conversation guard
@@ -126,8 +126,8 @@ public class RedisConversationStore implements ConversationStore {
 }
 ```
 
-Equivalently a JPA `@Entity Message(convId, seq, role, content)` + repository, or —
-if you adopt Spring AI — `MessageWindowChatMemory` over a `JdbcChatMemoryRepository`
+Equivalently a JPA `@Entity Message(convId, seq, role, content)` + repository, or,
+if you adopt Spring AI, `MessageWindowChatMemory` over a `JdbcChatMemoryRepository`
 *is* the transcript tier, and you write a thin adapter from `ConversationStore` onto
 it so the rest of the core is unaware.
 
@@ -163,7 +163,7 @@ bodies (the real work) stay in the pure core.
 
 The A2A protocol types + `A2AClient` SPI are pure and stay. The project deliberately
 **hand-rolled** `CircuitBreaker` + `ResilientA2AClient` (retry/backoff/jitter/deadline)
-to avoid a dependency. On Spring you would idiomatically **adopt Resilience4j** — its
+to avoid a dependency. On Spring you would idiomatically **adopt Resilience4j**, its
 `@CircuitBreaker`/`@Retry`/`@TimeLimiter` annotations (or the functional decorators)
 do exactly what `ResilientA2AClient.guarded(...)` does, with metrics wired into
 Micrometer for free:
@@ -187,13 +187,13 @@ public class SpringA2AClient {
 
 **Trade noted:** you trade ~270 lines of self-contained, dependency-free
 `ResilientA2AClient`+`CircuitBreaker` for a battle-tested library with config-driven
-policy and observability — the right call *on Spring*, where Resilience4j is already
+policy and observability, the right call *on Spring*, where Resilience4j is already
 in the room. Keep the SPI seam (`A2AClient`) so either implementation drops in.
 
 ### 3e. The routed graph as a Spring Integration flow (C12)
 
 This is where Spring shines. `router → path → verifier` (BankingAgentGraph) maps onto
-EIP almost 1:1: a **Content-Based Router** = our `BankingRouterFunction`; **channels**
+EIP almost 1:1: a **Content-Based Router** = our `BankingRouterFunction`;**channels**
 = the paths; **service activators** = the path brains; an **aggregator/filter** = the
 verifier.
 
@@ -226,7 +226,7 @@ public IntegrationFlow bankingFlow(BankingRouter router, /* path beans */, Verif
 ```
 
 Keying by `convId` (header) on the Kafka bindings preserves per-conversation ordering
-across the whole flow — the EIP analog of the Flink graph's "all operators keyed by
+across the whole flow, the EIP analog of the Flink graph's "all operators keyed by
 contextId." Cross-turn chaining (multi-step) lives in the shared `ConversationStore`
 (transcript + a `phase` attribute), exactly as the Flink version uses `PhaseStore`.
 
@@ -234,7 +234,7 @@ contextId." Cross-turn chaining (multi-step) lives in the shared `ConversationSt
 
 `AgentStateMachine` (INITIALIZED→VALIDATING→EXECUTING→SUPERVISOR_REVIEW→COMPLETED,
 with CORRECTING/FAILED/COMPENSATING/PAUSED) is currently compiled to Flink CEP
-patterns. On Spring it becomes a **Spring StateMachine** config — a far more natural
+patterns. On Spring it becomes a **Spring StateMachine** config, a far more natural
 home, since it's a workflow FSM, not event-pattern detection:
 
 ```java
@@ -261,13 +261,13 @@ public class AgentFsmConfig extends StateMachineConfigurerAdapter<AgentState, Ag
 The `AgentState` enum, `AgentTransition` (guard `when` + `action`), and timeout
 durations map directly onto Spring StateMachine's states/transitions/guards/actions
 and timed triggers. Persist the machine (`StateMachinePersister` → Redis/JPA) keyed by
-`conversationId` to survive restarts — the C1 story again.
+`conversationId` to survive restarts, the C1 story again.
 
 ### 3g. RAG / retrieval (pure)
 
 `TwoTierRetriever` (hot in-window + cold durable, dedupe-by-id, degrade-on-failure) is
 pure and unchanged. The *cold* `ColdSearch` seam is implemented over a Spring AI
-`VectorStore` (`PgVectorStore`, `RedisVectorStore`, `QdrantVectorStore` — all Boot
+`VectorStore` (`PgVectorStore`, `RedisVectorStore`, `QdrantVectorStore`, all Boot
 auto-configured); the *hot* tier stays the in-process index. Embeddings come from a
 Spring AI `EmbeddingModel` behind the `Embedding` SPI. Ingestion/chunking logic is
 unchanged; only the sink (`VectorStore.add(documents)`) is Spring AI.
@@ -276,9 +276,9 @@ unchanged; only the sink (`VectorStore.add(documents)`) is Spring AI.
 
 The Quarkus inbound gateway becomes a Spring MVC/WebFlux `@RestController` (+ SSE) that
 speaks A2A JSON-RPC and drops requests onto the `requests.in` channel via `StreamBridge`
-— the same bridge pattern as `A2ABridge`, expressed as a controller publishing to Kafka.
+, the same bridge pattern as `A2ABridge`, expressed as a controller publishing to Kafka.
 
-## 4. Worked example — banking router→path→verifier
+## 4. Worked example: banking router→path→verifier
 
 End-to-end on Spring, faithful to `BankingAgentGraph`:
 
@@ -298,7 +298,7 @@ End-to-end on Spring, faithful to `BankingAgentGraph`:
    reads/advances the `phase` attribute in the `ConversationStore` (the cross-turn
    `BankingPhase`), validates the path output, builds the `A2AResponse`.
 5. **A2A delegation.** If the personal agent must consult the CS agent, the path or
-   verifier calls `SpringA2AClient.send(csPeer, msg)` (§3d) — Resilience4j wraps
+   verifier calls `SpringA2AClient.send(csPeer, msg)` (§3d). Resilience4j wraps
    retry/breaker/deadline; the remote `contextId` continuity is persisted in the
    `ConversationStore` attribute (the Spring analog of `A2AStep.applyToStateful`'s
    keyed pre/post operators sharing the store across the async hop).
@@ -307,7 +307,7 @@ End-to-end on Spring, faithful to `BankingAgentGraph`:
    caller.
 
 One turn = Router → Path → Verifier (a clean flow, no cycle). Multi-step *chaining* is
-across turns via the shared store — identical to the Flink design, different substrate.
+across turns via the shared store, identical to the Flink design, different substrate.
 
 ## 5. What doesn't fit (honest gaps)
 
@@ -320,34 +320,34 @@ across turns via the shared store — identical to the Flink design, different s
 - **No `keyBy` (C2).** Single-writer-per-conversation is *convention* (Kafka keying +
   per-key executor), not enforced by the engine. A misconfigured partition count or a
   rebalance mid-turn can break the invariant; design tools to be idempotent.
-- **Event-time, watermarks, windowing (C9)** — absent. The streaming-analytics /
+- **Event-time, watermarks, windowing (C9)**: absent. The streaming-analytics /
   feature-aggregation flows do not port; push them to Kafka Streams (binder-hosted) if
   you truly need them. Don't emulate windows by hand in Integration flows.
-- **Native CEP (C10)** — absent. The *phase FSM* is fine (Spring StateMachine); genuine
+- **Native CEP (C10)**: absent. The *phase FSM* is fine (Spring StateMachine); genuine
   multi-event temporal pattern detection is not Spring's job.
-- **Exactly-once across tool side effects (C3)** — at-least-once is the realistic
+- **Exactly-once across tool side effects (C3)**: at-least-once is the realistic
   posture; lean on idempotency. Kafka transactional producers help for the
   emit-once-downstream case but not for external tool calls.
-- **Backpressure is partial (C5)** — clean on the Reactor path, coarse (poll-size /
+- **Backpressure is partial (C5)**: clean on the Reactor path, coarse (poll-size /
   pause-resume) on the Kafka consumer path; protect the model endpoint with an explicit
   `Semaphore`/bulkhead rather than relying on flow control.
 
 ## 6. When to choose Spring
 
 Choose Spring when the *organization* is already a Spring shop and the agentic system
-is one service among many enterprise services — when you value Boot autoconfiguration,
+is one service among many enterprise services, when you value Boot autoconfiguration,
 actuator health, Micrometer/OpenTelemetry tracing, Spring Security, and the ability to
 hand the agent FSM to **Spring StateMachine**, chat/tools/vectors to **Spring AI**, and
 the routed graph to **Spring Integration** without writing those primitives yourself.
 It is an excellent fit for **request/response and multi-turn conversational agents** at
-moderate scale, the **A2A inbound gateway**, **tool-rich** and **RAG-backed** agents,
+moderate scale, the **A2A inbound gateway**,**tool-rich** and **RAG-backed** agents,
 and any deployment where "fits the existing JVM/Spring platform" outweighs "best
 streaming runtime."
 
 Do **not** choose Spring as the home for the **live keyed-stateful streaming core** if
-you need real checkpointed state, event-time, windowing, or CEP — that is what Flink
+you need real checkpointed state, event-time, windowing, or CEP, that is what Flink
 (or Kafka Streams, rank 2) is for. The honest framing (§7): Spring gives you
 **messaging + integration + DI + Spring AI**, and you assemble durability from
 **Kafka + Redis/JPA**. You reuse the pure Java core wholesale and, uniquely among the
 JVM targets, you get the *option* to swap several core pieces for mature Spring
-ecosystem equivalents — at the cost of those new dependencies.
+ecosystem equivalents, at the cost of those new dependencies.

@@ -1,8 +1,8 @@
 # Web toolkit
 
-The framework ships a small, well-behaved web stack — Jsoup for HTML, Apache
+The framework ships a small, well-behaved web stack. Jsoup for HTML, Apache
 Tika for multi-format content extraction (PDF, DOC, PPT, EPUB, RTF, plain
-text, …), and crawler-commons for robots.txt + sitemap.xml. All optional
+text, ...), and crawler-commons for robots.txt + sitemap.xml. All optional
 dependencies; none load unless you opt in.
 
 The goal is "StormCrawler's capabilities, without StormCrawler's Storm
@@ -57,7 +57,7 @@ who don't run a crawler pay nothing transitively.
 | `ExtractLinksTool` | Cheaper variant: links only, no body. |
 | `CrawlerCore` | Multi-source fetch + extract loop. Consumes from any `Channel<UrlRequest>`s. |
 
-## Crawler frontier — multi-source by design
+## Crawler frontier: multi-source by design
 
 `CrawlerCore.builder()` takes one or more `Channel<UrlRequest>`s. They're
 unioned into a single input stream. The crawler doesn't own its inputs:
@@ -66,7 +66,7 @@ unioned into a single input stream. The crawler doesn't own its inputs:
 CrawlerCore.builder()
     .frontier(
         seedChannel,                                       // static URLs
-        agentCrawlChannel,                                 // ToolInvocationChannel — LLM-driven
+        agentCrawlChannel,                                 // ToolInvocationChannel - LLM-driven
         new KafkaChannel<>(brokers, "crawl-requests",      // external producers
                            "agent", UrlRequest.class))
     .options(WebToolkitOptions.defaults().withMaxDepth(2))
@@ -74,7 +74,7 @@ CrawlerCore.builder()
 ```
 
 Add or remove channels without touching the crawler operator. That's how the
-agent and an external producer can target the same crawler — they're just
+agent and an external producer can target the same crawler, they're just
 different channels into the same union.
 
 ## Robots policy
@@ -99,7 +99,7 @@ the truncated tail; titles, the first N pages of a PDF, and the visible
 text of an oversized HTML page all still extract correctly.
 
 For very-large-document corpora (>10 MB single files) raise the cap or pre-
-process upstream of the framework — Tika can stream PDFs but holding a 500
+process upstream of the framework. Tika can stream PDFs but holding a 500
 MB report in operator memory is rarely a good idea.
 
 ## Building your own ingestion shape

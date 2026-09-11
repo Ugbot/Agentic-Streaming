@@ -24,10 +24,10 @@ Ticket
 | Stage | API used |
 |-------|----------|
 | Guardrail | `ClassifierGuardrail` over a DJL HuggingFace classifier |
-| Intent tool | `InferenceToolAdapter` — model behind the `ToolExecutor` interface |
-| Draft loop | `ChatConnection` + `ChatSetup` — vendor-neutral SPI |
+| Intent tool | `InferenceToolAdapter`, model behind the `ToolExecutor` interface |
+| Draft loop | `ChatConnection` + `ChatSetup`, vendor-neutral SPI |
 | Reranker | `Scorer` via `InferenceClient.asScorer()` (binary classifier's positive-class probability) |
-| Tone polish | `LangChain4jChatClient#getUnderlyingModel()` — the documented escape hatch |
+| Tone polish | `LangChain4jChatClient#getUnderlyingModel()`, the documented escape hatch |
 | Observability | `MetricsAgentEventListener` counts chat / inference / guardrail events |
 
 ## Prerequisites
@@ -73,9 +73,9 @@ Picked draft (score=8.42)
 === Final reply ===
 Hi Alex,
 
-Thanks for reaching out — I'm sorry to hear about the delay with your refund...
+Thanks for reaching out - I'm sorry to hear about the delay with your refund...
 
-Metrics — chatRequests=4 toolCalls=1 inferences=4 guardrailBlocks=0
+Metrics - chatRequests=4 toolCalls=1 inferences=4 guardrailBlocks=0
 ```
 
 (Exact numbers depend on the LLM and model versions.)

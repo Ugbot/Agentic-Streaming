@@ -1,7 +1,7 @@
 # agentic-quarkus
 
 A minimal, standalone Quarkus (reactive) port of the Agentic-Flink essence onto the
-shared pure-Java core `org.jagentic:jagentic-core` — **no Flink dependency**. It maps the
+shared pure-Java core `org.jagentic:jagentic-core`. **no Flink dependency**. It maps the
 engine SPIs from [`docs/portability/quarkus.md`](../../docs/portability/quarkus.md) onto
 idiomatic Quarkus: the engine-agnostic `RoutedGraph` (`Banking.buildGraph()`,
 `router -> path -> verifier`) runs verbatim; **C1 durable keyed state** comes from the
@@ -11,7 +11,7 @@ topic is keyed by `conversationId`, so one partition = one consumer = one writer
 **C4/C5 async + backpressure** come from Mutiny `Uni` and SmallRye Reactive Messaging.
 `AgentResource` is the synchronous inbound REST edge returning a `Uni`; `BankingStream` is
 the `@Incoming("requests")`/`@Outgoing("replies")` streaming agent over Kafka. This module
-**complements** the existing `a2a-gateway/` Quarkus module (the inbound A2A/RAG proxy) — it
+**complements** the existing `a2a-gateway/` Quarkus module (the inbound A2A/RAG proxy), it
 is a separate, self-contained demonstration of the agent-on-Quarkus pattern and does not
 touch that gateway.
 

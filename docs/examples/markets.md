@@ -1,6 +1,6 @@
-# Markets — classic Flink upstream + inline agentic downstream
+# Markets: classic Flink upstream + inline agentic downstream
 
-> **Flink-runtime showcase** — **Kafka + Flink streaming** (Coinbase/bond feeds → agentic enrichment).
+> **Flink-runtime showcase**.**Kafka + Flink streaming** (Coinbase/bond feeds → agentic enrichment).
 > Genuinely streaming-native; not the portable baseline. For the agent that runs unchanged on every
 > runtime see [the banking agent on every runtime](banking-everywhere.md).
 
@@ -39,29 +39,29 @@ pipeline and a **live Coinbase crypto** pipeline.
 ## Files
 
 - `src/main/java/org/agentic/flink/example/markets/`
-  - `MarketPipeline.java` — composes the graph from Inventory/Security/Trade streams
-  - `BondMarketAgentExample.java` — main: reads anonymised `fnd-*` topics
-  - `CryptoMarketAgentExample.java` — main: reads `coinbase-*` topics
-  - `model/MarketRecords.java` — Inventory / Security / Trade / EnrichedInventory / RankedQuote /
+  - `MarketPipeline.java`, composes the graph from Inventory/Security/Trade streams
+  - `BondMarketAgentExample.java`, main: reads anonymised `fnd-*` topics
+  - `CryptoMarketAgentExample.java`, main: reads `coinbase-*` topics
+  - `model/MarketRecords.java`. Inventory / Security / Trade / EnrichedInventory / RankedQuote /
     BestQuoteWithTrade / MarketFeatures / AlertEvent
-  - `stage/EnrichmentFn.java` — broadcast enrichment
-  - `stage/TopNRankerFn.java` — running top-N per (instrument, side)
-  - `stage/BestQuoteFn.java` — best-quote ⨝ latest trade (KeyedCoProcessFunction)
-  - `stage/FeatureAggregatorFn.java` — windowed aggregation
-  - `stage/MarketSignals.java` — pure-function math
-  - `stage/MarketAgentFn.java` — inline agentic operator
-  - `producer/` — Java producers (same wire format as the Python flavour):
+  - `stage/EnrichmentFn.java`, broadcast enrichment
+  - `stage/TopNRankerFn.java`, running top-N per (instrument, side)
+  - `stage/BestQuoteFn.java`, best-quote ⨝ latest trade (KeyedCoProcessFunction)
+  - `stage/FeatureAggregatorFn.java`, windowed aggregation
+  - `stage/MarketSignals.java`, pure-function math
+  - `stage/MarketAgentFn.java`, inline agentic operator
+  - `producer/`. Java producers (same wire format as the Python flavour):
     `BondInventoryProducer`, `BondSecuritiesProducer`, `BondTradesProducer`, `CoinbaseProducer`
-    (built-in JDK 17 WebSocket — no extra deps), plus `MarketProducerSupport`
-- `examples-bin/markets/` — Python producers (anonymised + Coinbase)
+    (built-in JDK 17 WebSocket, no extra deps), plus `MarketProducerSupport`
+- `examples-bin/markets/`. Python producers (anonymised + Coinbase)
 - `examples-bin/run-bond-market.sh`, `examples-bin/run-crypto-market.sh`
-- `notebooks/07_market_depth_agents.ipynb` — drives the agentic operator on a deterministic
+- `notebooks/07_market_depth_agents.ipynb`, drives the agentic operator on a deterministic
   feature stream so the funnel is demonstrable without Kafka
 
 ## Running
 
 See `examples-bin/markets/README.md` for the full quick-start. The Flink job runs via `flink run`
-(not `mvn exec:java`) — the streaming MiniCluster classpath is incomplete under exec:java in this
+(not `mvn exec:java`), the streaming MiniCluster classpath is incomplete under exec:java in this
 repo, same limitation as the other streaming examples.
 
 ## What the agentic operator does

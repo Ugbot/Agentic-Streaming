@@ -1,8 +1,8 @@
-# 🔧 Troubleshooting Guide
+# Troubleshooting Guide
 
 **Having issues? This guide covers common problems and their solutions.**
 
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Setup & Installation Issues](#setup--installation-issues)
 2. [Build & Compilation Issues](#build--compilation-issues)
@@ -17,7 +17,7 @@
 
 ## Setup & Installation Issues
 
-### ❌ Problem: "java: command not found"
+### Problem: "java: command not found"
 
 **Symptom:**
 ```bash
@@ -51,7 +51,7 @@ $ java -version
 
 4. **If still not working, add to PATH:**
 
-   **On Mac/Linux:**
+**On Mac/Linux:**
    ```bash
    # Add to ~/.bashrc or ~/.zshrc
    export JAVA_HOME=/path/to/java
@@ -61,14 +61,14 @@ $ java -version
    source ~/.bashrc  # or source ~/.zshrc
    ```
 
-   **On Windows:**
+**On Windows:**
    - Open "Environment Variables"
    - Add JAVA_HOME = `C:\Program Files\Java\jdk-11`
    - Add `%JAVA_HOME%\bin` to PATH
 
 ---
 
-### ❌ Problem: "mvn: command not found"
+### Problem: "mvn: command not found"
 
 **Symptom:**
 ```bash
@@ -82,19 +82,19 @@ $ mvn -version
 
 1. **Install Maven:**
 
-   **On Mac:**
+**On Mac:**
    ```bash
    brew install maven
    ```
 
-   **On Linux:**
+**On Linux:**
    ```bash
    sudo apt-get install maven  # Ubuntu/Debian
    # or
    sudo yum install maven      # CentOS/RHEL
    ```
 
-   **On Windows:**
+**On Windows:**
    - Download from https://maven.apache.org/download.cgi
    - Extract to `C:\Program Files\Maven`
    - Add `C:\Program Files\Maven\bin` to PATH
@@ -107,7 +107,7 @@ $ mvn -version
 
 ---
 
-### ❌ Problem: "Ollama server not running"
+### Problem: "Ollama server not running"
 
 **Symptom:**
 ```
@@ -124,7 +124,7 @@ Connection refused
    ollama serve
    ```
 
-   **Leave this terminal open!** Ollama needs to keep running.
+**Leave this terminal open!** Ollama needs to keep running.
 
 2. **In a new terminal, verify:**
    ```bash
@@ -146,7 +146,7 @@ Connection refused
 
 ## Build & Compilation Issues
 
-### ❌ Problem: "BUILD FAILURE - Dependencies could not be resolved"
+### Problem: "BUILD FAILURE - Dependencies could not be resolved"
 
 **Symptom:**
 ```
@@ -187,7 +187,7 @@ Could not resolve dependencies for project org.agentic.flink:agentic-flink:jar:1
 
 ---
 
-### ❌ Problem: "Package does not exist" compilation errors
+### Problem: "Package does not exist" compilation errors
 
 **Symptom:**
 ```
@@ -220,7 +220,7 @@ Could not resolve dependencies for project org.agentic.flink:agentic-flink:jar:1
 
 ---
 
-### ❌ Problem: "OutOfMemoryError during build"
+### Problem: "OutOfMemoryError during build"
 
 **Symptom:**
 ```
@@ -254,7 +254,7 @@ java.lang.OutOfMemoryError: Java heap space
 
 ## Runtime Errors
 
-### ❌ Problem: "ClassNotFoundException" when running
+### Problem: "ClassNotFoundException" when running
 
 **Symptom:**
 ```
@@ -290,7 +290,7 @@ org.agentic.flink.example.SimpleAgentExample
 
 ---
 
-### ❌ Problem: "Could not find or load main class"
+### Problem: "Could not find or load main class"
 
 **Symptom:**
 ```
@@ -323,7 +323,7 @@ Error: Could not find or load main class org.agentic.flink.example.SimpleAgentEx
 
 ---
 
-### ❌ Problem: "NoSuchMethodError" at runtime
+### Problem: "NoSuchMethodError" at runtime
 
 **Symptom:**
 ```
@@ -366,7 +366,7 @@ java.lang.NoSuchMethodError: 'void org.apache.flink.streaming.api.environment.St
 
 ## Ollama & LLM Issues
 
-### ❌ Problem: "Model not found" error
+### Problem: "Model not found" error
 
 **Symptom:**
 ```
@@ -415,7 +415,7 @@ Try pulling it first with: ollama pull llama2:latest
 
 ---
 
-### ❌ Problem: "Ollama timeout" or very slow responses
+### Problem: "Ollama timeout" or very slow responses
 
 **Symptom:**
 ```
@@ -469,7 +469,7 @@ Tool execution failed: Request timeout
 
 ---
 
-### ❌ Problem: "Connection refused" to Ollama
+### Problem: "Connection refused" to Ollama
 
 **Symptom:**
 ```
@@ -510,7 +510,7 @@ java.net.ConnectException: Connection refused
 
 ## Qdrant & RAG Issues
 
-### ❌ Problem: "Cannot connect to Qdrant"
+### Problem: "Cannot connect to Qdrant"
 
 **Symptom:**
 ```
@@ -548,7 +548,7 @@ Connection refused
 
 ---
 
-### ❌ Problem: "Collection not found" in Qdrant
+### Problem: "Collection not found" in Qdrant
 
 **Symptom:**
 ```
@@ -585,7 +585,7 @@ Error: Collection 'agent-knowledge' not found in Qdrant
 
 ---
 
-### ❌ Problem: "Embedding dimension mismatch"
+### Problem: "Embedding dimension mismatch"
 
 **Symptom:**
 ```
@@ -630,7 +630,7 @@ Error: Vector dimension mismatch. Expected 768, got 384
 
 ## Performance Issues
 
-### ❌ Problem: "Agent is very slow"
+### Problem: "Agent is very slow"
 
 **Symptom:**
 - Simple operations take > 10 seconds
@@ -686,7 +686,7 @@ config.setEnableContextCompaction(false);
 
 ---
 
-### ❌ Problem: "OutOfMemoryError during execution"
+### Problem: "OutOfMemoryError during execution"
 
 **Symptom:**
 ```
@@ -739,7 +739,7 @@ Exception in thread "main"
 
 ## Context & Memory Issues
 
-### ❌ Problem: "Context keeps getting lost"
+### Problem: "Context keeps getting lost"
 
 **Symptom:**
 - Agent doesn't remember previous conversation
@@ -792,7 +792,7 @@ Exception in thread "main"
 
 ---
 
-### ❌ Problem: "Context growing too large"
+### Problem: "Context growing too large"
 
 **Symptom:**
 ```
@@ -844,7 +844,7 @@ Exception in thread "main"
 
 ## Debugging Tips
 
-### 🔍 Enable Debug Logging
+### Enable Debug Logging
 
 **Add to `src/main/resources/log4j2.properties`:**
 
@@ -865,7 +865,7 @@ logger.context.level = DEBUG
 
 ---
 
-### 🔍 Add Diagnostic Logging
+### Add Diagnostic Logging
 
 **In your code:**
 
@@ -896,7 +896,7 @@ LOG.debug("Validation result: valid={}, errors={}, score={}",
 
 ---
 
-### 🔍 Use Flink Web UI
+### Use Flink Web UI
 
 **Enable Flink's web UI for monitoring:**
 
@@ -919,7 +919,7 @@ StreamExecutionEnvironment env =
 
 ---
 
-### 🔍 Test Components Individually
+### Test Components Individually
 
 **Test tool in isolation:**
 
@@ -958,7 +958,7 @@ public void testOllamaConnection() {
 
 ---
 
-### 🔍 Common Log Messages Explained
+### Common Log Messages Explained
 
 **Normal operation:**
 
@@ -1007,7 +1007,7 @@ public void testOllamaConnection() {
 
 ---
 
-## 📚 Additional Resources
+## Additional Resources
 
 **If you're still stuck:**
 
@@ -1076,4 +1076,4 @@ java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
 
 Check the project's issue tracker or documentation for updates. The error message is usually your best friend - read it carefully!
 
-**Happy debugging!** 🐛🔧
+**Happy debugging!**

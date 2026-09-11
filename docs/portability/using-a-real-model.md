@@ -1,8 +1,8 @@
-# Using a real model (chat + embeddings) — per language
+# Using a real model (chat + embeddings): per language
 
 Every core ships **model-free defaults** so the test suites run offline: the `StubChatClient`
 (scripted ReAct), the FNV `HashingEmbedder` (deterministic), and a lexicon classifier. To go
-live, swap the provider — the SPIs are the same, so nothing else in your agent changes.
+live, swap the provider, the SPIs are the same, so nothing else in your agent changes.
 
 Secrets stay in a gitignored `.env`; never commit keys. Live tests run only when a key/server
 is present and **skip** otherwise.
@@ -34,7 +34,7 @@ export OPENAI_API_KEY=sk-...          # read from the environment, never the YAM
 
 ## In code
 
-### Python (`pyagentic`) — unified via litellm, or native SDKs
+### Python (`pyagentic`): unified via litellm, or native SDKs
 
 ```python
 from pyagentic.llm import LiteLLMChatClient, OllamaChatClient, LlmBrain
@@ -49,7 +49,7 @@ brain = LlmBrain(chat, name="assistant", system_prompt="You are helpful.")
 `pip install litellm` (chat+embeddings across providers); `qdrant-client`, `psycopg`,
 `duckdb`, `mcp` are optional extras for the matching backends.
 
-### Go (`goagentic`) — langchaingo, native go-openai where needed
+### Go (`goagentic`): langchaingo, native go-openai where needed
 
 ```go
 chat := core.NewOllamaChatClient("qwen2.5:3b", "http://localhost:11434")
@@ -59,7 +59,7 @@ brain := core.NewLlmBrain(chat, "assistant", "You are helpful.", nil, 6)
 `go get github.com/tmc/langchaingo` is already wired; `qdrant`/`pgx`/`mark3labs/mcp-go`
 back the optional stores/MCP.
 
-### Java (`jagentic-core`) — LangChain4J behind the ChatClient SPI
+### Java (`jagentic-core`): LangChain4J behind the ChatClient SPI
 
 ```java
 var chat  = new LangChain4jChatClient("ollama", "qwen2.5:3b", "http://localhost:11434");
@@ -67,7 +67,7 @@ var embed = Embedders.make(Map.of("provider", "ollama", "model", "nomic-embed-te
 var brain = new LlmBrain(chat, "assistant", "You are helpful.", null, 6, null);
 ```
 Add the LangChain4J provider modules (`langchain4j-ollama` / `-open-ai`) as `optional`
-dependencies — the lean core builds without them; they activate when present.
+dependencies, the lean core builds without them; they activate when present.
 
 ## Real embeddings → real retrieval
 

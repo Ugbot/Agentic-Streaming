@@ -2,9 +2,9 @@
 
 Agentic-Flink speaks the **A2A protocol v1.0** in both directions:
 
-- **Outbound** — a Flink agent calls a remote A2A agent as a step in its workflow, either as an
+- **Outbound**: a Flink agent calls a remote A2A agent as a step in its workflow, either as an
   LLM-selectable tool or as an explicit, deterministic pipeline step.
-- **Inbound** — a standalone Quarkus **gateway** exposes the agents running in a Flink job to any
+- **Inbound**: a standalone Quarkus **gateway** exposes the agents running in a Flink job to any
   external A2A client (Agent Card discovery + JSON-RPC/SSE, gRPC, and HTTP/REST bindings).
 
 The two sides are connected to the Flink job by a pluggable **bridge** (`inproc` / `zeromq` /
@@ -84,13 +84,13 @@ remote context in Flink state for conversation continuity. Record steps on a job
 
 Outbound uses the official SDK via `SdkA2AClient` (JSON-RPC binding), discovered through
 `A2AClientFactory.discovering()` (ServiceLoader). Override with
-`AgentBuilder.withA2AClientFactory(...)` — tests pass an in-memory fake.
+`AgentBuilder.withA2AClientFactory(...)`, tests pass an in-memory fake.
 
 ---
 
 ## Inbound: the Quarkus gateway
 
-A standalone module under `a2a-gateway/` (built separately — see its `README.md`). It serves the
+A standalone module under `a2a-gateway/` (built separately, see its `README.md`). It serves the
 Agent Card at `/.well-known/agent-card.json` and all three transport bindings, bridging each request
 into the Flink job and driving SSE + push from the job's responses.
 

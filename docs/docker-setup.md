@@ -2,7 +2,7 @@
 
 **Quick start guide for running Agentic Flink infrastructure with Docker Compose**
 
-## 📦 What's Included
+## What's Included
 
 This Docker Compose setup provides:
 
@@ -11,7 +11,7 @@ This Docker Compose setup provides:
 - **Ollama** - Local LLM inference (no API keys needed!)
 - **(Optional) Qdrant** - Vector database for RAG (commented out by default)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Start All Services
 
@@ -78,7 +78,7 @@ You should see tables: `conversations`, `context_items`, `messages`, `tool_execu
 
 ---
 
-## 📊 Service Details
+## Service Details
 
 ### PostgreSQL
 
@@ -142,7 +142,7 @@ docker compose exec ollama ollama rm qwen2.5:3b
 
 ---
 
-## 🔧 Common Operations
+## Common Operations
 
 ### Stop Services
 
@@ -190,7 +190,7 @@ docker volume ls | grep agentic-flink
 
 ---
 
-## 🔐 Security Notes
+## Security Notes
 
 **For Development:**
 - Default passwords are fine
@@ -206,7 +206,7 @@ docker volume ls | grep agentic-flink
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Port Already in Use
 
@@ -268,7 +268,7 @@ docker compose logs ollama
 
 ---
 
-## 📦 Data Persistence
+## Data Persistence
 
 All data is stored in Docker volumes:
 
@@ -298,7 +298,7 @@ docker compose restart redis
 
 ---
 
-## 🎯 Optional: Qdrant Vector Database
+## Optional: Qdrant Vector Database
 
 If you need vector search for RAG:
 
@@ -313,7 +313,7 @@ If you need vector search for RAG:
 
 ---
 
-## 🧹 Cleanup
+## Cleanup
 
 ```bash
 # Stop and remove everything
@@ -328,7 +328,7 @@ docker volume ls | grep agentic-flink | awk '{print $2}' | xargs docker volume r
 
 ---
 
-## 📚 Next Steps
+## Next Steps
 
 Once your infrastructure is running:
 
@@ -339,7 +339,7 @@ Once your infrastructure is running:
 
 ---
 
-## 💡 Tips
+## Tips
 
 - **Use `docker compose` not `docker-compose`** - The hyphenated version is deprecated
 - **Check health status**: `docker compose ps` shows health checks

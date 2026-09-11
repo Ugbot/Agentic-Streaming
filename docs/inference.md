@@ -1,7 +1,7 @@
 # Inference: traditional DL models as first-class agent components
 
-Agentic Flink treats traditional deep learning models — classifiers,
-scorers/regressors, embedders, anomaly detectors, anything that isn't an LLM —
+Agentic Flink treats traditional deep learning models, classifiers,
+scorers/regressors, embedders, anomaly detectors, anything that isn't an LLM,
 as ordinary, swappable framework components. The contract mirrors the chat-
 model SPI: a serializable `InferenceConnection` (transport) ships in the job
 graph, `bind(RuntimeContext)` produces a runtime `InferenceClient` in
@@ -13,7 +13,7 @@ size, and threads.
 LLMs are powerful but expensive and slow. Many real workflows want cheap,
 deterministic decisions instead:
 
-| Use case | Better with… |
+| Use case | Better with... |
 |----------|--------------|
 | Intent routing | small classifier (DistilBERT, fastText) |
 | Content moderation / safety guardrail | dedicated safety classifier |
@@ -40,7 +40,7 @@ unsupported views throw `UnsupportedOperationException`; probe with
 `client.supports(TaskKind.X)` first.
 
 Note that the **embedder view is the same `EmbeddingClient` the chat layer
-uses** — there is no parallel hierarchy. Anything that registers as an
+uses**, there is no parallel hierarchy. Anything that registers as an
 `EmbeddingConnection` (e.g. `DjlEmbeddingConnection`) works as the agent's
 embedder out of the box.
 
@@ -78,7 +78,7 @@ Plus the right native binary for your platform:
 | Linux CUDA 11.8 | `ai.djl.pytorch:pytorch-native-cu118` |
 | macOS Apple Silicon | `ai.djl.pytorch:pytorch-native-cpu` (auto-uses MPS where available) |
 
-The framework deliberately does **not** pull a native binary itself — pick
+The framework deliberately does **not** pull a native binary itself, pick
 the one matching your deployment.
 
 ## Wiring it up
@@ -171,7 +171,7 @@ RelevancyScorer relevancy = new RelevancyScorer(rankerScorer, setup);
 
 ```java
 Agent agent = Agent.builder()
-    .withId("…")
+    .withId("...")
     .withInferenceConnection("ner", DjlInferenceConnection.classification(
         "djl://ai.djl.huggingface.pytorch/dslim/bert-base-NER"))
     .withInferenceConnection("toxicity", DjlInferenceConnection.classification(
@@ -187,11 +187,11 @@ InferenceClient nerClient = ner.bind(getRuntimeContext());
 
 The agent listener interface gained three hooks for observability:
 
-- `onInference(agentId, modelName, task, durationMs)` — fires on every
+- `onInference(agentId, modelName, task, durationMs)`, fires on every
   classifier / scorer / embedder / generic call.
-- `onGuardrailBlock(agentId, modelName, label)` — fires when a guardrail
+- `onGuardrailBlock(agentId, modelName, label)`, fires when a guardrail
   short-circuits a chat.
-- `onGuardrailRewrite(agentId, modelName, reason)` — fires when a guardrail
+- `onGuardrailRewrite(agentId, modelName, reason)`, fires when a guardrail
   swaps the payload.
 
 Register listeners via `AgentBuilder.withListener(...)`; the
@@ -214,7 +214,7 @@ if you want `ServiceLoader` discovery, or pass it explicitly via
 `AgentBuilder.withInferenceConnection(name, conn)`.
 
 ONNX Runtime and DL4J would each follow this pattern. Their dependencies stay
-out of the default build the same way DJL's do — mark them `<optional>true</optional>`.
+out of the default build the same way DJL's do, mark them `<optional>true</optional>`.
 
 ## Running DJL live (native PyTorch) + benchmark
 
@@ -222,7 +222,7 @@ The default build pulls DJL's `api` + `pytorch-engine` but **not** the native
 PyTorch shared library, so a no-DL build stays small and `mvn test` never
 downloads models (the DJL tests are `@Tag("djl")` and excluded by default).
 
-To run real DJL embeddings, use the **`djl-native`** Maven profile — it selects
+To run real DJL embeddings, use the **`djl-native`** Maven profile, it selects
 the `djl` test group, and DJL's `pytorch-engine` auto-downloads the
 platform-matched CPU native + JNI on first model load (cached under
 `~/.djl.ai`; needs network once, offline thereafter):
@@ -234,9 +234,9 @@ bash examples-bin/run-djl-embed.sh
 ```
 
 `DjlRecallIT` loads `sentence-transformers/all-MiniLM-L6-v2`, embeds a small
-corpus into the RAG hot index, and asserts **semantic recall** — a paraphrased
+corpus into the RAG hot index, and asserts **semantic recall**, a paraphrased
 query (`"Which European city is France's capital?"`) retrieves the Paris passage
-as top-1 — then prints mean embed latency (≈5 ms/doc CPU on Apple Silicon).
+as top-1, then prints mean embed latency (≈5 ms/doc CPU on Apple Silicon).
 
 Wiring an embedder into an agent:
 
@@ -247,4 +247,4 @@ Agent.builder().withId("rag").withEmbeddingConnection(embedder)...;
 ```
 
 For a fully offline/air-gapped jar, add `ai.djl.pytorch:pytorch-native-cpu` with
-your platform's DJL classifier (`osx-aarch64`, `linux-x86_64`, …) at the call site.
+your platform's DJL classifier (`osx-aarch64`, `linux-x86_64`, ...) at the call site.

@@ -14,7 +14,7 @@ pip install agentic-flink
 pip install agentic-flink[pyflink]
 ```
 
-You'll also need the framework jar — see [`docs/python.md`](../docs/python.md)
+You'll also need the framework jar, see [`docs/python.md`](../docs/python.md)
 for the discovery rules.
 
 ## Quick start

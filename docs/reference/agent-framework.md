@@ -1,7 +1,7 @@
-# Agent framework — architecture reference
+# Agent framework: architecture reference
 
 A focused reference to how the framework is shaped today: the SPIs, how they
-compose, and where you plug in. Written in the present tense — features
+compose, and where you plug in. Written in the present tense, features
 documented here are shipped, not planned.
 
 For runnable walkthroughs of these ideas wired together, see
@@ -11,7 +11,7 @@ For runnable walkthroughs of these ideas wired together, see
 
 Agentic Flink is a thin set of SPIs over Apache Flink that lets you describe
 an agent declaratively (`Agent.builder()...build()`) and then run it inside a
-Flink operator. The framework is **vendor-neutral by default** — LangChain4J
+Flink operator. The framework is **vendor-neutral by default**. LangChain4J
 is the default chat backend, DJL the default inference backend, Postgres the
 default long-term store, but every one of those is a swap away.
 
@@ -22,7 +22,7 @@ but isn't on the hot path.
 ```
                   ┌────────────────────────────────┐
                   │           Agent.builder()       │
-                  │  – immutable spec, ships in     │
+                  │  - immutable spec, ships in     │
                   │    the Flink job graph          │
                   └──────────────┬─────────────────┘
                                  │
@@ -65,7 +65,7 @@ Eight SPIs follow this shape today:
 | `InferenceConnection` | `inference` | `DjlInferenceConnection` (opt-in) |
 | `AgentEventListener` | `listener` | `LoggingAgentEventListener` |
 
-Tools (`tools.ToolExecutor`) and skills (`skill.Skill`) are simpler — no
+Tools (`tools.ToolExecutor`) and skills (`skill.Skill`) are simpler, no
 Connection/Client split because they don't hold persistent transports.
 Guardrails (`inference.Guardrail`) are an interceptor layer over the chat
 path.
@@ -107,17 +107,17 @@ Every `with*` method is optional. The minimum viable agent is
 
 Three layers:
 
-1. **Short-term** — `FlinkStateShortTermMemory` over `ValueState` +
+1. **Short-term**: `FlinkStateShortTermMemory` over `ValueState` +
    `MapState` with `StateTtlConfig`. The hot path. Checkpoints provide
    durability; no external HOT tier required.
-2. **Vector** — `FlinkStateVectorMemory` over `MapState<String, VectorEntry>`,
+2. **Vector**: `FlinkStateVectorMemory` over `MapState<String, VectorEntry>`,
    brute-force KNN, configurable scope (per-key or per-operator). Default
    for in-JVM semantic recall; SPI escape hatch for HNSW backends.
-3. **Long-term** — `LongTermMemoryStore` (Postgres / Redis / in-memory).
+3. **Long-term**: `LongTermMemoryStore` (Postgres / Redis / in-memory).
    Used for conversation resumption across job lifetimes and fact archive.
    Write-behind from Flink state.
 
-External memories can be **fed in** via any `Channel<KeyedContextItem>` —
+External memories can be **fed in** via any `Channel<KeyedContextItem>`,
 `KafkaContextChannel`, `PostgresChangeChannel`, `RedisPubSubChannel`, or any
 custom transport you implement. Items materialize as a `DataStream` and
 union-connect into the agent operator.
@@ -154,14 +154,14 @@ Public framework API never returns `dev.langchain4j.*` types.
 
 `InferenceConnection` exposes up to four task surfaces on a single client:
 
-- `Classifier` — text → label + score + probability distribution
-- `Scorer` — text → numeric (also pair-scoring for cross-encoders)
-- `EmbeddingClient` — the existing embedding SPI, not a parallel hierarchy
-- `GenericInferenceModel` — `Map → Map` escape hatch
+- `Classifier`, text → label + score + probability distribution
+- `Scorer`, text → numeric (also pair-scoring for cross-encoders)
+- `EmbeddingClient`, the existing embedding SPI, not a parallel hierarchy
+- `GenericInferenceModel`, `Map → Map` escape hatch
 
 `DjlInferenceConnection` is the default backend, covering PyTorch, TF, ONNX,
 and HuggingFace under one API. DJL is `<optional>true</optional>` in the pom
-— users who don't use DL pay nothing transitively.
+, users who don't use DL pay nothing transitively.
 
 Inference models slot into the agent in four ways:
 
@@ -196,7 +196,7 @@ called from inside `LLMClient.chat(...)`:
 Returning `BLOCK` short-circuits the chat; `REWRITE` swaps the payload.
 Listener hooks fire either way.
 
-The canonical impl is `ClassifierGuardrail` — plug any DL classifier into it
+The canonical impl is `ClassifierGuardrail`, plug any DL classifier into it
 and configure a block-list of labels.
 
 ### Observability
@@ -219,10 +219,10 @@ exceptions. Reference impls: `LoggingAgentEventListener` (SLF4J),
 
 Two complementary models:
 
-- **CEP-driven** — Flink CEP patterns drive when the agent runs (validation,
+- **CEP-driven**: Flink CEP patterns drive when the agent runs (validation,
   escalation, anomaly confirmation). See `cep/CepPatternBuilder`. Pair with
   the incident example.
-- **Workflow / ReAct** — `function.ReActProcessFunction` packages the
+- **Workflow / ReAct**: `function.ReActProcessFunction` packages the
   canonical Thought / Action / Observation loop on the `ChatClient` SPI,
   bounded by `Agent.getMaxIterations()`. Pair with the RAG example.
 

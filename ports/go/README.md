@@ -1,7 +1,7 @@
-# goagentic — Agentic-Flink essence in Go
+# goagentic: Agentic-Flink essence in Go
 
 A pure-Go port of the Agentic-Flink **essence**, plus a complete Go runtime experience:
-an HTTP gateway, a NATS JetStream engine, and a Temporal engine — all reusing one
+an HTTP gateway, a NATS JetStream engine, and a Temporal engine, all reusing one
 dependency-free core. This is the Go peer of the Python `pyagentic` and Java
 `jagentic-core` cores. See [`../../docs/portability/00-essence-and-core-abstractions.md`](../../docs/portability/00-essence-and-core-abstractions.md).
 
@@ -20,11 +20,11 @@ ports/go/
 
 The `core` package is the single source of truth: `gateway`, `natsjs`, and `temporal`
 all consume `core.BuildBankingGraph()` / `core.DefaultBankingTools()` /
-`core.BankingRetriever()` and call `RoutedGraph.Handle` — none reimplements routing,
+`core.BankingRetriever()` and call `RoutedGraph.Handle`, none reimplements routing,
 tools, or retrieval. A new tool/path added to `core` propagates to all of them. Each
 engine's seam is injectable (`natsjs.New(graph, tools, retriever)`,
 `temporal.MakeConversationWorkflow(graph, tools, retriever)`) so an *extended* graph
-runs unchanged — the extensibility tests prove a new `freeze_card` tool + `fraud` path
+runs unchanged, the extensibility tests prove a new `freeze_card` tool + `fraud` path
 flow through both the NATS KV seam and the Temporal workflow.
 
 ## Run
@@ -49,12 +49,12 @@ go run ./cmd/natsdemo         # publish turns -> consumer runs the graph against
 
 ## The two engines, in Go
 
-- **NATS JetStream** ([`engines/natsjs`](engines/natsjs/natsjs.go)) — the JetStream **KV
+- **NATS JetStream** ([`engines/natsjs`](engines/natsjs/natsjs.go)), the JetStream **KV
   store** is native durable keyed state (C1); a persistent stream + durable consumer is
   the ordered, redelivering transport (C3). Each turn runs the graph in a load → handle →
   save bracket around the per-conversation KV envelope, with revision compare-and-set as
   the single-writer (C2) backstop. The Go peer of [`../nats`](../nats/) (Python).
-- **Temporal** ([`engines/temporal`](engines/temporal/temporal.go)) — one entity workflow
+- **Temporal** ([`engines/temporal`](engines/temporal/temporal.go)), one entity workflow
   per conversation (`workflowID == conversationID`): one running execution (C2),
   event-sourced durable state (C1+C3), turns delivered as signals and processed serially.
   Runs entirely in-memory via the SDK's `testsuite.TestWorkflowEnvironment` (no server).

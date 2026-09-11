@@ -1,7 +1,7 @@
-# ports/pekko — superseded by the first-class `agentic-pekko/` module
+# ports/pekko: superseded by the first-class `agentic-pekko/` module
 
 > **This was the proof-of-concept.** It has graduated to a full first-class runtime at the
-> top-level [`agentic-pekko/`](../../agentic-pekko/) module — event-sourced + cluster-sharded
+> top-level [`agentic-pekko/`](../../agentic-pekko/) module, event-sourced + cluster-sharded
 > entities, async turns with recovery + dedupe, `backend: pekko`, a Pekko HTTP front door, Pekko
 > Streams + Kafka ingress, and pluggable durability (memory/Postgres/Cassandra/Redis). Use that.
 > The files here remain only as the original minimal PoC.
@@ -11,16 +11,16 @@ the Flink-free `org.jagentic:jagentic-core`. See the design in
 [`../../docs/portability/pekko.md`](../../docs/portability/pekko.md).
 
 **Why it fits so well:** a Pekko actor has a mailbox (one message at a time =
-single-writer, ordered — **C2**) and private fields (its state — **C1**). One actor
+single-writer, ordered. **C2**) and private fields (its state.**C1**). One actor
 per `conversationId` via **Cluster Sharding** is exactly Flink's keyed operator, and
-**Pekko Persistence** (event sourcing) makes that state durable (**C3**) — so Pekko
+**Pekko Persistence** (event sourcing) makes that state durable (**C3**), so Pekko
 gives the C1+C2+C3 heart *natively*, in the actor paradigm, the way Kafka Streams
 does in the streaming paradigm. The `ask` pattern makes turns async (**C4**).
 
 | File | Role |
 |------|------|
 | `ConversationActor.java` | the per-conversation typed actor; runs `Banking.buildGraph().handle(...)` over its private keyed state |
-| `BankingSharding.java` | Cluster Sharding wiring — one entity per `conversationId` (keyed state + single-writer across the cluster) + an async `ask` |
+| `BankingSharding.java` | Cluster Sharding wiring, one entity per `conversationId` (keyed state + single-writer across the cluster) + an async `ask` |
 | `LocalDemo.java` | runnable single-node demo (guardian spawns a child actor per conversation; no cluster/broker needed) |
 
 ## Run

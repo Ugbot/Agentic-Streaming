@@ -1,12 +1,12 @@
 # PyFlink-native Python integration
 
 The recommended path for shipping Python-defined agents as part of a real
-PyFlink job (`flink run -py …`). Python builds a declarative
+PyFlink job (`flink run -py ...`). Python builds a declarative
 **agent plan** (JSON) from decorated user code; the plan is handed to
 Java's `CompileUtils.attachAgent` via PyFlink's existing Py4J gateway,
 which inserts an `AgentPlanProcessFunction` into the job graph. At
 runtime the function invokes Python tools and actions through PEMJA
-(Python embedded in the JVM) on the operator's own thread — no IPC, no
+(Python embedded in the JVM) on the operator's own thread, no IPC, no
 second process.
 
 This is parallel to Apache Flink Agents' upstream pattern, adapted to
@@ -33,7 +33,7 @@ pip install 'agentic-flink[pyflink]'
 
 This pulls in `apache-flink` and `cloudpickle`. The Java side needs the
 optional PEMJA dependency on the classpath at runtime
-(`com.alibaba:pemja:0.4.1`) — included automatically when you build the
+(`com.alibaba:pemja:0.4.1`), included automatically when you build the
 framework jar with `mvn package`.
 
 ## Defining an agent
@@ -138,29 +138,29 @@ JVM or PyFlink installation, which is what lets the offline tests run.
 
 ## Runtime semantics
 
-* **One Python interpreter per task slot** — PEMJA boots a single
+* **One Python interpreter per task slot**: PEMJA boots a single
   interpreter that's reused across invocations. Cloudpickled callables
   are deserialized once and cached behind opaque handles
   (`PythonExecutor.register`).
-* **Java SPIs by FQN** — chat connection, embedder, corpus, vector
+* **Java SPIs by FQN**: chat connection, embedder, corpus, vector
   memory, etc. are referenced in the plan as fully-qualified class
   names plus a `config` map. The Java side instantiates them via
   reflection, calling either a `Map<String,String>`-arg constructor or
   the no-arg constructor followed by `initialize(config)` (the same
   pattern as `StorageFactory.createLongTermStore`).
-* **Event routing** — `AgentPlanProcessFunction` infers an event type
+* **Event routing**: `AgentPlanProcessFunction` infers an event type
   from a `Map` with a `"type"` key, otherwise from the class simple
   name. Every matching action fires; if no action matches, the event
   passes through unchanged.
-* **Checkpointing** — the operator is a `KeyedProcessFunction`. State
+* **Checkpointing**: the operator is a `KeyedProcessFunction`. State
   inside Python callbacks is *not* checkpointed; keep durable state on
   the Java side (Flink keyed state, the framework's
   `ShortTermMemory` / `LongTermMemoryStore` / `VectorMemorySpec`).
 
 ## When to prefer the JPype standalone path
 
-* No PyFlink job — just a script / notebook / service.
-* Synchronous request/response — no streaming context.
+* No PyFlink job, just a script / notebook / service.
+* Synchronous request/response, no streaming context.
 * You want JNI-level access to arbitrary Java classes (not just the
   agent operator surface).
 
