@@ -44,7 +44,7 @@ class FlinkConformanceTest {
   @TestFactory
   Stream<DynamicTest> fixtures() {
     List<Path> files = FlinkConformanceHarness.fixtureFiles();
-    assertEquals(15, files.size(), "expected the 15 v1 fixtures at " + FlinkConformanceHarness.fixturesDir());
+    assertEquals(22, files.size(), "expected the 22 v1 fixtures at " + FlinkConformanceHarness.fixturesDir());
     return files.stream().map(p -> DynamicTest.dynamicTest(p.getFileName().toString(), () -> {
       FlinkConformanceHarness.Outcome o = FlinkConformanceHarness.run(p, cluster, savepoints);
       Assumptions.assumeFalse(o.skipped(), () -> "skip " + o.id() + ": " + o.skipReason());

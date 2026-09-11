@@ -1,0 +1,40 @@
+id: timer-survives-restart
+description: "Pending timers and the logical clock are part of recovered state: a timer scheduled before a runtime restart fires after it, exactly once, when the clock reaches its deadline. Recovery rebuilds pending timers from timer_scheduled and timer_fired events; it never re-schedules or double-fires."
+requires: [timers, checkpoint_recovery, durable_store]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  timers:
+    - {id: expiry, after_ms: 1000, tool: expire_cart, payload: {}}
+  agent:
+    id: cart
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: rule, prompt: You manage a cart.}
+  tools:
+    - {id: expire_cart, kind: constant, value: "expired"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "add item"}
+  - {conversation_id: c1, turn_id: t2, text: "add another", advance_time_ms: 600}
+  - {conversation_id: c1, turn_id: t3, text: "checkout?", restart_runtime: true, advance_time_ms: 500}
+  - {conversation_id: c1, turn_id: t4, text: "anything else?", restart_runtime: true, advance_time_ms: 5000}
+expect:
+  - turn_id: t1
+    status: completed
+    events_include: [turn_received, timer_scheduled]
+  - turn_id: t2
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired, timer_scheduled]
+  - turn_id: t3
+    status: completed
+    tool_calls:
+      - {tool: expire_cart, index: 0, args: {}}
+    events_include: [timer_fired, tool_called, turn_received, turn_completed]
+    events_exclude: [timer_scheduled]
+    state_includes: {turn_count: 3, fired_timers: [expiry]}
+  - turn_id: t4
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired, timer_scheduled]
+    state_includes: {turn_count: 4, fired_timers: [expiry]}

@@ -24,7 +24,7 @@ class ConformanceTest {
   @TestFactory
   Stream<DynamicTest> fixtures() {
     List<Path> files = ConformanceHarness.fixtureFiles();
-    assertEquals(15, files.size(), "expected the 15 v1 fixtures at " + ConformanceHarness.fixturesDir());
+    assertEquals(22, files.size(), "expected the 22 v1 fixtures at " + ConformanceHarness.fixturesDir());
     return files.stream().map(p -> DynamicTest.dynamicTest(p.getFileName().toString(), () -> {
       ConformanceHarness.Outcome o = ConformanceHarness.run(p);
       Assumptions.assumeFalse(o.skipped(), () -> "skip " + o.id() + ": " + o.skipReason());
