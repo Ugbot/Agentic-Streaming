@@ -6,10 +6,12 @@ import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.pipeline.BackendProvider;
 import org.jagentic.core.pipeline.GraphBuilder;
+import org.jagentic.pekko.durability.DurabilityProfile;
 
 /** Makes {@code backend: pekko} resolvable from a {@code pipeline.yaml}: builds the agent brain
  * from the compiled {@link GraphBuilder.Built}, boots a local Pekko system, and returns a
- * {@link PekkoRuntime}. The Pekko entity is event-sourced, so it owns its own durable state — the
+ * {@link PekkoRuntime} under the durability profile named by {@code AGENTIC_PEKKO_DURABILITY}
+ * (default memory). The Pekko entity is event-sourced, so it owns its own durable state — the
  * loader's {@code conversationStore} is intentionally not used here. Registered via
  * {@code META-INF/services/org.jagentic.core.pipeline.BackendProvider}. */
 public final class PekkoBackendProvider implements BackendProvider {
@@ -22,7 +24,7 @@ public final class PekkoBackendProvider implements BackendProvider {
   @Override
   public Runtime create(GraphBuilder.Built built, ConversationStore conversationStore) {
     AgentDeps deps = new AgentDeps(built.graph(), built.tools(), built.retriever());
-    PekkoSystem system = new PekkoSystem(deps);
+    PekkoSystem system = new PekkoSystem(deps, DurabilityProfile.fromEnvironment());
     return new PekkoRuntime(system.system(), Duration.ofSeconds(30), true);
   }
 }

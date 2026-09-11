@@ -1,152 +1,221 @@
 package org.jagentic.pekko.entity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.LinkedHashMap;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
 
 import com.typesafe.config.ConfigFactory;
 
-import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
-import org.apache.pekko.actor.testkit.typed.javadsl.TestProbe;
-import org.apache.pekko.actor.typed.ActorRef;
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import org.jagentic.core.Agent;
-import org.jagentic.core.Banking;
-import org.jagentic.core.Brain;
 import org.jagentic.core.Event;
-import org.jagentic.core.RoutedGraph;
-import org.jagentic.core.ToolRegistry;
-import org.jagentic.pekko.runtime.AgentDeps;
+import org.jagentic.core.EventType;
+import org.jagentic.core.LogEvent;
+import org.jagentic.core.TurnResult;
+import org.jagentic.core.TurnStatus;
+import org.jagentic.pekko.durability.DurabilityProfile;
+import org.jagentic.pekko.runtime.PekkoRuntime;
+import org.jagentic.pekko.runtime.PekkoSystem;
+import org.jagentic.pekko.testing.CountingGraph;
 
-import org.jagentic.pekko.entity.ConversationEntity.Command;
-import org.jagentic.pekko.entity.ConversationEntity.GetState;
-import org.jagentic.pekko.entity.ConversationEntity.ProcessTurn;
-import org.jagentic.pekko.entity.ConversationEntity.StateSnapshot;
-import org.jagentic.pekko.entity.ConversationEntity.TurnReply;
-
-/** The event-sourced conversation entity: routing through the banking graph, multi-turn
- * transcript accumulation, and an extended graph injected through the Pekko seam — all on a
- * real (single-node) actor with the in-memory persistence journal. */
+/**
+ * The event-sourced conversation entity: the journal is the spec log with dense sequences, state
+ * is only its fold, restart replays without running the brain/tools, and a redelivered turn_id is
+ * a {@code duplicate} that appends nothing and runs nothing.
+ */
 class ConversationEntityTest {
 
-  private static final ActorTestKit TESTKIT = ActorTestKit.create(ConfigFactory.parseString(
-      "pekko.persistence.journal.plugin = \"pekko.persistence.journal.inmem\"\n"
-          + "pekko.persistence.snapshot-store.plugin = \"pekko.persistence.snapshot-store.local\"\n"
-          + "pekko.persistence.snapshot-store.local.dir = \"target/pekko-snapshots-test\"\n"));
+  private CountingGraph graph;
+  private PekkoSystem sys;
+  private PekkoRuntime rt;
 
-  @AfterAll
-  static void shutdown() {
-    TESTKIT.shutdownTestKit();
+  @BeforeEach
+  void boot() {
+    graph = new CountingGraph();
+    // serialize-messages proves every command/reply crossing the entity boundary is CBOR-serializable
+    sys = new PekkoSystem(graph.deps(), DurabilityProfile.MEMORY, ConfigFactory.parseString(
+        "pekko.actor.serialize-messages = on\n"
+            + "pekko.persistence.snapshot-store.local.dir = \"target/pekko-snap-" + UUID.randomUUID() + "\"\n")
+        .withFallback(DurabilityProfile.MEMORY.config()));
+    rt = new PekkoRuntime(sys.system(), Duration.ofSeconds(20));
   }
 
-  private TurnReply ask(ActorRef<Command> actor, String cid, String text) {
-    return askWithId(actor, UUID.randomUUID().toString(), cid, text);
+  @AfterEach
+  void shutdown() {
+    sys.close();
   }
 
-  private TurnReply askWithId(ActorRef<Command> actor, String turnId, String cid, String text) {
-    TestProbe<TurnReply> probe = TESTKIT.createTestProbe(TurnReply.class);
-    actor.tell(new ProcessTurn(turnId, new Event(cid, "alice", text), probe.getRef()));
-    return probe.receiveMessage();
-  }
-
-  private StateSnapshot state(ActorRef<Command> actor) {
-    TestProbe<StateSnapshot> probe = TESTKIT.createTestProbe(StateSnapshot.class);
-    actor.tell(new GetState(probe.getRef()));
-    return probe.receiveMessage();
-  }
-
-  /** Single-path graph whose brain counts invocations — to prove the pipeline is NOT re-run on
-   * recovery and IS skipped on a deduped turn. */
-  private static AgentDeps countingDeps(AtomicInteger counter) {
-    Brain counting = (text, ctx) -> {
-      counter.incrementAndGet();
-      return "[count] " + text;
-    };
-    Map<String, Agent> paths = new LinkedHashMap<>();
-    paths.put("count", new Agent("count", "counts turns", counting));
-    RoutedGraph g = new RoutedGraph(
-        (ev, ctx) -> "count",
-        paths,
-        (reply, ctx) -> new RoutedGraph.Verifier.Result(true, reply));
-    return new AgentDeps(g, Banking.defaultTools(), Banking.retriever());
+  private static String rnd(String prefix) {
+    return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
   }
 
   @Test
-  void defaultBankingGraphRoutes() {
-    ActorRef<Command> actor = TESTKIT.spawn(ConversationEntity.create("c1", AgentDeps.banking()));
-    TurnReply r = ask(actor, "c1", "what is my balance?");
-    assertEquals("payments", r.path());
-    assertTrue(r.reply().contains("1234.56"), r.reply());
+  void journalIsTheSpecLogWithDenseSequences() {
+    String cid = rnd("c");
+    TurnResult r1 = rt.submit(Event.turn(cid, rnd("t"), "alice", "what is my balance?"));
+    TurnResult r2 = rt.submit(Event.turn(cid, rnd("t"), "alice", "hello there"));
+
+    assertEquals(TurnStatus.COMPLETED, r1.status);
+    assertEquals("payments", r1.path);
+    assertEquals("[payments] balance " + graph.balance, r1.reply);
+    assertEquals(1, r1.calls.size());
+    assertEquals(Map.of("user", "alice"), r1.calls.get(0).args());
+    assertEquals("general", r2.path);
+
+    ConversationEntity.StateSnapshot snap = rt.state(cid);
+    List<LogEvent> journal = snap.events();
+    assertEquals(r1.events.size() + r2.events.size(), journal.size());
+    for (int i = 0; i < journal.size(); i++) {
+      assertEquals(i, journal.get(i).sequence(), "journal must be dense and zero-based");
+      assertEquals(cid, journal.get(i).conversationId());
+    }
+    List<LogEvent> fromResults = new ArrayList<>(r1.events);
+    fromResults.addAll(r2.events);
+    assertEquals(fromResults, journal, "the result events are exactly the persisted journal");
+    assertEquals(2L, snap.turnCount());
+    assertEquals(2L, ((Number) snap.reduced().get("turn_count")).longValue());
+    assertTrue(journal.stream().anyMatch(e -> e.is(EventType.TOOL_CALLED)));
   }
 
   @Test
-  void multiTurnAccumulatesPersistedTranscript() {
-    ActorRef<Command> actor = TESTKIT.spawn(ConversationEntity.create("c2", AgentDeps.banking()));
-    ask(actor, "c2", "what card types do you offer?");
-    ask(actor, "c2", "tell me about crypto cash-back");
-    // 2 turns × (user + assistant) = 4 messages, durably committed via TurnCommitted events
-    assertEquals(4, state(actor).messageCount());
+  void restartReplaysTheJournalWithoutInvokingBrainOrTools() {
+    String cid = rnd("c");
+    rt.submit(Event.turn(cid, rnd("t"), "bob", "what is my balance?"));
+    rt.submit(Event.turn(cid, rnd("t"), "bob", "and some general chat"));
+    ConversationEntity.StateSnapshot before = rt.state(cid);
+    int brains = graph.brainCalls.get();
+    int tools = graph.toolCalls.get();
+    int guards = graph.guardrailCalls.get();
+    assertEquals(2, brains);
+    assertEquals(1, tools);
+
+    rt.passivate(cid);
+    ConversationEntity.StateSnapshot after = rt.state(cid);
+
+    assertEquals(before.events(), after.events(), "recovery must rebuild exactly the same journal");
+    assertEquals(before.reduced(), after.reduced());
+    assertEquals(before.transcriptLength(), after.transcriptLength());
+    assertEquals(brains, graph.brainCalls.get(), "the brain must NOT run during recovery");
+    assertEquals(tools, graph.toolCalls.get(), "tools must NOT run during recovery");
+    assertEquals(guards, graph.guardrailCalls.get(), "guardrails must NOT run during recovery");
+
+    TurnResult next = rt.submit(Event.turn(cid, rnd("t"), "bob", "what did I just ask?"));
+    assertEquals(3L, ((Number) next.state.get("turn_count")).longValue());
+    assertEquals(after.events().size(), next.events.get(0).sequence(), "sequences continue densely after restart");
   }
 
   @Test
-  void recoversTranscriptWithoutReplayingThePipeline() {
-    AtomicInteger turns = new AtomicInteger();
-    AgentDeps deps = countingDeps(turns);
+  void duplicateTurnIsAnsweredFromTheJournalAndRunsNothing() {
+    String cid = rnd("c");
+    String t1 = rnd("t");
+    TurnResult first = rt.submit(Event.turn(cid, t1, "carol", "what is my balance?"));
+    rt.submit(Event.turn(cid, rnd("t"), "carol", "something else"));
+    int journalSize = rt.state(cid).events().size();
+    int brains = graph.brainCalls.get();
+    int tools = graph.toolCalls.get();
+    int guards = graph.guardrailCalls.get();
 
-    ActorRef<Command> first = TESTKIT.spawn(ConversationEntity.create("rec", deps));
-    ask(first, "rec", "one");
-    ask(first, "rec", "two");
-    assertEquals(2, turns.get());
-    assertEquals(4, state(first).messageCount());
-    TESTKIT.stop(first);
+    TurnResult dup = rt.submit(Event.turn(cid, t1, "carol", "what is my balance?"));
 
-    // Same persistenceId → the entity recovers by replaying TurnCommitted events.
-    ActorRef<Command> recovered = TESTKIT.spawn(ConversationEntity.create("rec", deps));
-    assertEquals(4, state(recovered).messageCount(), "transcript must survive restart");
-    assertEquals(2, turns.get(), "the LLM-calling pipeline must NOT re-run during recovery");
+    assertEquals(TurnStatus.DUPLICATE, dup.status);
+    assertEquals(first.path, dup.path);
+    assertEquals(first.reply, dup.reply);
+    assertEquals(first.calls, dup.calls, "the original structured tool calls are retained");
+    assertTrue(dup.events.isEmpty(), "a duplicate carries no events");
+    assertEquals(2L, ((Number) dup.state.get("turn_count")).longValue(), "state is the current fold, not the original");
+    assertEquals(journalSize, rt.state(cid).events().size(), "a duplicate appends nothing");
+    assertEquals(brains, graph.brainCalls.get());
+    assertEquals(tools, graph.toolCalls.get());
+    assertEquals(guards, graph.guardrailCalls.get(), "not even the guardrail runs for a duplicate");
+
+    rt.passivate(cid);
+    TurnResult dupAfterRestart = rt.submit(Event.turn(cid, t1, "carol", "what is my balance?"));
+    assertEquals(TurnStatus.DUPLICATE, dupAfterRestart.status);
+    assertEquals(first.reply, dupAfterRestart.reply);
+    assertEquals(brains, graph.brainCalls.get());
   }
 
   @Test
-  void duplicateTurnIdIsDeduped() {
-    AtomicInteger turns = new AtomicInteger();
-    ActorRef<Command> actor = TESTKIT.spawn(ConversationEntity.create("dedupe", countingDeps(turns)));
-    TurnReply r1 = askWithId(actor, "fixed-turn-1", "dedupe", "hello");
-    TurnReply r2 = askWithId(actor, "fixed-turn-1", "dedupe", "hello again");
-    assertEquals(1, turns.get(), "the second (same turnId) must be deduped, not re-run");
-    assertEquals(r1.reply(), r2.reply());
+  void rejectedTurnsAreRecordedAndDedupedToo() {
+    String cid = rnd("c");
+    String t1 = rnd("t");
+    TurnResult rejected = rt.submit(Event.turn(cid, t1, "dave", "forbidden request"));
+    assertEquals(TurnStatus.REJECTED, rejected.status);
+    assertNotNull(rejected.error);
+    assertEquals(0, graph.brainCalls.get());
+
+    TurnResult dup = rt.submit(Event.turn(cid, t1, "dave", "forbidden request"));
+    assertEquals(TurnStatus.DUPLICATE, dup.status);
+    assertEquals(rejected.error, dup.error);
+    assertEquals(1, graph.guardrailCalls.get());
   }
 
   @Test
-  void extendedGraphFlowsThroughTheSeam() {
-    ToolRegistry tools = Banking.defaultTools()
-        .register("freeze_card", "Freeze the user's card", p -> "FRZ-" + p.get("user"));
-    Brain fraud = (userText, ctx) -> {
-      Object ref = ctx.callTool("freeze_card", Map.of("user", ctx.userId));
-      return "[fraud] Your card is frozen (ref " + ref + ").";
-    };
-    Map<String, Agent> paths = new LinkedHashMap<>();
-    paths.put("cards", new Agent("cards", "c", new Banking.RuleBrain("cards")));
-    paths.put("payments", new Agent("payments", "p", new Banking.RuleBrain("payments")));
-    paths.put("general", new Agent("general", "g", new Banking.RuleBrain("general")));
-    paths.put("fraud", new Agent("fraud", "f", fraud));
-    RoutedGraph extended = new RoutedGraph(
-        (ev, ctx) -> {
-          String low = ev.text().toLowerCase();
-          return (low.contains("stolen") || low.contains("freeze")) ? "fraud" : Banking.router(ev, ctx);
-        },
-        paths,
-        (reply, ctx) -> new RoutedGraph.Verifier.Result(reply.startsWith("["), reply));
+  void concurrentTurnsApplyInMailboxOrderAndDuplicateInFlightIsDeduped() {
+    String cid = rnd("c");
+    String t1 = rnd("t");
+    List<CompletableFuture<TurnResult>> futures = new ArrayList<>();
+    futures.add(rt.submitAsync(Event.turn(cid, t1, "erin", "first")));
+    futures.add(rt.submitAsync(Event.turn(cid, rnd("t"), "erin", "second")));
+    futures.add(rt.submitAsync(Event.turn(cid, t1, "erin", "first")));
+    futures.add(rt.submitAsync(Event.turn(cid, rnd("t"), "erin", "third balance")));
+    List<TurnResult> results = futures.stream().map(CompletableFuture::join).toList();
 
-    AgentDeps deps = new AgentDeps(extended, tools, Banking.retriever());
-    ActorRef<Command> actor = TESTKIT.spawn(ConversationEntity.create("c-fraud", deps));
-    TurnReply r = ask(actor, "c-fraud", "my card was stolen, please freeze it");
-    assertEquals("fraud", r.path());
-    assertTrue(r.reply().contains("FRZ-alice"), r.reply());
+    assertEquals(TurnStatus.COMPLETED, results.get(0).status);
+    assertEquals(1L, ((Number) results.get(0).state.get("turn_count")).longValue());
+    assertEquals(2L, ((Number) results.get(1).state.get("turn_count")).longValue());
+    assertEquals(TurnStatus.DUPLICATE, results.get(2).status);
+    assertEquals(3L, ((Number) results.get(3).state.get("turn_count")).longValue());
+    assertEquals(3, graph.brainCalls.get());
+    List<LogEvent> journal = rt.state(cid).events();
+    for (int i = 0; i < journal.size(); i++) {
+      assertEquals(i, journal.get(i).sequence());
+    }
+  }
+
+  @Test
+  void suspendedTurnSurvivesRestartAndResumesOnSignal() {
+    String cid = rnd("c");
+    String t1 = rnd("t");
+    TurnResult suspended = rt.submit(Event.turn(cid, t1, "faye", "please refund my charge"));
+    assertEquals(TurnStatus.SUSPENDED, suspended.status);
+    assertEquals("approval", suspended.path);
+    assertTrue(rt.state(cid).suspendedTurnIds().contains(t1));
+    assertEquals(0, graph.brainCalls.get(), "suspending happens before the brain");
+
+    rt.passivate(cid);
+    TurnResult resumed = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)));
+    assertEquals(TurnStatus.COMPLETED, resumed.status);
+    assertEquals("[approval] refund approved", resumed.reply);
+    assertTrue(resumed.events.stream().anyMatch(e -> e.is(EventType.TURN_RESUMED)));
+    assertTrue(rt.state(cid).suspendedTurnIds().isEmpty());
+
+    TurnResult dup = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)));
+    assertEquals(TurnStatus.DUPLICATE, dup.status, "a second signal for a completed turn is a duplicate");
+    assertEquals(1, graph.brainCalls.get());
+  }
+
+  @Test
+  void turnReplyRoundTripsTheNormalizedResult() {
+    String cid = rnd("c");
+    TurnResult r = rt.submit(Event.turn(cid, rnd("t"), "gus", "what is my balance?"));
+    Map<String, Object> doc = ConversationEntity.TurnReply.of(r).toMap();
+    assertEquals(r.toMap(), doc);
+    assertEquals(List.of("conversation_id", "turn_id", "status", "path", "reply", "state", "tool_calls", "events",
+        "error"), new ArrayList<>(doc.keySet()));
+    assertNull(doc.get("error"));
+    assertThrows(IllegalArgumentException.class,
+        () -> new ConversationEntity.ProcessTurn(null, sys.system().ignoreRef()));
   }
 }
