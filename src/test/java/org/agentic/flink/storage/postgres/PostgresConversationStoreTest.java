@@ -1,521 +1,276 @@
 package org.agentic.flink.storage.postgres;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
+import org.agentic.flink.storage.FlinkSerializationHarness;
 import org.agentic.flink.storage.StorageTier;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import org.apache.flink.util.InstantiationUtil;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for PostgresConversationStore.
- *
- * <p>These tests use H2 database in PostgreSQL compatibility mode to avoid requiring a running
- * PostgreSQL instance for tests.
- *
- * <p>Test coverage:
- *
- * <ul>
- *   <li>Initialization and schema creation
- *   <li>Context save and load operations
- *   <li>Facts storage and retrieval
- *   <li>Conversation lifecycle (exists, delete)
- *   <li>Multi-user conversation management
- *   <li>Metadata operations
- *   <li>Error handling
- * </ul>
- *
- * @author Agentic Flink Team
+ * {@link PostgresConversationStore} against a real PostgreSQL (Testcontainers on Podman). Covers
+ * the PostgreSQL {@code INSERT ... ON CONFLICT DO UPDATE} upserts, concurrent writers on the same
+ * conversation, and use of the store after Flink-style serialization.
  */
+@Tag("integration")
 class PostgresConversationStoreTest {
 
+  private static PostgresTestDatabase database;
+
   private PostgresConversationStore store;
-  private Map<String, String> config;
-  private String testFlowId;
+  private String flowId;
+
+  @BeforeAll
+  static void startDatabase() {
+    database = PostgresTestDatabase.start();
+  }
+
+  @AfterAll
+  static void stopDatabase() {
+    if (database != null) {
+      database.close();
+    }
+  }
 
   @BeforeEach
   void setUp() throws Exception {
-    // Use H2 in PostgreSQL compatibility mode for testing
-    // Use unique database name per test to avoid cross-test contamination
-    String dbName = "test_db_" + UUID.randomUUID().toString().replace("-", "");
-    config = new HashMap<>();
-    config.put("postgres.url", "jdbc:h2:mem:" + dbName + ";MODE=PostgreSQL");
-    config.put("postgres.user", "sa");
-    config.put("postgres.password", "");
-    config.put("postgres.pool.max.size", "5");
-    config.put("postgres.pool.min.idle", "1");
-    config.put("postgres.auto.create.tables", "true");
-
     store = new PostgresConversationStore();
-    store.initialize(config);
-
-    testFlowId = "test-flow-" + UUID.randomUUID();
+    store.initialize(database.storeConfig());
+    flowId = "flow-" + UUID.randomUUID();
   }
 
   @AfterEach
   void tearDown() throws Exception {
-    if (store != null) {
-      store.close();
-    }
+    store.close();
   }
 
-  // ==================== Initialization Tests ====================
-
   @Test
-  @DisplayName("Should initialize with correct tier and latency")
-  void testInitialization() {
+  @DisplayName("reports tier, latency and provider name")
+  void metadata() {
     assertEquals(StorageTier.WARM, store.getTier());
     assertEquals(10, store.getExpectedLatencyMs());
     assertEquals("PostgresConversationStore", store.getProviderName());
   }
 
   @Test
-  @DisplayName("Should create tables automatically when enabled")
-  void testAutoTableCreation() throws Exception {
-    // Tables should be created during initialization
-    // Verify by attempting to save a context
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    assertDoesNotThrow(() -> store.saveContext(testFlowId, context));
-  }
+  @DisplayName("save then save again upserts the same row instead of failing on the primary key")
+  void contextUpsertReplacesRow() throws Exception {
+    String userA = "user-" + UUID.randomUUID();
+    String userB = "user-" + UUID.randomUUID();
+    AgentContext first = context(flowId, userA);
+    first.addContext(item("first-" + UUID.randomUUID()));
+    store.saveContext(flowId, first);
 
-  // ==================== Context Save/Load Tests ====================
+    AgentContext second = context(flowId, userB);
+    String marker = "second-" + UUID.randomUUID();
+    second.addContext(item(marker));
+    store.saveContext(flowId, second);
 
-  @Test
-  @DisplayName("Should save and load context successfully")
-  void testSaveAndLoadContext() throws Exception {
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    context.addContext(createTestItem("Message 1", ContextPriority.MUST));
-    context.addContext(createTestItem("Message 2", ContextPriority.SHOULD));
-
-    store.saveContext(testFlowId, context);
-
-    Optional<AgentContext> loaded = store.loadContext(testFlowId);
+    Optional<AgentContext> loaded = store.loadContext(flowId);
     assertTrue(loaded.isPresent());
-    assertEquals(testFlowId, loaded.get().getFlowId());
-    assertEquals("user-001", loaded.get().getUserId());
-    assertEquals(2, loaded.get().getContextWindow().getItems().size());
+    assertEquals(userB, loaded.get().getUserId());
+    assertEquals(1, loaded.get().getContextWindow().getItems().size());
+    assertEquals(marker, loaded.get().getContextWindow().getItems().get(0).getContent());
+    assertEquals(1, countRows("agent_contexts", flowId));
+    assertEquals(List.of(flowId), store.listConversationsForUser(userB));
+    assertTrue(store.listConversationsForUser(userA).isEmpty());
   }
 
   @Test
-  @DisplayName("Should return empty optional for non-existent context")
-  void testLoadNonExistentContext() throws Exception {
-    Optional<AgentContext> loaded = store.loadContext("does-not-exist");
-    assertFalse(loaded.isPresent());
-  }
+  @DisplayName("facts upsert by (flow_id, fact_id) and saveFacts replaces the set")
+  void factUpsert() throws Exception {
+    String factId = "fact-" + UUID.randomUUID();
+    store.addFact(flowId, factId, item("v1-" + UUID.randomUUID()));
+    String latest = "v2-" + UUID.randomUUID();
+    store.addFact(flowId, factId, item(latest));
 
-  @Test
-  @DisplayName("Should update existing context on save")
-  void testUpdateContext() throws Exception {
-    // Save initial context
-    AgentContext context1 = createTestContext(testFlowId, "user-001");
-    context1.addContext(createTestItem("Message 1", ContextPriority.MUST));
-    store.saveContext(testFlowId, context1);
-
-    // Update with new context
-    AgentContext context2 = createTestContext(testFlowId, "user-001");
-    context2.addContext(createTestItem("Message 1", ContextPriority.MUST));
-    context2.addContext(createTestItem("Message 2", ContextPriority.MUST));
-    store.saveContext(testFlowId, context2);
-
-    // Load and verify
-    Optional<AgentContext> loaded = store.loadContext(testFlowId);
-    assertTrue(loaded.isPresent());
-    assertEquals(2, loaded.get().getContextWindow().getItems().size());
-  }
-
-  @Test
-  @DisplayName("Should support put/get via StorageProvider interface")
-  void testPutAndGet() throws Exception {
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    store.put(testFlowId, context);
-
-    Optional<AgentContext> loaded = store.get(testFlowId);
-    assertTrue(loaded.isPresent());
-    assertEquals(testFlowId, loaded.get().getFlowId());
-  }
-
-  // ==================== Conversation Lifecycle Tests ====================
-
-  @Test
-  @DisplayName("Should check conversation existence correctly")
-  void testConversationExists() throws Exception {
-    assertFalse(store.conversationExists(testFlowId));
-    assertFalse(store.exists(testFlowId));
-
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    store.saveContext(testFlowId, context);
-
-    assertTrue(store.conversationExists(testFlowId));
-    assertTrue(store.exists(testFlowId));
-  }
-
-  @Test
-  @DisplayName("Should delete conversation and all associated data")
-  void testDeleteConversation() throws Exception {
-    // Create conversation with context and facts
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    store.saveContext(testFlowId, context);
-
-    Map<String, ContextItem> facts = new HashMap<>();
-    facts.put("fact1", createTestItem("Fact 1", ContextPriority.MUST));
-    store.saveFacts(testFlowId, facts);
-
-    assertTrue(store.conversationExists(testFlowId));
-
-    // Delete
-    store.deleteConversation(testFlowId);
-
-    // Verify deletion
-    assertFalse(store.conversationExists(testFlowId));
-    Optional<AgentContext> loaded = store.loadContext(testFlowId);
-    assertFalse(loaded.isPresent());
-    Map<String, ContextItem> loadedFacts = store.loadFacts(testFlowId);
-    assertTrue(loadedFacts.isEmpty());
-  }
-
-  @Test
-  @DisplayName("Should support delete via StorageProvider interface")
-  void testDelete() throws Exception {
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    store.saveContext(testFlowId, context);
-
-    assertTrue(store.exists(testFlowId));
-
-    store.delete(testFlowId);
-
-    assertFalse(store.exists(testFlowId));
-  }
-
-  // ==================== Facts Storage Tests ====================
-
-  @Test
-  @DisplayName("Should save and load facts")
-  void testSaveAndLoadFacts() throws Exception {
-    Map<String, ContextItem> facts = new HashMap<>();
-    facts.put("fact1", createTestItem("User prefers window seats", ContextPriority.MUST));
-    facts.put("fact2", createTestItem("User is vegetarian", ContextPriority.MUST));
-    facts.put("fact3", createTestItem("User speaks English", ContextPriority.SHOULD));
-
-    store.saveFacts(testFlowId, facts);
-
-    Map<String, ContextItem> loaded = store.loadFacts(testFlowId);
-    assertEquals(3, loaded.size());
-    assertTrue(loaded.containsKey("fact1"));
-    assertTrue(loaded.containsKey("fact2"));
-    assertTrue(loaded.containsKey("fact3"));
-    assertEquals("User prefers window seats", loaded.get("fact1").getContent());
-  }
-
-  @Test
-  @DisplayName("Should return empty map for non-existent facts")
-  void testLoadNonExistentFacts() throws Exception {
-    Map<String, ContextItem> facts = store.loadFacts("does-not-exist");
-    assertNotNull(facts);
-    assertTrue(facts.isEmpty());
-  }
-
-  @Test
-  @DisplayName("Should add single fact")
-  void testAddFact() throws Exception {
-    ContextItem fact = createTestItem("User tier: Premium", ContextPriority.MUST);
-    store.addFact(testFlowId, "user_tier", fact);
-
-    Map<String, ContextItem> facts = store.loadFacts(testFlowId);
+    Map<String, ContextItem> facts = store.loadFacts(flowId);
     assertEquals(1, facts.size());
-    assertTrue(facts.containsKey("user_tier"));
+    assertEquals(latest, facts.get(factId).getContent());
+
+    Map<String, ContextItem> replacement = new HashMap<>();
+    int n = 2 + ThreadLocalRandom.current().nextInt(5);
+    for (int i = 0; i < n; i++) {
+      replacement.put("fact-" + UUID.randomUUID(), item("r-" + UUID.randomUUID()));
+    }
+    store.saveFacts(flowId, replacement);
+    Map<String, ContextItem> reloaded = store.loadFacts(flowId);
+    assertEquals(replacement.keySet(), reloaded.keySet());
+    assertEquals(n, countRows("agent_facts", flowId));
   }
 
   @Test
-  @DisplayName("Should update existing fact")
-  void testUpdateFact() throws Exception {
-    // Add initial fact
-    ContextItem fact1 = createTestItem("User tier: Basic", ContextPriority.SHOULD);
-    store.addFact(testFlowId, "user_tier", fact1);
+  @DisplayName("concurrent writers on the same conversation all succeed and leave one consistent row")
+  void concurrentWritersSameConversation() throws Exception {
+    int writers = 8 + ThreadLocalRandom.current().nextInt(8);
+    int writesPerWriter = 10 + ThreadLocalRandom.current().nextInt(10);
+    String userId = "user-" + UUID.randomUUID();
+    ExecutorService pool = Executors.newFixedThreadPool(writers);
+    CountDownLatch start = new CountDownLatch(1);
+    List<Future<List<String>>> results = new ArrayList<>();
+    try {
+      for (int w = 0; w < writers; w++) {
+        int writerIndex = w;
+        results.add(
+            pool.submit(
+                (Callable<List<String>>)
+                    () -> {
+                      List<String> written = new ArrayList<>();
+                      start.await();
+                      for (int i = 0; i < writesPerWriter; i++) {
+                        String content = "w" + writerIndex + "-" + i + "-" + UUID.randomUUID();
+                        AgentContext ctx = context(flowId, userId);
+                        ctx.addContext(item(content));
+                        store.saveContext(flowId, ctx);
+                        store.addFact(flowId, "writer-" + writerIndex, item(content));
+                        written.add(content);
+                      }
+                      return written;
+                    }));
+      }
+      start.countDown();
+      List<String> allWritten = new ArrayList<>();
+      for (Future<List<String>> f : results) {
+        allWritten.addAll(f.get(2, TimeUnit.MINUTES));
+      }
+      assertEquals(writers * writesPerWriter, allWritten.size());
+    } finally {
+      pool.shutdownNow();
+    }
 
-    // Update fact
-    ContextItem fact2 = createTestItem("User tier: Premium", ContextPriority.MUST);
-    store.addFact(testFlowId, "user_tier", fact2);
-
-    // Verify update
-    Map<String, ContextItem> facts = store.loadFacts(testFlowId);
-    assertEquals(1, facts.size());
-    assertEquals("User tier: Premium", facts.get("user_tier").getContent());
-  }
-
-  @Test
-  @DisplayName("Should remove fact")
-  void testRemoveFact() throws Exception {
-    // Add facts
-    store.addFact(testFlowId, "fact1", createTestItem("Fact 1", ContextPriority.MUST));
-    store.addFact(testFlowId, "fact2", createTestItem("Fact 2", ContextPriority.MUST));
-
-    assertEquals(2, store.loadFacts(testFlowId).size());
-
-    // Remove one fact
-    store.removeFact(testFlowId, "fact1");
-
-    // Verify
-    Map<String, ContextItem> facts = store.loadFacts(testFlowId);
-    assertEquals(1, facts.size());
-    assertFalse(facts.containsKey("fact1"));
-    assertTrue(facts.containsKey("fact2"));
-  }
-
-  @Test
-  @DisplayName("Should handle empty facts gracefully")
-  void testSaveEmptyFacts() throws Exception {
-    Map<String, ContextItem> emptyFacts = new HashMap<>();
-    assertDoesNotThrow(() -> store.saveFacts(testFlowId, emptyFacts));
-
-    Map<String, ContextItem> loaded = store.loadFacts(testFlowId);
-    assertTrue(loaded.isEmpty());
-  }
-
-  // ==================== Multi-User Tests ====================
-
-  @Test
-  @DisplayName("Should list active conversations")
-  void testListActiveConversations() throws Exception {
-    // Create multiple conversations
-    String flow1 = "flow-001";
-    String flow2 = "flow-002";
-    String flow3 = "flow-003";
-
-    store.saveContext(flow1, createTestContext(flow1, "user-1"));
-    store.saveContext(flow2, createTestContext(flow2, "user-2"));
-    store.saveContext(flow3, createTestContext(flow3, "user-3"));
-
-    List<String> active = store.listActiveConversations();
-    assertEquals(3, active.size());
-    assertTrue(active.contains(flow1));
-    assertTrue(active.contains(flow2));
-    assertTrue(active.contains(flow3));
-  }
-
-  @Test
-  @DisplayName("Should list conversations for specific user")
-  void testListConversationsForUser() throws Exception {
-    String user1 = "user-001";
-    String user2 = "user-002";
-
-    // Create conversations for different users
-    store.saveContext("flow-u1-1", createTestContext("flow-u1-1", user1));
-    store.saveContext("flow-u1-2", createTestContext("flow-u1-2", user1));
-    store.saveContext("flow-u2-1", createTestContext("flow-u2-1", user2));
-
-    // List for user1
-    List<String> user1Conversations = store.listConversationsForUser(user1);
-    assertEquals(2, user1Conversations.size());
-    assertTrue(user1Conversations.contains("flow-u1-1"));
-    assertTrue(user1Conversations.contains("flow-u1-2"));
-    assertFalse(user1Conversations.contains("flow-u2-1"));
-
-    // List for user2
-    List<String> user2Conversations = store.listConversationsForUser(user2);
-    assertEquals(1, user2Conversations.size());
-    assertTrue(user2Conversations.contains("flow-u2-1"));
-  }
-
-  @Test
-  @DisplayName("Should return empty list for user with no conversations")
-  void testListConversationsForUserNoResults() throws Exception {
-    List<String> conversations = store.listConversationsForUser("unknown-user");
-    assertNotNull(conversations);
-    assertTrue(conversations.isEmpty());
-  }
-
-  // ==================== Metadata Tests ====================
-
-  @Test
-  @DisplayName("Should retrieve conversation metadata")
-  void testGetConversationMetadata() throws Exception {
-    String userId = "user-001";
-    String agentId = "agent-test";
-
-    AgentContext context = new AgentContext(agentId, testFlowId, userId, 8000, 50);
-    store.saveContext(testFlowId, context);
-
-    Map<String, Object> metadata = store.getConversationMetadata(testFlowId);
-
-    assertNotNull(metadata);
-    assertEquals(testFlowId, metadata.get("flowId"));
-    assertEquals(userId, metadata.get("userId"));
-    assertEquals(agentId, metadata.get("agentId"));
-    assertTrue(metadata.containsKey("created_at"));
-    assertTrue(metadata.containsKey("last_updated_at"));
-  }
-
-  @Test
-  @DisplayName("Should return empty metadata for non-existent conversation")
-  void testGetMetadataNonExistent() throws Exception {
-    Map<String, Object> metadata = store.getConversationMetadata("does-not-exist");
-    assertNotNull(metadata);
-    assertTrue(metadata.isEmpty());
-  }
-
-  @Test
-  @DisplayName("Should update metadata on context update")
-  void testMetadataUpdate() throws Exception {
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    store.saveContext(testFlowId, context);
-
-    Map<String, Object> metadata1 = store.getConversationMetadata(testFlowId);
-    long firstUpdate = (Long) metadata1.get("last_updated_at");
-
-    // Wait a bit and update
-    Thread.sleep(100);
-    store.saveContext(testFlowId, context);
-
-    Map<String, Object> metadata2 = store.getConversationMetadata(testFlowId);
-    long secondUpdate = (Long) metadata2.get("last_updated_at");
-
-    assertTrue(secondUpdate >= firstUpdate);
-  }
-
-  // ==================== TTL Tests ====================
-
-  @Test
-  @DisplayName("Should accept setConversationTTL (no-op for PostgreSQL)")
-  void testSetConversationTTL() throws Exception {
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    store.saveContext(testFlowId, context);
-
-    // PostgreSQL doesn't support automatic TTL, so this is a no-op
-    assertDoesNotThrow(() -> store.setConversationTTL(testFlowId, 3600));
-
-    // Context should still exist
-    assertTrue(store.conversationExists(testFlowId));
-  }
-
-  // ==================== Error Handling Tests ====================
-
-  @Test
-  @DisplayName("Should throw exception for null flowId in saveContext")
-  void testSaveContextNullFlowId() {
-    AgentContext context = createTestContext("test", "user-001");
-    assertThrows(IllegalArgumentException.class, () -> store.saveContext(null, context));
-  }
-
-  @Test
-  @DisplayName("Should throw exception for null context in saveContext")
-  void testSaveContextNullContext() {
-    assertThrows(IllegalArgumentException.class, () -> store.saveContext(testFlowId, null));
-  }
-
-  @Test
-  @DisplayName("Should throw exception for null flowId in loadContext")
-  void testLoadContextNullFlowId() {
-    assertThrows(IllegalArgumentException.class, () -> store.loadContext(null));
-  }
-
-  @Test
-  @DisplayName("Should return false for null flowId in conversationExists")
-  void testConversationExistsNullFlowId() throws Exception {
-    assertFalse(store.conversationExists(null));
-  }
-
-  @Test
-  @DisplayName("Should throw exception for null parameters in saveFacts")
-  void testSaveFactsNullParams() {
-    Map<String, ContextItem> facts = new HashMap<>();
-    assertThrows(IllegalArgumentException.class, () -> store.saveFacts(null, facts));
-    assertThrows(IllegalArgumentException.class, () -> store.saveFacts(testFlowId, null));
-  }
-
-  @Test
-  @DisplayName("Should throw exception for null parameters in addFact")
-  void testAddFactNullParams() {
-    ContextItem fact = createTestItem("Test", ContextPriority.MUST);
-    assertThrows(IllegalArgumentException.class, () -> store.addFact(null, "fact1", fact));
-    assertThrows(IllegalArgumentException.class, () -> store.addFact(testFlowId, null, fact));
-    assertThrows(IllegalArgumentException.class, () -> store.addFact(testFlowId, "fact1", null));
-  }
-
-  @Test
-  @DisplayName("Should throw exception for null userId in listConversationsForUser")
-  void testListConversationsNullUser() {
-    assertThrows(IllegalArgumentException.class, () -> store.listConversationsForUser(null));
-  }
-
-  // ==================== Integration Tests ====================
-
-  @Test
-  @DisplayName("Should handle complete workflow: save, load, update, delete")
-  void testCompleteWorkflow() throws Exception {
-    // 1. Create and save context
-    AgentContext context = createTestContext(testFlowId, "user-001");
-    context.addContext(createTestItem("Message 1", ContextPriority.MUST));
-    store.saveContext(testFlowId, context);
-
-    // 2. Add facts
-    Map<String, ContextItem> facts = new HashMap<>();
-    facts.put("pref1", createTestItem("Preference 1", ContextPriority.MUST));
-    store.saveFacts(testFlowId, facts);
-
-    // 3. Verify existence
-    assertTrue(store.conversationExists(testFlowId));
-
-    // 4. Load and verify
-    Optional<AgentContext> loaded = store.loadContext(testFlowId);
+    assertEquals(1, countRows("agent_contexts", flowId));
+    Optional<AgentContext> loaded = store.loadContext(flowId);
     assertTrue(loaded.isPresent());
     assertEquals(1, loaded.get().getContextWindow().getItems().size());
+    assertTrue(
+        loaded.get().getContextWindow().getItems().get(0).getContent().matches("w\\d+-\\d+-.*"),
+        "final row must be one of the writers' payloads");
 
-    Map<String, ContextItem> loadedFacts = store.loadFacts(testFlowId);
-    assertEquals(1, loadedFacts.size());
-
-    // 5. Update context
-    context.addContext(createTestItem("Message 2", ContextPriority.MUST));
-    store.saveContext(testFlowId, context);
-
-    // 6. Verify update
-    Optional<AgentContext> updated = store.loadContext(testFlowId);
-    assertTrue(updated.isPresent());
-    assertEquals(2, updated.get().getContextWindow().getItems().size());
-
-    // 7. Delete conversation
-    store.deleteConversation(testFlowId);
-
-    // 8. Verify deletion
-    assertFalse(store.conversationExists(testFlowId));
+    Map<String, ContextItem> facts = store.loadFacts(flowId);
+    assertEquals(writers, facts.size());
+    for (int w = 0; w < writers; w++) {
+      ContextItem fact = facts.get("writer-" + w);
+      assertNotNull(fact, "fact for writer " + w);
+      assertTrue(fact.getContent().startsWith("w" + w + "-"), fact.getContent());
+    }
   }
 
   @Test
-  @DisplayName("Should handle multiple concurrent conversations")
-  void testMultipleConversations() throws Exception {
-    int numConversations = 10;
-    List<String> flowIds = new ArrayList<>();
+  @DisplayName("store serialized with Flink's InstantiationUtil reopens its pool and keeps working")
+  void usableAfterFlinkSerialization() throws Exception {
+    String userId = "user-" + UUID.randomUUID();
+    store.saveContext(flowId, context(flowId, userId));
 
-    // Create multiple conversations
-    for (int i = 0; i < numConversations; i++) {
-      String flowId = "flow-" + i;
-      flowIds.add(flowId);
-
-      AgentContext context = createTestContext(flowId, "user-" + (i % 3));
-      context.addContext(createTestItem("Message " + i, ContextPriority.MUST));
-      store.saveContext(flowId, context);
+    byte[] bytes = InstantiationUtil.serializeObject(store);
+    PostgresConversationStore copy =
+        InstantiationUtil.deserializeObject(bytes, getClass().getClassLoader());
+    try {
+      assertTrue(copy.conversationExists(flowId));
+      String other = "flow-" + UUID.randomUUID();
+      copy.saveContext(other, context(other, userId));
+      assertTrue(store.conversationExists(other));
+    } finally {
+      copy.close();
     }
-
-    // Verify all exist
-    for (String flowId : flowIds) {
-      assertTrue(store.conversationExists(flowId));
-    }
-
-    // Verify count
-    List<String> active = store.listActiveConversations();
-    assertEquals(numConversations, active.size());
   }
 
-  // ==================== Helper Methods ====================
-
-  private AgentContext createTestContext(String flowId, String userId) {
-    return new AgentContext("test-agent", flowId, userId, 8000, 50);
+  @Test
+  @DisplayName("store shipped inside a Flink job graph writes to the database from the task")
+  void usableInsideFlinkJob() throws Exception {
+    String userId = "user-" + UUID.randomUUID();
+    String taskFlow = "flow-" + UUID.randomUUID();
+    String input = "in-" + UUID.randomUUID();
+    List<String> out =
+        FlinkSerializationHarness.viaJobGraph(
+            store,
+            s -> {
+              try {
+                s.saveContext(taskFlow, context(taskFlow, userId));
+                s.addFact(taskFlow, "origin", item("task"));
+                return s.loadContext(taskFlow).orElseThrow().getUserId();
+              } catch (Exception e) {
+                throw new IllegalStateException(e);
+              }
+            },
+            List.of(input));
+    assertEquals(List.of(input + "=" + userId), out);
+    assertTrue(store.conversationExists(taskFlow));
+    assertEquals("task", store.loadFacts(taskFlow).get("origin").getContent());
   }
 
-  private ContextItem createTestItem(String content, ContextPriority priority) {
-    ContextItem item = new ContextItem(content, priority, MemoryType.SHORT_TERM);
+  @Test
+  @DisplayName("an unreachable configured PostgreSQL fails initialize loudly")
+  void unreachableDatabaseFailsLoudly() {
+    Map<String, String> config = database.storeConfig();
+    config.put("postgres.url", "jdbc:postgresql://127.0.0.1:1/" + UUID.randomUUID());
+    PostgresConversationStore broken = new PostgresConversationStore();
+    assertThrows(Exception.class, () -> broken.initialize(config));
+  }
+
+  @Test
+  @DisplayName("delete removes context, facts and user index")
+  void deleteConversation() throws Exception {
+    String userId = "user-" + UUID.randomUUID();
+    store.saveContext(flowId, context(flowId, userId));
+    store.addFact(flowId, "f", item("x-" + UUID.randomUUID()));
+    store.deleteConversation(flowId);
+    assertFalse(store.conversationExists(flowId));
+    assertTrue(store.loadFacts(flowId).isEmpty());
+    assertEquals(0, countRows("agent_contexts", flowId));
+    assertEquals(0, countRows("agent_facts", flowId));
+  }
+
+  private static int countRows(String table, String flowId) throws Exception {
+    Map<String, String> cfg = database.storeConfig();
+    try (Connection c =
+            DriverManager.getConnection(
+                cfg.get("postgres.url"), cfg.get("postgres.user"), cfg.get("postgres.password"));
+        Statement st = c.createStatement();
+        ResultSet rs =
+            st.executeQuery(
+                "SELECT count(*) FROM " + table + " WHERE flow_id = '" + flowId + "'")) {
+      rs.next();
+      return rs.getInt(1);
+    }
+  }
+
+  private static AgentContext context(String flowId, String userId) {
+    return new AgentContext("agent-" + UUID.randomUUID(), flowId, userId, 8000, 50);
+  }
+
+  private static ContextItem item(String content) {
+    ContextItem item = new ContextItem(content, ContextPriority.SHOULD, MemoryType.SHORT_TERM);
     item.setItemId(UUID.randomUUID().toString());
     return item;
   }
