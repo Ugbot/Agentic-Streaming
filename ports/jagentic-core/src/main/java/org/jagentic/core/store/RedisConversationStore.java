@@ -27,6 +27,7 @@ public final class RedisConversationStore implements ConversationStore {
 
   public RedisConversationStore(String url, int maxMessages) {
     this.jedis = new JedisPooled(url);
+    this.jedis.ping();
     this.max = maxMessages <= 0 ? 200 : maxMessages;
     this.prefix = "agentic";
   }
