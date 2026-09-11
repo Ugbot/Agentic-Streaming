@@ -72,7 +72,7 @@
 
   <build>
     <plugins>
-      <!-- Plain javac compile is the hard requirement; release 17. -->
+      <!-- Plain javac compile is the hard requirement; release 21. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
