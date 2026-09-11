@@ -2,7 +2,7 @@
 
 Standalone, **framework-agnostic** tool services: the toolkit (web scraping, Tika document
 extraction, RAG, inference, utilities) decomposed into self-describing "one-shot" tools that
-**any LLM or framework can run** over standard protocols — without depending on Flink or any
+**any LLM or framework can run** over standard protocols, without depending on Flink or any
 of the agent cores. Build a pack once (Java/Quarkus-first); every framework consumes it via
 the protocol.
 
@@ -20,12 +20,12 @@ Flink-free: the services depend on the pure-Java `jagentic-core` (tool model + t
 
 | Transport | Endpoint / entrypoint | Status |
 |-----------|----------------------|--------|
-| MCP (Streamable-HTTP) | `POST /mcp` (JSON-RPC 2.0) | ✅ |
-| MCP (stdio) | `org.jagentic.tools.app.mcp.StdioMain` (subprocess) | ✅ |
-| REST / OpenAPI | `GET /tools`, `POST /tools/{name}`, spec at `/q/openapi` | ✅ |
-| gRPC | `ToolService` (ListTools/CallTool); rides the HTTP port | ✅ |
-| Kafka pub-sub | `tool-requests` → `tool-results` (`-Dtools.kafka.enabled=true`) | ✅ (opt-in) |
-| Redis pub-sub | request → reply channels (`-Dtools.redis.enabled=true`) | ✅ (opt-in) |
+| MCP (Streamable-HTTP) | `POST /mcp` (JSON-RPC 2.0) | yes |
+| MCP (stdio) | `org.jagentic.tools.app.mcp.StdioMain` (subprocess) | yes |
+| REST / OpenAPI | `GET /tools`, `POST /tools/{name}`, spec at `/q/openapi` | yes |
+| gRPC | `ToolService` (ListTools/CallTool); rides the HTTP port | yes |
+| Kafka pub-sub | `tool-requests` → `tool-results` (`-Dtools.kafka.enabled=true`) | yes (opt-in) |
+| Redis pub-sub | request → reply channels (`-Dtools.redis.enabled=true`) | yes (opt-in) |
 
 The Kafka/Redis bridges are **build-time gated off by default** so the service boots with no
 broker; enable per deployment. `{id, tool, args}` in → `{id, ok, result|error}` out, by `id`.
@@ -34,10 +34,10 @@ broker; enable per deployment. `{id, tool, args}` in → `{id, ok, result|error}
 
 | Pack | name | Tools | Status |
 |------|------|-------|--------|
-| Utility | `util` | calculator + string ops (from `@Tool` methods) | ✅ |
-| Web + document | `web` | `web_fetch`, `web_links`, `doc_extract` (Tika), `web_crawl` | ✅ |
-| RAG / ingestion | `rag` | `ingest_document`, `semantic_search`, `rag_answer` | ✅ |
-| Inference | `inference` | `classify_text`, `score_text`, `guardrail_check` | ✅ |
+| Utility | `util` | calculator + string ops (from `@Tool` methods) | yes |
+| Web + document | `web` | `web_fetch`, `web_links`, `doc_extract` (Tika), `web_crawl` | yes |
+| RAG / ingestion | `rag` | `ingest_document`, `semantic_search`, `rag_answer` | yes |
+| Inference | `inference` | `classify_text`, `score_text`, `guardrail_check` | yes |
 
 ## Build & run
 
@@ -59,5 +59,5 @@ TOOL_PACKS=util \
   org.jagentic.tools.app.mcp.StdioMain
 ```
 
-`TOOL_PACKS` selects which packs to serve (CSV; empty = all). Any MCP-capable client — incl.
-our own `mcp:` pipeline section and `McpStdioClient` — can consume the stdio or HTTP server.
+`TOOL_PACKS` selects which packs to serve (CSV; empty = all). Any MCP-capable client, incl.
+our own `mcp:` pipeline section and `McpStdioClient`, can consume the stdio or HTTP server.

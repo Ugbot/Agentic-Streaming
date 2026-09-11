@@ -1,4 +1,4 @@
-# agentic-temporal — Agentic-Flink on Temporal
+# agentic-temporal: Agentic-Flink on Temporal
 
 The agent essence as **Temporal durable workflows**, reusing the Flink-free
 `org.jagentic:jagentic-core`. See the design in
@@ -6,11 +6,11 @@ The agent essence as **Temporal durable workflows**, reusing the Flink-free
 
 **Why it fits so well:** **one entity workflow per conversation**, with
 `workflowId == conversationId`. Temporal guarantees exactly one running execution per
-id (single-writer — **C2**), makes the workflow's in-memory state durable and
+id (single-writer. **C2**), makes the workflow's in-memory state durable and
 fault-tolerant via its event-sourced history (**C1+C3**, replayed on crash/restart),
 and delivers each turn as a synchronous **Update** applied serially. With Pekko and
 Pulsar Functions it's one of only three engines besides Flink to give C1+C2+C3
-natively — and the strongest durability of all (event-sourced replay + activity
+natively, and the strongest durability of all (event-sourced replay + activity
 retries are the whole point of the engine).
 
 | File | Role |

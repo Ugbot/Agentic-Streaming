@@ -1,4 +1,4 @@
-# Agentic Streaming on Faust (faust-streaming) — pure Python, no JVM
+# Agentic Streaming on Faust (faust-streaming): pure Python, no JVM
 
 > Per-engine doc in the `docs/portability/` series. Read
 > [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)
@@ -9,9 +9,9 @@
 ## 1. Verdict
 
 Faust is the **most natural pure-Python target** for the live keyed-stateful
-essence of Agentic Streaming. The mapping is almost embarrassing: our central idea —
+essence of Agentic Streaming. The mapping is almost embarrassing: our central idea,
 "an agent is a keyed, stateful, event-driven processor, one logical instance per
-conversation, processing its events in order" — is *literally* what Faust calls
+conversation, processing its events in order", is *literally* what Faust calls
 an **agent** (`@app.agent`, a coroutine consuming a keyed Kafka stream). Our C1
 (durable keyed state) is a Faust **Table** (RocksDB + a changelog topic); our C2
 (per-key ordered processing) is Kafka partitioning; our C4 (async I/O) is
@@ -20,7 +20,7 @@ an A2A peer inside an agent is the idiomatic thing rather than a bridge you have
 to engineer. You keep the entire §4a portable core verbatim (re-expressed in
 Python): the ConversationStore SPI, the two-tier retriever, the ReAct/TurnBrain
 loop, the resilient A2A client, the tool registry. You re-implement only the
-§4c Engine seam — `keyedAgent`, `asyncStage`, `route`, `KeyedStateStore` — and on
+§4c Engine seam, `keyedAgent`, `asyncStage`, `route`, `KeyedStateStore`, and on
 Faust each of those is a thin wrapper over a primitive that already exists. What
 you **give up** versus Flink: transactional exactly-once (Kafka offset commits
 give you at-least-once, so you lean on idempotency + the ConversationStore as the
@@ -31,18 +31,18 @@ barely uses.
 
 ## 2. Capability mapping (C1..C12)
 
-Following the §6 matrix's **Faust** column. Legend: **N**ative · **L**ibrary/
-idiom · **X**ternal service · **—** drop.
+Following the §6 matrix's **Faust** column. Legend:**N**ative · **L**ibrary/
+idiom · **X**ternal service · **-** drop.
 
 | Cap | §6 | Faust mechanism |
 |-----|:--:|-----------------|
-| **C1** durable keyed state | **N** | `app.Table(...)` — a dict-like keyed store backed by RocksDB locally and a compacted **changelog topic** in Kafka, recovered on rebalance. This *is* our per-conversation keyed state (short-term memory, `RoutingBudget`, A2A `contextId`, dedup set) and a direct ConversationStore backend. |
+| **C1** durable keyed state | **N** | `app.Table(...)`, a dict-like keyed store backed by RocksDB locally and a compacted **changelog topic** in Kafka, recovered on rebalance. This *is* our per-conversation keyed state (short-term memory, `RoutingBudget`, A2A `contextId`, dedup set) and a direct ConversationStore backend. |
 | **C2** per-key ordered proc | **N** | Kafka **partitioning**: a stream keyed on `conversationId` lands every event for that key on one partition, consumed by one agent instance, in offset order → single-writer-per-conversation without locks. Same guarantee Flink's `keyBy` gives. |
 | **C3** fault tolerance / EOS | **L** | Kafka **offset commits** + Table changelog recovery = **at-least-once**, *not* Flink-style transactional EOS. Mitigation: idempotent tool/A2A calls (the resilient client already assumes this) and treat the ConversationStore as the durable source of truth; dedup on a per-turn id held in a Table. |
 | **C4** async I/O | **N** | `asyncio` is native. Inside an agent you simply `await llm(...)`, `await tool(...)`, `await a2a_client.send(...)`. Bounded in-flight via `stream.take`/an `asyncio.Semaphore` or `app.agent(concurrency=N)`. No Async-I/O-operator bridge needed. |
 | **C5** backpressure | **L** | asyncio flow control + Kafka consumer fetch pacing; cap concurrent model calls with a `Semaphore`; `app.agent(concurrency=...)` bounds parallel coroutines per worker. |
 | **C6** connectors | **N** | Kafka is Faust's home transport (topics in/out). Other `Channel<T>` transports (Redis pub/sub, webhook, Postgres CDC, static seed) become small async producers/consumers or a Faust **web view** feeding a topic. |
-| **C7** side outputs | **L** | Publish to an extra topic (`await debug_topic.send(...)`) — the debug stream and tool-invocation channel become their own topics, consumable independently. |
+| **C7** side outputs | **L** | Publish to an extra topic (`await debug_topic.send(...)`), the debug stream and tool-invocation channel become their own topics, consumable independently. |
 | **C8** broadcast state | **L** | A **global Table** (`app.GlobalTable`, every worker has the full copy) for control-plane directives / enrichment dims, fed by a compacted topic. |
 | **C9** event-time / windows | **N (coarse)** | Faust **windowed Tables** (`Table(...).hopping/tumbling(...)`) exist for feature aggregation, but are simpler than Flink's watermark/allowed-lateness model. Fine for the streaming-analytics side flows; don't expect Flink parity. |
 | **C10** CEP | **L** | No CEP library; encode patterns as a small state machine over a Table (last-N events per key) inside an agent. The optional CEP module degrades to hand-rolled. |
@@ -54,7 +54,7 @@ idiom · **X**ternal service · **—** drop.
 A Python mirror of the §4c Engine SPI. The portable core (§4a) is consumed
 unchanged; only this seam is Faust-specific.
 
-### Agent — a keyed Kafka stream processor
+### Agent: a keyed Kafka stream processor
 
 The Flink `KeyedProcessFunction` becomes a Faust agent coroutine. One instance
 per partition; events for a `conversationId` arrive in order.
@@ -82,9 +82,9 @@ async def agent(stream):
 ```
 
 `stream.group_by(...)` re-partitions so all of a conversation's turns are
-single-writer. `handle_turn` is the **portable** TurnBrain — engine-free.
+single-writer. `handle_turn` is the **portable** TurnBrain, engine-free.
 
-### Keyed state — `KeyedStateStore` over a Table
+### Keyed state: `KeyedStateStore` over a Table
 
 The §4c `KeyedStateStore` (`get/put/update/clear` for a key) is a one-class
 adapter over a Faust Table. This is the portable C1 replacement for
@@ -105,10 +105,10 @@ state = TableStateStore(short_term)        # per-conversation working memory
 ```
 
 Because the Table is partitioned identically to the agent's stream, reads/writes
-for `conversation_id` are local to the worker owning that partition — no remote
+for `conversation_id` are local to the worker owning that partition, no remote
 hop, single-writer, recovered from the changelog on failover.
 
-### ConversationStore — a Table (or keep the Redis/Fluss SPI)
+### ConversationStore: a Table (or keep the Redis/Fluss SPI)
 
 The `ConversationStore` interface (append / history / recent / attributes /
 user-index) ports directly. The **default** Faust backend is a Table; for
@@ -140,10 +140,10 @@ class TableConversationStore:           # implements the ConversationStore SPI
 
 The transcript Table partitioned by `conversation_id` means the router, path and
 verifier agents (all keyed on the same `conversation_id`) **share** one
-conversation view across operators — exactly the gap §4a says the ConversationStore
+conversation view across operators, exactly the gap §4a says the ConversationStore
 fills, and the reason a routed graph can progress across turns.
 
-### Tools — async functions
+### Tools: async functions
 
 `ToolExecutor` (`Map<String,Object> → CompletableFuture<Object>`) becomes an
 `async def(params: dict) -> Any`. A registry is just a dict.
@@ -164,7 +164,7 @@ async def get_balance(params: dict):
 tools.register("get_balance", get_balance)
 ```
 
-### Async — native, with a concurrency cap
+### Async: native, with a concurrency cap
 
 Flink's Async-I/O operator (bounded in-flight) maps to `asyncio` + a semaphore
 (or `@app.agent(concurrency=N)`), protecting the model endpoint (C5).
@@ -176,7 +176,7 @@ async def llm(messages, **kw):
         return await chat_client.chat(messages, **kw)   # portable ChatConnection
 ```
 
-### Routed graph — `router → path → verifier`
+### Routed graph: `router → path → verifier`
 
 Two idiomatic shapes; both keep all stages keyed on `conversation_id`:
 
@@ -214,15 +214,15 @@ async def path_a(stream):
 Shape (a) mirrors the single-operator banking brain; shape (b) mirrors
 `BankingAgentGraph`'s multi-operator DAG. Cross-turn chaining happens through the
 shared phase attribute in the ConversationStore, **not** through a cycle in the
-topology — identical to the Flink design.
+topology, identical to the Flink design.
 
-### A2A — call the peer over aiohttp/httpx, resilient client re-impl
+### A2A: call the peer over aiohttp/httpx, resilient client re-impl
 
 The A2A protocol types + `RemoteAgentSpec` port directly; `SdkA2AClient` becomes
 a small async client with **retry / backoff / circuit-breaker** (the resilient
 behaviour `A2AClient` mandates). `A2AStep.applyToStateful` (keyed pre → async →
 keyed post) collapses on Faust into: read `contextId` from the ConversationStore,
-`await` the peer, write the returned `contextId` back — all inside the keyed
+`await` the peer, write the returned `contextId` back, all inside the keyed
 agent, because the agent coroutine is *already* both keyed and async.
 
 ```python
@@ -243,7 +243,7 @@ class A2AClient:                          # resilient: retry/backoff/breaker
                 await asyncio.sleep(min(2 ** attempt * 0.2, 5.0))   # backoff
         raise A2AError(self.spec.name)
 
-# A2AStep.applyToStateful — keyed + async fused into one coroutine step:
+# A2AStep.applyToStateful - keyed + async fused into one coroutine step:
 async def a2a_step(turn, cs, client: A2AClient):
     ctx = cs.get_attribute(turn.conversation_id, "a2a.contextId")
     res = await client.send(turn.text, context_id=ctx)             # non-blocking
@@ -254,7 +254,7 @@ async def a2a_step(turn, cs, client: A2AClient):
 Exposing a peer *as a tool* (`A2AToolExecutor`) is just registering
 `a2a_step` in the `ToolRegistry`.
 
-### Inbound proxy — a Faust web view or a sidecar FastAPI
+### Inbound proxy: a Faust web view or a sidecar FastAPI
 
 The Quarkus A2A gateway maps to either Faust's built-in web server
 (`@app.page` / `app.web`, runs inside the worker) or a separate **FastAPI**
@@ -276,10 +276,10 @@ async def a2a_inbound(self, request):
 For synchronous JSON-RPC/SSE replies, correlate on `turn_id`: the proxy awaits a
 future resolved by a consumer of the `replies` topic (or streams SSE from it).
 
-### RAG — hot tier in Redis/in-mem, cold tier in a vector store
+### RAG: hot tier in Redis/in-mem, cold tier in a vector store
 
 `TwoTierRetriever` (hot recent window ∪ cold durable corpus, dedup by id,
-degrade if either tier fails) ports verbatim — it has no Flink in it. The hot
+degrade if either tier fails) ports verbatim, it has no Flink in it. The hot
 index is an in-process index (or Redis for cross-worker sharing); the cold tier
 is pgvector/Qdrant via the `VectorStore` SPI. `RetrievalPipeline`
 (embed → search → rerank → answer) becomes an async function chain.
@@ -296,10 +296,10 @@ async def retrieve_answer(question: str) -> Answer:
 ```
 
 The hot tier makes retrieval *live*: a doc is searchable the instant it lands in
-the hot window, before the cold index catches up — same semantics as the Java
+the hot window, before the cold index catches up, same semantics as the Java
 `TwoTierRetriever`.
 
-## 4. Worked example — the banking router→path→verifier, end-to-end
+## 4. Worked example: the banking router→path→verifier, end-to-end
 
 Faithful port of `BankingAgentGraph`: a rule-based router screens + classifies
 (no LLM), a per-path ReAct brain handles the turn (LLM only here), a rule-based
@@ -395,14 +395,14 @@ async def banking(stream):
 
 One A2A turn = Router → Path → Verifier, a clean DAG with no cycle. Multi-step
 chaining (e.g. `GATHER` → next turn `ACTION`) happens **across turns** via the
-shared `phase` attribute and transcript in the ConversationStore — identical to
+shared `phase` attribute and transcript in the ConversationStore, identical to
 the Flink `PhaseStore`/`ConversationMemory` design. Concurrent sessions are
 isolated because every stage runs under `group_by(context_id)`. Reserving the
 LLM for path brains (router + verifier are rule-based) keeps model-call count per
-turn flat — the same cost discipline as the Java example.
+turn flat, the same cost discipline as the Java example.
 
-To split this into the multi-operator shape (§3b) — separate `router_a`,
-`path_a`, `verifier_a` agents wired by `routed`/`replies` topics — every stage
+To split this into the multi-operator shape (§3b), separate `router_a`,
+`path_a`, `verifier_a` agents wired by `routed`/`replies` topics, every stage
 still `group_by(context_id)`s and shares the same `cs`, so the ConversationStore
 remains the integration point across operators.
 
@@ -412,7 +412,7 @@ remains the integration point across operators.
   at-least-once; a worker crash mid-turn can re-deliver. *Workaround:* the
   `done.{turn_id}` guard above + idempotent tools/A2A (the resilient client
   already assumes idempotency), and treat the ConversationStore as the source of
-  truth. This is the single most important porting decision — exactly the §8
+  truth. This is the single most important porting decision, exactly the §8
   cross-cutting concern.
 - **faust-streaming is community-maintained.** The original Robinhood Faust is
   unmaintained; `faust-streaming` is the active fork. Pin versions, vet the
@@ -431,20 +431,20 @@ remains the integration point across operators.
   generously at the start.*
 - **Cross-process state sharing.** Tables are local to the Faust worker set. If a
   *separate* process (e.g. a standalone FastAPI proxy or an offline eval job)
-  needs the conversation state, **don't** reach into RocksDB — use the
+  needs the conversation state, **don't** reach into RocksDB, use the
   Redis/Fluss ConversationStore backend behind the SPI instead. That's precisely
   why the SPI exists.
 - **Synchronous request/response over an async stream.** The inbound proxy must
   correlate a reply on the `replies` topic back to the awaiting HTTP request
   (future keyed by `turn_id`, or SSE streamed from the topic). Workable, but it's
-  glue you write — Flink's bridge hid it.
+  glue you write. Flink's bridge hid it.
 
 ## 6. When to choose Faust
 
 Choose Faust when:
 
 - You want **pure Python, no JVM, no JPype** and the *live, keyed-stateful,
-  multi-turn conversational* core is the point — this is its strongest niche
+  multi-turn conversational* core is the point, this is its strongest niche
   among the Python targets.
 - You are **already on Kafka** (or happy to be); Faust is Kafka-native and the
   Table changelog model gives you durable keyed state for free.

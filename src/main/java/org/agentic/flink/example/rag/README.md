@@ -24,8 +24,8 @@ Query (topic, question)
 | Piece | API used |
 |-------|----------|
 | Embedder | `DjlEmbeddingConnection` over sentence-transformers/all-MiniLM-L6-v2 (384-d) |
-| Vector memory | `FlinkStateVectorMemory.spec(384)` — exact brute-force KNN over `MapState` |
-| Reranker | `Scorer` via `DjlInferenceConnection` — cross-encoder/ms-marco-MiniLM-L-6-v2 |
+| Vector memory | `FlinkStateVectorMemory.spec(384)`, exact brute-force KNN over `MapState` |
+| Reranker | `Scorer` via `DjlInferenceConnection`, cross-encoder/ms-marco-MiniLM-L-6-v2 |
 | LLM | vendor-neutral `ChatConnection` (Ollama by default; swap freely) |
 | Per-key state | `ValueState<Boolean>` tracks whether the KB has been seeded for the topic |
 

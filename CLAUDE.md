@@ -1,7 +1,7 @@
 # Agentic Streaming (formerly Agentic Flink)
 
 Agentic Streaming is a library + example pack for building agents as streaming,
-stateful, **event-sourced** systems — an agent's state is a materialized view over an
+stateful, **event-sourced** systems, an agent's state is a materialized view over an
 ordered log of events, with CQRS (command = process a turn; query = read the view) and
 single-writer-per-conversation. Apache Flink is the **first-class runtime** (this main
 module); the same essence is ported to a dozen other engines across Python, the JVM, and
@@ -24,14 +24,14 @@ engine-agnostic "essence" and per-engine design notes are in `docs/portability/`
   - `tools/` -- ToolExecutor interface, AbstractToolExecutor, built-in tools
   - `tool/` -- ToolRegistry (central tool registry with builder)
   - `langchain/` -- ToolAnnotationRegistry, LangChainToolAdapter (@Tool bridge)
-  - `memory/` -- Flink-state-first short-term memory (ShortTermMemory, FlinkStateShortTermMemory) — the **default** for in-job memory
-  - `memory/conversation/` -- **Per-conversation memory shared across operators**: `ConversationStore` SPI (multi-turn ChatMessage transcript + scalar workflow attributes, keyed by conversationId, also indexable by userId). `InMemoryConversationStore` (default, process-wide `shared()` singleton for embedded single-JVM; bounded transcript); `ConversationStores.discover()` (ServiceLoader → else shared in-JVM). This is the layer between per-operator short-term Flink state and the long-term store — what a routed graph (router→path→verifier) needs to progress across turns. Wired via `AgentBuilder.withConversationStore(...)`.
+  - `memory/` -- Flink-state-first short-term memory (ShortTermMemory, FlinkStateShortTermMemory), the **default** for in-job memory
+  - `memory/conversation/` -- **Per-conversation memory shared across operators**: `ConversationStore` SPI (multi-turn ChatMessage transcript + scalar workflow attributes, keyed by conversationId, also indexable by userId). `InMemoryConversationStore` (default, process-wide `shared()` singleton for embedded single-JVM; bounded transcript); `ConversationStores.discover()` (ServiceLoader → else shared in-JVM). This is the layer between per-operator short-term Flink state and the long-term store, what a routed graph (router→path→verifier) needs to progress across turns. Wired via `AgentBuilder.withConversationStore(...)`.
   - `memory/vector/` -- In-JVM vector memory backed by Flink state (FlinkStateVectorMemory, brute-force KNN); external VectorStore SPI for HNSW backends
-  - (memory feeds moved to `channel/` — see below; `Channel<KeyedContextItem>` replaces the old MemoryFeed)
+  - (memory feeds moved to `channel/`, see below; `Channel<KeyedContextItem>` replaces the old MemoryFeed)
   - `storage/` -- Long-term store SPI (LongTermMemoryStore) for resumption + archival; ServiceLoader-based discovery
   - `storage/memory/` -- InMemoryLongTermStore for tests/dev; legacy InMemoryShortTermStore (deprecated path)
   - `storage/postgres/` -- PostgresConversationStore (production default for long-term)
-  - `storage/redis/` -- RedisConversationStore — optional, no longer default; Jedis dep is optional
+  - `storage/redis/` -- RedisConversationStore, optional, no longer default; Jedis dep is optional
   - `context/` -- Context management (ContextItem, ContextWindowManager)
   - `statemachine/` -- AgentStateMachine for workflow state transitions
   - `inference/` -- Traditional DL model SPI (Classifier, Scorer, EmbeddingClient, GenericInferenceModel) + guardrails + tool adapter; DJL is the default optional backend
@@ -70,7 +70,7 @@ mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.Pipel
   -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"   # any spec on the actor runtime
 mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.RecoveryDemo  # durability/recovery
 
-# Agentic Clojure (Datomic) — in agentic-clj/
+# Agentic Clojure (Datomic) - in agentic-clj/
 clojure -X:test          # full suite
 clojure -M:run           # banking demo
 clojure -M:time-travel   # Datomic transcript time-travel (as-of)
@@ -83,7 +83,7 @@ The cross-runtime parity story (one `pipeline.yaml`, every runtime) is documente
 ## Key Patterns
 
 - **AgentBuilder DSL**: `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).withShortTermTtl(Duration.ofMinutes(30)).withLongTermStore(...).withMemoryChannel(...).withVectorMemory(FlinkStateHnswVectorMemory.spec(768)).build()`
-- **Flink-state-first memory**: Short-term memory is `FlinkStateShortTermMemory` — built in `RichFunction.open()` from `ShortTermMemorySpec`. No external HOT tier required.
+- **Flink-state-first memory**: Short-term memory is `FlinkStateShortTermMemory`, built in `RichFunction.open()` from `ShortTermMemorySpec`. No external HOT tier required.
 - **LongTermMemoryStore** (optional): Postgres default, Redis optional, ServiceLoader-discovered. Used only for conversation resumption + fact archive. Write-behind from Flink state.
 - **ToolExecutor interface**: Async tool execution via `CompletableFuture<Object> execute(Map<String, Object>)`
 - **@Tool annotations**: LangChain4J annotation-based tool discovery via ToolAnnotationRegistry

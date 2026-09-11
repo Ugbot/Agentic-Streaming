@@ -9,22 +9,22 @@ Posts (DataStream / Kafka)
   │
   ▼  Classifier (Toxic-BERT, four labels)
   │
-  ├──── label ∈ {toxic, threat, …}  ─►  side output  ─►  HTTP audit endpoint
+  ├──── label ∈ {toxic, threat, ...}  ─►  side output  ─►  HTTP audit endpoint
   │
   └──── safe  ─►  LLM summary  ─►  main output
 ```
 
 ## What's interesting
 
-- **Toxicity classifier as a hard gate** rather than a soft guardrail — blocked
+- **Toxicity classifier as a hard gate** rather than a soft guardrail, blocked
   posts never reach the LLM, saving cost and latency.
-- **Real Flink streaming wrapper** — the agent operator's `open()` binds DJL
+- **Real Flink streaming wrapper**: the agent operator's `open()` binds DJL
   and Ollama once per subtask; the spec is the only thing in the job graph.
-- **Side outputs for audit** — `OutputTag<BlockedPost>` keeps the audit trail
+- **Side outputs for audit**: `OutputTag<BlockedPost>` keeps the audit trail
   out of the main path. The `AuditingListener` POSTs each block to an HTTP
   audit endpoint; swap for `LongTermMemoryStore` or Kafka in production.
 - **MetricsAgentEventListener** counts every classification, every chat call,
-  and every guardrail block — wire up to Prometheus / OpenTelemetry through
+  and every guardrail block, wire up to Prometheus / OpenTelemetry through
   Flink's `MetricGroup`.
 
 ## Prerequisites

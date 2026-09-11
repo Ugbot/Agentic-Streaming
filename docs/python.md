@@ -8,8 +8,8 @@ mode.
 
 | Path | Module | Use when | Mechanism |
 |------|--------|----------|-----------|
-| **PyFlink-native** *(recommended for streaming)* | `agentic_flink.pyflink` | You're shipping a real PyFlink job (`flink run -py …`) | Python builds an `AgentPlan` (JSON) → Java `CompileUtils.attachAgent` wires the agent operator into the job graph → PEMJA invokes Python callbacks on the operator thread |
-| **JPype standalone** | `agentic_flink` (top-level) | Notebooks, scripts, services with no PyFlink dep | One of three runtime modes — see below |
+| **PyFlink-native** *(recommended for streaming)* | `agentic_flink.pyflink` | You're shipping a real PyFlink job (`flink run -py ...`) | Python builds an `AgentPlan` (JSON) → Java `CompileUtils.attachAgent` wires the agent operator into the job graph → PEMJA invokes Python callbacks on the operator thread |
+| **JPype standalone** | `agentic_flink` (top-level) | Notebooks, scripts, services with no PyFlink dep | One of three runtime modes, see below |
 
 The two paths don't compose; pick one. The sections below cover the JPype path;
 for PyFlink-native, see [`pyflink-integration.md`](pyflink-integration.md).
@@ -52,7 +52,7 @@ option (`docker-compose-notebook.yml`).
 `agentic-flink` (top-level) is a thin JPype-backed facade over the Java
 framework. The JVM runs **in-process** (thread mode); Python and Java
 share threads, and calls cross JNI without serialization. The Java
-framework is the single source of truth — the Python package adds
+framework is the single source of truth, the Python package adds
 Pythonic ergonomics on top.
 
 ## Install
@@ -73,7 +73,7 @@ Discovery order:
 
 1. `AGENTIC_FLINK_JAR` environment variable.
 2. `jar_path=` kwarg to `start_jvm`.
-3. Sibling Maven build (`../target/agentic-flink-*.jar`) — covers
+3. Sibling Maven build (`../target/agentic-flink-*.jar`), covers
    editable installs from a checkout.
 4. Bundled package data (when shipping a wheel that includes the jar).
 
@@ -105,7 +105,7 @@ agent = (
 )
 
 print(agent)
-# Invoke the tool through its Java ToolExecutor proxy — same path the
+# Invoke the tool through its Java ToolExecutor proxy - same path the
 # agent operator uses at runtime.
 HashMap = af.jclass("java.util.HashMap")
 args = HashMap(); args.put("a", 2); args.put("b", 3)
@@ -157,7 +157,7 @@ agent = Agent.builder().with_listener(StdoutListener()).build()
 ```
 
 Same pattern works for `Guardrail`, `Classifier`, `Scorer`, `Chunker`
-implementations — JPype's `@JImplements` decorator generates the proxy.
+implementations. JPype's `@JImplements` decorator generates the proxy.
 
 ## Flink 2.2 / PyFlink version
 
@@ -167,7 +167,7 @@ Both paths target the **Flink 2.2** line, matching the Java framework:
 pip install 'agentic-flink[pyflink]'   # apache-flink>=2.0 (2.2.1 matches the Java build)
 ```
 
-The PyFlink-native code is API-modern for 2.x — it uses `from_collection` /
+The PyFlink-native code is API-modern for 2.x, it uses `from_collection` /
 `from_source` (FLIP-27) / `key_by` / `sink_to` (FLIP-143) and the agent operator
 is attached via `CompileUtils.attachAgent`; no removed `add_source`/`SourceFunction`
 APIs are used. The new framework features (live hot+cold RAG, A2A graph steps,
@@ -177,7 +177,7 @@ single-JVM mode, and from PyFlink agent `@action`/`@tool` callbacks via the same
 JVM the job runs against.
 
 > **Python version:** the PyFlink runtime (`apache-flink` 2.x) supports CPython
-> 3.8–3.12. The JPype facade itself works on newer Pythons; only the PyFlink-native
+> 3.8-3.12. The JPype facade itself works on newer Pythons; only the PyFlink-native
 > path is bound by PyFlink's interpreter support.
 
 ## PyFlink integration
@@ -222,9 +222,9 @@ Every wrapper exposes `_to_java()` to drop down to the live Java object.
 
 Three runnable scripts under `agentic_flink.examples`:
 
-- `quickstart` — calculator tool + agent build, no LLM call.
-- `rag` — sequential Python RAG with sentence-transformer embeddings.
-- `live_research` — full PyFlink job with two-input crawler + retrieve.
+- `quickstart`, calculator tool + agent build, no LLM call.
+- `rag`, sequential Python RAG with sentence-transformer embeddings.
+- `live_research`, full PyFlink job with two-input crawler + retrieve.
 
 ```bash
 python -m agentic_flink.examples.quickstart
@@ -248,17 +248,17 @@ framework + runtime jars via Maven.
 
 ## Troubleshooting
 
-- **`FileNotFoundError: agentic-flink jar not found`** — set
+- **`FileNotFoundError: agentic-flink jar not found`**, set
   `AGENTIC_FLINK_JAR` or run `mvn -DskipTests package`.
-- **`NoClassDefFoundError: org/slf4j/LoggerFactory`** — the shaded jar
+- **`NoClassDefFoundError: org/slf4j/LoggerFactory`**, the shaded jar
   doesn't include `<scope>provided</scope>` Flink deps. Pass the full
   runtime classpath via `extra_jars=` to `start_jvm`. Generate it with
   `mvn dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt`.
-- **`Initial state has no outgoing transitions`** — the Python builder
+- **`Initial state has no outgoing transitions`**, the Python builder
   supplies a permissive default state machine; if you call
   `.with_state_machine(...)` make sure it covers every non-terminal
   `AgentState`.
-- **`TypeError: No matching overloads found`** — JPype is strict about Java
+- **`TypeError: No matching overloads found`**. JPype is strict about Java
   boxed types (`Long`, `Integer`, etc.). The wrappers handle the common
   cases; for new bindings explicit box with
   `af.jclass("java.lang.Long")(int(x))`.

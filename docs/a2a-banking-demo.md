@@ -1,4 +1,4 @@
-# Rho-Bank A2A demo — safe two-agent customer service
+# Rho-Bank A2A demo: safe two-agent customer service
 
 A first-class Agentic-Flink demo of the [A2A Hackathon](https://hackathon.a2anet.com) banking track
 (tau2-bench): a **personal-agent** (`:9001`) and a **cs-agent** (`:9002`) talk over A2A JSON-RPC
@@ -27,7 +27,7 @@ Flink operator (`BankingTurnFunction`): **screen → bounded ReAct brain → rep
 
 | Concern | Component | Behavior |
 |---|---|---|
-| Anti-explosion | `RoutingBudget` | caps personal↔cs round-trips + per-turn iterations + a soft deadline under the harness 5-min limit; dedupes repeats — the agent answers from what it has instead of looping into a timeout |
+| Anti-explosion | `RoutingBudget` | caps personal↔cs round-trips + per-turn iterations + a soft deadline under the harness 5-min limit; dedupes repeats, the agent answers from what it has instead of looping into a timeout |
 | Authorization | `AuthorizationToolGuard` | refuses high-risk env tools until identity is verified; refuses placeholder args |
 | Threat screening | `BankingScreening` (`InjectionDetector` + Repeat + Velocity) | prompt-injection / identity-bypass / impersonation / exfiltration → BLOCK before the LLM; loop/flood → REVIEW |
 | Escalation | ReAct brain + bank policy (`kb/policy.md`) | ALLOW / REVIEW / BLOCK; the policy's transfer-to-human guidance is the escalation path |
@@ -60,7 +60,7 @@ OPENAI_API_KEY=sk-... podman compose -f docker-compose-a2a-banking.yml up --buil
 ## Swapping to the hackathon model
 
 The model is config-only (`BankingModel.fromEnv`): for marked runs set `LLM_PROVIDER=gemini` and
-`GOOGLE_API_KEY=...` (Vertex). No code change — the framework's Gemini `ChatConnection`
+`GOOGLE_API_KEY=...` (Vertex). No code change, the framework's Gemini `ChatConnection`
 (`gemini-3.5-flash`) is already wired.
 
 ## Hosting inside Flink (the second "swap")
@@ -68,17 +68,17 @@ The model is config-only (`BankingModel.fromEnv`): for marked runs set `LLM_PROV
 The brain (`ReActTurnBrain`) and the Flink operator (`BankingTurnFunction`, keyed by `contextId`)
 are already split. The gateway runs the brain in-process today; moving execution into a Flink job
 behind the A2A bridge is a wiring change (gateway → `A2ABridge` → `BankingTurnFunction`), not a
-rewrite — the bounded-loop guarantee is proven in `BankingTurnFunctionTest` on a MiniCluster.
+rewrite, the bounded-loop guarantee is proven in `BankingTurnFunctionTest` on a MiniCluster.
 
 ## Config reference
 
 | Env var | Default | Meaning |
 |---|---|---|
 | `LLM_PROVIDER` | `openai` | `openai` / `gemini` / `ollama` |
-| `OPENAI_API_KEY` / `GOOGLE_API_KEY` | — | model credential |
+| `OPENAI_API_KEY` / `GOOGLE_API_KEY` | - | model credential |
 | `MODEL` | per-provider (`openai`→`gpt-5.4-nano` for local testing, `gemini`→`gemini-3.5-flash`) | chat model id |
 | `A2A_BANKING_ROLE` | `personal` | `personal` / `cs` |
-| `CS_AGENT_URL` | — | personal agent's CS endpoint (the harness `/cs-agent` gateway in marked runs) |
-| `ENV_API_URL` / `ENV_API_TOKEN` | — | harness env-tools API (optional; chat/RAG only without it) |
+| `CS_AGENT_URL` | - | personal agent's CS endpoint (the harness `/cs-agent` gateway in marked runs) |
+| `ENV_API_URL` / `ENV_API_TOKEN` | - | harness env-tools API (optional; chat/RAG only without it) |
 | `KB_PATH` / `KB_POLICY_PATH` | `kb/documents`, `kb/policy.md` | CS knowledge base + policy |
 | `A2A_MAX_ROUND_TRIPS` / `A2A_MAX_ITERATIONS` / `A2A_TURN_DEADLINE_MS` | 4 / 12 / 240000 | routing budget caps |

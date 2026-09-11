@@ -10,7 +10,7 @@ This document explains how **Agentic-Flink** integrates with the official **Apac
 
 ### Key Points
 
-- **Complementary, Not Competing**: Both projects share the same vision—scalable, event-driven AI agents—but approach it from different angles
+- **Complementary, Not Competing**: Both projects share the same vision: scalable, event-driven AI agents, but approach it from different angles
 - **Independent Development**: Agentic-Flink was designed and built before Apache Flink Agents 0.1.0 was released (October 2025)
 - **Integration Path**: Agentic-Flink is actively integrating with Flink Agents through a plugin architecture
 - **Best of Both Worlds**: Combine Flink Agents' official patterns with Agentic-Flink's well-tested innovations
@@ -27,7 +27,7 @@ This document explains how **Agentic-Flink** integrates with the official **Apac
 | **Context Management** | MoSCoW prioritization, 5-phase compaction | Event-based orchestration |
 | **Unique Features** | Validation/correction patterns, tiered agents, RAG tools | MCP protocol, exactly-once action consistency |
 
-**Recommendation**: Use both together—Flink Agents for official patterns and tooling, Agentic-Flink for well-tested storage, context management, and advanced features.
+**Recommendation**: Use both together: Flink Agents for official patterns and tooling, Agentic-Flink for well-tested storage, context management, and advanced features.
 
 ---
 
@@ -61,11 +61,11 @@ This document explains how **Agentic-Flink** integrates with the official **Apac
 - **RAG Capabilities**: Document ingestion, semantic search, and embedding support
 
 #### Status
-- ✅ **Build**: SUCCESS (112 tests, 0 failures)
-- ✅ **Well-Tested Components**: Storage, context management, tool framework
-- ✅ **Working Examples**: 14 real examples including TieredAgentExample with live LLM calls
-- ✅ **Infrastructure**: One-command Docker setup (PostgreSQL + Redis + Ollama)
-- ⚠️ **Maturity**: Early-stage software - well-tested but still new, not battle-tested at scale
+- **Build**: SUCCESS (112 tests, 0 failures)
+- **Well-Tested Components**: Storage, context management, tool framework
+- **Working Examples**: 14 real examples including TieredAgentExample with live LLM calls
+- **Infrastructure**: One-command Docker setup (PostgreSQL + Redis + Ollama)
+- **Maturity**: Early-stage software - well-tested but still new, not battle-tested at scale
 
 #### Philosophy
 Comprehensive testing, real working code, transparent about current capabilities and limitations.
@@ -89,10 +89,10 @@ Comprehensive testing, real working code, transparent about current capabilities
 - **Distributed Runtime**: Lightweight local development + full distributed Flink runtime
 
 #### Status
-- 🚧 **Version**: 0.1.0 (Preview release, October 2025)
-- ⚠️ **Production Use**: Not recommended for production environments with high stability requirements
-- 🔄 **API Stability**: Experimental APIs subject to non-backward compatible changes
-- 📈 **Development**: Active development by Apache community (Alibaba Cloud, LinkedIn, Confluent)
+- **Version**: 0.1.0 (Preview release, October 2025)
+- **Production Use**: Not recommended for production environments with high stability requirements
+- **API Stability**: Experimental APIs subject to non-backward compatible changes
+- **Development**: Active development by Apache community (Alibaba Cloud, LinkedIn, Confluent)
 
 #### Philosophy
 Built to bridge stream processing and autonomous agents with enterprise-grade reliability and scale.
@@ -189,7 +189,7 @@ Understanding how these projects evolved helps explain their relationship:
      - Enable enterprise adoption with governance and stability
      - Bridge data streaming and AI agents seamlessly
 
-**The Result**: Two complementary approaches that benefit from integration—Agentic-Flink brings battle-tested implementations and LangChain4J expertise, while Flink Agents provides official patterns and Apache governance.
+**The Result**: Two complementary approaches that benefit from integration: Agentic-Flink brings battle-tested implementations and LangChain4J expertise, while Flink Agents provides official patterns and Apache governance.
 
 ---
 
@@ -349,62 +349,62 @@ public class ContextManagementAction extends Action {
 | Feature | Agentic-Flink | Apache Flink Agents | Notes |
 |---------|---------------|---------------------|-------|
 | **Core Framework** |
-| Event-Driven Architecture | ✅ Custom patterns | ✅ Official patterns | Compatible approaches |
-| Flink CEP Integration | ✅ Production-ready | ✅ Native support | Both leverage Flink CEP |
-| State Management | ✅ Two-tier storage | ✅ Flink state backend | Complementary |
+| Event-Driven Architecture | yes, Custom patterns | yes, Official patterns | Compatible approaches |
+| Flink CEP Integration | yes, Production-ready | yes, Native support | Both leverage Flink CEP |
+| State Management | yes, Two-tier storage | yes, Flink state backend | Complementary |
 | **Agent Patterns** |
-| ReAct Pattern | ⚠️ Custom implementation | ✅ Official support | Use Flink Agents |
-| Workflow Pattern | ⚠️ Custom implementation | ✅ Official support | Use Flink Agents |
-| Tiered Agents | ✅ Production examples | ❌ Not specified | Agentic-Flink innovation |
-| Multi-Agent Coordination | 🚧 In development | ✅ Native support | Use Flink Agents |
+| ReAct Pattern | partial, Custom implementation | yes, Official support | Use Flink Agents |
+| Workflow Pattern | partial, Custom implementation | yes, Official support | Use Flink Agents |
+| Tiered Agents | yes, Production examples | no, Not specified | Agentic-Flink innovation |
+| Multi-Agent Coordination | planned, In development | yes, Native support | Use Flink Agents |
 | **LLM Integration** |
-| LangChain4J | ✅ Native integration | ❌ Not primary focus | Agentic-Flink strength |
-| OpenAI | ✅ Via LangChain4J | ✅ Native support | Both support |
-| Ollama (Local LLMs) | ✅ Production-ready | ⚠️ Community support | Agentic-Flink optimized |
-| Custom LLM Providers | ✅ Via LangChain4J | ✅ Extensible | Both extensible |
+| LangChain4J | yes, Native integration | no, Not primary focus | Agentic-Flink strength |
+| OpenAI | yes, Via LangChain4J | yes, Native support | Both support |
+| Ollama (Local LLMs) | yes, Production-ready | partial, Community support | Agentic-Flink optimized |
+| Custom LLM Providers | yes, Via LangChain4J | yes, Extensible | Both extensible |
 | **Context & Memory** |
-| MoSCoW Prioritization | ✅ Production-ready | ❌ Not specified | Agentic-Flink innovation |
-| 5-Phase Compaction | ✅ Tested algorithm | ❌ Not specified | Agentic-Flink innovation |
-| Token Budget Management | ✅ Automatic | ⚠️ Manual | Agentic-Flink automation |
-| Temporal Relevancy | ✅ Implemented | ❌ Not specified | Agentic-Flink feature |
+| MoSCoW Prioritization | yes, Production-ready | no, Not specified | Agentic-Flink innovation |
+| 5-Phase Compaction | yes, Tested algorithm | no, Not specified | Agentic-Flink innovation |
+| Token Budget Management | yes, Automatic | partial, Manual | Agentic-Flink automation |
+| Temporal Relevancy | yes, Implemented | no, Not specified | Agentic-Flink feature |
 | **Storage & Persistence** |
-| Redis (Hot Tier) | ✅ 5 tests, working | ⚠️ Custom integration | Agentic-Flink ready |
-| PostgreSQL (Warm Tier) | ✅ 31 tests, working | ⚠️ Custom integration | Agentic-Flink ready |
-| Exactly-Once Persistence | ✅ Via Flink checkpoints | ✅ With write-ahead log | Both support |
-| Storage Abstraction | ✅ Multi-backend | ⚠️ Implementation-dependent | Agentic-Flink flexible |
+| Redis (Hot Tier) | yes, 5 tests, working | partial, Custom integration | Agentic-Flink ready |
+| PostgreSQL (Warm Tier) | yes, 31 tests, working | partial, Custom integration | Agentic-Flink ready |
+| Exactly-Once Persistence | yes, Via Flink checkpoints | yes, With write-ahead log | Both support |
+| Storage Abstraction | yes, Multi-backend | partial, Implementation-dependent | Agentic-Flink flexible |
 | **Tool Framework** |
-| Tool Registration | ✅ @Tool annotations | ✅ MCP protocol | Both support |
-| Built-in Tools | ✅ Calculator, RAG, etc. | ⚠️ Community-provided | Agentic-Flink has library |
-| Custom Tools | ✅ Easy via LangChain4J | ✅ MCP servers | Both extensible |
-| Tool Validation | ✅ Multi-attempt | ⚠️ Implementation-dependent | Agentic-Flink automation |
+| Tool Registration | yes, @Tool annotations | yes, MCP protocol | Both support |
+| Built-in Tools | yes, Calculator, RAG, etc. | partial, Community-provided | Agentic-Flink has library |
+| Custom Tools | yes, Easy via LangChain4J | yes, MCP servers | Both extensible |
+| Tool Validation | yes, Multi-attempt | partial, Implementation-dependent | Agentic-Flink automation |
 | **Validation & Quality** |
-| Output Validation | ✅ LLM-based validation | ⚠️ Custom implementation | Agentic-Flink pattern |
-| Automatic Correction | ✅ Multi-attempt | ⚠️ Custom implementation | Agentic-Flink pattern |
-| Supervisor Escalation | ✅ Human-in-loop | ⚠️ Custom implementation | Agentic-Flink pattern |
-| Feedback Loops | ✅ Implemented | ⚠️ Custom implementation | Agentic-Flink feature |
+| Output Validation | yes, LLM-based validation | partial, Custom implementation | Agentic-Flink pattern |
+| Automatic Correction | yes, Multi-attempt | partial, Custom implementation | Agentic-Flink pattern |
+| Supervisor Escalation | yes, Human-in-loop | partial, Custom implementation | Agentic-Flink pattern |
+| Feedback Loops | yes, Implemented | partial, Custom implementation | Agentic-Flink feature |
 | **RAG & Embeddings** |
-| Document Ingestion | ✅ Working examples | ⚠️ Custom implementation | Agentic-Flink ready |
-| Vector Search | 🚧 Qdrant integration | ✅ Multiple providers | Use Flink Agents |
-| Semantic Search | ✅ Via LangChain4J | ✅ Native support | Both support |
-| Embedding Models | ✅ Via LangChain4J | ✅ Multiple providers | Both support |
+| Document Ingestion | yes, Working examples | partial, Custom implementation | Agentic-Flink ready |
+| Vector Search | planned, Qdrant integration | yes, Multiple providers | Use Flink Agents |
+| Semantic Search | yes, Via LangChain4J | yes, Native support | Both support |
+| Embedding Models | yes, Via LangChain4J | yes, Multiple providers | Both support |
 | **Protocols & Standards** |
-| MCP Protocol | ⚠️ Via adapters | ✅ Native support | Use Flink Agents |
-| Agent-to-Agent (A2A) | 🚧 Custom patterns | ⚠️ Emerging standard | Both evolving |
+| MCP Protocol | partial, Via adapters | yes, Native support | Use Flink Agents |
+| Agent-to-Agent (A2A) | planned, Custom patterns | partial, Emerging standard | Both evolving |
 | **Production Features** |
-| Testing | ✅ 112 tests | ⚠️ Preview (unstable APIs) | Agentic-Flink mature |
-| Docker Setup | ✅ One-command | ⚠️ Custom setup | Agentic-Flink ready |
-| Monitoring | 🚧 In development | ✅ Event logs | Use Flink Agents |
-| Production Documentation | ✅ Comprehensive | ✅ Official docs | Both have docs |
+| Testing | yes, 112 tests | partial, Preview (unstable APIs) | Agentic-Flink mature |
+| Docker Setup | yes, One-command | partial, Custom setup | Agentic-Flink ready |
+| Monitoring | planned, In development | yes, Event logs | Use Flink Agents |
+| Production Documentation | yes, Comprehensive | yes, Official docs | Both have docs |
 | **APIs & Languages** |
-| Java API | ✅ Native | ✅ Native | Both support |
-| Python API | ❌ Java-focused | ✅ Native PyFlink | Use Flink Agents |
-| Type Safety | ✅ Strong typing | ✅ Strong typing | Both support |
+| Java API | yes, Native | yes, Native | Both support |
+| Python API | no, Java-focused | yes, Native PyFlink | Use Flink Agents |
+| Type Safety | yes, Strong typing | yes, Strong typing | Both support |
 
 **Legend:**
-- ✅ Production-ready or officially supported
-- ⚠️ Possible but requires custom work
-- 🚧 In development
-- ❌ Not available or not a focus
+- Production-ready or officially supported
+- Possible but requires custom work
+- In development
+- Not available or not a focus
 
 ---
 
@@ -695,14 +695,14 @@ public class HybridAgentJob {
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| **Event Adapter** | ✅ Complete | Bidirectional conversion working |
-| **Tool Adapter** | ✅ Complete | @Tool to MCP wrapping functional |
-| **Context Integration** | ✅ Complete | MoSCoW works as Flink Agents Action |
-| **Storage Integration** | ✅ Complete | Two-tier storage as plugin |
-| **Example Code** | ✅ Complete | 4 integration examples ready |
-| **Documentation** | ✅ Complete | This document + plugin README |
-| **Maven Artifacts** | ⚠️ Waiting | Flink Agents not in Maven Central yet |
-| **Production Testing** | 🚧 Pending | Waiting for Flink Agents v1.0 stable |
+| **Event Adapter** | yes, Complete | Bidirectional conversion working |
+| **Tool Adapter** | yes, Complete | @Tool to MCP wrapping functional |
+| **Context Integration** | yes, Complete | MoSCoW works as Flink Agents Action |
+| **Storage Integration** | yes, Complete | Two-tier storage as plugin |
+| **Example Code** | yes, Complete | 4 integration examples ready |
+| **Documentation** | yes, Complete | This document + plugin README |
+| **Maven Artifacts** | partial, Waiting | Flink Agents not in Maven Central yet |
+| **Production Testing** | planned, Pending | Waiting for Flink Agents v1.0 stable |
 
 ### Short-Term Roadmap (Q4 2025 - Q1 2026)
 
@@ -730,7 +730,7 @@ public class HybridAgentJob {
 1. **v1.0 (Q4 2025)**: Agentic-Flink standalone remains primary, Flink Agents optional plugin
 2. **v1.5 (Q2 2026)**: Hybrid approach becomes recommended for new projects
 3. **v2.0 (Q4 2026)**: Flink Agents foundation with Agentic-Flink as enhancements
-4. **v3.0 (2027+)**: Full convergence—Agentic-Flink innovations merged into Apache Flink Agents
+4. **v3.0 (2027+)**: Full convergence, Agentic-Flink innovations merged into Apache Flink Agents
 
 **Key Milestone:** When Flink Agents v1.0 stable releases, Agentic-Flink will shift to plugin-first architecture. Both projects are early-stage and evolving.
 
@@ -847,7 +847,7 @@ If choosing one:
 1. Plugin architecture already provides adapters
 2. Event/tool formats are compatible
 3. Migration guides will be provided
-4. No vendor lock-in—both use Apache Flink underneath
+4. No vendor lock-in, both use Apache Flink underneath
 
 ---
 
@@ -867,7 +867,7 @@ If choosing one:
 - **LangChain4J** (Agentic-Flink): Mature ecosystem, Ollama support, @Tool annotations, Java-focused
 - **Native Flink Agents**: Official support, Python APIs, MCP protocol, emerging ecosystem
 
-You can use both in hybrid architecture—they're not mutually exclusive.
+You can use both in hybrid architecture; they're not mutually exclusive.
 
 ---
 

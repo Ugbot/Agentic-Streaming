@@ -1,7 +1,7 @@
 # Publishing `agentic-flink` to PyPI
 
 This repo publishes the Python facade via **PyPI Trusted Publishing** (OIDC).
-No API tokens are stored in GitHub secrets — PyPI verifies the workflow's
+No API tokens are stored in GitHub secrets. PyPI verifies the workflow's
 identity directly from GitHub.
 
 The Java framework jar is **not** bundled in the wheel. Users obtain it via
@@ -19,10 +19,10 @@ their own classpath or the `AGENTIC_FLINK_JAR` env var (see
 | **PyPI**       | https://pypi.org/account/register/        | 2FA (required for new accounts), recovery codes saved     |
 | **TestPyPI**   | https://test.pypi.org/account/register/   | 2FA (good practice; separate from PyPI account)           |
 
-Use the **same email** if you like — the accounts are entirely separate but
+Use the **same email** if you like, the accounts are entirely separate but
 having a matched pair makes the workflow obvious.
 
-### 2. Register Trusted Publishers (before the package exists — "pending")
+### 2. Register Trusted Publishers (before the package exists: "pending")
 
 PyPI lets you register a trusted publisher for a project *before* the project
 exists. The first successful upload creates the project.
@@ -135,12 +135,12 @@ will skip `1.0.0a1`); users have to pass `--pre` or pin an exact version.
 
 ## Troubleshooting
 
-- **"Trusted publishing exchange failure"** — the workflow's `environment:`,
+- **"Trusted publishing exchange failure"**: the workflow's `environment:`,
   `workflow:`, or repo path doesn't match the pending publisher config on
   PyPI. Recheck the four fields under "Add a new pending publisher".
-- **"File already exists"** — you tried to upload a version PyPI has already
+- **"File already exists"**: you tried to upload a version PyPI has already
   accepted. Bump the version.
-- **`twine check` fails on long-description** — usually a Markdown issue in
+- **`twine check` fails on long-description**, usually a Markdown issue in
   `README.md`. PyPI renders CommonMark; avoid raw HTML.
-- **First upload missing classifiers / metadata** — make sure `pyproject.toml`
+- **First upload missing classifiers / metadata**: make sure `pyproject.toml`
   changes were committed before the release was cut.

@@ -1,6 +1,6 @@
 # Live-research walkthrough
 
-> **Flink-runtime showcase** — a crawler frontier + LLM-steered crawl composed as **Flink operators**
+> **Flink-runtime showcase**, a crawler frontier + LLM-steered crawl composed as **Flink operators**
 > over an HNSW corpus. Not the portable baseline; for the agent that runs unchanged on every runtime
 > see [the banking agent on every runtime](banking-everywhere.md).
 
@@ -11,12 +11,12 @@
 
 A research assistant has two operating modes that have to coexist:
 
-1. **Learning** — ingest documents (URLs, PDFs, …) into a searchable corpus.
-2. **Recall** — answer questions against that corpus with citations.
+1. **Learning**: ingest documents (URLs, PDFs, ...) into a searchable corpus.
+2. **Recall**: answer questions against that corpus with citations.
 
 Most production systems split these into two services. We argue that for
-Flink-scale workloads they want to be **one job** — same state, same
-failure domain, same checkpoint barrier — but the *operators* doing the
+Flink-scale workloads they want to be **one job**, same state, same
+failure domain, same checkpoint barrier, but the *operators* doing the
 work should still be independent. That's what the framework's `Channel`,
 `Corpus`, and pipeline-builder primitives buy you.
 
@@ -56,12 +56,12 @@ holds a per-replica copy. Either side scales independently.
 Three independent inputs feed the frontier today; the framework doesn't
 care which you wire in:
 
-- **Seeds** — `StaticSeedChannel<UrlRequest>` for an initial corpus.
-- **LLM-driven** — `ToolInvocationChannel.sideOutput("crawl-url", ...)`.
+- **Seeds**: `StaticSeedChannel<UrlRequest>` for an initial corpus.
+- **LLM-driven**: `ToolInvocationChannel.sideOutput("crawl-url", ...)`.
   When the LLM decides it needs a URL it doesn't have, it calls
   `crawl-url(url=...)`. The framework routes via Flink side-output; the
   crawler sees it on its frontier just like any other input.
-- **External** — add `KafkaChannel<UrlRequest>` to the frontier to let an
+- **External**: add `KafkaChannel<UrlRequest>` to the frontier to let an
   external service nudge the crawler. Useful for "I just found a new doc;
   please index it" workflows.
 
@@ -79,19 +79,19 @@ CrawlerCore.builder()
 `FlinkStateHnswVectorMemory.spec(384)` is the default. It's a single-layer
 NSW graph backed by Flink `MapState`:
 
-- **Vectors live in MapState** — they checkpoint with the job and survive
+- **Vectors live in MapState**: they checkpoint with the job and survive
   restarts.
 - **Graph is rebuilt on operator `open()`** by replaying MapState. At
   d=384, ~1 s per 10⁵ vectors.
 - For larger corpora drop in a JVector or Lucene-HNSW backed
-  `VectorMemorySpec` via the SPI — the `Corpus` interface doesn't change.
+  `VectorMemorySpec` via the SPI, the `Corpus` interface doesn't change.
 - For very large or cross-job corpora, swap to `ExternalCorpus.spec("pgvector",
-  …)` and the vectors live in Postgres + pgvector. Same `Corpus` API.
+  ...)` and the vectors live in Postgres + pgvector. Same `Corpus` API.
 
 ## Side-output vs Kafka for the LLM tool
 
 The default `ToolInvocationChannel.sideOutput(...)` routes invocations
-through Flink's normal network stack — exactly-once with checkpoints,
+through Flink's normal network stack, exactly-once with checkpoints,
 cross-TM safe within a single job. That's what we want for an in-job
 agent + crawler.
 
@@ -127,4 +127,4 @@ query takes a couple of seconds; the LLM is the dominant cost.
   drawn from the corpus.
 - If you point a Kafka producer at the optional `crawl-requests` topic,
   those URLs join the same crawler frontier and the corpus grows
-  on the fly — searchable on the very next query.
+  on the fly, searchable on the very next query.

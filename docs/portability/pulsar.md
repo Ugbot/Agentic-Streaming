@@ -12,11 +12,11 @@ Pulsar Functions is one of the strongest fits in the series, and the **closest o
 native-C1+C2+C3 engines to Flink's own topic-in/topic-out shape**. A function is a
 keyed stream processor with state: consume the request topic with a `Key_Shared`
 subscription keyed by `conversationId`, and Pulsar delivers each conversation to one
-function instance, in order (single-writer — C2); the function's **state store**
-(BookKeeper-backed, replicated) is durable keyed state (C1 *and* C3 — the runtime
+function instance, in order (single-writer, C2); the function's **state store**
+(BookKeeper-backed, replicated) is durable keyed state (C1 *and* C3, the runtime
 persists and recovers it, no external database); chained functions/topics are the
 topology (C12); effectively-once processing covers fault tolerance. You keep the whole
-Flink-free `jagentic-core` verbatim — the function body just builds an `AgentContext`
+Flink-free `jagentic-core` verbatim, the function body just builds an `AgentContext`
 over a state-backed `ConversationStore` and calls `Banking.buildGraph().handle(...)`.
 The one caveat is C4: a blocking LLM/A2A call on the function thread stalls the
 instance, so the non-blocking pattern is the same response-topic split as Kafka
@@ -27,21 +27,21 @@ store and rebalancing for you).
 
 | Cap | How Pulsar Functions supplies it |
 |-----|------------------------------------|
-| **C1** durable keyed state | **N** — the function **state store** (`Context.putState/getState`), BookKeeper-backed and replicated; the conversation envelope is one state value per `conversationId`. |
-| **C2** per-key ordered processing | **N** — a `Key_Shared` subscription with the message key = `conversationId` routes one key to one instance, processed in order. |
-| **C3** fault tolerance / durability | **N** — effectively-once processing guarantee + acks; state survives instance restart/rebalance via BookKeeper. |
-| **C4** async I/O | **L** — `process` is synchronous on the function thread; go non-blocking by publishing the reply to a response topic keyed by the same id (the Kafka-Streams-style split). |
-| **C5** backpressure | **L** — Pulsar's flow control / receiver queue + ack pacing. |
-| **C6** connectors | **N** — Pulsar IO connectors (sources/sinks) feed/drain the function. |
-| **C7** side outputs | **N** — `context.newOutputMessage(topic, schema)` publishes to any topic. |
-| **C8** broadcast state | **L** — a compacted topic the function reads, or shared state. |
-| **C9** event-time / windows | **L** — windowing via the Windowed Functions wrapper; not a full event-time engine. |
-| **C10** CEP | **L** — custom in the function. |
-| **C11** distributed scale | **N** — instances scale per partition; the broker rebalances key ownership. |
-| **C12** topology builder | **N** — chained functions and topics form the DAG. |
+| **C1** durable keyed state | **N**, the function **state store** (`Context.putState/getState`), BookKeeper-backed and replicated; the conversation envelope is one state value per `conversationId`. |
+| **C2** per-key ordered processing | **N**, a `Key_Shared` subscription with the message key = `conversationId` routes one key to one instance, processed in order. |
+| **C3** fault tolerance / durability | **N**, effectively-once processing guarantee + acks; state survives instance restart/rebalance via BookKeeper. |
+| **C4** async I/O | **L**,`process` is synchronous on the function thread; go non-blocking by publishing the reply to a response topic keyed by the same id (the Kafka-Streams-style split). |
+| **C5** backpressure | **L**. Pulsar's flow control / receiver queue + ack pacing. |
+| **C6** connectors | **N**. Pulsar IO connectors (sources/sinks) feed/drain the function. |
+| **C7** side outputs | **N**,`context.newOutputMessage(topic, schema)` publishes to any topic. |
+| **C8** broadcast state | **L**, a compacted topic the function reads, or shared state. |
+| **C9** event-time / windows | **L**, windowing via the Windowed Functions wrapper; not a full event-time engine. |
+| **C10** CEP | **L**, custom in the function. |
+| **C11** distributed scale | **N**, instances scale per partition; the broker rebalances key ownership. |
+| **C12** topology builder | **N**, chained functions and topics form the DAG. |
 
 With Pekko and Temporal, Pulsar Functions is one of only three engines besides Flink
-here to give **C1+C2+C3 all natively** — and the only one of them that does it in
+here to give **C1+C2+C3 all natively**, and the only one of them that does it in
 Flink's topic-in/topic-out streaming shape.
 
 ## 3. The core abstractions on Pulsar Functions
@@ -69,23 +69,23 @@ Flink's topic-in/topic-out streaming shape.
 
 - **ConversationStore.** [`PulsarStateConversationStore`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/PulsarStateConversationStore.java)
   serializes the per-conversation envelope (bounded transcript + attributes + owner)
-  into one state value under `conv/<cid>`, with a `user/<userId>` reverse index — the
+  into one state value under `conv/<cid>`, with a `user/<userId>` reverse index, the
   same SPI as every other port, now backed by Pulsar's durable state instead of Redis.
 - **KeyedStateStore.** [`PulsarStateKeyedStore`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/PulsarStateKeyedStore.java)
-  maps each `(key,name)` scalar slot to a state key — the analogue of Flink keyed
+  maps each `(key,name)` scalar slot to a state key, the analogue of Flink keyed
   `ValueState`, persisted by the runtime.
 - **Single-writer per conversation (C2).** The `Key_Shared` subscription contract:
   one key → one consumer instance, in order. Read-modify-write of the envelope is safe.
 - **Tools / async (C4).** The rule-based banking graph never blocks. A real LLM/A2A
   call publishes to a response topic keyed by `conversationId` and re-enters the
-  function to resume — the state store carries the pending turn between the two halves.
+  function to resume, the state store carries the pending turn between the two halves.
 - **Inbound edge.** A Pulsar IO source or any producer onto the request topic, with
   the message key set to the `conversationId`.
 
-## 4. Worked example — banking router→path→verifier
+## 4. Worked example: banking router→path→verifier
 
 [`LocalDemo`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/LocalDemo.java)
-runs the function with **no cluster** — an [`InMemoryContext`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/InMemoryContext.java)
+runs the function with **no cluster**, an [`InMemoryContext`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/InMemoryContext.java)
 (a dynamic proxy over the state API) stands in for the broker + BookKeeper:
 
 ```
@@ -98,7 +98,7 @@ c1 persisted message count = 4 (state survives across turns)
 ```
 
 `c1`'s two turns hit the *same* persisted envelope (4 messages = user+assistant ×2),
-recovered straight from the state store — proving C1. In production:
+recovered straight from the state store, proving C1. In production:
 
 ```
 pulsar-admin functions create --jar agentic-pulsar.jar \
@@ -122,7 +122,7 @@ pulsar-admin functions create --jar agentic-pulsar.jar \
 
 Choose Pulsar Functions when you already run **Pulsar** and want the keyed-stateful
 agent essence with **native durable state and effectively-once**, without standing up
-Flink — a serverless function per stage, state managed for you, scaling per partition.
+Flink, a serverless function per stage, state managed for you, scaling per partition.
 It is the closest non-Flink engine to the topic-in/topic-out streaming model, and the
 operationally lightest of the native-C1+C2+C3 options. If you need event-time analytics
 or windowed CEP, that remains Flink's home; for a Kafka-native (not Pulsar) stack the

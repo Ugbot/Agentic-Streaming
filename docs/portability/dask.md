@@ -1,7 +1,7 @@
-# Agentic Streaming on Dask — pure Python, no JVM
+# Agentic Streaming on Dask: pure Python, no JVM
 
 > Per-engine portability doc. Read [`00-essence-and-core-abstractions.md`](./00-essence-and-core-abstractions.md)
-> first — this doc is written against its essence (§2), capability inventory
+> first, this doc is written against its essence (§2), capability inventory
 > (§3, C1..C12), Engine SPI (§4c), matrix (§6), and ranked fit (§7), and follows
 > the §9 six-section template. Target: pure Python, no JVM, no JPype.
 
@@ -20,57 +20,57 @@ Keep on Dask, idiomatically and at scale:
   cluster. Thousands of documents, hundreds of workers, one `bag` pipeline.
 - **Offline eval / benchmark sweeps**: run the retrieval pipeline (or a full
   routed graph replay) over a labelled dataset, parametrised across configs
-  (k, chunk size, embedder, reranker), in parallel — recall@k / nDCG / latency
+  (k, chunk size, embedder, reranker), in parallel, recall@k / nDCG / latency
   matrices as a DataFrame. This is the thing Dask is *unfairly good at*.
 
 Do **not** put the live keyed-stateful agent loop on Dask. `distributed.Actor`
 gives a stateful, single-threaded-per-instance actor, so a conversation-actor is
-*technically* constructible (C1/C2 weakly) — but Dask is built for **bounded**
+*technically* constructible (C1/C2 weakly), but Dask is built for **bounded**
 task graphs that complete, not long-lived per-key ordered streaming with
 low-latency turn handling and backpressure-as-topology. You would fight the
 model the whole way: no partitioned ordered ingest, no native durability of
 actor state, no streaming source/sink. The honest recommendation (keystone §7):
 **port the ingestion + retrieval-eval pipelines to Dask; run the live loop on
-Faust or Ray; use Dask as the heavy offline data engine alongside them.**
+Faust or Ray; use Dask as the heavy offline data engine alongside them. **
 
-What you keep unchanged: the entire pure core (§4a) — `Chunker`,
+What you keep unchanged: the entire pure core (§4a), `Chunker`,
 `TwoTierRetriever`, the embed→search→rerank→answer *logic*, `ToolExecutor`
 semantics, `ConversationStore`/`VectorStore` as the durability seam. What you
-re-implement: nothing of the agent operator — you simply don't host it here.
+re-implement: nothing of the agent operator, you simply don't host it here.
 
-## 2. Capability mapping (C1..C12 — Dask column of §6)
+## 2. Capability mapping (C1..C12: Dask column of §6)
 
 | Cap | §6 | On Dask | Mechanism / honest note |
 |-----|:--:|---------|-------------------------|
-| **C1** keyed durable state | **L\*** | `distributed.Actor` fields | An actor is a single Python object pinned to one worker; its fields *are* per-key state — but in-memory only, lost on worker death. Durability = write through to the `ConversationStore`/`VectorStore` SPI. Weak, and out of the sweet spot. |
-| **C2** per-key ordered proc | **—** | not native | No `keyBy`→partition. You can route by key to a per-key actor (one actor per `conversationId`) and the actor's mailbox serialises calls, but there is no ordered partitioned *ingest*, no replay, no rebalance. For batch, ordering is irrelevant. |
+| **C1** keyed durable state | **L\*** | `distributed.Actor` fields | An actor is a single Python object pinned to one worker; its fields *are* per-key state, but in-memory only, lost on worker death. Durability = write through to the `ConversationStore`/`VectorStore` SPI. Weak, and out of the sweet spot. |
+| **C2** per-key ordered proc | **-** | not native | No `keyBy`→partition. You can route by key to a per-key actor (one actor per `conversationId`) and the actor's mailbox serialises calls, but there is no ordered partitioned *ingest*, no replay, no rebalance. For batch, ordering is irrelevant. |
 | **C3** fault tolerance | **L** | task retry | Dask reruns failed tasks from the graph; great for **idempotent batch** (re-embed a chunk). No checkpointed streaming state. Eval/ingest get C3 for free; the agent loop does not. |
 | **C4** async I/O | **L** | futures / asyncio client | `client.submit` returns futures; `as_completed` bounds in-flight work; the async `Client` runs inside `asyncio`. Maps the *embed/LLM call fan-out* well; maps the *per-event agent loop* poorly. |
 | **C5** backpressure | **L** | scheduler + batching | The scheduler caps concurrency; you throttle with `as_completed` over a sliding window or a `Semaphore`. Protects the embedder/model endpoint in batch. Not end-to-end streaming backpressure. |
 | **C6** connectors | **L** | `read_*` / `to_*` | `db.read_text`, `dd.read_parquet`, `read_sql`, object-store globs, `to_parquet`. Bounded sources/sinks, not Kafka/streaming connectors. Perfect for "ingest this corpus", wrong for "subscribe to a topic". |
 | **C7** side outputs | **L** | extra return / extra collection | A task returns a tuple, or you build a second `bag`. Trivial for the debug/metrics side-channel of a batch run. |
 | **C8** broadcast state | **L** | `client.scatter(broadcast=True)` | Scatter the embedder config / control dims to every worker once, reference by future. Idiomatic and cheap. |
-| **C9** event-time/windows | **—** | not a fit | No streaming time model. N/A for batch. |
-| **C10** CEP | **—** | not a fit | No pattern-over-stream. Out of scope. |
-| **C11** distributed scale | **N** | adaptive cluster | Dask's home turf: `Client`, `LocalCluster`, `dask-kubernetes`, adaptive scaling. This is *why* you'd reach for it — embed 10⁶ chunks across 200 workers. |
+| **C9** event-time/windows | **-** | not a fit | No streaming time model. N/A for batch. |
+| **C10** CEP | **-** | not a fit | No pattern-over-stream. Out of scope. |
+| **C11** distributed scale | **N** | adaptive cluster | Dask's home turf: `Client`, `LocalCluster`, `dask-kubernetes`, adaptive scaling. This is *why* you'd reach for it, embed 10⁶ chunks across 200 workers. |
 | **C12** topology builder | **N** | task graph | `delayed`/`bag`/`dataframe` build a native lazy DAG the scheduler optimises. The routed-graph *pattern* expresses cleanly as a DAG per input row (router→path→verifier as delayed nodes). |
 
 `*` = present but caveated, as spelled out above. The shape of the column is the
 verdict: **C11/C12 native, the data-plane capabilities L, and the
-live-streaming-core capabilities (C2, C9, C10) flat `—`.**
+live-streaming-core capabilities (C2, C9, C10) flat `-`. **
 
 ## 3. The core abstractions on Dask
 
 ### 3a. The pure core ports verbatim (logic, not Flink)
 
 `Chunker`, `RecursiveTextChunker`, `TwoTierRetriever`, the embed→search→rerank→
-answer steps, and the `ToolExecutor` contract have **no Flink in them** — they're
+answer steps, and the `ToolExecutor` contract have **no Flink in them**, they're
 pure functions over plain values. In Python they're plain callables. The
 `RecursiveTextChunker` separator cascade (`["\n\n","\n",". "," ",""]`, target
 `max_chars`, 10% overlap) transcribes 1:1:
 
 ```python
-# pyagentic/ingest.py — pure, engine-free (mirrors RecursiveTextChunker.java)
+# pyagentic/ingest.py - pure, engine-free (mirrors RecursiveTextChunker.java)
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -95,7 +95,7 @@ class RecursiveTextChunker:
 ### 3b. ConversationStore / VectorStore = the durability seam (unchanged SPI)
 
 These are *already* the portable contract (keystone §4a). On Dask they are
-plain Protocols backed by Postgres/pgvector/Redis — exactly the existing
+plain Protocols backed by Postgres/pgvector/Redis, exactly the existing
 backends, addressed over the network instead of via Flink keyed state. Dask
 workers are stateless; **all durable state lives behind these Protocols.**
 
@@ -115,16 +115,16 @@ class VectorStore(Protocol):                        # the cold tier; pgvector/Qd
     def search(self, query: list[float], k: int) -> list["ScoredItem"]: ...
 ```
 
-### 3c. TwoTierRetriever — pure, used at *query/eval* time
+### 3c. TwoTierRetriever: pure, used at *query/eval* time
 
 The hot+cold merge (query both tiers, dedupe by id keeping the higher score,
 degrade gracefully if a tier fails) is pure logic. On Dask the "hot" tier is
 usually empty/irrelevant for offline eval (no live ingest stream), so you run it
-**cold-only** — but the class is identical to the Java one so a future live
+**cold-only**: but the class is identical to the Java one so a future live
 engine reuses it:
 
 ```python
-# pyagentic/retrieve.py — mirrors TwoTierRetriever.java, degradation included
+# pyagentic/retrieve.py - mirrors TwoTierRetriever.java, degradation included
 class TwoTierRetriever:
     def __init__(self, hot, cold, hot_k: int, cold_k: int):
         self.hot, self.cold = hot, cold
@@ -142,7 +142,7 @@ class TwoTierRetriever:
         return sorted(best.values(), key=lambda s: s.score, reverse=True)[:max(1, k)]
 ```
 
-### 3d. The Engine SPI (§4c) realised on Dask — bounded, not streaming
+### 3d. The Engine SPI (§4c) realised on Dask: bounded, not streaming
 
 Dask realises the SPI for **bounded collections**, not live streams. `source`
 becomes "read a bounded corpus", `sink` becomes "write results", and the unit of
@@ -153,13 +153,13 @@ import dask.bag as db
 from dask.distributed import Client
 
 class DaskRuntime:
-    """Engine SPI (§4c) for the DATA PLANE only. No keyedAgent — see §5."""
+    """Engine SPI (§4c) for the DATA PLANE only. No keyedAgent - see §5."""
     def __init__(self, client: Client): self.client = client
 
     def source(self, glob: str) -> db.Bag:                 # C6 (bounded)
         return db.read_text(glob)                          # or read_parquet / read_sql
 
-    def map_stage(self, bag: db.Bag, fn) -> db.Bag:        # C12 — a DAG node, map per element
+    def map_stage(self, bag: db.Bag, fn) -> db.Bag:        # C12 - a DAG node, map per element
         return bag.map(fn)
 
     def sink(self, bag: db.Bag, path: str):                # C6 sink
@@ -168,14 +168,14 @@ class DaskRuntime:
     def broadcast(self, obj):                              # C8
         return self.client.scatter(obj, broadcast=True)
 
-    def execute(self, *collections):                       # C11 — fan across the cluster
+    def execute(self, *collections):                       # C11 - fan across the cluster
         return self.client.compute(list(collections), sync=True)
 ```
 
 `asyncStage` (C4) is `client.submit` + `as_completed`; there is **deliberately no
-`keyedAgent`** — that's the line §5 will not cross.
+`keyedAgent`**, that's the line §5 will not cross.
 
-### 3e. Async / tools (C4) — fan-out, not per-event loop
+### 3e. Async / tools (C4): fan-out, not per-event loop
 
 A `ToolExecutor` is `params -> result`. In a *batch* eval each tool/LLM call is a
 submitted future; `as_completed` bounds in-flight work (C5, protecting the model
@@ -196,9 +196,9 @@ def run_bounded(client, fn, items, max_in_flight=64):     # C4 + C5
     return results
 ```
 
-## 4. Worked example — corpus ingest → cold index → retrieval eval
+## 4. Worked example: corpus ingest → cold index → retrieval eval
 
-The faithful, Dask-shaped worked example is **not** the live banking turn loop —
+The faithful, Dask-shaped worked example is **not** the live banking turn loop,
 it's the data plane that *feeds* it. Two pipelines, both pure-core logic wired
 onto Dask collections.
 
@@ -238,8 +238,8 @@ acks  = (pages
 n_indexed = acks.count().compute()                # C11: whole DAG fans across the cluster
 ```
 
-This is the *exact* dataflow of the Java `IngestionPipeline` — chunk → embed →
-upsert — except the partitioned operators are `bag` partitions and the scheduler
+This is the *exact* dataflow of the Java `IngestionPipeline`, chunk → embed →
+upsert, except the partitioned operators are `bag` partitions and the scheduler
 provides the parallelism Flink got from operator parallelism.
 
 ### 4b. Retrieval-quality eval sweep (the thing Dask wins at)
@@ -274,14 +274,14 @@ print(report.groupby([c for c in report if c.startswith("cfg_")])
             [["recall_at_k", "ndcg"]].mean())                 # the benchmark matrix
 ```
 
-### 4c. Optional — batch replay of the routed banking graph over N transcripts
+### 4c. Optional: batch replay of the routed banking graph over N transcripts
 
 You *can* express `BankingAgentGraph`'s router→path→verifier as a per-row
-`delayed` DAG and replay it over historical transcripts in parallel — for
+`delayed` DAG and replay it over historical transcripts in parallel, for
 regression eval, **not** live serving. Note the verifier's cross-turn phase
 (`BankingPhase` via the `ConversationStore`/`PhaseStore`) means each *transcript*
 must run its turns sequentially (state threads through), but **transcripts are
-independent** — so parallelism is across transcripts, not within one:
+independent**, so parallelism is across transcripts, not within one:
 
 ```python
 import dask
@@ -307,49 +307,49 @@ the live version needs C1+C2, which Dask doesn't give.
 - **Live keyed streaming agents (C2).** No partitioned ordered ingest, no
   `keyBy`, no rebalance, no replay. `distributed.Actor` per `conversationId`
   *technically* gives single-writer ordered handling, but you'd hand-build the
-  router (key→actor lookup), the actor lifecycle, and eviction — reinventing a
+  router (key→actor lookup), the actor lifecycle, and eviction, reinventing a
   worse Faust/Ray. **Don't do this on Dask.**
 - **Durable keyed state (C1).** Actor fields are in-memory and die with the
   worker. Durability is *only* via the `ConversationStore`/`VectorStore` SPI
-  (Postgres/Redis), with no checkpoint coordination — so no exactly-once on the
+  (Postgres/Redis), with no checkpoint coordination, so no exactly-once on the
   agent path; you lean on idempotent tool/A2A calls (keystone §8).
 - **Low-latency conversation.** Dask's scheduler is tuned for throughput on a
   task graph, not millisecond per-event dispatch. Turn latency would be at the
   mercy of scheduler round-trips. Wrong tool.
-- **Streaming connectors (C6), event-time/windows (C9), CEP (C10).** Flat `—`.
+- **Streaming connectors (C6), event-time/windows (C9), CEP (C10).** Flat `-`.
   Dask sources/sinks are bounded; there is no time model or pattern engine.
 - **Backpressure-as-topology (C5).** You get scheduler-level concurrency caps
   and `as_completed` windows, not end-to-end streaming backpressure protecting a
   live pipeline.
-- **The inbound A2A proxy / outbound live connectors.** Out of scope — those
+- **The inbound A2A proxy / outbound live connectors.** Out of scope, those
   belong to the live engine (Quarkus proxy + Faust/Ray loop). Dask has no
   business terminating JSON-RPC/SSE.
 
 The clean line: **anything bounded and parallel → Dask; anything live, keyed,
-ordered, low-latency → not Dask.**
+ordered, low-latency → not Dask. **
 
 ## 6. When to choose Dask
 
 Choose Dask when the *workload* in front of you is the data plane, and you
 already run (or will run) the live loop elsewhere:
 
-- **You have a large corpus to (re)ingest** — crawl/chunk/embed/index 10⁵–10⁷
+- **You have a large corpus to (re)ingest**: crawl/chunk/embed/index 10⁵-10⁷
   documents across a cluster, faster than a single-JVM Flink embedded run, with
   free task-retry idempotency. The cold index it builds is then served by the
   live engine via the same `VectorStore` SPI.
-- **You run retrieval/agent eval sweeps** — recall@k, nDCG, latency, LLM-judge
+- **You run retrieval/agent eval sweeps**: recall@k, nDCG, latency, LLM-judge
   scoring across a parameter grid and a dataset. This is Dask's strongest case
   here: embarrassingly parallel, bounded, throughput-bound, DataFrame-native
   reporting.
-- **You already live in the PyData stack** — pandas/NumPy/Parquet, a
+- **You already live in the PyData stack**: pandas/NumPy/Parquet, a
   `dask-kubernetes` cluster, scientists who think in DataFrames. Dask slots in
   with zero new infrastructure.
-- **You want one heavy offline engine alongside a streaming one** — the keystone
+- **You want one heavy offline engine alongside a streaming one**: the keystone
   recommendation: **Dask for the data plane, Faust or Ray for the live agent
   plane**, both sharing the pure core (§4a) and the durable SPIs.
 
 Do **not** choose Dask as the home for the agentic essence (§2.1) itself. It
 hosts the parts of this project that are *batch data engineering with an LLM in
-the loop* — and for those it is excellent and idiomatic. For "a fleet of
+the loop*, and for those it is excellent and idiomatic. For "a fleet of
 per-conversation stateful agents driven by events," look at Faust (#1) or Ray
 (#3) and let Dask be the data engine they stand on.

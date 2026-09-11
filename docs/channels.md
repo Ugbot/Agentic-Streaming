@@ -7,7 +7,7 @@ invocation, and a static seed list are all `Channel<T>` impls.
 
 The point of the abstraction: anywhere you'd otherwise hand-roll source
 plumbing, you instead union one or more channels together. The crawler is
-the canonical example — its frontier is whatever channels you wire in, and
+the canonical example, its frontier is whatever channels you wire in, and
 the crawler operator doesn't care which they are.
 
 ## The contract
@@ -21,7 +21,7 @@ public interface Channel<T> extends Serializable {
 ```
 
 Implementations must be `Serializable` (they ride in the Flink job graph);
-the live transport — Kafka consumer, HTTP server, JDBC handle — is built
+the live transport. Kafka consumer, HTTP server, JDBC handle, is built
 inside `open(env)` when the job graph is constructed.
 
 ## Built-in channels
@@ -34,7 +34,7 @@ inside `open(env)` when the job graph is constructed.
 | `PostgresChangeChannel` | Postgres polling | Single-parallelism. Polls `agent_facts`. |
 | `RedisPubSubChannel` | Redis pub/sub | Single-parallelism. Requires Jedis (optional dep). |
 | `WebhookChannel<T>` | HTTP `POST` | JDK `HttpServer`. Single-parallelism. |
-| `ToolInvocationChannel<T>` | three options — see below | LLM-driven. |
+| `ToolInvocationChannel<T>` | three options, see below | LLM-driven. |
 
 ## `ToolInvocationChannel<T>`
 
@@ -43,9 +43,9 @@ stream element for some downstream operator to consume. Three transports:
 
 | Static factory | Transport | Cross-TM | Cross-job | Use for |
 |----------------|-----------|----------|-----------|---------|
-| `ToolInvocationChannel.sideOutput(toolId, type, mapper)` | Flink side-output | ✅ | ❌ | Default. Single-job, exactly-once with checkpoints. |
-| `ToolInvocationChannel.via(toolId, type, mapper, wrapped, publisher)` | Wrapped `Channel<T>` (Kafka, …) | ✅ | ✅ | Multiple Flink jobs share the tool stream. |
-| `ToolInvocationChannel.inJvm(toolId, type, mapper)` | per-task `BlockingQueue` | ❌ | ❌ | Unit tests / single-JVM dev only. |
+| `ToolInvocationChannel.sideOutput(toolId, type, mapper)` | Flink side-output | yes | no | Default. Single-job, exactly-once with checkpoints. |
+| `ToolInvocationChannel.via(toolId, type, mapper, wrapped, publisher)` | Wrapped `Channel<T>` (Kafka, ...) | yes | yes | Multiple Flink jobs share the tool stream. |
+| `ToolInvocationChannel.inJvm(toolId, type, mapper)` | per-task `BlockingQueue` | no | no | Unit tests / single-JVM dev only. |
 
 For side-output to actually emit via Flink's network stack, the **agent
 operator** must set the current emit-context per call via
@@ -73,24 +73,24 @@ public final class WebSocketChannel<T> implements Channel<T> {
 }
 ```
 
-Register through `ChannelRegistry.builder().add("name", channel).build()` —
+Register through `ChannelRegistry.builder().add("name", channel).build()`,
 or pass directly into `CrawlerCore.builder().frontier(...)`,
-`IngestionPipeline.from(channel.open(env)).…`, etc.
+`IngestionPipeline.from(channel.open(env))....`, etc.
 
 ## When to use which
 
-- **`StaticSeedChannel`** — tests, seed URLs, single-shot demos.
-- **`KafkaChannel<T>`** — production. Cross-job, cross-TM, backpressure-aware.
-- **`KafkaContextChannel`** — when the payload is specifically the framework's
+- **`StaticSeedChannel`**, tests, seed URLs, single-shot demos.
+- **`KafkaChannel<T>`**, production. Cross-job, cross-TM, backpressure-aware.
+- **`KafkaContextChannel`**, when the payload is specifically the framework's
   `KeyedContextItem` (memory-feed use case).
-- **`WebhookChannel<T>`** — accept events from upstream systems (GitHub
+- **`WebhookChannel<T>`**, accept events from upstream systems (GitHub
   events, Slack, custom integrations) without a message broker in the loop.
-- **`PostgresChangeChannel` / `RedisPubSubChannel`** — when those are already
+- **`PostgresChangeChannel` / `RedisPubSubChannel`**, when those are already
   in your stack.
-- **`ToolInvocationChannel<T>`** — when an LLM tool call should *also* drive
+- **`ToolInvocationChannel<T>`**, when an LLM tool call should *also* drive
   a continuous operator (the agent fires a crawl, the crawler picks it up).
 
 The crawler in the [live-research example](examples/live-research.md) wires
-four of these into the same operator's input — seed + LLM tool + (optional
+four of these into the same operator's input, seed + LLM tool + (optional
 Kafka) + discovered-links recursion. Same pattern works for any operator
 that wants a unified "things to do next" frontier.

@@ -11,7 +11,7 @@ same named corpus, the framework picks the right flavour underneath.
 |---------|-------|--------------|---------------|----------|
 | `SingleOperatorCorpus` | Flink keyed state | <1 ms | <1 ms | Small / medium corpora in one operator (the `KeyedCoProcessFunction` pattern). |
 | `BroadcastCorpus` | Per-replica copy via Flink broadcast state | <1 ms | one cross-task hop per update | Moderate corpora (≤10⁵ vectors per replica), low write rate, multiple readers want independent parallelism. |
-| `ExternalCorpus` | pgvector / Qdrant / any `VectorStore` | 5–20 ms | 5–20 ms | Large corpora, cross-job sharing, durable beyond one job's lifetime. |
+| `ExternalCorpus` | pgvector / Qdrant / any `VectorStore` | 5-20 ms | 5-20 ms | Large corpora, cross-job sharing, durable beyond one job's lifetime. |
 
 All three implement the same `Corpus` interface:
 
@@ -45,7 +45,7 @@ CorpusSpec c = ExternalCorpus.spec(
 
 ## `SingleOperatorCorpus`
 
-The simplest flavour. Both reads and writes happen on the same operator —
+The simplest flavour. Both reads and writes happen on the same operator,
 typically a `KeyedCoProcessFunction` whose two inputs are the ingest stream
 (`processElement1`) and the query stream (`processElement2`). Bind the
 corpus in `open()`:
@@ -56,18 +56,18 @@ corpus = SingleOperatorCorpus.spec("kb", FlinkStateHnswVectorMemory.spec(384))
 ```
 
 Every write is immediately visible to subsequent reads on the same operator
-— there's no replication lag. The constraint is that ingest and retrieve
+, there's no replication lag. The constraint is that ingest and retrieve
 must share the same `keyBy` and the same operator chain.
 
 ## `BroadcastCorpus`
 
-Use this when ingest and retrieve should run independently — e.g. retrieve
+Use this when ingest and retrieve should run independently, e.g. retrieve
 needs more parallelism than ingest, or you want the read operator's state
 to be a self-contained replica.
 
 The framework primitive gives you the per-replica vector memory and the
-serializable spec. The **wiring** — turning the ingest stream into a
-`BroadcastStream` and connecting it into the read operators — is your job.
+serializable spec. The **wiring**, turning the ingest stream into a
+`BroadcastStream` and connecting it into the read operators, is your job.
 Canonical snippet:
 
 ```java
@@ -90,7 +90,7 @@ via `corpus.upsert(...)`.
 ## `ExternalCorpus`
 
 When the corpus is too big for Flink state or needs to be shared across
-jobs. Wraps any `VectorStore` SPI implementation — pgvector and Qdrant ship
+jobs. Wraps any `VectorStore` SPI implementation, pgvector and Qdrant ship
 in-box.
 
 ```java

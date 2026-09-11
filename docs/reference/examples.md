@@ -1,4 +1,4 @@
-# 📚 Example Walkthroughs
+# Example Walkthroughs
 
 This guide walks through each example in detail, explaining what happens at each step.
 
@@ -762,19 +762,19 @@ context.addContext(new ContextItem(
 
 ---
 
-## 🎯 Summary
+## Summary
 
 You've now seen:
-- ✅ Simple Agent: Basic workflow
-- ✅ RAG Agent: Document processing and search
-- ✅ Context Agent: Memory management
-- ✅ Custom Agent: Build your own from scratch
+- Simple Agent: Basic workflow
+- RAG Agent: Document processing and search
+- Context Agent: Memory management
+- Custom Agent: Build your own from scratch
 
-## 📚 Next Steps
+## Next Steps
 
 1. **Experiment** - Modify the examples
 2. **Combine** - Use RAG + Context + Your Tools together
 3. **Build** - Create your own agent for your use case
 4. **Read** - Check [agent-framework.md](agent-framework.md) for advanced topics
 
-**Happy building!** 🚀
+**Happy building!**

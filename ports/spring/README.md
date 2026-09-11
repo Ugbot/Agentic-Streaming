@@ -7,9 +7,9 @@ enterprise wiring: Spring exposes the inbound REST edge and expresses the core
 `AgentController` (`POST /agent {conversationId,userId,text}`) builds a per-turn
 `AgentContext` over a singleton `ConversationStore.InMemory` + `Banking.retriever()` and
 runs `Banking.buildGraph().handle(...)`, returning the verified reply; `RoutedFlow` shows
-the equivalent integration wiring — a Content-Based Router (`Banking.router`) dispatching
+the equivalent integration wiring, a Content-Based Router (`Banking.router`) dispatching
 to per-path channels (`cards|payments|general`), each a service activator that delegates
-the turn to the shared `RoutedGraph` and forwards to a final verify endpoint — while
+the turn to the shared `RoutedGraph` and forwards to a final verify endpoint, while
 `AgentPhaseFsm` maps the agent phase FSM onto Spring StateMachine (the durable, external
 state story replaces Flink's checkpointed keyed state). See
 `docs/portability/spring.md` for the full design.

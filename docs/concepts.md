@@ -1,4 +1,4 @@
-# 🎓 Core Concepts - Explained Simply
+# Core Concepts - Explained Simply
 
 This guide explains the key concepts of Agentic Flink using simple analogies and examples.
 
@@ -100,22 +100,22 @@ event.putData("orderId", "12345");
 
 ### Common Tool Categories
 
-📱 **Communication Tools**
+**Communication Tools**
 - SendEmail
 - SendSMS
 - PostToSlack
 
-💾 **Data Tools**
+**Data Tools**
 - DatabaseQuery
 - ReadFile
 - WriteFile
 
-🧮 **Processing Tools**
+**Processing Tools**
 - Calculator
 - DataValidator
 - TextAnalyzer
 
-🌐 **External Tools**
+**External Tools**
 - CallAPI
 - WebSearch
 - FetchURL
@@ -248,7 +248,7 @@ config.setSupervisorReviewEnabled(true);
 
 ### Types of Memory
 
-#### 🧠 Short-Term Memory (Working Memory)
+#### Short-Term Memory (Working Memory)
 
 Like remembering a phone number long enough to dial it.
 
@@ -267,7 +267,7 @@ memory.add(new ContextItem(
 ));
 ```
 
-#### 📚 Long-Term Memory (Permanent Memory)
+#### Long-Term Memory (Permanent Memory)
 
 Like remembering your home address forever.
 
@@ -286,7 +286,7 @@ memory.addFact(new ContextItem(
 ));
 ```
 
-#### 🎯 Steering State (Rules and Policies)
+#### Steering State (Rules and Policies)
 
 Like company policies you must follow.
 
@@ -359,7 +359,7 @@ Memory Available! (2800/4000 tokens)
 
 ## Validation and Correction
 
-**Validation** is checking if work is correct. **Correction** is fixing mistakes.
+**Validation** is checking if work is correct.**Correction** is fixing mistakes.
 
 ### Why Validate?
 
@@ -568,16 +568,16 @@ No data lost!
 ### You Don't Need to Know Flink!
 
 The framework handles all the Flink complexity:
-- ✅ Streaming setup - Done for you
-- ✅ State management - Automatic
-- ✅ Checkpointing - Configured
-- ✅ Scaling - Just change parallelism
+- Streaming setup - Done for you
+- State management - Automatic
+- Checkpointing - Configured
+- Scaling - Just change parallelism
 
 **You just write agent logic!**
 
 ---
 
-## 🎯 Putting It All Together
+## Putting It All Together
 
 Here's how all the concepts work together:
 
@@ -640,7 +640,7 @@ if (policyContainsRequiredInfo(policy)) {
 
 ---
 
-## 🎓 Key Takeaways
+## Key Takeaways
 
 1. **Agents** are autonomous workers that complete tasks
 2. **Events** are messages that tell agents what to do
@@ -653,7 +653,7 @@ if (policyContainsRequiredInfo(policy)) {
 
 ---
 
-## 📚 Next Steps
+## Next Steps
 
 Now that you understand the concepts:
 
@@ -662,4 +662,4 @@ Now that you understand the concepts:
 3. **Explore advanced topics** - Read the full framework docs ([reference/agent-framework.md](reference/agent-framework.md))
 4. **Get help** - Check troubleshooting if you get stuck ([reference/troubleshooting.md](reference/troubleshooting.md))
 
-**You now understand how Agentic Flink works!** 🎉
+**You now understand how Agentic Flink works!**

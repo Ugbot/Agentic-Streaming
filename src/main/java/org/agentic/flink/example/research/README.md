@@ -12,7 +12,7 @@ agent's crawl-url ──► ToolInvocationChannel<UrlRequest> ──┐
         (side-output)                                     │
                                                           ▼
                                                   CrawlerCore.builder()
-                                                       .frontier(…)
+                                                       .frontier(...)
                                                        .open(env)
                                                           │
                                                           ▼  DataStream<CrawledPage>
@@ -38,14 +38,14 @@ queries (StaticSeedChannel<String>) ─► RetrievalPipeline.from(queries)
 
 | Piece | Framework primitive |
 |-------|---------------------|
-| Crawler frontier (seeds + LLM + …) | `CrawlerCore.builder().frontier(Channel…)` |
-| LLM-driven URL emission | `ToolInvocationChannel.sideOutput(…)` |
-| Multi-format extraction (HTML, PDF, …) | `DocumentExtractor` (Jsoup + Tika) |
+| Crawler frontier (seeds + LLM + ...) | `CrawlerCore.builder().frontier(Channel...)` |
+| LLM-driven URL emission | `ToolInvocationChannel.sideOutput(...)` |
+| Multi-format extraction (HTML, PDF, ...) | `DocumentExtractor` (Jsoup + Tika) |
 | robots.txt enforcement | `RobotsCache` inside `Fetcher` |
 | HNSW over Flink state | `FlinkStateHnswVectorMemory.spec(dim)` |
 | Shared corpus across operators | `BroadcastCorpus.spec(name, vectorSpec)` |
-| Chunk → embed → upsert | `IngestionPipeline.from(pages).chunk(…).embed(…).into(corpus)` |
-| Embed → search → rerank → answer | `RetrievalPipeline.from(queries).embed(…).search(…).rerank(…).answer(…)` |
+| Chunk → embed → upsert | `IngestionPipeline.from(pages).chunk(...).embed(...).into(corpus)` |
+| Embed → search → rerank → answer | `RetrievalPipeline.from(queries).embed(...).search(...).rerank(...).answer(...)` |
 
 The point of this example: **everything heavy is a framework primitive.**
 The `main()` is the sentence the verbs let you write.
@@ -91,7 +91,7 @@ CrawlerCore.builder()
 ```
 
 Any producer that writes JSON `UrlRequest` records to the `crawl-requests`
-topic now nudges the crawler — same operator, no code change to the crawler.
+topic now nudges the crawler, same operator, no code change to the crawler.
 
 ## Cross-job tool invocations
 

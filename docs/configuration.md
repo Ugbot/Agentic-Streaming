@@ -8,7 +8,7 @@ When you request a configuration key (e.g., `ollama.base.url`), the value is res
 
 1. **Explicit properties** -- values passed via `AgenticFlinkConfig.fromMap(props)` or the constructor.
 2. **Environment variables** -- the key is transformed to the form `AGENTIC_FLINK_OLLAMA_BASE_URL` (uppercased, dots replaced with underscores, prefixed with `AGENTIC_FLINK_`).
-3. **System properties** -- the key is prefixed with `agentic.flink.` (e.g., `agentic.flink.ollama.base.url`).
+3. **System properties** -- the key is prefixed with `agentic.flink. ` (e.g., `agentic.flink.ollama.base.url`).
 4. **Default values** -- hard-coded in `ConfigKeys`.
 
 The `forTesting()` factory skips steps 2 and 3, returning only defaults and explicit properties. This isolates tests from host environment variables.
@@ -36,7 +36,7 @@ Configuration keys use dot-separated lowercase notation. The corresponding envir
 | `openai.api.key` | `AGENTIC_FLINK_OPENAI_API_KEY` |
 | `openai.model` | `AGENTIC_FLINK_OPENAI_MODEL` |
 
-System properties use the prefix `agentic.flink.` followed by the key verbatim (e.g., `-Dagentic.flink.ollama.base.url=http://my-ollama:11434`).
+System properties use the prefix `agentic.flink. ` followed by the key verbatim (e.g., `-Dagentic.flink.ollama.base.url=http://my-ollama:11434`).
 
 ## Configuration Keys
 

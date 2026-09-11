@@ -1,6 +1,6 @@
 # Apache Flink Agents Plugin
 
-**Status:** 📋 Future Integration - Optional Plugin
+**Status:** Future Integration - Optional Plugin
 **Dependencies:** Requires Apache Flink Agents (v1.0+) when available
 
 ---
@@ -9,7 +9,7 @@
 
 This package contains **optional integration** with Apache Flink Agents, the official AI agent framework from the Apache Flink community.
 
-⚠️ **This is NOT part of the core framework** - The core Agentic Flink framework works without this plugin.
+**This is NOT part of the core framework** - The core Agentic Flink framework works without this plugin.
 
 ---
 
@@ -126,10 +126,10 @@ Examples of how to use both frameworks together
 
 ## What This Plugin Does NOT Provide
 
-- ❌ Core agent functionality (that's in the main framework)
-- ❌ LLM integration (use LangChain4J directly)
-- ❌ Storage backends (use core storage package)
-- ❌ Context management (use core context package)
+- Core agent functionality (that's in the main framework)
+- LLM integration (use LangChain4J directly)
+- Storage backends (use core storage package)
+- Context management (use core context package)
 
 ---
 

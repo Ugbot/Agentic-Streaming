@@ -1,37 +1,37 @@
-# Portability — Agentic Streaming on any backend (Flink is one of three first‑class runtimes)
+# Portability. Agentic Streaming on any backend (Flink is one of three first-class runtimes)
 
 What would this project be on a *different* engine? These notes name the
 engine-agnostic essence, the capabilities Flink was providing, and an honest
 per-engine mapping (what fits, what's awkward, what to drop). The essence is now
-implemented: three Flink‑free cores (`pyagentic` · `jagentic-core` · `goagentic`) + 12
-engine adapters + a declarative YAML pipeline. Three runtimes are **first‑class** — the
+implemented: three Flink-free cores (`pyagentic` · `jagentic-core` · `goagentic`) + 12
+engine adapters + a declarative YAML pipeline. Three runtimes are **first-class**, the
 Flink framework, [`agentic-pekko/`](../../agentic-pekko/) (actors), and
 [`agentic-clj/`](../../agentic-clj/) (pure Clojure on Datomic).
-The cores are now **near‑complete standalone agent frameworks** — real LLM/embedding
-libraries, structured output, skills, MCP + A2A clients, saga/compensation, context‑window
-management, an in‑process **HNSW** vector index, vector/long‑term/conversation store SPIs
-(Qdrant/Postgres/Redis reference impls), a web toolkit, a DL‑inference SPI, and the
-**stream‑stateful core** (CEP · timers · windows · replay · suspend/resume · tracing — see
-[`stream-stateful-core.md`](stream-stateful-core.md)) — so you get the good parts without Flink.
+The cores are now **near-complete standalone agent frameworks**, real LLM/embedding
+libraries, structured output, skills, MCP + A2A clients, saga/compensation, context-window
+management, an in-process **HNSW** vector index, vector/long-term/conversation store SPIs
+(Qdrant/Postgres/Redis reference impls), a web toolkit, a DL-inference SPI, and the
+**stream-stateful core** (CEP · timers · windows · replay · suspend/resume · tracing, see
+[`stream-stateful-core.md`](stream-stateful-core.md)), so you get the good parts without Flink.
 
 **Build & deploy (start here if you just want to use it):**
-- [`pipelines.md`](pipelines.md) — define an agent in `pipeline.yaml` (prompts, tools,
-  skills, retrieval + vector store, classifier/regex guardrails, MCP + A2A, context‑window
-  management, hot‑swappable stores) and run it on any backend, in Python / JVM / Go.
-- [`using-a-real-model.md`](using-a-real-model.md) — swap the model‑free defaults for real
+- [`pipelines.md`](pipelines.md), define an agent in `pipeline.yaml` (prompts, tools,
+  skills, retrieval + vector store, classifier/regex guardrails, MCP + A2A, context-window
+  management, hot-swappable stores) and run it on any backend, in Python / JVM / Go.
+- [`using-a-real-model.md`](using-a-real-model.md), swap the model-free defaults for real
   chat + embeddings (Ollama / OpenAI / Anthropic) per language.
-- [`tool-services.md`](tool-services.md) — the toolkit (web scraping, **Tika**, RAG, inference,
-  utilities) decomposed into standalone, framework‑agnostic tools any LLM/framework can run over
-  **MCP · REST · gRPC · Kafka/Redis pub‑sub** (Java/Quarkus, Flink‑free).
-- [`choosing-a-backend.md`](choosing-a-backend.md) — the decision guide.
-- [`stream-stateful-core.md`](stream-stateful-core.md) — the **stream-stateful core**: CEP, timers,
+- [`tool-services.md`](tool-services.md), the toolkit (web scraping, **Tika**, RAG, inference,
+  utilities) decomposed into standalone, framework-agnostic tools any LLM/framework can run over
+  **MCP · REST · gRPC · Kafka/Redis pub-sub** (Java/Quarkus, Flink-free).
+- [`choosing-a-backend.md`](choosing-a-backend.md), the decision guide.
+- [`stream-stateful-core.md`](stream-stateful-core.md), the **stream-stateful core**: CEP, timers,
   windows, replay, human-in-the-loop, and tracing, portable across all four cores (CEP is no longer
   Flink-only).
-- [`parity-matrix.md`](parity-matrix.md) — what each backend can do + its limitations,
-  and the full three‑core capability/parity table.
+- [`parity-matrix.md`](parity-matrix.md), what each backend can do + its limitations,
+  and the full three-core capability/parity table.
 
 **Design (the why):**
-- [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md) —
+- [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md),
   the essence, the capability inventory, the engine-agnostic core + Engine SPI, the
   capability matrix, and the ranked fit. Every engine doc is written against it.
 
@@ -41,10 +41,10 @@ management, an in‑process **HNSW** vector index, vector/long‑term/conversati
 |-----|--------|------|---------------------|
 | [`faust.md`](faust.md) | Faust (faust-streaming) | Python | Native fit: faust *agents* + *Tables* ≈ our agent + ConversationStore. |
 | [`kafka-streams.md`](kafka-streams.md) | Kafka Streams | Java | Closest analog: state stores + partitions + EOS; bridge async I/O. |
-| [`pekko.md`](pekko.md) | Apache Pekko | Java | **First-class** ([`agentic-pekko/`](../../agentic-pekko/)) — event-sourced, cluster-sharded entity per conversation (C1+C2+C3 native). |
+| [`pekko.md`](pekko.md) | Apache Pekko | Java | **First-class** ([`agentic-pekko/`](../../agentic-pekko/)), event-sourced, cluster-sharded entity per conversation (C1+C2+C3 native). |
 | [`clojure.md`](clojure.md) | Clojure (Datomic) | Clojure | **First-class, pure-Clojure** reimplementation; immutable datoms = the conversation log + time-travel (C3 native). |
-| [`temporal.md`](temporal.md) | Temporal | Java | Entity workflow per conversation; event-sourced C1+C2+C3 — strongest durability. |
-| [`pulsar.md`](pulsar.md) | Apache Pulsar Functions | Java | State store (C1+C3) + Key_Shared (C2) — native, in Flink's topic-in/topic-out shape. |
+| [`temporal.md`](temporal.md) | Temporal | Java | Entity workflow per conversation; event-sourced C1+C2+C3, strongest durability. |
+| [`pulsar.md`](pulsar.md) | Apache Pulsar Functions | Java | State store (C1+C3) + Key_Shared (C2), native, in Flink's topic-in/topic-out shape. |
 | [`ray.md`](ray.md) | Ray | Python | Actor-per-conversation = stateful agent; durability + streaming are external. |
 | [`nats.md`](nats.md) | NATS JetStream | Python | Durable KV state (C1) + persistent stream (C3); C2 via subject + KV CAS. Lightweight, online. |
 | [`quarkus.md`](quarkus.md) | Quarkus | Java | Reactive messaging + Mutiny; keyed state external. Already our proxy. |
@@ -60,7 +60,7 @@ SPI.
 
 **A third core, in Go.** [`ports/go/`](../../ports/go/) is a pure-Go realization of the
 same essence, with its own **NATS JetStream** and **Temporal** engines (so both have
-two implementations — Python/Go and Java/Go) and a stdlib HTTP gateway. Together with
+two implementations. Python/Go and Java/Go) and a stdlib HTTP gateway. Together with
 the [FastAPI gateway](../../ports/gateway-fastapi/) over `pyagentic`, two HTTP front
-doors expose the agent under an identical A2A-style Agent Card — the essence is portable
+doors expose the agent under an identical A2A-style Agent Card, the essence is portable
 across Python, the JVM, and Go, behind one contract.

@@ -14,14 +14,14 @@ job over a pluggable transport, holding A2A task lifecycle state on behalf of di
 
 ## How it fits together
 
-- **`AgentCardProducer`** — produces the `AgentCard` served at `/.well-known/agent-card.json`, from
+- **`AgentCardProducer`**, produces the `AgentCard` served at `/.well-known/agent-card.json`, from
   `GatewayConfig`.
-- **`AgenticFlinkAgentExecutor`** — the server-side `AgentExecutor` the SDK reference servers call
+- **`AgenticFlinkAgentExecutor`**, the server-side `AgentExecutor` the SDK reference servers call
   for every `message/send` / `message/stream`. Backs all three transport bindings with one bean.
-- **`A2ARequestBridge`** — transport-agnostic core: publishes an `A2ARequest` over the
+- **`A2ARequestBridge`**, transport-agnostic core: publishes an `A2ARequest` over the
   `A2AGatewayConnector` and pumps the job's `A2AResponse`s into the SDK `AgentEmitter` (driving SSE
   + push). Unit-tested without booting Quarkus.
-- **`BridgeProducer`** — opens the gateway-side `A2ABridge` connector chosen by
+- **`BridgeProducer`**, opens the gateway-side `A2ABridge` connector chosen by
   `a2a.bridge.transport` (`inproc` | `zeromq` | `redis`).
 
 The Flink job consumes requests by unioning `bridge.requestChannel()` into its agent input and writes
@@ -30,7 +30,7 @@ results to `bridge.responseSink()` (see `docs/a2a.md` and the example).
 ## Build & run
 
 This module is **not** part of the core Maven reactor (kept separate to avoid converting the root to
-`pom` packaging — mirrors how `plugins/flintagents` is excluded). Install the core artifact first,
+`pom` packaging, mirrors how `plugins/flintagents` is excluded). Install the core artifact first,
 then build the gateway:
 
 ```bash
