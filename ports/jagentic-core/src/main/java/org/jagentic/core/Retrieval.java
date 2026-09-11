@@ -43,6 +43,10 @@ public final class Retrieval {
     return v;
   }
 
+  /** Ranking order shared by every tier: highest score first, ties broken by id (spec reference). */
+  public static final java.util.Comparator<Scored> BY_SCORE_THEN_ID =
+      java.util.Comparator.comparingDouble((Scored s) -> -s.score()).thenComparing(Scored::id);
+
   public static double cosine(float[] a, float[] b) {
     if (a.length != b.length) return -1.0;
     double dot = 0, na = 0, nb = 0;
@@ -103,7 +107,7 @@ public final class Retrieval {
       for (Map.Entry<String, Entry> e : entries.entrySet()) {
         all.add(new Scored(e.getKey(), cosine(query, e.getValue().vec()), e.getValue().text()));
       }
-      all.sort((x, y) -> Double.compare(y.score(), x.score()));
+      all.sort(BY_SCORE_THEN_ID);
       return all.subList(0, Math.min(Math.max(1, k), all.size()));
     }
 
@@ -148,7 +152,7 @@ public final class Retrieval {
         }
       }
       List<Scored> out = new ArrayList<>(best.values());
-      out.sort((x, y) -> Double.compare(y.score(), x.score()));
+      out.sort(BY_SCORE_THEN_ID);
       return out.subList(0, Math.min(Math.max(1, k), out.size()));
     }
 
