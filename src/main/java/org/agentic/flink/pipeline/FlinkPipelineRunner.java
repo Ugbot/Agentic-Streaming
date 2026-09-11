@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -19,7 +20,10 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.Collector;
 
 import org.agentic.flink.cep.CepSpecTranslator;
+import org.agentic.flink.runtime.FlinkRuntimeOptions;
+import org.agentic.flink.runtime.WorkflowTurnFunction;
 import org.jagentic.core.Event;
+import org.jagentic.core.TurnResult;
 
 /**
  * The YAML→Flink-job runner: read a portable {@code pipeline.yaml} (the same schema the cores load)
@@ -31,6 +35,11 @@ import org.jagentic.core.Event;
  * native {@code CEP.pattern(...)} (via {@link CepSpecTranslator}); a {@code kind: submit} match emits
  * a derived event that is unioned back into the agent input (so it routes through the graph, e.g. to
  * an {@code escalate} path) — the Flink-idiomatic form of the portable submit action.</p>
+ *
+ * <p>The agent graph itself is the canonical core ({@code org.jagentic.core}) hosted by
+ * {@link WorkflowTurnFunction}: the keyed operator holds the conversation event log as Flink state
+ * and emits normalized {@link TurnResult}s. {@link #assembleResults} exposes that stream;
+ * {@link #assemble} keeps the pre-spec one-line summary per turn.</p>
  */
 public final class FlinkPipelineRunner {
 
@@ -48,11 +57,29 @@ public final class FlinkPipelineRunner {
   /**
    * Assemble the job graph onto {@code env}: wire native CEP (if any) over {@code source}, union the
    * derived events into the agent input, and run the portable graph keyed by conversation. Returns
-   * the per-turn summary stream (caller adds a sink / collects / executes).
+   * the per-turn summary stream ({@code cid | path=.. | ok=.. | reply}); see {@link #assembleResults}
+   * for the normalized results.
    */
-  @SuppressWarnings("unchecked")
   public static DataStream<String> assemble(StreamExecutionEnvironment env, Map<String, Object> spec,
                                             DataStream<Event> source) {
+    return assembleResults(env, spec, source)
+        .map(FlinkGraphFunction::summary)
+        .returns(TypeInformation.of(String.class));
+  }
+
+  /** {@link #assembleResults(StreamExecutionEnvironment, Map, DataStream, FlinkRuntimeOptions)} with options from {@code runtime.flink}. */
+  public static DataStream<TurnResult> assembleResults(StreamExecutionEnvironment env, Map<String, Object> spec,
+                                                       DataStream<Event> source) {
+    return assembleResults(env, spec, source, FlinkRuntimeOptions.fromSpec(spec));
+  }
+
+  /**
+   * Assemble the job graph and return the normalized turn results, one per input event (and one per
+   * timer-driven resume), in the shape of {@code spec/v1/result.schema.json}.
+   */
+  @SuppressWarnings("unchecked")
+  public static DataStream<TurnResult> assembleResults(StreamExecutionEnvironment env, Map<String, Object> spec,
+                                                       DataStream<Event> source, FlinkRuntimeOptions options) {
     List<Map<String, Object>> cepRules = (List<Map<String, Object>>) spec.get("cep");
     DataStream<Event> agentInput = source;
 
@@ -69,12 +96,12 @@ public final class FlinkPipelineRunner {
         Pattern<Event, Event> pattern = CepSpecTranslator.toPattern(rule, Event::text, Event::metadata);
         DataStream<Event> derived = CEP.pattern(timed.keyBy(key), pattern)
             .process(new SubmitOnMatch(rule))
-            .returns(TypeInformation.of(Event.class));
+            .returns(WorkflowTurnFunction.EVENT_TYPE);
         agentInput = agentInput.union(derived);
       }
     }
 
-    return agentInput.keyBy(Event::conversationId).process(new FlinkGraphFunction(spec));
+    return agentInput.keyBy(Event::conversationId).process(new WorkflowTurnFunction(spec, options));
   }
 
   /** A CEP match → a derived agent event (the native form of the portable {@code on_match: submit}). */
@@ -97,7 +124,10 @@ public final class FlinkPipelineRunner {
       Event first = match.get(firstStage).get(0);
       String key = extractKey(keySpec, first);
       String body = text.replace("{key}", key == null ? "" : key);
-      out.collect(new Event(key, "cep", body, Map.of(DERIVED, "true")));
+      // Deterministic turn id: the same match (first event's turn + text) always yields the same id,
+      // so a replayed match is a duplicate turn rather than a second one.
+      String turnId = UUID.nameUUIDFromBytes(("cep:" + first.turnId() + ":" + body).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+      out.collect(new Event(key, turnId, "cep", body, Map.of(DERIVED, "true"), null));
     }
   }
 
@@ -156,7 +186,7 @@ public final class FlinkPipelineRunner {
     env.setParallelism(1);
 
     Event seed = new Event(cid, "user", text == null ? "what is my balance?" : text, Map.of());
-    DataStream<Event> source = env.fromData(List.of(seed), TypeInformation.of(Event.class));
+    DataStream<Event> source = env.fromData(List.of(seed), WorkflowTurnFunction.EVENT_TYPE);
 
     assemble(env, spec, source).print();
     env.execute("agentic-flink: " + yaml);

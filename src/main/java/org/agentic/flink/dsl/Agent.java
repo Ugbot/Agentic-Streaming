@@ -59,7 +59,12 @@ import java.util.*;
  *
  * @author Agentic Flink Team
  * @see AgentBuilder
+ * @deprecated the agent model (turn/event/state/router/brain/tool/guardrail/verifier/saga) now
+ *     lives in the canonical core {@code org.jagentic.core} and runs on Flink through
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}; this class is kept as the pre-spec
+ *     Flink-only DSL and receives no new features.
  */
+@Deprecated
 public class Agent implements Serializable {
 
   private static final long serialVersionUID = 1L;
