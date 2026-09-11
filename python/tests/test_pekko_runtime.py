@@ -16,7 +16,7 @@ import pytest
 
 from agentic_flink import loads
 from agentic_flink._classpath import MissingJarError, pekko_jars
-from agentic_flink._contract import RuntimeNotAvailable, get_runtime
+from agentic_flink._contract import RuntimeNotAvailableError, get_runtime
 from agentic_flink.conformance import default_fixtures_dir, load_comparator, run_fixture
 from agentic_flink.workflow import Event
 
@@ -70,6 +70,6 @@ def test_pekko_capabilities_are_not_claimed_and_fixtures_skip():
 
 def test_pekko_without_jars_names_the_build_step(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENTIC_PEKKO_CLASSPATH", str(tmp_path / "missing.jar"))
-    with pytest.raises((RuntimeNotAvailable, MissingJarError), match="missing.jar"):
+    with pytest.raises((RuntimeNotAvailableError, MissingJarError), match="missing.jar"):
         rt = get_runtime("pekko")
         rt.deploy(loads("spec_version: agentic/v1\nagent: {id: a, paths: {p: {brain: rule, prompt: x}}}\n"))

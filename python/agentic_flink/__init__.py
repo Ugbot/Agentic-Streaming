@@ -19,8 +19,8 @@ require a running JVM. Call :func:`start_jvm` before invoking any wrapper.
 from ._classpath import MissingJarError, flink_jars, framework_jar
 from ._contract import (
     Runtime as WorkflowRuntime,
-    RuntimeNotAvailable,
-    UnsupportedRequirements,
+    RuntimeNotAvailableError,
+    CapabilityError,
     available_runtimes,
     get_runtime,
     register_runtime,
@@ -109,8 +109,8 @@ __all__ = [
     "load",
     "loads",
     "WorkflowRuntime",
-    "RuntimeNotAvailable",
-    "UnsupportedRequirements",
+    "RuntimeNotAvailableError",
+    "CapabilityError",
     "available_runtimes",
     "get_runtime",
     "register_runtime",

@@ -47,7 +47,7 @@ def jvm():
     extra = _resolve_classpath()
     # The agentic-pekko jars go first when built (their Jackson is newer than the shaded one),
     # so the `pekko` runtime is reachable in the same JVM. Without them, pekko tests fail
-    # with RuntimeNotAvailable naming the build step.
+    # with RuntimeNotAvailableError naming the build step.
     try:
         prepend = pekko_jars()
     except MissingJarError:
