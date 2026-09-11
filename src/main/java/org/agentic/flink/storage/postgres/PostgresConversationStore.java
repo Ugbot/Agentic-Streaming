@@ -9,6 +9,7 @@ import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.LongTermMemoryStore;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
 import com.zaxxer.hikari.HikariConfig;
@@ -74,9 +75,15 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
-public class PostgresConversationStore implements LongTermMemoryStore {
+public class PostgresConversationStore extends ReopenableStore implements LongTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(PostgresConversationStore.class);
+  private static final long serialVersionUID = 1L;
+
+  private static final String UPSERT_FACT =
+      "INSERT INTO agent_facts (flow_id, fact_id, fact_json, created_at) "
+          + "VALUES (?, ?, ?, ?) "
+          + "ON CONFLICT (flow_id, fact_id) DO UPDATE SET fact_json = EXCLUDED.fact_json";
 
   // Configuration
   private String jdbcUrl;
@@ -91,7 +98,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
   private transient ObjectMapper objectMapper;
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) throws Exception {
     this.jdbcUrl = config.getOrDefault(
         ConfigKeys.POSTGRES_URL, ConfigKeys.DEFAULT_POSTGRES_URL);
     this.username = config.getOrDefault(ConfigKeys.POSTGRES_USER, ConfigKeys.DEFAULT_POSTGRES_USER);
@@ -131,6 +138,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
     hikariConfig.setConnectionTimeout(5000); // 5 seconds
     hikariConfig.setIdleTimeout(600000); // 10 minutes
     hikariConfig.setMaxLifetime(1800000); // 30 minutes
+    hikariConfig.setInitializationFailTimeout(1); // fail loudly if the database is unreachable
 
     this.dataSource = new HikariDataSource(hikariConfig);
 
@@ -141,6 +149,16 @@ public class PostgresConversationStore implements LongTermMemoryStore {
     if (autoCreateTables) {
       createTablesIfNotExist();
     }
+  }
+
+  private HikariDataSource dataSource() {
+    ensureOpen();
+    return dataSource;
+  }
+
+  private ObjectMapper mapper() {
+    ensureOpen();
+    return objectMapper;
   }
 
   /**
@@ -199,18 +217,22 @@ public class PostgresConversationStore implements LongTermMemoryStore {
       throw new IllegalArgumentException("flowId and context cannot be null");
     }
 
-    String contextJson = objectMapper.writeValueAsString(context);
+    String contextJson = mapper().writeValueAsString(context);
     String userId = context.getUserId();
     String agentId = context.getAgentId();
     Timestamp now = new Timestamp(System.currentTimeMillis());
 
-    // Use MERGE for H2 compatibility (works in both H2 and PostgreSQL 15+)
     String sql =
-        "MERGE INTO agent_contexts (flow_id, context_json, user_id, agent_id, created_at, last_updated_at) "
-            + "KEY (flow_id) "
-            + "VALUES (?, ?, ?, ?, ?, ?)";
+        "INSERT INTO agent_contexts "
+            + "(flow_id, context_json, user_id, agent_id, created_at, last_updated_at) "
+            + "VALUES (?, ?, ?, ?, ?, ?) "
+            + "ON CONFLICT (flow_id) DO UPDATE SET "
+            + "context_json = EXCLUDED.context_json, "
+            + "user_id = EXCLUDED.user_id, "
+            + "agent_id = EXCLUDED.agent_id, "
+            + "last_updated_at = EXCLUDED.last_updated_at";
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
@@ -233,7 +255,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
 
     String sql = "SELECT context_json FROM agent_contexts WHERE flow_id = ?";
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
@@ -241,7 +263,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
       try (ResultSet rs = pstmt.executeQuery()) {
         if (rs.next()) {
           String contextJson = rs.getString("context_json");
-          AgentContext context = objectMapper.readValue(contextJson, AgentContext.class);
+          AgentContext context = mapper().readValue(contextJson, AgentContext.class);
           LOG.debug("Loaded context for flow {} from PostgreSQL", flowId);
           return Optional.of(context);
         }
@@ -259,7 +281,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
 
     String sql = "SELECT 1 FROM agent_contexts WHERE flow_id = ? LIMIT 1";
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
@@ -276,7 +298,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
       throw new IllegalArgumentException("flowId cannot be null");
     }
 
-    try (Connection conn = dataSource.getConnection()) {
+    try (Connection conn = dataSource().getConnection()) {
       conn.setAutoCommit(false);
 
       try {
@@ -309,34 +331,34 @@ public class PostgresConversationStore implements LongTermMemoryStore {
       throw new IllegalArgumentException("flowId and facts cannot be null");
     }
 
-    if (facts.isEmpty()) {
-      return;
-    }
+    try (Connection conn = dataSource().getConnection()) {
+      boolean autoCommit = conn.getAutoCommit();
+      conn.setAutoCommit(false);
+      try (PreparedStatement delete =
+              conn.prepareStatement("DELETE FROM agent_facts WHERE flow_id = ?");
+          PreparedStatement upsert = conn.prepareStatement(UPSERT_FACT)) {
+        delete.setString(1, flowId);
+        delete.executeUpdate();
 
-    // Use MERGE for H2 compatibility
-    String sql =
-        "MERGE INTO agent_facts (flow_id, fact_id, fact_json, created_at) "
-            + "KEY (flow_id, fact_id) "
-            + "VALUES (?, ?, ?, ?)";
-
-    try (Connection conn = dataSource.getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-      Timestamp now = new Timestamp(System.currentTimeMillis());
-
-      for (Map.Entry<String, ContextItem> entry : facts.entrySet()) {
-        String factId = entry.getKey();
-        String factJson = objectMapper.writeValueAsString(entry.getValue());
-
-        pstmt.setString(1, flowId);
-        pstmt.setString(2, factId);
-        pstmt.setString(3, factJson);
-        pstmt.setTimestamp(4, now);
-        pstmt.addBatch();
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        for (Map.Entry<String, ContextItem> entry : facts.entrySet()) {
+          upsert.setString(1, flowId);
+          upsert.setString(2, entry.getKey());
+          upsert.setString(3, mapper().writeValueAsString(entry.getValue()));
+          upsert.setTimestamp(4, now);
+          upsert.addBatch();
+        }
+        if (!facts.isEmpty()) {
+          upsert.executeBatch();
+        }
+        conn.commit();
+      } catch (Exception e) {
+        conn.rollback();
+        throw e;
+      } finally {
+        conn.setAutoCommit(autoCommit);
       }
-
-      pstmt.executeBatch();
-      LOG.debug("Saved {} facts for flow {} in PostgreSQL", facts.size(), flowId);
+      LOG.debug("Replaced facts for flow {} in PostgreSQL with {} entries", flowId, facts.size());
     }
   }
 
@@ -349,7 +371,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
     String sql = "SELECT fact_id, fact_json FROM agent_facts WHERE flow_id = ?";
     Map<String, ContextItem> facts = new HashMap<>();
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
@@ -358,7 +380,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
         while (rs.next()) {
           String factId = rs.getString("fact_id");
           String factJson = rs.getString("fact_json");
-          ContextItem fact = objectMapper.readValue(factJson, ContextItem.class);
+          ContextItem fact = mapper().readValue(factJson, ContextItem.class);
           facts.put(factId, fact);
         }
       }
@@ -375,17 +397,11 @@ public class PostgresConversationStore implements LongTermMemoryStore {
       throw new IllegalArgumentException("flowId, factId, and fact cannot be null");
     }
 
-    String factJson = objectMapper.writeValueAsString(fact);
+    String factJson = mapper().writeValueAsString(fact);
     Timestamp now = new Timestamp(System.currentTimeMillis());
 
-    // Use MERGE for H2 compatibility
-    String sql =
-        "MERGE INTO agent_facts (flow_id, fact_id, fact_json, created_at) "
-            + "KEY (flow_id, fact_id) "
-            + "VALUES (?, ?, ?, ?)";
-
-    try (Connection conn = dataSource.getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    try (Connection conn = dataSource().getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(UPSERT_FACT)) {
 
       pstmt.setString(1, flowId);
       pstmt.setString(2, factId);
@@ -405,7 +421,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
 
     String sql = "DELETE FROM agent_facts WHERE flow_id = ? AND fact_id = ?";
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
@@ -421,7 +437,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
     String sql = "SELECT flow_id FROM agent_contexts ORDER BY last_updated_at DESC";
     List<String> flowIds = new ArrayList<>();
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql);
          ResultSet rs = pstmt.executeQuery()) {
 
@@ -443,7 +459,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
         "SELECT flow_id FROM agent_contexts WHERE user_id = ? ORDER BY last_updated_at DESC";
     List<String> flowIds = new ArrayList<>();
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, userId);
@@ -468,7 +484,7 @@ public class PostgresConversationStore implements LongTermMemoryStore {
         "SELECT flow_id, user_id, agent_id, created_at, last_updated_at "
             + "FROM agent_contexts WHERE flow_id = ?";
 
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
@@ -536,6 +552,8 @@ public class PostgresConversationStore implements LongTermMemoryStore {
       dataSource.close();
       LOG.info("PostgresConversationStore connection pool closed");
     }
+    dataSource = null;
+    markClosed();
   }
 
   @Override
