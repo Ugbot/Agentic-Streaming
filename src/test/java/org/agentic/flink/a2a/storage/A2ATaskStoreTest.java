@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import org.agentic.flink.a2a.A2AArtifact;
@@ -19,22 +18,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Backend-agnostic contract for {@link A2ATaskStore}, run against the in-memory and Postgres (H2)
- * implementations with randomized task graphs. Redis is covered by an integration test.
+ * Backend-agnostic contract for {@link A2ATaskStore}, run against the in-memory backend. The
+ * Postgres backend runs the same contract against a real PostgreSQL in {@link
+ * PostgresA2ATaskStoreTest} (integration group); Redis in {@link A2ARedisTaskStoreIT}.
  */
 class A2ATaskStoreTest {
 
   private final Random random = new Random();
 
   private A2ATaskStore store(String backend) throws Exception {
-    Map<String, String> config = new HashMap<>();
-    if (!"memory".equals(backend)) {
-      config.put("postgres.url", "jdbc:h2:mem:a2a_" + UUID.randomUUID().toString().replace('-', '_')
-          + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
-      config.put("postgres.user", "sa");
-      config.put("postgres.auto.create.tables", "true");
-    }
-    return A2ATaskStoreFactory.create(backend, config);
+    return A2ATaskStoreFactory.create(backend, new HashMap<>());
   }
 
   private A2ATask randomTask(String contextId, A2ATaskState state) {
@@ -51,7 +44,7 @@ class A2ATaskStoreTest {
   }
 
   @ParameterizedTest(name = "[{0}] save/load round-trips a task")
-  @ValueSource(strings = {"memory", "postgres"})
+  @ValueSource(strings = {"memory"})
   void saveLoadRoundTrip(String backend) throws Exception {
     try (A2ATaskStore store = store(backend)) {
       A2ATask task = randomTask(UUID.randomUUID().toString(), A2ATaskState.WORKING);
@@ -63,7 +56,7 @@ class A2ATaskStoreTest {
   }
 
   @ParameterizedTest(name = "[{0}] list by context and by state")
-  @ValueSource(strings = {"memory", "postgres"})
+  @ValueSource(strings = {"memory"})
   void listing(String backend) throws Exception {
     try (A2ATaskStore store = store(backend)) {
       String ctx = "conv-" + UUID.randomUUID();
@@ -87,7 +80,7 @@ class A2ATaskStoreTest {
   }
 
   @ParameterizedTest(name = "[{0}] state transition updates state index")
-  @ValueSource(strings = {"memory", "postgres"})
+  @ValueSource(strings = {"memory"})
   void stateTransitionReindexes(String backend) throws Exception {
     try (A2ATaskStore store = store(backend)) {
       A2ATask task = randomTask(UUID.randomUUID().toString(), A2ATaskState.WORKING);
@@ -104,7 +97,7 @@ class A2ATaskStoreTest {
   }
 
   @ParameterizedTest(name = "[{0}] push config CRUD")
-  @ValueSource(strings = {"memory", "postgres"})
+  @ValueSource(strings = {"memory"})
   void pushConfigCrud(String backend) throws Exception {
     try (A2ATaskStore store = store(backend)) {
       A2ATask task = randomTask(UUID.randomUUID().toString(), A2ATaskState.WORKING);
@@ -125,7 +118,7 @@ class A2ATaskStoreTest {
   }
 
   @ParameterizedTest(name = "[{0}] delete removes task and its push configs")
-  @ValueSource(strings = {"memory", "postgres"})
+  @ValueSource(strings = {"memory"})
   void deleteCascades(String backend) throws Exception {
     try (A2ATaskStore store = store(backend)) {
       A2ATask task = randomTask("ctx", A2ATaskState.WORKING);

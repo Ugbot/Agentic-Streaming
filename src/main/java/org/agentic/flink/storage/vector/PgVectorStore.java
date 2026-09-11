@@ -2,6 +2,7 @@ package org.agentic.flink.storage.vector;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.VectorStore;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -29,7 +30,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Requires the {@code postgres.dimension} configuration key on first initialize.
  */
-public final class PgVectorStore implements VectorStore {
+public final class PgVectorStore extends ReopenableStore implements VectorStore {
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(PgVectorStore.class);
 
@@ -48,7 +50,7 @@ public final class PgVectorStore implements VectorStore {
   public PgVectorStore() {}
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) throws Exception {
     this.jdbcUrl =
         config.getOrDefault("postgres.url", "jdbc:postgresql://localhost:5432/agentic_flink");
     this.username = config.getOrDefault("postgres.user", "flink_user");
@@ -64,6 +66,7 @@ public final class PgVectorStore implements VectorStore {
     hc.setMaximumPoolSize(
         Integer.parseInt(config.getOrDefault("postgres.pool.max.size", "10")));
     hc.setMinimumIdle(Integer.parseInt(config.getOrDefault("postgres.pool.min.idle", "2")));
+    hc.setInitializationFailTimeout(1);
     this.dataSource = new HikariDataSource(hc);
     this.mapper = new ObjectMapper();
 
@@ -98,8 +101,8 @@ public final class PgVectorStore implements VectorStore {
           "embedding dimension " + embedding.length + " != configured " + dimension);
     }
     String vec = floatArrayToPgVector(embedding);
-    String json = metadata == null ? "{}" : mapper.writeValueAsString(metadata);
-    try (Connection conn = dataSource.getConnection();
+    String json = metadata == null ? "{}" : mapper().writeValueAsString(metadata);
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
                 "INSERT INTO " + tableName
@@ -118,7 +121,7 @@ public final class PgVectorStore implements VectorStore {
       Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata)
       throws Exception {
     if (embeddings == null || embeddings.isEmpty()) return;
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
                 "INSERT INTO " + tableName
@@ -129,7 +132,7 @@ public final class PgVectorStore implements VectorStore {
         Map<String, Object> md = metadata == null ? Map.of() : metadata.getOrDefault(e.getKey(), Map.of());
         ps.setString(1, e.getKey());
         ps.setString(2, floatArrayToPgVector(e.getValue()));
-        ps.setString(3, mapper.writeValueAsString(md));
+        ps.setString(3, mapper().writeValueAsString(md));
         ps.addBatch();
       }
       ps.executeBatch();
@@ -141,7 +144,7 @@ public final class PgVectorStore implements VectorStore {
     String vec = floatArrayToPgVector(queryEmbedding);
     String op = similarityOperator();
     List<VectorSearchResult> out = new ArrayList<>();
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
                 "SELECT id, metadata, embedding " + op + " ?::vector AS distance FROM "
@@ -156,7 +159,7 @@ public final class PgVectorStore implements VectorStore {
           String metadataJson = rs.getString(2);
           double distance = rs.getDouble(3);
           @SuppressWarnings("unchecked")
-          Map<String, Object> md = mapper.readValue(metadataJson, Map.class);
+          Map<String, Object> md = mapper().readValue(metadataJson, Map.class);
           out.add(new VectorSearchResult(id, distanceToScore(distance), md));
         }
       }
@@ -172,9 +175,9 @@ public final class PgVectorStore implements VectorStore {
     }
     String vec = floatArrayToPgVector(queryEmbedding);
     String op = similarityOperator();
-    String filterJson = mapper.writeValueAsString(metadataFilter);
+    String filterJson = mapper().writeValueAsString(metadataFilter);
     List<VectorSearchResult> out = new ArrayList<>();
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
                 "SELECT id, metadata, embedding " + op + " ?::vector AS distance FROM "
@@ -190,7 +193,7 @@ public final class PgVectorStore implements VectorStore {
           String md = rs.getString(2);
           double distance = rs.getDouble(3);
           @SuppressWarnings("unchecked")
-          Map<String, Object> mdMap = mapper.readValue(md, Map.class);
+          Map<String, Object> mdMap = mapper().readValue(md, Map.class);
           out.add(new VectorSearchResult(id, distanceToScore(distance), mdMap));
         }
       }
@@ -212,7 +215,7 @@ public final class PgVectorStore implements VectorStore {
 
   @Override
   public float[] getEmbedding(String id) throws Exception {
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement("SELECT embedding::text FROM " + tableName + " WHERE id = ?")) {
       ps.setString(1, id);
@@ -225,14 +228,14 @@ public final class PgVectorStore implements VectorStore {
 
   @Override
   public Map<String, Object> getMetadata(String id) throws Exception {
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement("SELECT metadata FROM " + tableName + " WHERE id = ?")) {
       ps.setString(1, id);
       try (ResultSet rs = ps.executeQuery()) {
         if (!rs.next()) return Map.of();
         @SuppressWarnings("unchecked")
-        Map<String, Object> md = mapper.readValue(rs.getString(1), Map.class);
+        Map<String, Object> md = mapper().readValue(rs.getString(1), Map.class);
         return md;
       }
     }
@@ -240,7 +243,7 @@ public final class PgVectorStore implements VectorStore {
 
   @Override
   public void deleteEmbedding(String id) throws Exception {
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement("DELETE FROM " + tableName + " WHERE id = ?")) {
       ps.setString(1, id);
@@ -250,7 +253,7 @@ public final class PgVectorStore implements VectorStore {
 
   @Override
   public void deleteByFlowId(String flowId) throws Exception {
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
                 "DELETE FROM " + tableName + " WHERE metadata->>'flow_id' = ?")) {
@@ -272,7 +275,7 @@ public final class PgVectorStore implements VectorStore {
   @Override
   public Map<String, Object> getStatistics() throws Exception {
     Map<String, Object> out = new HashMap<>();
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         Statement st = conn.createStatement();
         ResultSet rs = st.executeQuery("SELECT count(*) FROM " + tableName)) {
       if (rs.next()) out.put("total_embeddings", rs.getInt(1));
@@ -314,7 +317,7 @@ public final class PgVectorStore implements VectorStore {
 
   @Override
   public boolean exists(String key) throws Exception {
-    try (Connection conn = dataSource.getConnection();
+    try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement("SELECT 1 FROM " + tableName + " WHERE id = ?")) {
       ps.setString(1, key);
@@ -326,8 +329,22 @@ public final class PgVectorStore implements VectorStore {
 
   @Override
   public void close() {
-    if (dataSource != null) dataSource.close();
+    if (dataSource != null) {
+      dataSource.close();
+      dataSource = null;
+    }
+    markClosed();
   }
+  private HikariDataSource dataSource() {
+    ensureOpen();
+    return dataSource;
+  }
+
+  private ObjectMapper mapper() {
+    ensureOpen();
+    return mapper;
+  }
+
 
   // ---------- helpers ----------
 

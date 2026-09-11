@@ -562,7 +562,7 @@ In development:
 
 ## Requirements
 
-- Java 17+ and Maven 3.8+ for the Flink framework (Apache Flink 2.2, native FLIP-27/143) and
+- Java 21+ and Maven 3.9+ (or the committed `./mvnw`) for the Flink framework (Apache Flink 2.2, native FLIP-27/143) and
   for Agentic Pekko, which is built separately after
   `mvn -f ports/jagentic-core/pom.xml install`
 - Clojure CLI (tools.deps) for Agentic Clojure under `agentic-clj/`

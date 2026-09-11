@@ -13,12 +13,29 @@ import java.util.function.Function;
  * 3-arg {@code register} still works and yields the permissive {@code {"type":"object"}}. */
 public final class ToolRegistry {
 
-  /** A single tool. {@code inputSchema} is a JSON-schema map for the parameters, or null. */
+  /** Raised by {@link AgentContext#invoke} for an id that is not registered (error class validation). */
+  public static final class UnknownTool extends IllegalArgumentException {
+    private static final long serialVersionUID = 1L;
+
+    public UnknownTool(String id) {
+      super("no such tool: " + id);
+    }
+  }
+
+  /**
+   * A single tool. {@code inputSchema} is a JSON-schema map for the parameters, or null. {@code
+   * peer} marks an A2A peer agent exposed as a tool: its calls are recorded as {@code delegated}.
+   */
   public record Tool(String id, String description, Map<String, Object> inputSchema,
-                     Function<Map<String, Object>, Object> fn) {
+                     Function<Map<String, Object>, Object> fn, boolean peer) {
+    public Tool(String id, String description, Map<String, Object> inputSchema,
+                Function<Map<String, Object>, Object> fn) {
+      this(id, description, inputSchema, fn, false);
+    }
+
     /** Schema-less convenience constructor (back-compatible). */
     public Tool(String id, String description, Function<Map<String, Object>, Object> fn) {
-      this(id, description, null, fn);
+      this(id, description, null, fn, false);
     }
 
     public Object execute(Map<String, Object> params) {
@@ -45,8 +62,19 @@ public final class ToolRegistry {
     return this;
   }
 
+  /** Register an A2A peer as a tool; the runtime records its calls as {@code delegated}. */
+  public ToolRegistry registerPeer(String id, String description,
+                                   Function<Map<String, Object>, Object> fn) {
+    tools.put(id, new Tool(id, description, null, fn, true));
+    return this;
+  }
+
   public Tool get(String id) {
     return tools.get(id);
+  }
+
+  public boolean contains(String id) {
+    return tools.containsKey(id);
   }
 
   public List<String> ids() {
@@ -79,7 +107,7 @@ public final class ToolRegistry {
   public Object execute(String id, Map<String, Object> params) {
     Tool t = tools.get(id);
     if (t == null) {
-      throw new IllegalArgumentException("no such tool: " + id);
+      throw new UnknownTool(id);
     }
     return t.execute(params);
   }

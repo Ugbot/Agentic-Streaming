@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 # Run the banking demo locally WITHOUT containers: per role, a Flink MiniCluster job
 # (banking-job.jar) + the Quarkus A2A gateway (quarkus-run.jar), bridged over a local Redis.
 # This mirrors the single-container shape (one Quarkus front + one embedded Flink job per role,
@@ -9,6 +10,10 @@
 #                 && mvn -o -f a2a-gateway/pom.xml package -DskipTests \
 #                 && mvn -o -f banking-job/pom.xml package -DskipTests
 #   Then:         ANTHROPIC_API_KEY=... bash examples-bin/run-banking-local.sh
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=examples-bin/jvm-opts.sh
+source "$SCRIPT_DIR/jvm-opts.sh"
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -48,7 +53,7 @@ start_role() {
     ENV_API_URL="$ENV_API_URL" ENV_API_TOKEN="$tok" \
     KB_PATH="$ROOT/banking-kb/documents" KB_POLICY_PATH="$ROOT/banking-kb/policy.md" \
     CS_AGENT_URL="${CS_AGENT_URL:-http://localhost:9002}" \
-    java -jar "$JOB_JAR" > "$LOG/job-$role.log" 2>&1 &
+    java $AGENTIC_ADD_OPENS -jar "$JOB_JAR" > "$LOG/job-$role.log" 2>&1 &
   PIDS+=($!)
   # Quarkus A2A gateway (thin front; publishes to Redis, awaits the verifier).
   env "${common[@]}" \
@@ -56,7 +61,7 @@ start_role() {
     AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL="http://localhost:$port" \
     AGENTIC_FLINK_A2A_GATEWAY_AGENT_NAME="$agentname" \
     AGENTIC_FLINK_A2A_GATEWAY_REQUEST_TIMEOUT_MS="${A2A_GATEWAY_REQUEST_TIMEOUT_MS:-280000}" \
-    java -jar "$GW_JAR" > "$LOG/gw-$role.log" 2>&1 &
+    java $AGENTIC_ADD_OPENS -jar "$GW_JAR" > "$LOG/gw-$role.log" 2>&1 &
   PIDS+=($!)
   echo "started $role: job + gateway on :$port"
 }

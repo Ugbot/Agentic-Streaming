@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.StorageTier;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +74,8 @@ import org.slf4j.LoggerFactory;
  *       {@code dot_product})
  * </ul>
  */
-public final class FlussVectorStore implements VectorStore {
+public final class FlussVectorStore extends ReopenableStore implements VectorStore {
+  private static final long serialVersionUID = 1L;
 
   private static final Logger LOG = LoggerFactory.getLogger(FlussVectorStore.class);
 
@@ -108,7 +110,7 @@ public final class FlussVectorStore implements VectorStore {
   public FlussVectorStore() {}
 
   @Override
-  public void initialize(Map<String, String> config) throws Exception {
+  protected void open(Map<String, String> config) throws Exception {
     this.bootstrapServers = config.getOrDefault("fluss.bootstrap.servers", "localhost:9123");
     this.database = config.getOrDefault("fluss.database", "agentic_flink");
     this.table = config.getOrDefault("fluss.table", "vectors");
@@ -269,10 +271,10 @@ public final class FlussVectorStore implements VectorStore {
     }
     Map<String, Object> meta = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
 
-    // Durable write to Fluss first, then mirror into the in-memory index.
-    writer.upsert(toRow(id, embedding, meta)).get();
-    writer.flush();
-    index.storeEmbedding(id, embedding, meta);
+    // Durable write to Fluss first, then mirror into the in-memory index().
+    writer().upsert(toRow(id, embedding, meta)).get();
+    writer().flush();
+    index().storeEmbedding(id, embedding, meta);
   }
 
   @Override
@@ -303,26 +305,26 @@ public final class FlussVectorStore implements VectorStore {
     if (pending.isEmpty()) return;
     List<java.util.concurrent.CompletableFuture<?>> futures = new ArrayList<>(pending.size());
     for (GenericRow row : pending) {
-      futures.add(writer.upsert(row));
+      futures.add(writer().upsert(row));
     }
     for (java.util.concurrent.CompletableFuture<?> f : futures) {
       f.get();
     }
-    writer.flush();
+    writer().flush();
     for (int i = 0; i < ids.size(); i++) {
-      index.storeEmbedding(ids.get(i), vectors.get(i), metas.get(i));
+      index().storeEmbedding(ids.get(i), vectors.get(i), metas.get(i));
     }
   }
 
   @Override
   public List<VectorSearchResult> searchSimilar(float[] queryEmbedding, int topK) throws Exception {
-    return index.searchSimilar(queryEmbedding, topK);
+    return index().searchSimilar(queryEmbedding, topK);
   }
 
   @Override
   public List<VectorSearchResult> searchSimilarWithFilter(
       float[] queryEmbedding, int topK, Map<String, Object> metadataFilter) throws Exception {
-    return index.searchSimilarWithFilter(queryEmbedding, topK, metadataFilter);
+    return index().searchSimilarWithFilter(queryEmbedding, topK, metadataFilter);
   }
 
   @Override
@@ -343,10 +345,10 @@ public final class FlussVectorStore implements VectorStore {
     InternalRow row = lookup(id);
     if (row == null) {
       // Fall back to the in-memory index (e.g. Fluss not yet propagated).
-      return index.getEmbedding(id);
+      return index().getEmbedding(id);
     }
     String vectorJson = rowString(row, COL_VECTOR);
-    return vectorJson == null ? index.getEmbedding(id) : decodeVector(vectorJson);
+    return vectorJson == null ? index().getEmbedding(id) : decodeVector(vectorJson);
   }
 
   @Override
@@ -354,16 +356,16 @@ public final class FlussVectorStore implements VectorStore {
     if (id == null) return null;
     InternalRow row = lookup(id);
     if (row == null) {
-      return index.getMetadata(id);
+      return index().getMetadata(id);
     }
     String metaJson = rowString(row, COL_METADATA);
-    return metaJson == null ? index.getMetadata(id) : decodeMetadata(metaJson);
+    return metaJson == null ? index().getMetadata(id) : decodeMetadata(metaJson);
   }
 
   private InternalRow lookup(String id) throws Exception {
     GenericRow key = new GenericRow(1);
     key.setField(0, BinaryString.fromString(id));
-    LookupResult result = lookuper.lookup(key).get();
+    LookupResult result = lookuper().lookup(key).get();
     return result == null ? null : result.getSingletonRow();
   }
 
@@ -372,9 +374,9 @@ public final class FlussVectorStore implements VectorStore {
     if (id == null) return;
     GenericRow key = new GenericRow(1);
     key.setField(0, BinaryString.fromString(id));
-    writer.delete(key).get();
-    writer.flush();
-    index.deleteEmbedding(id);
+    writer().delete(key).get();
+    writer().flush();
+    index().deleteEmbedding(id);
   }
 
   @Override
@@ -382,7 +384,7 @@ public final class FlussVectorStore implements VectorStore {
     if (flowId == null) return;
     // Identify affected ids via the in-memory index (mirror of Fluss state), then delete each.
     List<String> toDelete = new ArrayList<>();
-    for (VectorSearchResult r : index.searchSimilarWithFilter(zeroQuery(), Integer.MAX_VALUE, null)) {
+    for (VectorSearchResult r : index().searchSimilarWithFilter(zeroQuery(), Integer.MAX_VALUE, null)) {
       if (flowId.equals(r.getMetadata().get("flowId"))) {
         toDelete.add(r.getId());
       }
@@ -394,7 +396,7 @@ public final class FlussVectorStore implements VectorStore {
 
   @Override
   public int getEmbeddingDimension() {
-    return index != null ? index.getEmbeddingDimension() : dimension;
+    return index != null ? index().getEmbeddingDimension() : dimension;
   }
 
   @Override
@@ -405,7 +407,7 @@ public final class FlussVectorStore implements VectorStore {
   @Override
   public Map<String, Object> getStatistics() throws Exception {
     Map<String, Object> stats = new LinkedHashMap<>();
-    Map<String, Object> indexStats = index.getStatistics();
+    Map<String, Object> indexStats = index().getStatistics();
     stats.put("total_vectors", indexStats.get("total_vectors"));
     stats.put("dimension", getEmbeddingDimension());
     stats.put("similarity", similarity);
@@ -451,7 +453,7 @@ public final class FlussVectorStore implements VectorStore {
   @Override
   public boolean exists(String key) throws Exception {
     if (key == null) return false;
-    return lookup(key) != null || index.exists(key);
+    return lookup(key) != null || index().exists(key);
   }
 
   @Override
@@ -487,6 +489,33 @@ public final class FlussVectorStore implements VectorStore {
     if (index != null) {
       index.close();
     }
+    writer = null;
+    lookuper = null;
+    flussTable = null;
+    admin = null;
+    connection = null;
+    index = null;
+    markClosed();
+  }
+
+  private UpsertWriter writer() {
+    ensureOpen();
+    return writer;
+  }
+
+  private Lookuper lookuper() {
+    ensureOpen();
+    return lookuper;
+  }
+
+  private InMemoryVectorStore index() {
+    ensureOpen();
+    return index;
+  }
+
+  private Table flussTable() {
+    ensureOpen();
+    return flussTable;
   }
 
   // ---------- helpers ----------
@@ -540,7 +569,7 @@ public final class FlussVectorStore implements VectorStore {
 
   /** A zero query used purely to enumerate every indexed entry for filtered deletion. */
   private float[] zeroQuery() {
-    int dim = index.getEmbeddingDimension();
+    int dim = index().getEmbeddingDimension();
     return new float[dim > 0 ? dim : 1];
   }
 }
