@@ -178,3 +178,80 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 - Removing or re-meaning a field requires `agentic/v2`.
 - A runtime declares the spec versions it accepts. Loading a newer major version is a
   `validation` error, not a best-effort parse.
+
+## 8. Time, patterns, context, and the scripted brain
+
+These semantics are what the `timers`, `event_time`, `checkpoint_recovery`, `cep`,
+`context_window`, `llm_brain`, and `parallelism` capability ids mean. Each is proven by a
+conformance fixture; a runtime that does not implement one declares it `unsupported` and
+skips the fixture.
+
+### Clocks
+
+A runtime has two clocks, both observable only through turns:
+
+- **Processing time** is the runtime's logical clock. It never runs backwards and is part
+  of recovered state: a restart does not reset it. Fixtures advance it with
+  `advance_time_ms`; a runtime without a controllable logical clock declares `timers`
+  `unsupported`.
+- **Event time** is carried by the turn as `metadata.event_time_ms` (an integer in decimal
+  string form, since metadata values are strings). A conversation's **watermark** is the
+  highest event time seen on its turns; it is recorded in the `turn_received` payload as
+  `event_time_ms` and reduced into `state.watermark_ms`. A late turn (event time below the
+  watermark) is processed in arrival order like any other and does not move the watermark
+  back.
+
+### Timers
+
+`timers` are declared on the workflow and scheduled per conversation on its first turn,
+`after_ms` past the chosen clock's reading at that moment. Scheduling appends
+`timer_scheduled {timer_id, clock, due_ms}` after that turn's `turn_received`. A timer
+fires on the first later turn of the conversation delivered when its clock reads at or
+past `due_ms`: before that turn's `turn_received`, the runtime appends
+`timer_fired {timer_id, due_ms}` and, if the timer names a `tool`, invokes it with
+`payload` as arguments, recorded as that turn's first tool call. Due timers fire in
+`(due_ms, timer_id)` order. A timer fires once; `state.fired_timers` lists the ids that
+have fired, in order.
+
+`checkpoint_recovery` means pending timers and the logical clock survive a restart: they
+are rebuilt from `timer_scheduled` and `timer_fired` events (or an equivalent checkpoint),
+never re-scheduled and never fired twice.
+
+### Sequence patterns (CEP)
+
+A `cep` entry is a sequence pattern over one conversation's turns, evaluated after `routed`
+and before the brain on every turn. Stages match in declaration order against turn text
+(`where.text_contains`, case-insensitive). A stage's `contiguity` says how it follows the
+previous one: `next` (default) requires the immediately following turn, and a
+non-matching turn drops the partial match; `followedBy` skips non-matching turns.
+`within` bounds the event-time span between the first and last matched turn, read from
+the metadata key named by `ts`; a partial match that exceeds it is dropped and the current
+turn may start a new one. A match completes on the turn satisfying the last stage; its
+turns are consumed, so matches never overlap. `on_match.kind: tool` invokes the tool on
+the completing turn with arguments `{"pattern": <name>, "key": <conversation_id>}`,
+recorded as a normal tool call. `on_match.kind: submit` injects a derived turn and is
+outside the v1 fixtures.
+
+### Context window
+
+`context.compaction: window` with `max_items: N` bounds the model-visible transcript to
+the most recent `N` messages. The log is never compacted; only the retained transcript is,
+so `state.turn_count` keeps counting while `state.transcript_length` reports the retained
+message count, at most `N`. `compaction: none` retains everything. `moscow` and
+`max_tokens` are runtime-specific and not covered by v1 fixtures.
+
+### Scripted LLM brain
+
+A path with `brain: llm` under `llm.provider: stub` is driven by `llm.script`, replayed
+from the top on every turn: each `{tool, args}` step is one structured tool call with
+exactly those arguments, and the first `{text}` step is the reply, verbatim, with no
+`[path]` prefix. This is the portable form of the LLM control loop (call tools, then
+answer); a real provider replaces the script, not the loop.
+
+### Parallelism
+
+`parallelism` means turns on different conversations may run concurrently and every
+conversation's state, transcript, timers, and tool calls are its own. Section 3's ordering
+guarantee is per conversation only. The fixture proves isolation under concurrent
+delivery; a runtime that processes keys serially may still pass it and must say so in its
+capability declaration.

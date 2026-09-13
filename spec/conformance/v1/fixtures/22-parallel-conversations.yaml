@@ -1,0 +1,40 @@
+id: parallel-conversations
+description: "Turns on different conversations delivered concurrently are processed independently: each conversation's state, transcript and tool calls are its own, no turn observes another conversation's state, and every result is complete and consistent regardless of interleaving. Ordering is only guaranteed within a conversation; across conversations the runtime is free to run in parallel."
+requires: [parallelism, ordering, memory]
+workflow_ref: ../workflows/support.yaml
+turns:
+  - {conversation_id: c1, turn_id: c1-t1, text: "what is my balance?", concurrent_with: [c2-t1, c3-t1]}
+  - {conversation_id: c2, turn_id: c2-t1, text: "I lost my password", concurrent_with: [c1-t1, c3-t1]}
+  - {conversation_id: c3, turn_id: c3-t1, text: "hello", concurrent_with: [c1-t1, c2-t1]}
+  - {conversation_id: c1, turn_id: c1-t2, text: "and my last charge?", concurrent_with: [c2-t2]}
+  - {conversation_id: c2, turn_id: c2-t2, text: "reset my password please", concurrent_with: [c1-t2]}
+expect:
+  - turn_id: c1-t1
+    conversation_id: c1
+    status: completed
+    path: billing
+    tool_calls:
+      - {tool: lookup_charge, index: 0}
+    state_includes: {turn_count: 1, transcript_length: 2}
+  - turn_id: c2-t1
+    conversation_id: c2
+    status: completed
+    path: account
+    tool_calls: []
+    state_includes: {turn_count: 1, transcript_length: 2}
+  - turn_id: c3-t1
+    conversation_id: c3
+    status: completed
+    path: general
+    tool_calls: []
+    state_includes: {turn_count: 1, transcript_length: 2}
+  - turn_id: c1-t2
+    conversation_id: c1
+    status: completed
+    path: billing
+    state_includes: {turn_count: 2, transcript_length: 4}
+  - turn_id: c2-t2
+    conversation_id: c2
+    status: completed
+    path: account
+    state_includes: {turn_count: 2, transcript_length: 4}

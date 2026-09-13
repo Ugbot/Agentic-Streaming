@@ -1,0 +1,36 @@
+id: llm-brain-scripted
+description: "An llm brain under the deterministic stub provider follows llm.script: each tool step is one structured tool call with the scripted arguments, and the final text step is the reply verbatim. Every runtime executes the same script, so the LLM control loop is portable even though no model runs."
+requires: [llm_brain, tools, structured_tool_args]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  llm:
+    provider: stub
+    script:
+      - {tool: get_balance, args: {account: "acct-42", currency: USD}}
+      - {text: "Your balance is 1234.56 USD."}
+  agent:
+    id: banking
+    router: {kind: keyword, default: general, rules: {payments: [balance]}}
+    paths:
+      payments: {brain: llm, prompt: You answer balance questions with the get_balance tool.}
+      general: {brain: rule, prompt: You answer general questions.}
+    verifier: {kind: none}
+  tools:
+    - {id: get_balance, kind: constant, value: "1234.56"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
+  - {conversation_id: c1, turn_id: t2, text: "hello there"}
+expect:
+  - turn_id: t1
+    status: completed
+    path: payments
+    reply: "Your balance is 1234.56 USD."
+    tool_calls:
+      - {tool: get_balance, index: 0, attempt: 1, args: {account: "acct-42", currency: USD}}
+    events_include: [turn_received, routed, brain_started, tool_called, reply_drafted, memory_written, turn_completed]
+  - turn_id: t2
+    status: completed
+    path: general
+    reply_matches: "^\\[general\\] "
+    tool_calls: []

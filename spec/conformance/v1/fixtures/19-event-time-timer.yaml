@@ -1,0 +1,42 @@
+id: event-time-timer
+description: "A timer on the event clock is measured against the conversation's watermark, the highest event_time_ms carried by its turns, not against processing time. A late turn (event time below the watermark) is still processed in arrival order and does not move the watermark backwards. The timer fires on the first turn whose event time reaches the deadline, without any processing-time advance."
+requires: [timers, event_time, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  timers:
+    - {id: sla, after_ms: 500, clock: event, tool: escalate, payload: {reason: sla}}
+  agent:
+    id: sla-watch
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: rule, prompt: You chat.}
+  tools:
+    - {id: escalate, kind: constant, value: "escalated"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "open", metadata: {event_time_ms: "1000"}}
+  - {conversation_id: c1, turn_id: t2, text: "update", metadata: {event_time_ms: "1200"}}
+  - {conversation_id: c1, turn_id: t3, text: "late update", metadata: {event_time_ms: "900"}}
+  - {conversation_id: c1, turn_id: t4, text: "still open", metadata: {event_time_ms: "2000"}}
+expect:
+  - turn_id: t1
+    status: completed
+    tool_calls: []
+    events_include: [turn_received, timer_scheduled]
+    state_includes: {watermark_ms: 1000}
+  - turn_id: t2
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired]
+    state_includes: {watermark_ms: 1200}
+  - turn_id: t3
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired]
+    state_includes: {watermark_ms: 1200, turn_count: 3}
+  - turn_id: t4
+    status: completed
+    tool_calls:
+      - {tool: escalate, index: 0, args: {reason: sla}}
+    events_include: [timer_fired, tool_called, turn_received, turn_completed]
+    state_includes: {watermark_ms: 2000, fired_timers: [sla]}

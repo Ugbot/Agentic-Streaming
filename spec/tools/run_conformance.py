@@ -23,13 +23,19 @@ from reference_runtime import ReferenceRuntime, SpecError, Turn  # noqa: E402
 FIXTURES = Path(__file__).resolve().parents[1] / "conformance" / "v1" / "fixtures"
 
 # What the reference runtime is for. Fixtures needing anything else are reported as
-# skipped, never as passed. `durable_store` is claimed in the narrow sense the reference
-# can honour: the log outlives a `restart()` within one process, which is enough to prove
-# replay and resume semantics but is not durability across a crash.
+# skipped, never as passed. Three ids are claimed in the narrow sense the reference can
+# honour, which is exactly what the fixtures observe:
+# - `durable_store`, `checkpoint_recovery`: the log, pending timers and the logical clock
+#   outlive a `restart()` within one process. That proves replay, resume and timer recovery
+#   semantics but is not durability across a crash.
+# - `parallelism`: conversations are isolated under concurrent delivery. The reference is
+#   single-threaded, so it proves the isolation contract, not concurrent execution.
+# - `llm_brain`: the deterministic `stub` provider driven by `llm.script`; no model.
 REFERENCE_CAPABILITIES = {
-    "routing", "rule_brain", "tools", "structured_tool_args", "guardrails", "verifier",
-    "ordering", "idempotency", "retry", "memory", "retrieval", "replay", "suspend_resume",
-    "saga", "a2a", "durable_store",
+    "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
+    "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay",
+    "suspend_resume", "timers", "saga", "a2a", "cep", "event_time", "checkpoint_recovery",
+    "parallelism", "durable_store",
 }
 
 
@@ -108,11 +114,14 @@ def run_fixture(path: Path) -> List[str]:
     for spec in fixture["turns"]:
         if spec.get("restart_runtime"):
             runtime.restart()
+        if "advance_time_ms" in spec:
+            runtime.advance(spec["advance_time_ms"])
         results.append(runtime.submit(Turn(
             conversation_id=spec["conversation_id"],
             turn_id=spec["turn_id"],
             text=spec.get("text", ""),
             signal=spec.get("signal"),
+            metadata=dict(spec.get("metadata") or {}),
         )))
 
     problems: List[str] = []

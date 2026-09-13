@@ -1,0 +1,46 @@
+id: cep-sequence
+description: "A sequence pattern over one conversation's turns matches when its stages are satisfied in order within the declared event-time window, and on_match invokes the declared tool once, on the turn that completes the match, with the pattern name and key as arguments. Matches do not overlap: the turns of a completed match are consumed. A stage with contiguity followedBy tolerates non-matching turns in between; one without it (contiguity next) does not."
+requires: [cep, event_time, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: monitor
+    router: {kind: keyword, default: monitor}
+    paths:
+      monitor: {brain: rule, prompt: You acknowledge signals.}
+  tools:
+    - {id: open_ticket, kind: constant, value: "TICKET-OPENED"}
+  cep:
+    - name: host_incident
+      key: conversation_id
+      ts: metadata.event_time_ms
+      within: 300000
+      pattern:
+        - {stage: first, where: {text_contains: anomaly}}
+        - {stage: second, where: {text_contains: anomaly}, contiguity: followedBy}
+        - {stage: third, where: {text_contains: anomaly}, contiguity: followedBy}
+      on_match: {kind: tool, tool: open_ticket}
+turns:
+  - {conversation_id: host-a, turn_id: a1, text: "anomaly: cpu high", metadata: {event_time_ms: "0"}}
+  - {conversation_id: host-a, turn_id: a2, text: "heartbeat ok", metadata: {event_time_ms: "60000"}}
+  - {conversation_id: host-a, turn_id: a3, text: "anomaly: memory high", metadata: {event_time_ms: "120000"}}
+  - {conversation_id: host-b, turn_id: b1, text: "anomaly: disk full", metadata: {event_time_ms: "130000"}}
+  - {conversation_id: host-a, turn_id: a4, text: "anomaly: io stalled", metadata: {event_time_ms: "180000"}}
+  - {conversation_id: host-a, turn_id: a5, text: "anomaly: cpu high", metadata: {event_time_ms: "200000"}}
+  - {conversation_id: host-a, turn_id: a6, text: "anomaly: cpu high", metadata: {event_time_ms: "900000"}}
+  - {conversation_id: host-a, turn_id: a7, text: "anomaly: cpu high", metadata: {event_time_ms: "910000"}}
+expect:
+  - {turn_id: a1, status: completed, tool_calls: []}
+  - {turn_id: a2, status: completed, tool_calls: []}
+  - {turn_id: a3, status: completed, tool_calls: []}
+  - {turn_id: b1, status: completed, tool_calls: [], state_includes: {turn_count: 1}}
+  - turn_id: a4
+    status: completed
+    path: monitor
+    tool_calls:
+      - {tool: open_ticket, index: 0, args: {pattern: host_incident, key: host-a}}
+    events_include: [turn_received, routed, tool_called, turn_completed]
+  - {turn_id: a5, status: completed, tool_calls: []}
+  - {turn_id: a6, status: completed, tool_calls: []}
+  - {turn_id: a7, status: completed, tool_calls: []}

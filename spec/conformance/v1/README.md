@@ -25,6 +25,13 @@ Clojure, and Python owners.
 | `saga-compensation` | compensations execute in reverse order and are recorded as events |
 | `a2a-delegation` | a peer agent is callable as a tool and the delegation is recorded |
 | `retrieval` | retrieval over the hashing embedder is deterministic and ordered |
+| `llm-brain-scripted` | the stub LLM brain follows `llm.script`: structured tool calls, then the verbatim reply |
+| `context-window` | `compaction: window` bounds the retained transcript to `max_items`; the log is untouched |
+| `timer-fires` | a timer fires once when logical time reaches its deadline and invokes its tool with its payload |
+| `event-time-timer` | an event-clock timer follows the watermark; late turns do not move it back |
+| `cep-sequence` | a sequence pattern matches in order within its event-time window and fires `on_match` once |
+| `timer-survives-restart` | a pending timer and the logical clock survive a restart; the timer fires once |
+| `parallel-conversations` | concurrently delivered turns on different conversations are isolated |
 
 Run them against the reference runtime:
 
@@ -45,6 +52,39 @@ python spec/tools/run_conformance.py duplicate-turn   # one fixture
 4. Emit one normalized result per turn (`spec/v1/result.schema.json`).
 5. Compare with `check_expectation` in `spec/tools/run_conformance.py`, or an equivalent
    implementation of the rules below.
+
+## Binding output contract
+
+A binding that a cross-runtime runner (such as `spec/tools/conformance_matrix.py`) can
+compare itself, rather than trusting the binding's ported comparator, writes one JSON
+document listing every fixture in the directory, in file order:
+
+```json
+[
+  {"id": "routing-keyword", "status": "passed", "results": [ <normalized result per turn> ]},
+  {"id": "a2a-delegation", "status": "skipped", "skip_reason": "requires [a2a]"},
+  {"id": "retry-tool", "status": "failed", "results": [ ... ], "problems": ["expect[1] (t2) ..."]}
+]
+```
+
+- `status` is exactly one of `passed`, `failed`, `skipped`. A fixture is `skipped` only
+  when a capability in its `requires` is not declared supported by the runtime; the
+  `skip_reason` names those capabilities as `requires [a, b]`. A skip is never a pass.
+- The fixture set is discovered, never enumerated: a binding lists every `*.yaml` in the
+  directory and must not assert a fixture count. Its suite fails if the directory is empty
+  or if any fixture was neither executed nor skipped with a reason naming the undeclared
+  capabilities. Adding a fixture must never require editing a runtime's tests.
+- `results` is present for `passed` and `failed` and holds one result per delivered turn,
+  each valid against `result.schema.json`, so the runner can re-run the comparison rules
+  below and validate the schema independently. `runtime_detail` may be included; it is
+  ignored.
+- `problems` is optional and informational; the runner's own comparison is authoritative.
+- The document is printed to standard output on its own line between the marker lines
+  `@@AGENTIC_CONFORMANCE@@` and `@@END@@`, so build tools may interleave their own output
+  around it. Only one such block is printed per run.
+
+A binding that only reports through its test framework (JUnit XML, pytest) is still
+conformant; the matrix then records its comparison as made *inside the binding*.
 
 ## Comparison rules
 

@@ -4,7 +4,9 @@
 It is not a production runtime and never will be: no concurrency, no durability beyond
 the in-process log, no models. It exists so the fixtures are executable and so every real
 runtime has a golden oracle for routing, ordering, idempotency, retry, replay, saga
-compensation, and the normalized result shape defined in `spec/v1/result.schema.json`.
+compensation, timers on a logical clock and on event time, sequence CEP, the scripted
+LLM stub, the transcript window, and the normalized result shape defined in
+`spec/v1/result.schema.json`.
 
 Semantics follow `spec/v1/primitives.md`. Where the existing JVM and Python cores already
 agreed on a detail (the `[path] ...` reply prefix, the FNV-1a hashing embedder, tool
@@ -62,6 +64,11 @@ class Turn:
     text: str = ""
     user_id: str = "anonymous"
     signal: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, str] = field(default_factory=dict)
+
+    def event_time_ms(self) -> Optional[int]:
+        raw = self.metadata.get("event_time_ms")
+        return None if raw is None else int(raw)
 
 
 @dataclass
@@ -69,19 +76,36 @@ class Conversation:
     log: List[Dict[str, Any]] = field(default_factory=list)
     results: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     suspended: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    timers: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # pending, by timer id
+    watermark_ms: Optional[int] = None
 
 
-def reduce_state(log: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """The only definition of conversation state: a fold over the log."""
+def reduce_state(log: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """The only definition of conversation state: a fold over the log.
+
+    `context` is the workflow's `context` block: with `compaction: window` the retained
+    transcript holds at most `max_items` messages and `transcript_length` counts what is
+    retained, not what was ever written.
+    """
+    context = context or {}
+    window = context.get("max_items") if context.get("compaction", "none") == "window" else None
     state: Dict[str, Any] = {"turn_count": 0, "transcript_length": 0}
     for event in log:
         kind = event["type"]
+        payload = event["payload"]
         if kind == "turn_received":
             state["turn_count"] += 1
+            if "event_time_ms" in payload:
+                state["watermark_ms"] = max(state.get("watermark_ms", payload["event_time_ms"]),
+                                            payload["event_time_ms"])
         elif kind == "memory_written":
-            state["transcript_length"] += len(event["payload"]["messages"])
+            state["transcript_length"] += len(payload["messages"])
+            if window is not None:
+                state["transcript_length"] = min(state["transcript_length"], window)
         elif kind == "retrieved":
-            state["last_retrieved_ids"] = list(event["payload"]["ids"])
+            state["last_retrieved_ids"] = list(payload["ids"])
+        elif kind == "timer_fired":
+            state.setdefault("fired_timers", []).append(payload["timer_id"])
     return state
 
 
@@ -102,6 +126,19 @@ class ReferenceRuntime:
         for name, peer in self.peers.items():
             self.tools[name] = {"id": name, "kind": "agent", "peer": peer}
         self.guardrails = workflow.get("guardrails", [])
+        self.llm: Dict[str, Any] = workflow.get("llm") or {}
+        self.context: Dict[str, Any] = workflow.get("context") or {}
+        if self.context.get("compaction", "none") not in ("none", "window"):
+            raise SpecError(f"the reference runtime implements context compaction none|window only, "
+                            f"got {self.context['compaction']}")
+        if "max_tokens" in self.context:
+            raise SpecError("the reference runtime has no tokenizer; use context.max_items")
+        self.timers: List[Dict[str, Any]] = workflow.get("timers", [])
+        self.cep: List[Dict[str, Any]] = workflow.get("cep", [])
+        for pattern in self.cep:
+            if pattern.get("on_match", {}).get("kind", "tool") != "tool":
+                raise SpecError("the reference runtime implements cep on_match.kind tool only")
+        self.clock_ms = 0  # logical processing time, durable across restart()
         retrieval = workflow.get("retrieval") or {}
         self.kb = retrieval.get("kb", [])
         self.top_k = retrieval.get("top_k", 4)
@@ -115,11 +152,26 @@ class ReferenceRuntime:
         """Drop everything derived and rebuild from the log, exercising replay."""
         for conv in self.conversations.values():
             conv.suspended = {}
+            conv.timers = {}
+            conv.watermark_ms = None
             for event in conv.log:
-                if event["type"] == "turn_suspended":
-                    conv.suspended[event["payload"]["turn_id"]] = event["payload"]
-                elif event["type"] == "turn_resumed":
-                    conv.suspended.pop(event["payload"]["turn_id"], None)
+                kind, payload = event["type"], event["payload"]
+                if kind == "turn_suspended":
+                    conv.suspended[payload["turn_id"]] = payload
+                elif kind == "turn_resumed":
+                    conv.suspended.pop(payload["turn_id"], None)
+                elif kind == "timer_scheduled":
+                    conv.timers[payload["timer_id"]] = dict(payload)
+                elif kind == "timer_fired":
+                    conv.timers.pop(payload["timer_id"], None)
+                elif kind == "turn_received" and "event_time_ms" in payload:
+                    conv.watermark_ms = max(conv.watermark_ms or payload["event_time_ms"], payload["event_time_ms"])
+
+    def advance(self, ms: int) -> None:
+        """Advance logical processing time. Due timers fire on the next turn of their conversation."""
+        if ms < 0:
+            raise SpecError("logical time never moves backwards")
+        self.clock_ms += ms
 
     # -- turn handling -----------------------------------------------------
 
@@ -136,7 +188,20 @@ class ReferenceRuntime:
             return prior
 
         ctx = _TurnContext(turn)
-        self._append(conv, ctx, "turn_received", {"turn_id": turn.turn_id, "text": turn.text})
+        event_time = turn.event_time_ms()
+        if event_time is not None:
+            conv.watermark_ms = max(conv.watermark_ms if conv.watermark_ms is not None else event_time, event_time)
+        first_turn = not conv.log
+        if not first_turn:
+            self._fire_due_timers(conv, ctx)
+        received: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text}
+        if event_time is not None:
+            received["event_time_ms"] = event_time
+        if turn.metadata:
+            received["metadata"] = dict(turn.metadata)
+        self._append(conv, ctx, "turn_received", received)
+        if first_turn:
+            self._schedule_timers(conv, ctx)
 
         blocked = self._check_guardrails(turn.text)
         if blocked is not None:
@@ -145,6 +210,7 @@ class ReferenceRuntime:
 
         path = self._route(turn.text)
         self._append(conv, ctx, "routed", {"path": path})
+        self._match_patterns(conv, ctx)
 
         if "x-suspend-until" in self.paths[path]:
             self._append(conv, ctx, "turn_suspended",
@@ -184,8 +250,11 @@ class ReferenceRuntime:
 
     def _draft(self, conv: Conversation, ctx: "_TurnContext", path: str) -> str:
         spec = self.paths[path]
-        if spec.get("brain", "rule") != "rule":
-            raise SpecError("the reference runtime implements the rule brain only")
+        brain = spec.get("brain", "rule")
+        if brain == "llm":
+            return self._draft_scripted(conv, ctx)
+        if brain != "rule":
+            raise SpecError(f"the reference runtime does not implement the {brain} brain")
         low = ctx.turn.text.lower()
         for keyword, tool_id in (spec.get("tool_triggers") or {}).items():
             if keyword.lower() in low:
@@ -201,6 +270,98 @@ class ReferenceRuntime:
             if scored and scored[0][0] > spec.get("threshold", 0.15):
                 return f"[{path}] {scored[0][1]['text']}"
         return f'[{path}] I can help with {path} questions. You said: "{ctx.turn.text}"'
+
+    def _draft_scripted(self, conv: Conversation, ctx: "_TurnContext") -> str:
+        """The `stub` LLM provider: replay `llm.script` from the top on every turn."""
+        if self.llm.get("provider", "stub") != "stub":
+            raise SpecError(f"the reference runtime implements the stub LLM provider only, got {self.llm['provider']}")
+        script = self.llm.get("script")
+        if not script:
+            raise SpecError("an llm brain needs llm.script under the stub provider")
+        for step in script:
+            if "tool" in step:
+                self._invoke(conv, ctx, step["tool"], dict(step.get("args", {})))
+            else:
+                return step["text"]
+        raise SpecError("llm.script ended without a final text")
+
+    # -- time and patterns -------------------------------------------------
+
+    def _clock(self, conv: Conversation, clock: str) -> int:
+        if clock == "event":
+            return conv.watermark_ms if conv.watermark_ms is not None else 0
+        if clock == "processing":
+            return self.clock_ms
+        raise SpecError(f"unknown timer clock {clock}")
+
+    def _schedule_timers(self, conv: Conversation, ctx: "_TurnContext") -> None:
+        for timer in self.timers:
+            clock = timer.get("clock", "processing")
+            now = self._clock(conv, clock)
+            payload = {"timer_id": timer["id"], "clock": clock, "due_ms": now + timer["after_ms"]}
+            self._append(conv, ctx, "timer_scheduled", payload)
+            conv.timers[timer["id"]] = payload
+
+    def _fire_due_timers(self, conv: Conversation, ctx: "_TurnContext") -> None:
+        due = sorted((t for t in conv.timers.values() if self._clock(conv, t["clock"]) >= t["due_ms"]),
+                     key=lambda t: (t["due_ms"], t["timer_id"]))
+        for pending in due:
+            conv.timers.pop(pending["timer_id"])
+            self._append(conv, ctx, "timer_fired", {"timer_id": pending["timer_id"], "due_ms": pending["due_ms"]})
+            spec = next(t for t in self.timers if t["id"] == pending["timer_id"])
+            if spec.get("tool"):
+                self._invoke(conv, ctx, spec["tool"], dict(spec.get("payload") or {}))
+
+    def _match_patterns(self, conv: Conversation, ctx: "_TurnContext") -> None:
+        """Sequence CEP over this conversation's turns; a match completing on this turn fires on_match."""
+        turns = [e["payload"] for e in conv.log if e["type"] == "turn_received"]
+        for pattern in self.cep:
+            if self._matches_on_last_turn(pattern, turns):
+                on_match = pattern.get("on_match") or {}
+                if "tool" not in on_match:
+                    raise SpecError(f"cep pattern {pattern['name']} has on_match.kind tool without a tool id")
+                self._invoke(conv, ctx, on_match["tool"],
+                             {"pattern": pattern["name"], "key": ctx.turn.conversation_id})
+
+    @staticmethod
+    def _matches_on_last_turn(pattern: Dict[str, Any], turns: List[Dict[str, Any]]) -> bool:
+        stages = pattern["pattern"]
+        ts_key = pattern.get("ts")
+        within = pattern.get("within")
+        if within is not None and not ts_key:
+            raise SpecError(f"cep pattern {pattern['name']} sets within without ts")
+
+        def timestamp(turn: Dict[str, Any]) -> int:
+            scope, _, key = ts_key.partition(".")
+            if scope != "metadata":
+                raise SpecError(f"cep ts must be metadata.<key>, got {ts_key}")
+            raw = (turn.get("metadata") or {}).get(key)
+            if raw is None:
+                raise SpecError(f"turn {turn['turn_id']} lacks metadata.{key} needed by cep pattern {pattern['name']}")
+            return int(raw)
+
+        def where(stage: Dict[str, Any], turn: Dict[str, Any]) -> bool:
+            cond = stage.get("where") or {}
+            needle = cond.get("text_contains")
+            return needle is None or needle.lower() in (turn.get("text") or "").lower()
+
+        matched_at = -1
+        stage_index = 0
+        start_ts = 0
+        for i, turn in enumerate(turns):
+            if stage_index > 0 and within is not None and timestamp(turn) - start_ts > within:
+                stage_index = 0
+            stage = stages[stage_index]
+            if where(stage, turn):
+                if stage_index == 0 and ts_key:
+                    start_ts = timestamp(turn)
+                stage_index += 1
+                if stage_index == len(stages):
+                    matched_at = i
+                    stage_index = 0
+            elif stage_index > 0 and stage.get("contiguity", "next") == "next":
+                stage_index = 0
+        return matched_at == len(turns) - 1
 
     def _run_saga(self, conv: Conversation, ctx: "_TurnContext", path: str) -> Dict[str, Any]:
         done: List[Dict[str, Any]] = []
@@ -321,7 +482,7 @@ class ReferenceRuntime:
             "status": status,
             "path": path,
             "reply": reply,
-            "state": reduce_state(conv.log),
+            "state": reduce_state(conv.log, self.context),
             "tool_calls": ctx.tool_calls,
             "events": [{"type": e["type"], "sequence": e["sequence"], "payload": e["payload"]}
                        for e in ctx.events],

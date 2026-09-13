@@ -1,0 +1,31 @@
+id: context-window
+description: "With context.compaction window the retained transcript holds at most max_items messages. Each completed turn writes two messages; after three turns the conversation has written six but retains four, and transcript_length reports what is retained. Turn count is unaffected because the log is never compacted, only the model-visible window."
+requires: [context_window, memory]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  context: {max_items: 4, compaction: window}
+  agent:
+    id: chat
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: rule, prompt: You chat.}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "first"}
+  - {conversation_id: c1, turn_id: t2, text: "second"}
+  - {conversation_id: c1, turn_id: t3, text: "third"}
+  - {conversation_id: c2, turn_id: t4, text: "other conversation"}
+expect:
+  - turn_id: t1
+    status: completed
+    state_includes: {turn_count: 1, transcript_length: 2}
+  - turn_id: t2
+    status: completed
+    state_includes: {turn_count: 2, transcript_length: 4}
+  - turn_id: t3
+    status: completed
+    state_includes: {turn_count: 3, transcript_length: 4}
+    events_include: [memory_written, turn_completed]
+  - turn_id: t4
+    status: completed
+    state_includes: {turn_count: 1, transcript_length: 2}

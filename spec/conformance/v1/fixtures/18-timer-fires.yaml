@@ -1,0 +1,40 @@
+id: timer-fires
+description: "A workflow timer is scheduled for a conversation on its first turn and fires when logical processing time reaches its deadline. Firing appends timer_fired and invokes the timer's tool with its payload before the turn that observed the deadline is received. A turn that arrives before the deadline neither fires the timer nor records a tool call."
+requires: [timers, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  timers:
+    - {id: followup, after_ms: 1000, tool: send_nudge, payload: {channel: email}}
+  agent:
+    id: reminders
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: rule, prompt: You chat.}
+  tools:
+    - {id: send_nudge, kind: constant, value: "nudged"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "start"}
+  - {conversation_id: c1, turn_id: t2, text: "still here", advance_time_ms: 600}
+  - {conversation_id: c1, turn_id: t3, text: "and now?", advance_time_ms: 400}
+  - {conversation_id: c1, turn_id: t4, text: "again", advance_time_ms: 5000}
+expect:
+  - turn_id: t1
+    status: completed
+    tool_calls: []
+    events_include: [turn_received, timer_scheduled, routed, turn_completed]
+  - turn_id: t2
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired]
+  - turn_id: t3
+    status: completed
+    tool_calls:
+      - {tool: send_nudge, index: 0, args: {channel: email}}
+    events_include: [timer_fired, tool_called, turn_received, routed, turn_completed]
+    state_includes: {fired_timers: [followup]}
+  - turn_id: t4
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired]
+    state_includes: {fired_timers: [followup]}
