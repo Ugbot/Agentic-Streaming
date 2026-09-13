@@ -20,7 +20,7 @@
           brain (llm/llm-brain stub {:name "assistant" :max-iterations 4})
           reply (brain "please echo" context)]
       (is (= "[assistant] done" reply))
-      (is (= ["echo"] @(:tool-calls context))))))
+      (is (= ["echo"] (mapv :tool @(:tool-calls context)))))))
 
 (deftest parse-react-json
   (is (= {:tool "t" :args {:a 1}} (llm/parse-react "{\"tool\":\"t\",\"args\":{\"a\":1}}")))

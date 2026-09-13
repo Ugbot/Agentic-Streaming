@@ -7,7 +7,10 @@
             [agentic.retrieval :as r]))
 
 (defn keyword-brain
-  [name {:keys [tool-triggers threshold dim] :or {threshold 0.15 dim 256}}]
+  "The v1 `rule` brain: the first trigger keyword found in the text fires its tool with
+   `{\"user\" user-id}`; else the top-k retrieval hits are recorded and the best one answers when it
+   clears the threshold; else an echo. Every reply carries the `[path]` prefix the verifier expects."
+  [name {:keys [tool-triggers threshold dim top-k] :or {threshold 0.15 dim 256 top-k 4}}]
   (fn [user-text context]
     (let [low (str/lower-case user-text)]
       (or
@@ -17,7 +20,7 @@
                    (str "[" name "] " tool " returned " result))))
              tool-triggers)
        (when (:retriever context)
-         (let [hits (r/retrieve (:retriever context) (r/embed user-text dim) 1)]
+         (let [hits (ctx/retrieve context (r/embed user-text dim) top-k)]
            (when (and (seq hits) (> (:score (first hits)) threshold))
              (str "[" name "] " (:text (first hits))))))
        (str "[" name "] I can help with " name " questions. You said: \"" user-text "\"")))))

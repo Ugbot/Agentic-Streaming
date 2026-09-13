@@ -8,8 +8,10 @@
 
    Each message is an immutable datom, so the conversation transcript is a true event log — Datomic's
    history/as-of give time-travel for free, on the in-process and the external engines alike."
-  (:require [datomic.client.api :as d]
-            [agentic.store :as store]))
+  (:require [clojure.edn :as edn]
+            [datomic.client.api :as d]
+            [agentic.store :as store]
+            [agentic.log :as log]))
 
 (def schema
   [{:db/ident :conversation/id :db/valueType :db.type/string :db/cardinality :db.cardinality/one
@@ -20,6 +22,15 @@
    {:db/ident :message/content :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :message/tool-name :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :message/position :db/valueType :db.type/long :db/cardinality :db.cardinality/one}
+   ;; "<cid>|<position>" — unique by value, so two writers racing for one position conflict in the
+   ;; transactor instead of both landing; see `transact-dense!`.
+   {:db/ident :message/key :db/valueType :db.type/string :db/cardinality :db.cardinality/one :db/unique :db.unique/value}
+   {:db/ident :event/key :db/valueType :db.type/string :db/cardinality :db.cardinality/one :db/unique :db.unique/value}
+   {:db/ident :event/conversation :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
+   {:db/ident :event/turn :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
+   {:db/ident :event/sequence :db/valueType :db.type/long :db/cardinality :db.cardinality/one}
+   {:db/ident :event/type :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
+   {:db/ident :event/payload :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :attr/composite :db/valueType :db.type/string :db/cardinality :db.cardinality/one :db/unique :db.unique/identity}
    {:db/ident :attr/conversation :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :attr/key :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
@@ -34,7 +45,34 @@
    {:db/ident :lt/user :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :lt/role :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
    {:db/ident :lt/content :db/valueType :db.type/string :db/cardinality :db.cardinality/one}
-   {:db/ident :lt/position :db/valueType :db.type/long :db/cardinality :db.cardinality/one}])
+   {:db/ident :lt/position :db/valueType :db.type/long :db/cardinality :db.cardinality/one}
+   {:db/ident :lt/key :db/valueType :db.type/string :db/cardinality :db.cardinality/one :db/unique :db.unique/value}])
+
+;; ---- dense, race-free positions ----
+
+(defn unique-conflict?
+  "Did this transaction fail because another writer already took the unique value?"
+  [t]
+  (let [data (ex-data t)]
+    (or (= :db.error/unique-conflict (:db/error data))
+        (= :cognitect.anomalies/conflict (:cognitect.anomalies/category data)))))
+
+(defn transact-dense!
+  "Append an entity at the next dense position of a per-conversation sequence without a
+   read-modify-write race: `count-fn` reads the current length from a db value, `entity-fn` builds the
+   entity for that position including a `:db.unique/value` key `<cid>|<position>`. If a concurrent
+   writer claimed the same position the transactor rejects the unique value and the append retries
+   from a fresh db, so every position is written exactly once and positions stay dense."
+  [conn cid count-fn entity-fn]
+  (loop [attempt 1]
+    (let [position (count-fn (d/db conn) cid)
+          outcome (try (d/transact conn {:tx-data [(entity-fn position)]})
+                       {:position position}
+                       (catch Exception e
+                         (if (and (unique-conflict? e) (< attempt 64))
+                           ::retry
+                           (throw e))))]
+      (if (= ::retry outcome) (recur (inc attempt)) outcome))))
 
 ;; ---- time-travel: the transcript is immutable datoms, so any past state is a query `as-of` a point ----
 
@@ -60,19 +98,23 @@
   [conn cid t]
   (transcript-from-db (d/as-of (d/db conn) t) cid))
 
-(defn- msg-count [conn cid]
-  (or (ffirst (d/q '[:find (count ?m) :in $ ?cid :where [?m :message/conversation ?cid]]
-                   (d/db conn) cid))
+(defn- msg-count-db [db cid]
+  (or (ffirst (d/q '[:find (count ?m) :in $ ?cid :where [?m :message/conversation ?cid]] db cid))
       0))
+
+(defn- msg-count [conn cid] (msg-count-db (d/db conn) cid))
 
 (defn datomic-conversation-store [conn]
   (reify store/ConversationStore
     (append [_ cid msg]
-      (d/transact conn {:tx-data [{:message/conversation cid
-                                   :message/role (:role msg)
-                                   :message/content (:content msg)
-                                   :message/tool-name (or (:tool-name msg) "")
-                                   :message/position (msg-count conn cid)}]}))
+      (transact-dense! conn cid msg-count-db
+                       (fn [position]
+                         {:message/key (str cid "|" position)
+                          :message/conversation cid
+                          :message/role (:role msg)
+                          :message/content (:content msg)
+                          :message/tool-name (or (:tool-name msg) "")
+                          :message/position position})))
     (history [_ cid]
       (->> (d/q '[:find ?role ?content ?pos :in $ ?cid :where
                   [?m :message/conversation ?cid] [?m :message/role ?role]
@@ -124,10 +166,12 @@
 (defn datomic-long-term-store [conn]
   (reify store/LongTermStore
     (save-turn [_ cid uid role content]
-      (let [pos (or (ffirst (d/q '[:find (count ?m) :in $ ?cid :where [?m :lt/conversation ?cid]]
-                                 (d/db conn) cid)) 0)]
-        (d/transact conn {:tx-data [{:lt/conversation cid :lt/user uid :lt/role role
-                                     :lt/content content :lt/position pos}]})))
+      (transact-dense! conn cid
+                       (fn [db cid]
+                         (or (ffirst (d/q '[:find (count ?m) :in $ ?cid :where [?m :lt/conversation ?cid]] db cid)) 0))
+                       (fn [pos]
+                         {:lt/key (str cid "|" pos) :lt/conversation cid :lt/user uid :lt/role role
+                          :lt/content content :lt/position pos})))
     (load-history [_ cid]
       (->> (d/q '[:find ?role ?content ?pos :in $ ?cid :where
                   [?m :lt/conversation ?cid] [?m :lt/role ?role]
@@ -145,6 +189,47 @@
       (->> (d/q '[:find ?cid :in $ ?uid :where [?m :lt/user ?uid] [?m :lt/conversation ?cid]]
                 (d/db conn) uid)
            (map first) distinct vec))))
+
+;; ---- the v1 event log as datoms ----
+
+(defn- event-count-db [db cid]
+  (or (ffirst (d/q '[:find (count ?e) :in $ ?cid :where [?e :event/conversation ?cid]] db cid)) 0))
+
+(defn- events-from-db [db cid]
+  (->> (d/q '[:find ?seq ?turn ?type ?payload :in $ ?cid :where
+              [?e :event/conversation ?cid] [?e :event/sequence ?seq] [?e :event/turn ?turn]
+              [?e :event/type ?type] [?e :event/payload ?payload]]
+            db cid)
+       (sort-by first)
+       (mapv (fn [[seq turn type payload]]
+               {:sequence seq :turn-id turn :type (keyword type) :payload (edn/read-string payload)}))))
+
+(defn datomic-event-log
+  "agentic.log/EventLog over Datomic: one immutable datom group per event, dense per-conversation
+   sequences enforced by the unique `:event/key`, and the whole log readable `as-of` any basis-t."
+  [conn]
+  (reify log/EventLog
+    (append-event! [_ cid event]
+      (when-not (contains? log/event-types (:type event))
+        (throw (ex-info (str "unknown event type " (:type event)) {:error/class :fatal :event event})))
+      (let [{:keys [position]}
+            (transact-dense! conn cid event-count-db
+                             (fn [position]
+                               {:event/key (str cid "|" position)
+                                :event/conversation cid
+                                :event/turn (str (:turn-id event))
+                                :event/sequence position
+                                :event/type (name (:type event))
+                                :event/payload (pr-str (:payload event))}))]
+        (assoc event :sequence position)))
+    (conversation-events [_ cid] (events-from-db (d/db conn) cid))
+    (conversation-ids [_]
+      (mapv first (d/q '[:find ?cid :where [_ :event/conversation ?cid]] (d/db conn))))))
+
+(defn events-as-of
+  "The conversation's event log exactly as it stood at basis-t `t`."
+  [conn cid t]
+  (events-from-db (d/as-of (d/db conn) t) cid))
 
 (defn- ->server-type [st]
   (cond (keyword? st) st (string? st) (keyword st) :else :datomic-local))
@@ -192,6 +277,7 @@
      (let [conn (d/connect client {:db-name db-name})]
        (d/transact conn {:tx-data schema})
        {:conn conn
+        :log (datomic-event-log conn)
         :conversation (datomic-conversation-store conn)
         :keyed (datomic-keyed-state-store conn)
         :long-term (datomic-long-term-store conn)}))))
