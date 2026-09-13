@@ -19,13 +19,13 @@ JNI boundary without serialization.
 
 from __future__ import annotations
 
-import glob
-import os
 from pathlib import Path
 from typing import Iterable
 
 import jpype
 import jpype.imports  # noqa: F401  -- side-effect: enables ``from java...`` imports
+
+from ._classpath import MissingJarError, bundled_jars, env_classpath, framework_jar
 
 _DEFAULT_JVM_ARGS = (
     "-Xms256m",
@@ -46,6 +46,7 @@ def start_jvm(
     extra_jars: Iterable[str | Path] = (),
     jvm_args: Iterable[str] = (),
     convert_strings: bool = True,
+    prepend_jars: Iterable[str | Path] = (),
 ) -> None:
     """Start the JVM and load the framework jar onto its classpath.
 
@@ -61,16 +62,21 @@ def start_jvm(
         convert_strings: forwarded to :func:`jpype.startJVM`. Default :data:`True`
             so Java :class:`String` round-trips as Python :class:`str` without
             explicit wrappers.
+        prepend_jars: jars placed *before* the framework jar, so their classes win when
+            the shaded jar bundles an older copy (the Pekko runtime needs its own Jackson).
 
     Raises:
-        FileNotFoundError: if no framework jar is found in any of the search
-            locations.
+        MissingJarError: (a ``FileNotFoundError``) if no framework jar is found in any
+            of the search locations; the message names the fix.
     """
     if jpype.isJVMStarted():
         return
 
     resolved = _resolve_jar(jar_path)
-    classpath = [str(resolved)] + [str(Path(j).resolve()) for j in extra_jars]
+    classpath = [str(Path(j).resolve()) for j in prepend_jars]
+    classpath.append(str(resolved))
+    classpath += [j for j in bundled_jars() + env_classpath() if j not in classpath]
+    classpath += [str(Path(j).resolve()) for j in extra_jars]
     args = list(_DEFAULT_JVM_ARGS) + list(jvm_args)
 
     jpype.startJVM(
@@ -109,41 +115,15 @@ def jclass(fqn: str):
 
 
 def _resolve_jar(explicit: str | Path | None) -> Path:
-    """Find the framework jar. Raises :class:`FileNotFoundError` if none exists."""
-    env = os.environ.get("AGENTIC_FLINK_JAR")
-    if env:
-        p = Path(env).expanduser().resolve()
-        if not p.exists():
-            raise FileNotFoundError(
-                f"AGENTIC_FLINK_JAR points at {p}, which does not exist"
-            )
-        return p
+    """Find the framework jar. Raises :class:`MissingJarError` if none exists."""
+    return framework_jar(explicit)
 
-    if explicit is not None:
-        p = Path(explicit).expanduser().resolve()
-        if not p.exists():
-            raise FileNotFoundError(f"jar_path {p} does not exist")
-        return p
 
-    # Sibling Maven build — covers `pip install -e python/` from a checkout.
-    here = Path(__file__).resolve()
-    candidates = sorted(
-        glob.glob(str(here.parents[2] / "target" / "agentic-flink-*.jar"))
-    )
-    if candidates:
-        # Prefer the shaded fat jar if present.
-        shaded = [c for c in candidates if "original-" not in Path(c).name]
-        return Path(shaded[-1] if shaded else candidates[-1]).resolve()
-
-    # Package data (post-wheel install).
-    bundled = here.parent / "jars"
-    if bundled.exists():
-        bundled_jars = sorted(bundled.glob("agentic-flink-*.jar"))
-        if bundled_jars:
-            return bundled_jars[-1].resolve()
-
-    raise FileNotFoundError(
-        "agentic-flink jar not found. Set AGENTIC_FLINK_JAR, pass jar_path="
-        "<path> to start_jvm(), or build the project (`mvn -DskipTests package` "
-        "from the repo root)."
-    )
+__all__ = [
+    "JvmNotStartedError",
+    "MissingJarError",
+    "is_started",
+    "jclass",
+    "shutdown_jvm",
+    "start_jvm",
+]
