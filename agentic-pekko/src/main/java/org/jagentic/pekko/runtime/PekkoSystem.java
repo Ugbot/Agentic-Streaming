@@ -1,49 +1,54 @@
 package org.jagentic.pekko.runtime;
 
-import java.util.function.Function;
+import com.typesafe.config.Config;
 
 import org.apache.pekko.actor.typed.ActorSystem;
-import org.apache.pekko.actor.typed.Behavior;
 
-import org.jagentic.core.ConversationStore;
-import org.jagentic.core.store.RedisConversationStore;
 import org.jagentic.pekko.durability.DurabilityProfile;
-import org.jagentic.pekko.durability.WriteThroughConversationEntity;
-import org.jagentic.pekko.entity.ConversationEntity;
 
-/** Boots the Pekko {@link ActorSystem} whose guardian routes turns to per-conversation entities.
- * The durability profile chooses the entity flavour: event-sourced (memory/postgres/cassandra —
- * the journal is picked by the active config) or Redis write-through. AutoCloseable for demos/tests. */
+/**
+ * Boots the Pekko {@link ActorSystem} whose guardian routes turns to per-conversation entities.
+ * The {@link DurabilityProfile} chooses the journal (memory, Postgres, Cassandra, Redis) purely by
+ * configuration; the entity code is identical under every profile. AutoCloseable for demos/tests.
+ */
 public final class PekkoSystem implements AutoCloseable {
-
   public static final String SYSTEM_NAME = "AgenticPekko";
 
   private final ActorSystem<ConversationManager.Command> system;
+  private final DurabilityProfile profile;
 
-  /** Event-sourced (journal chosen by config). */
+  /** The {@link DurabilityProfile#MEMORY} profile. */
   public PekkoSystem(AgentDeps deps) {
-    this(ConversationManager.create(deps));
+    this(deps, DurabilityProfile.MEMORY);
   }
 
-  /** Profile-aware: {@code REDIS} → write-through to {@code redisUrl}; otherwise event-sourced. */
-  public PekkoSystem(AgentDeps deps, DurabilityProfile profile, String redisUrl) {
-    this(profile.isWriteThrough()
-        ? ConversationManager.create(redisFactory(deps, redisUrl))
-        : ConversationManager.create(deps));
+  /** Boots with the profile's resolved configuration; fails clearly when the profile's journal is not configured. */
+  public PekkoSystem(AgentDeps deps, DurabilityProfile profile) {
+    this(deps, profile, profile.config());
   }
 
-  private PekkoSystem(Behavior<ConversationManager.Command> guardian) {
-    this.system = ActorSystem.create(guardian, SYSTEM_NAME);
-  }
-
-  private static Function<String, Behavior<ConversationEntity.Command>> redisFactory(
-      AgentDeps deps, String redisUrl) {
-    ConversationStore redis = new RedisConversationStore(redisUrl, 200);
-    return cid -> WriteThroughConversationEntity.create(cid, deps, redis);
+  /**
+   * Boots with an explicit configuration (tests that layer their own overrides on a profile). The
+   * profile's {@link DurabilityProfile#preflight preflight} runs first, so a store that is
+   * unreachable or not durable fails here, synchronously.
+   */
+  public PekkoSystem(AgentDeps deps, DurabilityProfile profile, Config config) {
+    this.profile = profile;
+    profile.preflight(config);
+    this.system = ActorSystem.create(ConversationManager.create(deps), SYSTEM_NAME, config);
   }
 
   public ActorSystem<ConversationManager.Command> system() {
     return system;
+  }
+
+  public DurabilityProfile profile() {
+    return profile;
+  }
+
+  /** The journal plugin the running system persists to. */
+  public String journalPlugin() {
+    return system.settings().config().getString("pekko.persistence.journal.plugin");
   }
 
   @Override

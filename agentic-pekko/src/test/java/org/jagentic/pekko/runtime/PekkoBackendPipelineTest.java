@@ -28,9 +28,7 @@ class PekkoBackendPipelineTest {
   @Test
   void backendPekkoRunsDeclarativeCepFromIncidentYaml() {
     Path yaml = PIPELINES.resolve("incident.yaml");
-    if (!Files.exists(yaml)) {
-      org.junit.jupiter.api.Assumptions.abort("incident.yaml not found at " + yaml.toAbsolutePath());
-    }
+    assertTrue(Files.exists(yaml), () -> "incident.yaml not found at " + yaml.toAbsolutePath());
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       assertEquals("pekko", sys.backendName);
@@ -51,9 +49,7 @@ class PekkoBackendPipelineTest {
 
   @Test
   void backendPekkoRunsTheSharedBankingYaml() {
-    if (!Files.exists(BANKING)) {
-      org.junit.jupiter.api.Assumptions.abort("banking.yaml not found at " + BANKING.toAbsolutePath());
-    }
+    assertTrue(Files.exists(BANKING), () -> "banking.yaml not found at " + BANKING.toAbsolutePath());
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(BANKING, "pekko");
     try {
       assertEquals("pekko", sys.backendName);
@@ -69,9 +65,7 @@ class PekkoBackendPipelineTest {
   @Test
   void backendPekkoRunsTheLlmYaml() {
     Path yaml = PIPELINES.resolve("banking-llm.yaml");
-    if (!Files.exists(yaml)) {
-      org.junit.jupiter.api.Assumptions.abort("banking-llm.yaml not found at " + yaml.toAbsolutePath());
-    }
+    assertTrue(Files.exists(yaml), () -> "banking-llm.yaml not found at " + yaml.toAbsolutePath());
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       Event e = new Event("c1", "demo", "what is my balance?");
@@ -87,9 +81,7 @@ class PekkoBackendPipelineTest {
   @Test
   void backendPekkoRunsTheRagYamlWithColdTierRecall() {
     Path yaml = PIPELINES.resolve("banking-rag.yaml");
-    if (!Files.exists(yaml)) {
-      org.junit.jupiter.api.Assumptions.abort("banking-rag.yaml not found at " + yaml.toAbsolutePath());
-    }
+    assertTrue(Files.exists(yaml), () -> "banking-rag.yaml not found at " + yaml.toAbsolutePath());
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       // skills + HNSW cold tier + context-window + classifier guardrail, all on the actor runtime.

@@ -8,6 +8,7 @@ import org.apache.pekko.cluster.sharding.typed.javadsl.EntityTypeKey;
 
 import org.jagentic.pekko.entity.ConversationEntity;
 import org.jagentic.pekko.runtime.AgentDeps;
+import org.jagentic.pekko.runtime.ConversationManager;
 
 /** Cluster Sharding wiring — the production distributed single-writer: Pekko guarantees exactly
  * one live {@link ConversationEntity} per {@code conversationId} across the cluster, and migrates
@@ -24,7 +25,8 @@ public final class ConversationSharding {
   /** Register the entity type with the cluster's shard region. Call once at startup. */
   public static void init(ActorSystem<?> system, AgentDeps deps) {
     ClusterSharding.get(system).init(
-        Entity.of(TYPE_KEY, entityCtx -> ConversationEntity.create(entityCtx.getEntityId(), deps)));
+        Entity.of(TYPE_KEY, entityCtx ->
+            ConversationManager.supervised(ConversationEntity.create(entityCtx.getEntityId(), deps))));
   }
 
   /** A reference to the (sharded) entity for a conversation — created on demand on the owning node. */

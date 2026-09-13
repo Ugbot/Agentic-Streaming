@@ -92,8 +92,7 @@
 
     <!-- Durability profiles. The event-sourced journals (memory/postgres/cassandra) are selected
          purely by config (pekko.persistence.journal.plugin) — the entity is journal-agnostic — so
-         these are runtime-scoped. Redis is a write-through profile using jagentic-core's
-         RedisConversationStore (needs Jedis at compile time). -->
+         these are runtime-scoped. -->
     <dependency>
       <groupId>org.apache.pekko</groupId>
       <artifactId>pekko-persistence-jdbc_${scala.binary}</artifactId>
@@ -112,6 +111,8 @@
       <version>1.1.0</version>
       <scope>runtime</scope>
     </dependency>
+
+    <!-- Redis journal + snapshot store (org.jagentic.pekko.persistence.redis), REDIS profile. -->
     <dependency>
       <groupId>redis.clients</groupId>
       <artifactId>jedis</artifactId>
@@ -148,6 +149,34 @@
       <version>5.10.2</version>
       <scope>test</scope>
     </dependency>
+
+    <!-- Redis integration tests (@Tag("integration"), -P integration-tests): real Redis via
+         Testcontainers on Podman, plus the Pekko persistence TCK (ScalaTest, run through the
+         JUnit 4 runner + vintage engine). -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.pekko</groupId>
+      <artifactId>pekko-persistence-tck_${scala.binary}</artifactId>
+      <version>${pekko.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.scalatestplus</groupId>
+      <artifactId>junit-4-13_${scala.binary}</artifactId>
+      <version>3.2.19.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.vintage</groupId>
+      <artifactId>junit-vintage-engine</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -163,6 +192,9 @@
         <version>3.2.5</version>
         <configuration>
           <excludedGroups>integration</excludedGroups>
+          <!-- The JUnit 4 (TCK) classes need a container; only the integration-tests profile
+               below enables the vintage engine that runs them. -->
+          <excludeJUnit5Engines>junit-vintage</excludeJUnit5Engines>
         </configuration>
       </plugin>
       <plugin>
@@ -175,4 +207,29 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- Real-infrastructure tests (Redis via Testcontainers on Podman + the persistence TCK):
+         mvn -f agentic-pekko/pom.xml test -P integration-tests -->
+    <profile>
+      <id>integration-tests</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>3.2.5</version>
+            <configuration combine.self="override">
+              <groups>integration,org.jagentic.pekko.testing.IntegrationCategory</groups>
+              <includes>
+                <include>**/*Test.java</include>
+                <include>**/*IT.java</include>
+                <include>**/*TckSpec.java</include>
+              </includes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
