@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-pyflink"
+version = "1.0.0a1"
+description = "Run portable agentic/v1 workflow documents on Apache Flink from Python (PyFlink)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+keywords = ["agentic", "flink", "pyflink", "agents", "streaming"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "apache-flink>=2.0,<3",
+    "PyYAML>=6",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "jsonschema>=4"]
+
+# Discovery hook for the shared Python surface (`agentic.runtime.get_runtime("flink")`).
+[project.entry-points."agentic.runtimes"]
+flink = "agentic_pyflink.runtime:FlinkRuntime"
+
+[project.urls]
+Repository = "https://github.com/Ugbot/Agentic-Streaming"
+Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/docs/python.md"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentic_pyflink*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP"]
