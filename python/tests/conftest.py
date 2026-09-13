@@ -42,8 +42,17 @@ def jvm():
     sys.path.insert(0, str(REPO_ROOT / "python"))
     import agentic_flink as af
 
+    from agentic_flink._classpath import MissingJarError, pekko_jars
+
     extra = _resolve_classpath()
-    af.start_jvm(extra_jars=extra)
+    # The agentic-pekko jars go first when built (their Jackson is newer than the shaded one),
+    # so the `pekko` runtime is reachable in the same JVM. Without them, pekko tests fail
+    # with RuntimeNotAvailableError naming the build step.
+    try:
+        prepend = pekko_jars()
+    except MissingJarError:
+        prepend = []
+    af.start_jvm(extra_jars=extra, prepend_jars=prepend)
     assert af.is_started()
     yield af
     # NOTE: JPype JVMs can't restart in the same process; we deliberately do
