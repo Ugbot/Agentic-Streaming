@@ -193,12 +193,45 @@ def test_clojure_output_without_marker_is_a_binding_error() -> None:
 def test_absent_bindings_and_toolchains_are_reported_not_omitted(tmp_path: Path) -> None:
     # python is located through entry points, not the checkout, so it is exercised with an absent module
     reports = [cm.run_runtime(name, FIXTURES, tmp_path, tmp_path / "logs", "no_such_agentic_binding:run")
-               for name in ("jvm-core", "flink", "pekko", "clojure", "python")]
+               for name in ("jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink")]
     assert [r.status for r in reports[:4]] == [cm.NOT_TESTED] * 4
     assert reports[4].status == cm.ERROR
+    assert [r.status for r in reports[5:]] == [cm.NOT_TESTED] * 3
+    assert all("binding absent" in r.reason for r in reports[5:])
     assert all(r.reason for r in reports)
     artifact = cm.build_artifact(reports, FIXTURES, tmp_path)
-    assert [r["name"] for r in artifact["runtimes"]] == ["jvm-core", "flink", "pekko", "clojure", "python"]
+    assert [r["name"] for r in artifact["runtimes"]] == [
+        "jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink"]
+
+
+def test_python_suite_outcomes_map_to_fixture_outcomes() -> None:
+    suite = cm.PYTHON_SUITES["pyflink"]
+    rows = []
+    for fixture in FIXTURES.values():
+        if fixture["id"] == "saga-compensation":
+            rows.append({"id": fixture["id"], "status": "skip", "reason": "requires ['saga']", "problems": []})
+        elif fixture["id"] == "tool-failure":
+            rows.append({"id": fixture["id"], "status": "fail", "reason": None, "problems": ["status differs"]})
+        else:
+            rows.append({"id": fixture["id"], "status": "pass", "reason": None, "problems": []})
+    by_id = {o.fixture: o for o in cm.outcomes_from_python_suite(rows, FIXTURES, suite)}
+    assert len(by_id) == len(FIXTURES)
+    assert by_id["saga-compensation"].status == cm.SKIPPED and by_id["saga-compensation"].missing == ["saga"]
+    assert by_id["tool-failure"].status == cm.FAILED and by_id["tool-failure"].problems == ["status differs"]
+    assert by_id["routing-keyword"].status == cm.PASSED
+    with pytest.raises(cm.BindingError):
+        cm.outcomes_from_python_suite(rows[1:], FIXTURES, suite)
+    with pytest.raises(cm.BindingError):
+        cm.outcomes_from_python_suite([{**rows[0], "status": "maybe"}] + rows[1:], FIXTURES, suite)
+
+
+def test_python_suite_missing_module_is_not_tested(tmp_path: Path) -> None:
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "conformance.py").write_text("", encoding="utf-8")
+    suite = cm.PythonSuite("x", "x", "no_such_agentic_suite.conformance", "m.run_all()", "id", "o.status", "o.reason", "pip install x")
+    report = cm.run_python_suite(suite, FIXTURES, tmp_path, tmp_path / "logs")
+    assert report.status == cm.NOT_TESTED
+    assert report.reason.startswith("toolchain unavailable:") and "pip install x" in report.reason
 
 
 def test_python_binding_hook_uses_the_runner_comparator() -> None:
