@@ -227,9 +227,12 @@ def run_reference(fixtures: Dict[str, Dict[str, Any]]) -> RuntimeReport:
             for spec in fixture["turns"]:
                 if spec.get("restart_runtime"):
                     runtime.restart()
+                if "advance_time_ms" in spec:
+                    runtime.advance(spec["advance_time_ms"])
                 results.append(runtime.submit(Turn(
                     conversation_id=spec["conversation_id"], turn_id=spec["turn_id"],
                     text=spec.get("text", ""), signal=spec.get("signal"),
+                    metadata=dict(spec.get("metadata") or {}),
                 )))
         except (SpecError, KeyError) as exc:
             report.fixtures.append(FixtureOutcome(fixture["id"], FAILED, list(fixture["requires"]),
