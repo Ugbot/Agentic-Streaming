@@ -21,7 +21,11 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * {@code {metadata_gt: {k: n}}}. Contiguity {@code next} (strict) / {@code followedBy} (relaxed);
  * {@code within} → {@link Pattern#within(Duration)}. Wire the result with
  * {@code CEP.pattern(stream.keyBy(key), translate(...)).process(...)} as in {@code IncidentAgentExample}.</p>
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public final class CepSpecTranslator {
 
   /** A serializable extractor — Flink CEP conditions are shipped to task managers, so the text /

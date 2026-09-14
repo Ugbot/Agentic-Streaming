@@ -2,6 +2,9 @@ package org.agentic.flink.llm.langchain4j;
 
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatConnection;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -11,6 +14,10 @@ import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -181,10 +188,41 @@ public final class LangChain4jChatConnection implements ChatConnection {
     }
   }
 
+  private static final ObjectMapper JSON = new ObjectMapper();
+  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
+  /**
+   * Convert the structured {@link AiMessage#toolExecutionRequests()} of a response into framework
+   * tool calls. Arguments are parsed with Jackson; a request whose arguments are not a JSON object
+   * is dropped with a warning rather than guessed at.
+   */
+  static List<org.agentic.flink.llm.ChatToolCall> toolCallsOf(AiMessage message) {
+    if (message == null || !message.hasToolExecutionRequests()) {
+      return Collections.emptyList();
+    }
+    List<org.agentic.flink.llm.ChatToolCall> out = new ArrayList<>();
+    int index = 0;
+    for (ToolExecutionRequest req : message.toolExecutionRequests()) {
+      String id = req.id() == null || req.id().isBlank() ? "call_" + index : req.id();
+      index++;
+      Map<String, Object> args;
+      try {
+        String raw = req.arguments();
+        args = raw == null || raw.isBlank() ? Map.of() : JSON.readValue(raw, MAP_TYPE);
+      } catch (java.io.IOException e) {
+        LOG.warn("Dropping tool request {} with unparseable arguments: {}", req.name(), e.getMessage());
+        continue;
+      }
+      out.add(new org.agentic.flink.llm.ChatToolCall(id, req.name(), args));
+    }
+    return out;
+  }
+
   /** Extract a {@link org.agentic.flink.llm.ChatResponse} from a LangChain4J response. */
   static org.agentic.flink.llm.ChatResponse fromLangChainResponse(
       dev.langchain4j.model.chat.response.ChatResponse response, String modelName) {
     String text = response.aiMessage() != null ? response.aiMessage().text() : "";
+    List<org.agentic.flink.llm.ChatToolCall> toolCalls = toolCallsOf(response.aiMessage());
     Long tokens =
         response.tokenUsage() == null ? null : (long) response.tokenUsage().totalTokenCount();
     org.agentic.flink.llm.ChatResponse.FinishReason fr =
@@ -207,7 +245,6 @@ public final class LangChain4jChatConnection implements ChatConnection {
           fr = org.agentic.flink.llm.ChatResponse.FinishReason.UNKNOWN;
       }
     }
-    return new org.agentic.flink.llm.ChatResponse(
-        text, modelName, java.util.Collections.emptyList(), tokens, fr);
+    return new org.agentic.flink.llm.ChatResponse(text, modelName, toolCalls, tokens, fr);
   }
 }

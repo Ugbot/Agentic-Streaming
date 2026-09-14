@@ -151,6 +151,7 @@ public class ContentModerationExample {
       classifier = inferenceClient.asClassifier();
       chatClient = chatConnection.bind(getRuntimeContext());
       metrics = new MetricsAgentEventListener();
+      metrics.open(getRuntimeContext());
       audit = new AuditingListener();
     }
 

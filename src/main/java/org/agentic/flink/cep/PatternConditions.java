@@ -35,7 +35,11 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * @author Agentic Flink Team
  * @see SimpleCondition
  * @see IterativeCondition
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class PatternConditions {
 
   // Private constructor - utility class

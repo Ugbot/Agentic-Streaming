@@ -62,7 +62,11 @@ import java.util.*;
  * @see Agent
  * @see SupervisorChain
  * @see AgentJobGenerator
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class AgentJob implements Serializable {
 
   private static final long serialVersionUID = 1L;

@@ -50,7 +50,11 @@ import org.slf4j.LoggerFactory;
  * @see StorageFactory
  * @see ShortTermMemoryStore
  * @see LongTermMemoryStore
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class StorageSinkFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final long serialVersionUID = 1L;

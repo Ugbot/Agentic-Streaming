@@ -8,8 +8,14 @@ import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatRole;
 import org.agentic.flink.llm.ChatSetup;
+import org.agentic.flink.llm.ChatToolCall;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,6 +23,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,12 +45,30 @@ import org.slf4j.LoggerFactory;
  *   <li>OpenAI: gpt-5.5, gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano</li>
  * </ul>
  *
+ * <p><b>Tool calls.</b> Tool calls come from the provider's structured tool execution requests
+ * ({@code AiMessage.toolExecutionRequests()} surfaced as {@link ChatResponse#getToolCalls()}),
+ * with arguments parsed by Jackson. Only when a response carries no structured requests does
+ * {@link #parseToolCallsFromText} apply the text protocol ({@code TOOL_CALL: name {json}} or
+ * {@code TOOL_CALL: name(k=v, ...)}) for providers without tool support.
+ *
+ * <p><b>Serialization.</b> The listener is process-local and transient; after Java
+ * deserialization it is re-resolved to a no-op until {@link #withGuardrails} attaches one again.
+ *
  * @author Agentic Flink Team
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class LLMClient implements Serializable {
 
-  private static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 2L;
   private static final Logger LOG = LoggerFactory.getLogger(LLMClient.class);
+  private static final ObjectMapper JSON = new ObjectMapper();
+  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+  private static final Pattern TEXT_JSON_CALL =
+      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*(\\{.*?\\})", Pattern.DOTALL);
+  private static final Pattern TEXT_KV_CALL =
+      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]*)\\)");
 
   private final String modelName;
   private final double temperature;
@@ -59,6 +85,16 @@ public class LLMClient implements Serializable {
   private List<Guardrail> guardrails = Collections.emptyList();
   private String agentId = "llm-client";
   private transient AgentEventListener listener = new AgentEventListener() {};
+
+  private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+    listener = new AgentEventListener() {};
+  }
+
+  /** Listener currently receiving guardrail hook events (never {@code null}). */
+  public AgentEventListener getListener() {
+    return listener;
+  }
 
   private LLMClient(
       String modelName,
@@ -136,7 +172,7 @@ public class LLMClient implements Serializable {
         }
         if (d.isRewrite() && d.getRewrittenPayload() != null) {
           listener.onGuardrailRewrite(agentId, d.getModelName(), d.getReason());
-          chatMessages = List.of(ChatMessage.user(d.getRewrittenPayload()));
+          chatMessages = replaceLastUserMessage(chatMessages, d.getRewrittenPayload());
         }
       }
 
@@ -176,7 +212,10 @@ public class LLMClient implements Serializable {
         llmResponse.setTokenUsage(response.getTokensUsed().intValue());
       }
 
-      List<ToolCall> toolCalls = parseToolCalls(responseText);
+      List<ToolCall> toolCalls =
+          response.hasToolCalls()
+              ? fromStructured(response.getToolCalls())
+              : parseToolCallsFromText(responseText);
       llmResponse.setToolCalls(toolCalls);
 
       LOG.debug(
@@ -203,117 +242,74 @@ public class LLMClient implements Serializable {
   }
 
   /**
-   * Parses tool calls from LLM response text.
-   *
-   * <p>Supports multiple formats:
-   * <ul>
-   *   <li>TOOL_CALL: tool_name {"param": "value"}</li>
-   *   <li>TOOL_CALL: tool_name(param=value)</li>
-   *   <li>{"tool": "tool_name", "parameters": {...}}</li>
-   * </ul>
-   *
-   * @param responseText The LLM response text
-   * @return List of parsed tool calls
+   * Replaces the most recent user message with the guardrail's rewritten payload, keeping the
+   * rest of the conversation (system prompt, earlier turns, tool results) intact. When the
+   * conversation has no user message the rewrite is appended as one.
    */
-  private List<ToolCall> parseToolCalls(String responseText) {
-    List<ToolCall> toolCalls = new ArrayList<>();
+  static List<ChatMessage> replaceLastUserMessage(List<ChatMessage> messages, String rewritten) {
+    List<ChatMessage> out = new ArrayList<>(messages);
+    for (int i = out.size() - 1; i >= 0; i--) {
+      if (out.get(i).getRole() == ChatRole.USER) {
+        out.set(i, ChatMessage.user(rewritten));
+        return out;
+      }
+    }
+    out.add(ChatMessage.user(rewritten));
+    return out;
+  }
 
+  /** Maps the provider's structured tool requests onto the executor's {@link ToolCall}. */
+  static List<ToolCall> fromStructured(List<ChatToolCall> calls) {
+    List<ToolCall> out = new ArrayList<>(calls.size());
+    int index = 0;
+    for (ChatToolCall c : calls) {
+      String id = c.getId() == null || c.getId().isBlank() ? "call_" + index : c.getId();
+      out.add(new ToolCall(id, c.getName(), new HashMap<>(c.getArguments())));
+      index++;
+    }
+    return out;
+  }
+
+  /**
+   * Text fallback for providers without structured tool support. Recognizes
+   * {@code TOOL_CALL: name {json}} (arguments parsed by Jackson) and, when no JSON form is
+   * present, {@code TOOL_CALL: name(k=v, ...)}. Unparseable calls are skipped with a warning.
+   */
+  static List<ToolCall> parseToolCallsFromText(String responseText) {
+    List<ToolCall> toolCalls = new ArrayList<>();
     if (responseText == null || responseText.isEmpty()) {
       return toolCalls;
     }
 
-    // Pattern 1: TOOL_CALL: tool_name {json}
-    // Example: TOOL_CALL: calculator-add {"a": 5, "b": 3}
-    java.util.regex.Pattern pattern1 = java.util.regex.Pattern.compile(
-        "TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\{([^}]+)\\}");
-    java.util.regex.Matcher matcher1 = pattern1.matcher(responseText);
-
     int callCount = 0;
-    while (matcher1.find()) {
-      String toolName = matcher1.group(1).trim();
-      String jsonParams = "{" + matcher1.group(2) + "}";
-
+    Matcher json = TEXT_JSON_CALL.matcher(responseText);
+    while (json.find()) {
+      String toolName = json.group(1).trim();
+      String jsonParams = json.group(2);
       try {
-        Map<String, Object> parameters = parseJsonParameters(jsonParams);
-        String toolCallId = "call_" + (callCount++);
-        toolCalls.add(new ToolCall(toolCallId, toolName, parameters));
-        LOG.debug("Parsed tool call: {} with params: {}", toolName, parameters);
-      } catch (Exception e) {
-        LOG.warn("Failed to parse tool call parameters: {}", jsonParams, e);
+        Map<String, Object> parameters = JSON.readValue(jsonParams, MAP_TYPE);
+        toolCalls.add(new ToolCall("call_" + (callCount++), toolName, parameters));
+      } catch (IOException e) {
+        LOG.warn("Text tool call {} has invalid JSON arguments {}: {}", toolName, jsonParams,
+            e.getMessage());
       }
     }
 
-    // Pattern 2: TOOL_CALL: tool_name(param=value, param2=value2)
-    // Example: TOOL_CALL: calculator-add(a=5, b=3)
     if (toolCalls.isEmpty()) {
-      java.util.regex.Pattern pattern2 = java.util.regex.Pattern.compile(
-          "TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]+)\\)");
-      java.util.regex.Matcher matcher2 = pattern2.matcher(responseText);
-
-      while (matcher2.find()) {
-        String toolName = matcher2.group(1).trim();
-        String paramsStr = matcher2.group(2);
-
-        try {
-          Map<String, Object> parameters = parseKeyValueParameters(paramsStr);
-          String toolCallId = "call_" + (callCount++);
-          toolCalls.add(new ToolCall(toolCallId, toolName, parameters));
-          LOG.debug("Parsed tool call: {} with params: {}", toolName, parameters);
-        } catch (Exception e) {
-          LOG.warn("Failed to parse tool call parameters: {}", paramsStr, e);
-        }
+      Matcher kv = TEXT_KV_CALL.matcher(responseText);
+      while (kv.find()) {
+        String toolName = kv.group(1).trim();
+        Map<String, Object> parameters = parseKeyValueParameters(kv.group(2));
+        toolCalls.add(new ToolCall("call_" + (callCount++), toolName, parameters));
       }
     }
-
     return toolCalls;
-  }
-
-  /**
-   * Parses JSON-formatted parameters.
-   */
-  private Map<String, Object> parseJsonParameters(String jsonStr) {
-    Map<String, Object> params = new HashMap<>();
-
-    // Simple JSON parser for basic types
-    // Format: {"key": "value", "key2": 123}
-    String content = jsonStr.replaceAll("[{}]", "").trim();
-    if (content.isEmpty()) {
-      return params;
-    }
-
-    String[] pairs = content.split(",");
-    for (String pair : pairs) {
-      String[] kv = pair.split(":", 2);
-      if (kv.length == 2) {
-        String key = kv[0].trim().replaceAll("\"", "");
-        String value = kv[1].trim();
-
-        // Remove quotes and parse value
-        if (value.startsWith("\"") && value.endsWith("\"")) {
-          params.put(key, value.substring(1, value.length() - 1));
-        } else {
-          // Try to parse as number
-          try {
-            if (value.contains(".")) {
-              params.put(key, Double.parseDouble(value));
-            } else {
-              params.put(key, Integer.parseInt(value));
-            }
-          } catch (NumberFormatException e) {
-            // Keep as string
-            params.put(key, value);
-          }
-        }
-      }
-    }
-
-    return params;
   }
 
   /**
    * Parses key=value parameter format.
    */
-  private Map<String, Object> parseKeyValueParameters(String paramsStr) {
+  private static Map<String, Object> parseKeyValueParameters(String paramsStr) {
     Map<String, Object> params = new HashMap<>();
 
     String[] pairs = paramsStr.split(",");

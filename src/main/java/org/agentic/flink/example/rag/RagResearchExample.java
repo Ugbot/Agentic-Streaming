@@ -162,6 +162,7 @@ public class RagResearchExample {
       seededState =
           getRuntimeContext().getState(new ValueStateDescriptor<>("rag.seeded", Boolean.class));
       metrics = new MetricsAgentEventListener();
+      metrics.open(getRuntimeContext());
     }
 
     @Override

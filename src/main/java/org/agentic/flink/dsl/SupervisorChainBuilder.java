@@ -28,7 +28,11 @@ import java.util.List;
  *
  * @author Agentic Flink Team
  * @see SupervisorChain
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class SupervisorChainBuilder {
 
   String chainId;

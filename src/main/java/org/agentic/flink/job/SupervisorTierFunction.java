@@ -8,11 +8,14 @@ import org.agentic.flink.dsl.SupervisorChain.EscalationPolicy;
 import org.agentic.flink.dsl.SupervisorChain.SupervisorTier;
 import org.agentic.flink.execution.AgentExecutor;
 import org.agentic.flink.execution.ExecutionResult;
+import org.agentic.flink.execution.LLMClient;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.tool.ToolRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
@@ -53,19 +56,36 @@ import org.slf4j.LoggerFactory;
  *   - quality_score: 0.65
  * </pre>
  *
+ * <p><b>Checkpoint impact.</b> The tier agent runs synchronously inside this keyed CEP
+ * operator because the escalation decision needs the result in the same {@code processMatch}
+ * call. While a tier executes, this subtask cannot process other flows or align checkpoint
+ * barriers, so checkpoints of the whole job are delayed by up to the tier timeout. The timeout
+ * is {@link Agent#getTimeout()} of the tier agent or {@link #DEFAULT_TIMEOUT}; keep it short.
+ * When it fires, the in-flight execution is cancelled with {@code cancel(true)} so the LLM loop
+ * and tool futures stop instead of running orphaned. Flows that need long agent turns should
+ * use the event-sourced runtime instead of a supervisor chain.
+ *
  * @author Agentic Flink Team
  * @see SupervisorChain
  * @see EscalationPolicy
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, AgentEvent>
     implements TimedOutPartialMatchHandler<AgentEvent> {
 
-  private static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 2L;
   private static final Logger LOG = LoggerFactory.getLogger(SupervisorTierFunction.class);
+
+  /** Default per-tier execution budget when the tier agent has no explicit timeout. */
+  public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
   private final SupervisorTier tier;
   private final SupervisorChain chain;
   private final ToolRegistry toolRegistry;
+  private final LLMClient llmClient;
+  private final long timeoutMillis;
 
   // Side output tags
   private static final OutputTag<AgentEvent> ESCALATION_TAG =
@@ -93,9 +113,53 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
 
   public SupervisorTierFunction(
       SupervisorTier tier, SupervisorChain chain, ToolRegistry toolRegistry) {
+    this(tier, chain, toolRegistry, null);
+  }
+
+  /**
+   * @param defaultTimeout budget used when the tier agent has no {@code timeout}; {@code null}
+   *     selects {@link #DEFAULT_TIMEOUT}
+   */
+  public SupervisorTierFunction(
+      SupervisorTier tier, SupervisorChain chain, ToolRegistry toolRegistry,
+      Duration defaultTimeout) {
+    this(tier, chain, toolRegistry, defaultTimeout, null);
+  }
+
+  /**
+   * @param llmClient client used for the tier agent; {@code null} builds the default client from
+   *     the agent's model settings
+   */
+  public SupervisorTierFunction(
+      SupervisorTier tier, SupervisorChain chain, ToolRegistry toolRegistry,
+      Duration defaultTimeout, LLMClient llmClient) {
     this.tier = tier;
     this.chain = chain;
     this.toolRegistry = toolRegistry;
+    this.llmClient = llmClient;
+    Duration agentTimeout = tier.getAgent().getTimeout();
+    Duration effective =
+        agentTimeout != null
+            ? agentTimeout
+            : (defaultTimeout != null ? defaultTimeout : DEFAULT_TIMEOUT);
+    if (effective.isZero() || effective.isNegative()) {
+      throw new IllegalArgumentException("tier timeout must be positive, got " + effective);
+    }
+    this.timeoutMillis = effective.toMillis();
+  }
+
+  /** Effective per-tier execution budget. */
+  public Duration getTimeout() {
+    return Duration.ofMillis(timeoutMillis);
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (executor != null) {
+      executor.close();
+      executor = null;
+    }
+    super.close();
   }
 
   private AgentExecutor getOrCreateExecutor() {
@@ -103,6 +167,7 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
       executor = AgentExecutor.builder()
           .withAgent(tier.getAgent())
           .withToolRegistry(toolRegistry)
+          .withLlmClient(llmClient)
           .build();
     }
     return executor;
@@ -172,6 +237,18 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
         LOG.info("Tier {} approved flow: {}", tier.getTierIndex(), flowId);
       }
 
+    } catch (TimeoutException e) {
+      LOG.error("Tier {} timed out for flow: {}: {}", tier.getTierIndex(), flowId, e.getMessage());
+
+      AgentEvent timeoutEvent = startEvent.withEventType(AgentEventType.FLOW_FAILED);
+      timeoutEvent.incrementIteration();
+      timeoutEvent.putMetadata("state", AgentState.FAILED.name());
+      timeoutEvent.getData().put("error", e.getMessage());
+      timeoutEvent.getData().put("failure_kind", AgentResultRouter.FAILURE_KIND_TIMEOUT);
+      timeoutEvent.getData().put("failed_at_tier", tier.getTierIndex());
+
+      ctx.output(TIMEOUT_TAG, timeoutEvent);
+
     } catch (Exception e) {
       LOG.error("Tier {} execution failed for flow: {}", tier.getTierIndex(), flowId, e);
 
@@ -197,13 +274,17 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
       throws Exception {
 
     Agent agent = tier.getAgent();
-    long timeoutMs = agent.getTimeout() != null
-        ? agent.getTimeout().toMillis()
-        : 300_000L; // 5 minute default
 
-    ExecutionResult executionResult = getOrCreateExecutor()
-        .execute(startEvent)
-        .get(timeoutMs, TimeUnit.MILLISECONDS);
+    CompletableFuture<ExecutionResult> pending = getOrCreateExecutor().execute(startEvent);
+    ExecutionResult executionResult;
+    try {
+      executionResult = pending.get(timeoutMillis, TimeUnit.MILLISECONDS);
+    } catch (TimeoutException e) {
+      pending.cancel(true);
+      throw new TimeoutException(
+          "Tier " + tier.getTierIndex() + " agent " + agent.getAgentId()
+              + " exceeded " + timeoutMillis + " ms; execution cancelled");
+    }
 
     AgentEvent result = startEvent.withEventType(AgentEventType.SUPERVISOR_REVIEW_COMPLETED);
     result.incrementIteration();
@@ -420,7 +501,7 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
    * Gets escalation count from event metadata.
    */
   private int getEscalationCount(AgentEvent event) {
-    Object countObj = event.getMetadata().get("escalation_count");
+    Object countObj = event.getMetadata("escalation_count");
     if (countObj instanceof Integer) {
       return (Integer) countObj;
     }

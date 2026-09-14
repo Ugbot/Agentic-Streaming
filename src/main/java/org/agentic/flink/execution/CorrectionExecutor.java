@@ -36,7 +36,11 @@ import org.slf4j.LoggerFactory;
  * </ul>
  *
  * @author Agentic Flink Team
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class CorrectionExecutor implements Serializable {
 
   private static final long serialVersionUID = 1L;
