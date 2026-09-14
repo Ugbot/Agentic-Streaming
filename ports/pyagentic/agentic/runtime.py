@@ -236,7 +236,7 @@ class LocalRuntime(Runtime):
         "tools": "supported", "structured_tool_args": "supported", "guardrails": "supported",
         "verifier": "supported", "ordering": "supported", "idempotency": "supported",
         "retry": "supported", "memory": "supported", "retrieval": "supported",
-        "context_window": "unsupported", "replay": "supported", "suspend_resume": "supported",
+        "context_window": "supported", "replay": "supported", "suspend_resume": "supported",
         "timers": "unsupported", "saga": "supported", "a2a": "supported", "cep": "unsupported",
         "event_time": "unsupported", "checkpoint_recovery": "unsupported",
         "parallelism": "unsupported", "durable_store": "supported",

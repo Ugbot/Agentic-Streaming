@@ -51,6 +51,7 @@ public final class RoutedGraph {
   private final Policies policies;
   private final SagaPlan saga; // may be null
   private final Map<String, String> suspendUntil;
+  private final ContextWindow contextWindow;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -81,6 +82,18 @@ public final class RoutedGraph {
                      Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
                      List<AgentListener> listeners, Policies policies, SagaPlan saga,
                      Map<String, String> suspendUntil) {
+    this(router, paths, verifier, pathVerifiers, guardrails, listeners, policies, saga, suspendUntil,
+        ContextWindow.NONE);
+  }
+
+  /**
+   * @param contextWindow the workflow's {@code context} block; bounds the transcript every turn's
+   *     {@link AgentContext#conversationState()} folds, and with it {@code state.transcript_length}
+   */
+  public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
+                     Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
+                     List<AgentListener> listeners, Policies policies, SagaPlan saga,
+                     Map<String, String> suspendUntil, ContextWindow contextWindow) {
     if (paths == null || paths.isEmpty()) {
       throw new IllegalArgumentException("RoutedGraph requires at least one path");
     }
@@ -98,6 +111,7 @@ public final class RoutedGraph {
     this.policies = policies == null ? Policies.DEFAULTS : policies;
     this.saga = saga;
     this.suspendUntil = suspendUntil == null ? Map.of() : Map.copyOf(suspendUntil);
+    this.contextWindow = contextWindow == null ? ContextWindow.NONE : contextWindow;
   }
 
   public Policies policies() {
@@ -106,6 +120,10 @@ public final class RoutedGraph {
 
   public SagaPlan saga() {
     return saga;
+  }
+
+  public ContextWindow contextWindow() {
+    return contextWindow;
   }
 
   public List<AgentListener> listeners() {
@@ -127,6 +145,7 @@ public final class RoutedGraph {
 
   public TurnResult handle(Event event, AgentContext ctx) {
     ctx.listeners = listeners; // so callTool can fire tool-call hooks
+    ctx.contextWindow = contextWindow;
     ConversationState before = ctx.conversationState();
 
     if (event.isResume() && before.suspended().containsKey(event.turnId())) {

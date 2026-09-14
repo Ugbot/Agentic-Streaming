@@ -133,6 +133,7 @@
                     :max-iterations (as-int max-iterations 6)
                     :context-window (when context
                                       {:max-tokens (as-int (:max-tokens context) 512)
+                                       :max-items (:max-items context)
                                        :compaction (or (:compaction context) "moscow")})})
     (brain/keyword-brain path-name (cond-> {:tool-triggers tool-triggers :dim dim :top-k top-k}
                                      threshold (assoc :threshold threshold)))))
@@ -224,6 +225,7 @@
              :guardrails (mapv build-guardrail (:guardrails wf))
              :policies policies
              :saga saga
+             :context context
              :listeners []}
      :tools reg
      :retriever (build-retriever retrieval dim)

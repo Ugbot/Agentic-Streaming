@@ -55,6 +55,15 @@ public final class ConversationState implements Serializable {
   }
 
   public static ConversationState fold(List<LogEvent> log) {
+    return fold(log, ContextWindow.NONE);
+  }
+
+  /**
+   * The fold under a workflow {@code context} block: the log is read whole, then the transcript
+   * (and {@code transcript_length}) is bounded to the retained window. {@code turn_count} and the
+   * per-turn records are unaffected.
+   */
+  public static ConversationState fold(List<LogEvent> log, ContextWindow window) {
     long turnCount = 0;
     long transcriptLength = 0;
     List<String> lastRetrieved = null;
@@ -181,6 +190,10 @@ public final class ConversationState implements Serializable {
     Map<String, TurnRecord> turns = new LinkedHashMap<>();
     for (Builder b : builders.values()) {
       turns.put(b.turnId, b.build());
+    }
+    if (window != null && window.bounded()) {
+      transcript = new ArrayList<>(window.retain(transcript));
+      transcriptLength = window.retainedLength(transcriptLength);
     }
     return new ConversationState(turnCount, transcriptLength, lastRetrieved,
         Collections.unmodifiableList(transcript), Collections.unmodifiableMap(turns),

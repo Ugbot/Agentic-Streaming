@@ -65,7 +65,8 @@
          (throw e))))
 
 (defn- result [system cid turn-id]
-  (let [r (log/turn-result cid turn-id (log/conversation-events (:log system) cid))]
+  (let [r (log/turn-result cid turn-id (log/conversation-events (:log system) cid)
+                           (get-in system [:graph :context]))]
     (assoc r :ok (= :completed (:status r)))))
 
 (defn- process
@@ -118,9 +119,9 @@
   (log/conversation-events (:log system) cid))
 
 (defn state
-  "Conversation state, folded from the log."
+  "Conversation state, folded from the log under the workflow's `context` block."
   [system cid]
-  (log/reduce-state (events system cid)))
+  (log/reduce-state (events system cid) (get-in system [:graph :context])))
 
 (defn banking-system []
   (local-system (banking/build-graph) (banking/default-tools) (banking/retriever)))

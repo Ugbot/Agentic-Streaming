@@ -104,6 +104,7 @@ class Engine:
         self.verifier: Mapping[str, Any] = agent.get("verifier") or {"kind": "prefix"}
         self.policies: Mapping[str, Any] = doc.get("policies") or {}
         self.saga: Optional[Mapping[str, Any]] = doc.get("saga")
+        self.context: Mapping[str, Any] = doc.get("context") or {}
         self.llm: Mapping[str, Any] = doc.get("llm") or {}
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
@@ -147,10 +148,10 @@ class Engine:
             self._suspended = suspended
 
     def state(self, conversation_id: str) -> Dict[str, Any]:
-        return reduce_state(self.log.read(conversation_id))
+        return reduce_state(self.log.read(conversation_id), self.context)
 
     def transcript(self, conversation_id: str) -> List[ChatMessage]:
-        return transcript(self.log.read(conversation_id))
+        return transcript(self.log.read(conversation_id), self.context)
 
     def suspended_turns(self, conversation_id: str) -> List[str]:
         with self._guard:
@@ -500,7 +501,7 @@ class Engine:
             "status": status,
             "path": path,
             "reply": reply if status in ("completed", "unverified", "rejected") else None,
-            "state": reduce_state(e for e in log if e.sequence <= last_sequence),
+            "state": reduce_state((e for e in log if e.sequence <= last_sequence), self.context),
             "tool_calls": tool_calls,
             "events": [e.normalized() for e in events],
             "error": error,

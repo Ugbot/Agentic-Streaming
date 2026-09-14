@@ -32,6 +32,11 @@ public interface ConversationLog {
     return ConversationState.fold(events(conversationId));
   }
 
+  /** Folds the log of one conversation under the workflow's {@code context} window. */
+  default ConversationState state(String conversationId, ContextWindow window) {
+    return ConversationState.fold(events(conversationId), window);
+  }
+
   /** In-process, serializable log; the default for the local runtime. */
   final class InMemory implements ConversationLog, Serializable {
     private static final long serialVersionUID = 1L;
