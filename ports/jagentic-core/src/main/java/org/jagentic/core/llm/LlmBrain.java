@@ -88,6 +88,12 @@ public final class LlmBrain implements Brain {
     for (int i = 0; i < maxIterations; i++) {
       ChatResult r = client.chat(messages, specs);
       if (r.isToolCall()) {
+        if (allowedTools != null && !allowedTools.contains(r.tool())) {
+          messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"" + r.tool() + "\"}"));
+          messages.add(Map.of("role", "tool", "content",
+              "error: tool " + r.tool() + " is not permitted for this agent"));
+          continue;
+        }
         Object observation = ctx.callTool(r.tool(), r.args());
         messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"" + r.tool() + "\"}"));
         messages.add(Map.of("role", "tool", "content", String.valueOf(observation)));
