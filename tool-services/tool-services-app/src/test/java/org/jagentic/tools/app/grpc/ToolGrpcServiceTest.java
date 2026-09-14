@@ -2,12 +2,17 @@ package org.jagentic.tools.app.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
 
+import io.grpc.Metadata;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.quarkus.grpc.GrpcClient;
+import io.quarkus.grpc.GrpcClientUtils;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +30,38 @@ import org.jagentic.tools.grpc.ToolService;
 class ToolGrpcServiceTest {
 
   @GrpcClient
+  ToolService rawToolService;
+
   ToolService toolService;
+
+  @org.junit.jupiter.api.BeforeEach
+  void attachToken() {
+    Metadata md = new Metadata();
+    md.put(Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
+        "Bearer test-tool-services-token");
+    toolService = GrpcClientUtils.attachHeaders(rawToolService, md);
+  }
+
+  @Test
+  void callWithoutTokenIsUnauthenticated() {
+    StatusRuntimeException ex = assertThrows(StatusRuntimeException.class, () ->
+        rawToolService.listTools(ListToolsRequest.newBuilder().build())
+            .await().atMost(Duration.ofSeconds(10)));
+    assertEquals(Status.Code.UNAUTHENTICATED, ex.getStatus().getCode());
+  }
+
+  @Test
+  void callWithWrongTokenIsUnauthenticated() {
+    Metadata md = new Metadata();
+    md.put(Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER),
+        "Bearer " + java.util.UUID.randomUUID());
+    ToolService wrong = GrpcClientUtils.attachHeaders(rawToolService, md);
+    StatusRuntimeException ex = assertThrows(StatusRuntimeException.class, () ->
+        wrong.callTool(CallToolRequest.newBuilder().setName("util_add")
+            .setArgsJson("{\"a\":1,\"b\":2}").build())
+            .await().atMost(Duration.ofSeconds(10)));
+    assertEquals(Status.Code.UNAUTHENTICATED, ex.getStatus().getCode());
+  }
 
   @Test
   void listToolsIncludesUtilAdd() {

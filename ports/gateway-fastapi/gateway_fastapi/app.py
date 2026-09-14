@@ -8,16 +8,22 @@ Endpoints:
 
 The chosen backend (local/celery/nats) is wired into ``app.state`` so the routes stay
 backend-agnostic. Errors are sanitized: clients get clean JSON, never a stack trace.
+
+``/agent`` and ``/conversations/*`` require a bearer token (see ``auth.py``). The authenticated
+principal is the user id handed to the backend, and conversations are scoped per principal: the
+backend key is ``<subject>/<conversation_id>``, so one principal can never read or continue
+another principal's conversation, whatever id it guesses.
 """
 
 from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from .auth import BearerAuth, Principal
 from .backends import Backend, make_backend
 
 AGENT_CARD = {
@@ -40,11 +46,12 @@ AGENT_CARD = {
 
 
 class TurnRequest(BaseModel):
-    """Inbound turn. ``user_id`` defaults to ``anonymous`` (matches pyagentic.Event)."""
+    """Inbound turn. ``user_id`` is optional and, when present, must equal the authenticated
+    principal; the principal is what the backend receives either way."""
 
-    conversation_id: str = Field(..., min_length=1)
+    conversation_id: str = Field(..., min_length=1, pattern=r"^[^/]+$")
     text: str = Field(..., min_length=1)
-    user_id: str = "anonymous"
+    user_id: Optional[str] = None
 
 
 class TurnResponse(BaseModel):
@@ -66,10 +73,15 @@ class ConversationResponse(BaseModel):
     message_count: int
 
 
-def create_app(backend: Optional[Backend] = None) -> FastAPI:
+def scoped_conversation_id(principal: Principal, conversation_id: str) -> str:
+    return f"{principal.subject}/{conversation_id}"
+
+
+def create_app(backend: Optional[Backend] = None, auth: Optional[BearerAuth] = None) -> FastAPI:
     """Build the gateway app. ``backend`` defaults to the env-selected backend
-    (``AGENTIC_GATEWAY_BACKEND``, else ``local``)."""
+    (``AGENTIC_GATEWAY_BACKEND``, else ``local``); ``auth`` defaults to the env-configured tokens."""
     backend = backend if backend is not None else make_backend()
+    auth = auth if auth is not None else BearerAuth.from_env()
 
     app = FastAPI(
         title="Agentic-Flink Banking Gateway",
@@ -92,13 +104,21 @@ def create_app(backend: Optional[Backend] = None) -> FastAPI:
         return AGENT_CARD
 
     @app.post("/agent", response_model=TurnResponse)
-    async def agent(req: TurnRequest) -> TurnResponse:
-        result = app.state.backend.submit(req.conversation_id, req.text, req.user_id)
+    async def agent(req: TurnRequest, principal: Principal = Depends(auth)) -> TurnResponse:
+        if req.user_id is not None and req.user_id != principal.subject:
+            raise HTTPException(status_code=403, detail="user_id does not match the authenticated principal")
+        result = app.state.backend.submit(
+            scoped_conversation_id(principal, req.conversation_id), req.text, principal.subject
+        )
+        result = dict(result)
+        result["conversation_id"] = req.conversation_id
         return TurnResponse(**result)
 
     @app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-    async def conversation(conversation_id: str) -> ConversationResponse:
-        messages = app.state.backend.history(conversation_id)
+    async def conversation(conversation_id: str, principal: Principal = Depends(auth)) -> ConversationResponse:
+        if "/" in conversation_id:
+            raise HTTPException(status_code=422, detail="conversation_id must not contain '/'")
+        messages = app.state.backend.history(scoped_conversation_id(principal, conversation_id))
         return ConversationResponse(
             conversation_id=conversation_id,
             messages=[Message(**m) for m in messages],

@@ -14,7 +14,15 @@ import org.agentic.flink.config.ConfigKeys;
 @ApplicationScoped
 public class GatewayConfig {
 
-  private final AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
+  private final AgenticFlinkConfig config;
+
+  public GatewayConfig() {
+    this(AgenticFlinkConfig.fromEnvironment());
+  }
+
+  public GatewayConfig(AgenticFlinkConfig config) {
+    this.config = config;
+  }
 
   public AgenticFlinkConfig raw() {
     return config;
@@ -101,5 +109,32 @@ public class GatewayConfig {
   /** Whether the Agent Card advertises push notifications. */
   public boolean pushEnabled() {
     return Boolean.parseBoolean(config.get("a2a.gateway.push.enabled", "false"));
+  }
+
+  /**
+   * Bearer tokens accepted by the gateway: {@code a2a.auth.tokens} ({@code AGENTIC_FLINK_A2A_AUTH_TOKENS})
+   * as {@code subject=token,...} or a bare token, falling back to the {@code AGENTIC_A2A_TOKEN}
+   * environment variable. Empty means unauthenticated access is refused unless {@link #authDevMode()}.
+   */
+  public String authTokens() {
+    String v = config.get("a2a.auth.tokens", "");
+    if (v != null && !v.isBlank()) {
+      return v;
+    }
+    String env = System.getenv("AGENTIC_A2A_TOKEN");
+    return env == null ? "" : env;
+  }
+
+  /** Explicit development override: admit unauthenticated callers when no token is configured. */
+  public boolean authDevMode() {
+    return Boolean.parseBoolean(config.get("a2a.auth.dev.mode", "false"));
+  }
+
+  /**
+   * Comma-separated host allowlist for push notification webhooks ({@code a2a.push.allowed.hosts}).
+   * Empty means any public host; private, loopback, link-local and metadata addresses are always denied.
+   */
+  public String pushAllowedHosts() {
+    return config.get("a2a.push.allowed.hosts", "");
   }
 }

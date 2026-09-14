@@ -32,6 +32,7 @@ import org.agentic.flink.a2a.bridge.A2AGatewayConnector;
 import org.agentic.flink.a2a.bridge.A2ARequest;
 import org.agentic.flink.a2a.bridge.A2AResponse;
 import org.agentic.flink.a2a.storage.A2ATaskStore;
+import org.agentic.flink.net.OutboundUrlPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,9 +43,10 @@ import org.slf4j.LoggerFactory;
  * <p>Methods: {@code message/send} (each message becomes an {@link A2ARequest} published over the
  * A2A bridge to the embedded Flink job; {@link A2ARequestBridge} blocks for the verifier's response),
  * plus {@code tasks/get} and {@code tasks/cancel} served from the {@link A2ATaskStore}. The full task
- * lifecycle (submitted → working → completed/failed) is persisted to that store, and any
- * {@code Authorization} header is extracted into {@link A2ARequest#getClaims() claims} propagated to
- * the job.
+ * lifecycle (submitted → working → completed/failed) is persisted to that store. Every call is
+ * authenticated by {@link GatewayAuth}; the validated principal (never the raw header) becomes the
+ * {@link A2ARequest#getClaims() claims} propagated to the job and the owner recorded on the task, and
+ * {@code tasks/*} methods only operate on tasks owned by the caller.
  *
  * <p>{@code message/send} returns a JSON-RPC <b>Message</b> result (the reply text) — exactly what the
  * tau2 harness reads — while the Task envelope is available via {@code tasks/get}. Persistence is
@@ -57,9 +59,31 @@ public class A2AResource {
   private static final Logger LOG = LoggerFactory.getLogger(A2AResource.class);
   private static final ObjectMapper JSON = new ObjectMapper();
 
+  /** Task metadata key holding the authenticated subject that created the task. */
+  static final String OWNER_KEY = "owner";
+  static final int RPC_UNAUTHORIZED = -32000;
+  static final int RPC_FORBIDDEN = -32003;
+
   @Inject GatewayConfig config;
   @Inject A2AGatewayConnector connector;
   @Inject A2ATaskStore taskStore;
+  @Inject GatewayAuth auth;
+
+  private volatile OutboundUrlPolicy pushUrlPolicy;
+
+  OutboundUrlPolicy pushUrlPolicy() {
+    OutboundUrlPolicy p = pushUrlPolicy;
+    if (p == null) {
+      p = OutboundUrlPolicy.fromAllowlist(config.pushAllowedHosts());
+      pushUrlPolicy = p;
+    }
+    return p;
+  }
+
+  /** Test hook: override the push webhook egress policy (for example to pin a resolver). */
+  void setPushUrlPolicy(OutboundUrlPolicy policy) {
+    this.pushUrlPolicy = policy;
+  }
 
   // ---- Agent Card ----
 
@@ -97,32 +121,41 @@ public class A2AResource {
     }
     JsonNode idNode = req.get("id");
     String method = req.path("method").asText("");
+    GatewayAuth.Principal caller;
+    try {
+      caller = auth.authenticate(headers);
+    } catch (GatewayAuth.Unauthorized e) {
+      return rpcError(idNode, RPC_UNAUTHORIZED, "Unauthorized: " + e.getMessage());
+    }
     try {
       switch (method) {
         case "message/send":
-          return messageSend(idNode, req, headers);
+          return messageSend(idNode, req, caller);
         case "tasks/get":
-          return tasksGet(idNode, req);
+          return tasksGet(idNode, req, caller);
         case "tasks/cancel":
-          return tasksCancel(idNode, req);
+          return tasksCancel(idNode, req, caller);
         case "tasks/pushNotificationConfig/set":
-          return pushConfigSet(idNode, req);
+          return pushConfigSet(idNode, req, caller);
         case "tasks/pushNotificationConfig/get":
-          return pushConfigGet(idNode, req);
+          return pushConfigGet(idNode, req, caller);
         case "tasks/pushNotificationConfig/list":
-          return pushConfigList(idNode, req);
+          return pushConfigList(idNode, req, caller);
         case "tasks/pushNotificationConfig/delete":
-          return pushConfigDelete(idNode, req);
+          return pushConfigDelete(idNode, req, caller);
         default:
           return rpcError(idNode, -32601, "Unsupported method: " + method);
       }
+    } catch (GatewayAuth.Forbidden e) {
+      return rpcError(idNode, RPC_FORBIDDEN, "Forbidden: " + e.getMessage());
     } catch (Exception e) {
       LOG.warn("{} failed", method, e);
       return rpcError(idNode, -32603, "Internal error: " + e.getMessage());
     }
   }
 
-  private String messageSend(JsonNode idNode, JsonNode req, HttpHeaders headers) throws Exception {
+  private String messageSend(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     JsonNode message = req.path("params").path("message");
     String contextId = message.path("contextId").asText(null);
     if (contextId == null || contextId.isBlank()) {
@@ -130,12 +163,12 @@ public class A2AResource {
     }
     String userText = textOf(message);
     String taskId = UUID.randomUUID().toString();
-    Map<String, Object> claims = claimsFrom(headers);
+    Map<String, Object> claims = caller.claims();
 
     A2AMessage userMessage = A2AMessage.userText(UUID.randomUUID().toString(), userText);
     long now = System.currentTimeMillis();
     // Persist the lifecycle: submitted -> working (best-effort, never fails the turn).
-    A2ATask task = A2ATask.submitted(taskId, contextId, userMessage, now);
+    A2ATask task = ownedTask(taskId, contextId, userMessage, now, caller);
     persist(task);
     task = task.withState(A2ATaskState.WORKING, null, now);
     persist(task);
@@ -165,7 +198,8 @@ public class A2AResource {
     return rpcResult(idNode, reply, contextId);
   }
 
-  private String tasksGet(JsonNode idNode, JsonNode req) throws Exception {
+  private String tasksGet(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     String taskId = req.path("params").path("id").asText(null);
     if (taskId == null || taskId.isBlank()) {
       return rpcError(idNode, -32602, "tasks/get requires params.id");
@@ -174,10 +208,12 @@ public class A2AResource {
     if (task.isEmpty()) {
       return rpcError(idNode, -32001, "Task not found: " + taskId);
     }
+    requireOwned(task.get(), caller);
     return rpcTaskResult(idNode, task.get());
   }
 
-  private String tasksCancel(JsonNode idNode, JsonNode req) throws Exception {
+  private String tasksCancel(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     String taskId = req.path("params").path("id").asText(null);
     if (taskId == null || taskId.isBlank()) {
       return rpcError(idNode, -32602, "tasks/cancel requires params.id");
@@ -187,6 +223,7 @@ public class A2AResource {
       return rpcError(idNode, -32001, "Task not found: " + taskId);
     }
     A2ATask task = existing.get();
+    requireOwned(task, caller);
     if (!task.getState().isFinal()) {
       // Best-effort: mark canceled. The in-flight bridge request, if any, will time out or complete
       // independently; this records the caller's intent and stops the task being treated as live.
@@ -213,6 +250,12 @@ public class A2AResource {
     } catch (Exception e) {
       return Multi.createFrom().item(sseError("Parse error"));
     }
+    final GatewayAuth.Principal caller;
+    try {
+      caller = auth.authenticate(headers);
+    } catch (GatewayAuth.Unauthorized e) {
+      return Multi.createFrom().item(sseError("Unauthorized: " + e.getMessage()));
+    }
     JsonNode message = req.path("params").path("message");
     String contextId = message.path("contextId").asText(null);
     if (contextId == null || contextId.isBlank()) {
@@ -221,10 +264,10 @@ public class A2AResource {
     final String ctx = contextId;
     final String userText = textOf(message);
     final String taskId = UUID.randomUUID().toString();
-    final Map<String, Object> claims = claimsFrom(headers);
+    final Map<String, Object> claims = caller.claims();
 
     A2AMessage userMessage = A2AMessage.userText(UUID.randomUUID().toString(), userText);
-    persist(A2ATask.submitted(taskId, ctx, userMessage, System.currentTimeMillis()));
+    persist(ownedTask(taskId, ctx, userMessage, System.currentTimeMillis(), caller));
 
     return Multi.createFrom()
         .<String>emitter(
@@ -297,16 +340,23 @@ public class A2AResource {
 
   // ---- tasks/pushNotificationConfig/* ----
 
-  private String pushConfigSet(JsonNode idNode, JsonNode req) throws Exception {
+  private String pushConfigSet(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     String taskId = req.path("params").path("taskId").asText(null);
     JsonNode cfg = req.path("params").path("pushNotificationConfig");
     if (taskId == null || taskId.isBlank() || cfg.isMissingNode()) {
       return rpcError(idNode, -32602, "set requires params.taskId + pushNotificationConfig");
     }
+    requireOwnedTaskId(taskId, caller);
     String configId = cfg.path("id").asText(UUID.randomUUID().toString());
     String url = cfg.path("url").asText(null);
     if (url == null || url.isBlank()) {
       return rpcError(idNode, -32602, "pushNotificationConfig.url is required");
+    }
+    try {
+      pushUrlPolicy().validate(url);
+    } catch (OutboundUrlPolicy.BlockedUrlException e) {
+      return rpcError(idNode, -32602, "pushNotificationConfig.url rejected: " + e.getMessage());
     }
     String token = cfg.path("token").asText(null);
     AuthSpec auth = AuthSpec.none();
@@ -319,12 +369,14 @@ public class A2AResource {
     return rpcPushConfigResult(idNode, taskId, stored);
   }
 
-  private String pushConfigGet(JsonNode idNode, JsonNode req) throws Exception {
+  private String pushConfigGet(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     String taskId = req.path("params").path("taskId").asText(null);
     String configId = req.path("params").path("pushNotificationConfigId").asText(null);
     if (taskId == null || configId == null) {
       return rpcError(idNode, -32602, "get requires params.taskId + pushNotificationConfigId");
     }
+    requireOwnedTaskId(taskId, caller);
     Optional<A2APushConfig> cfg = taskStore.getPushConfig(taskId, configId);
     if (cfg.isEmpty()) {
       return rpcError(idNode, -32001, "push config not found");
@@ -332,11 +384,13 @@ public class A2AResource {
     return rpcPushConfigResult(idNode, taskId, cfg.get());
   }
 
-  private String pushConfigList(JsonNode idNode, JsonNode req) throws Exception {
+  private String pushConfigList(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     String taskId = req.path("params").path("taskId").asText(null);
     if (taskId == null) {
       return rpcError(idNode, -32602, "list requires params.taskId");
     }
+    requireOwnedTaskId(taskId, caller);
     ObjectNode root = JSON.createObjectNode();
     root.put("jsonrpc", "2.0");
     root.set("id", idNode == null ? JSON.nullNode() : idNode);
@@ -347,12 +401,14 @@ public class A2AResource {
     return JSON.writeValueAsString(root);
   }
 
-  private String pushConfigDelete(JsonNode idNode, JsonNode req) throws Exception {
+  private String pushConfigDelete(JsonNode idNode, JsonNode req, GatewayAuth.Principal caller)
+      throws Exception {
     String taskId = req.path("params").path("taskId").asText(null);
     String configId = req.path("params").path("pushNotificationConfigId").asText(null);
     if (taskId == null || configId == null) {
       return rpcError(idNode, -32602, "delete requires params.taskId + pushNotificationConfigId");
     }
+    requireOwnedTaskId(taskId, caller);
     taskStore.deletePushConfig(taskId, configId);
     ObjectNode root = JSON.createObjectNode();
     root.put("jsonrpc", "2.0");
@@ -392,23 +448,43 @@ public class A2AResource {
     }
   }
 
-  /** Extract authenticated-caller claims from the Authorization header, if present. */
-  private Map<String, Object> claimsFrom(HttpHeaders headers) {
-    if (headers == null) {
-      return null;
+  /** A freshly submitted task whose metadata records the authenticated caller as owner. */
+  static A2ATask ownedTask(
+      String taskId, String contextId, A2AMessage first, long now, GatewayAuth.Principal caller) {
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put(OWNER_KEY, caller.subject());
+    return new A2ATask(
+        taskId,
+        contextId,
+        A2ATaskState.SUBMITTED,
+        null,
+        first == null ? List.of() : List.of(first),
+        List.of(),
+        metadata,
+        now,
+        now);
+  }
+
+  static String ownerOf(A2ATask task) {
+    Map<String, Object> md = task.getMetadata();
+    Object owner = md == null ? null : md.get(OWNER_KEY);
+    return owner == null ? null : owner.toString();
+  }
+
+  private static void requireOwned(A2ATask task, GatewayAuth.Principal caller) {
+    GatewayAuth.requireOwner(caller, ownerOf(task), task.getId());
+  }
+
+  /**
+   * Ownership gate for the push-config methods, which address a task by id only. A task the store
+   * does not know is treated as not owned so callers cannot pre-register webhooks for foreign ids.
+   */
+  private void requireOwnedTaskId(String taskId, GatewayAuth.Principal caller) throws Exception {
+    Optional<A2ATask> task = taskStore.loadTask(taskId);
+    if (task.isEmpty()) {
+      throw new GatewayAuth.Forbidden("task " + taskId + " is not owned by the caller");
     }
-    String auth = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
-    if (auth == null || auth.isBlank()) {
-      return null;
-    }
-    Map<String, Object> claims = new LinkedHashMap<>();
-    claims.put("authorization", auth);
-    int sp = auth.indexOf(' ');
-    if (sp > 0) {
-      claims.put("scheme", auth.substring(0, sp));
-      claims.put("token", auth.substring(sp + 1).trim());
-    }
-    return claims;
+    requireOwned(task.get(), caller);
   }
 
   private static String textOf(JsonNode message) {

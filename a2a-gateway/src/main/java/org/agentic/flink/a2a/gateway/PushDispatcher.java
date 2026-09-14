@@ -18,6 +18,7 @@ import org.agentic.flink.a2a.AuthSpec;
 import org.agentic.flink.a2a.bridge.A2AGatewayConnector;
 import org.agentic.flink.a2a.bridge.A2AResponse;
 import org.agentic.flink.a2a.storage.A2ATaskStore;
+import org.agentic.flink.net.OutboundUrlPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +42,26 @@ public class PushDispatcher {
   @Inject A2ATaskStore taskStore;
 
   private final HttpClient http =
-      HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+      HttpClient.newBuilder()
+          .connectTimeout(Duration.ofSeconds(5))
+          .followRedirects(HttpClient.Redirect.NEVER)
+          .build();
+
+  private volatile OutboundUrlPolicy urlPolicy;
+
+  OutboundUrlPolicy urlPolicy() {
+    OutboundUrlPolicy p = urlPolicy;
+    if (p == null) {
+      p = OutboundUrlPolicy.fromAllowlist(config.pushAllowedHosts());
+      urlPolicy = p;
+    }
+    return p;
+  }
+
+  /** Test hook: override the webhook egress policy (for example to pin a resolver). */
+  void setUrlPolicy(OutboundUrlPolicy policy) {
+    this.urlPolicy = policy;
+  }
 
   void onStart(@Observes StartupEvent ev) {
     if (!config.pushEnabled()) {
@@ -67,11 +87,18 @@ public class PushDispatcher {
   }
 
   private void post(A2APushConfig cfg, A2AResponse resp) {
+    URI target;
+    try {
+      target = urlPolicy().validate(cfg.getUrl());
+    } catch (OutboundUrlPolicy.BlockedUrlException e) {
+      LOG.warn("push for task {} skipped, webhook rejected by egress policy: {}", resp.getTaskId(), e.getMessage());
+      return;
+    }
     try {
       String body = taskJson(resp);
       HttpRequest.Builder b =
           HttpRequest.newBuilder()
-              .uri(URI.create(cfg.getUrl()))
+              .uri(target)
               .timeout(Duration.ofSeconds(10))
               .header("Content-Type", "application/json")
               .POST(HttpRequest.BodyPublishers.ofString(body));
