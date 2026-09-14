@@ -7,12 +7,18 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Objects;
+import java.util.Optional;
+import org.agentic.flink.net.OutboundUrlPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * HTTP fetcher that honours {@link RobotsCache} and the framework's
- * {@link WebToolkitOptions} (user-agent, timeouts, max-page-size).
+ * {@link WebToolkitOptions} (user-agent, timeouts, max-page-size, egress policy).
+ *
+ * <p>Every URL, including each redirect target, is checked against the options'
+ * {@link OutboundUrlPolicy} before a connection is opened; redirects are followed manually so
+ * the check runs per hop and the hop count is capped by the policy.
  */
 public final class Fetcher implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -32,6 +38,8 @@ public final class Fetcher implements Serializable {
   }
 
   public FetchResult fetch(String url) throws IOException {
+    OutboundUrlPolicy policy = options.getUrlPolicy();
+    URI target = policy.validate(url);
     if (options.isRespectRobots() && !robots.isAllowed(url)) {
       LOG.info("robots.txt disallows {}", url);
       return FetchResult.disallowed(url);
@@ -41,20 +49,34 @@ public final class Fetcher implements Serializable {
         http =
             HttpClient.newBuilder()
                 .connectTimeout(options.getFetchTimeout())
-                .followRedirects(
-                    options.isFollowRedirects()
-                        ? HttpClient.Redirect.NORMAL
-                        : HttpClient.Redirect.NEVER)
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
       }
-      HttpRequest req =
-          HttpRequest.newBuilder()
-              .uri(URI.create(url))
-              .timeout(options.getFetchTimeout())
-              .header("User-Agent", options.getUserAgent())
-              .GET()
-              .build();
-      HttpResponse<byte[]> resp = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
+      HttpResponse<byte[]> resp = null;
+      int hops = 0;
+      while (true) {
+        HttpRequest req =
+            HttpRequest.newBuilder()
+                .uri(target)
+                .timeout(options.getFetchTimeout())
+                .header("User-Agent", options.getUserAgent())
+                .GET()
+                .build();
+        resp = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
+        Optional<String> location = redirectLocation(resp);
+        if (location.isEmpty() || !options.isFollowRedirects()) {
+          break;
+        }
+        if (++hops > policy.getMaxRedirects()) {
+          throw new IOException("too many redirects (>" + policy.getMaxRedirects() + ") from " + url);
+        }
+        URI next = target.resolve(location.get().trim());
+        target = policy.validate(next);
+        if (options.isRespectRobots() && !robots.isAllowed(target.toString())) {
+          LOG.info("robots.txt disallows redirect target {}", target);
+          return FetchResult.disallowed(target.toString());
+        }
+      }
       byte[] body = resp.body();
       if (body.length > options.getMaxPageBytes()) {
         byte[] truncated = new byte[options.getMaxPageBytes()];
@@ -62,12 +84,20 @@ public final class Fetcher implements Serializable {
         body = truncated;
       }
       String ct = resp.headers().firstValue("content-type").orElse("text/plain");
-      String finalUrl = resp.uri().toString();
+      String finalUrl = target.toString();
       return new FetchResult(url, finalUrl, resp.statusCode(), ct, body);
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
       throw new IOException(ie);
     }
+  }
+
+  private static Optional<String> redirectLocation(HttpResponse<?> resp) {
+    int s = resp.statusCode();
+    if (s == 301 || s == 302 || s == 303 || s == 307 || s == 308) {
+      return resp.headers().firstValue("location");
+    }
+    return Optional.empty();
   }
 
   /** Outcome of a fetch attempt. */

@@ -655,7 +655,7 @@ semantically **inverted**, it matches activity); `cep/CepPatternBuilder` (485)
 `memory/`); `tools/ToolExecutorRegistry`; `stream/AgentExecutionStream`;
 `function/ToolCallAsyncFunctionV2`; `core/AgentConfig`; `core/ToolDefinition`;
 `stream/CompensationFunction`; `serde/ControlCommand*`,
-`serde/ToolAllowlistUpdate/Action`; `storage/SteeringStateStore` (260-LOC
+`storage/SteeringStateStore` (260-LOC
 interface, zero impls, zero callers); `tools/rag/KnowledgeQueryTool`,
 `ScrapeUrlTool`.
 

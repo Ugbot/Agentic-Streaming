@@ -59,7 +59,8 @@ class WebDocumentPackTest {
 
   private ToolRegistry reg() {
     ToolRegistry reg = new ToolRegistry();
-    new WebDocumentPack().register(reg);
+    new WebDocumentPack(WebToolkitOptions.defaults()
+        .withUrlPolicy(OutboundUrlPolicy.defaults().allowingPrivateAddresses())).register(reg);
     return reg;
   }
 
