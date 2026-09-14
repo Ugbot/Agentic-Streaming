@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import org.agentic.flink.tools.mcp.McpClient;
 import org.agentic.flink.tools.mcp.McpServerSpec;
 import org.agentic.flink.web.WebFetchTool;
+import org.agentic.flink.net.OutboundUrlPolicy;
 import org.agentic.flink.web.WebToolkitOptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,7 +103,7 @@ class HttpToolFailureModesTest {
   @Test
   void webFetchToolReportsNon2xxAsNotOkWithoutExtracting() throws Exception {
     int status = List.of(404, 410, 500, 503).get(ThreadLocalRandom.current().nextInt(4));
-    WebFetchTool tool = new WebFetchTool(WebToolkitOptions.defaults().withRespectRobots(false));
+    WebFetchTool tool = new WebFetchTool(WebToolkitOptions.defaults().withRespectRobots(false).withUrlPolicy(OutboundUrlPolicy.defaults().allowingPrivateAddresses()));
     @SuppressWarnings("unchecked")
     Map<String, Object> result = (Map<String, Object>) tool.execute(Map.of("url", url("/status?code=" + status)))
         .get(10, TimeUnit.SECONDS);
@@ -114,7 +115,7 @@ class HttpToolFailureModesTest {
   @Test
   void webFetchToolTimesOutOnSlowServer() throws Exception {
     long timeoutMs = ThreadLocalRandom.current().nextLong(100, 500);
-    WebFetchTool tool = new WebFetchTool(WebToolkitOptions.defaults().withRespectRobots(false)
+    WebFetchTool tool = new WebFetchTool(WebToolkitOptions.defaults().withRespectRobots(false).withUrlPolicy(OutboundUrlPolicy.defaults().allowingPrivateAddresses())
         .withFetchTimeout(Duration.ofMillis(timeoutMs)));
     long started = System.nanoTime();
     @SuppressWarnings("unchecked")

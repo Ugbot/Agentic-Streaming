@@ -106,7 +106,7 @@ class AgentExecutionFunctionAsyncTest {
     long timeoutMs = ThreadLocalRandom.current().nextLong(200, 800);
     AgentExecutorTest.CountingTool slow = new AgentExecutorTest.CountingTool("slow");
     slow.block = new CountDownLatch(1);
-    Agent agent = Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("s")
+    Agent agent = Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("s").withTools("slow")
         .withTimeout(Duration.ofMillis(timeoutMs)).withStateMachine(AgentExecutorTest.stateMachine()).build();
     AgentExecutionFunction fn = function(agent, slow,
         List.of(AgentExecutorTest.toolCall("slow", Map.of()), AgentExecutorTest.text("never")));

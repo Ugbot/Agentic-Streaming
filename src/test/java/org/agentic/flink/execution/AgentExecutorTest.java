@@ -146,7 +146,7 @@ public class AgentExecutorTest {
   }
 
   static Agent agent(int maxIterations) {
-    return Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("sys")
+    return Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("sys").withTools("charge", "slow")
         .withMaxIterations(maxIterations).withStateMachine(stateMachine()).build();
   }
 

@@ -176,7 +176,7 @@ class LegacyCepFunctionsTest {
     long timeoutMs = ThreadLocalRandom.current().nextLong(100, 400);
     AgentExecutorTest.CountingTool slow = new AgentExecutorTest.CountingTool("slow");
     slow.block = new CountDownLatch(1);
-    Agent agent = Agent.builder().withId("sup-" + UUID.randomUUID()).withSystemPrompt("s")
+    Agent agent = Agent.builder().withId("sup-" + UUID.randomUUID()).withSystemPrompt("s").withTools("slow")
         .withTimeout(Duration.ofMillis(timeoutMs)).withStateMachine(AgentExecutorTest.stateMachine()).build();
     SupervisorChain chain = SupervisorChain.builder().withId("c").addSimpleTier("t0", agent).build();
     LLMClient llm = LLMClient.builder().withModel("m").build(new AgentExecutorTest.ScriptedConnection(
