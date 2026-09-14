@@ -17,7 +17,7 @@
    "structured_tool_args" :supported "guardrails" :supported "verifier" :supported
    "ordering" :supported "idempotency" :supported "retry" :supported "memory" :supported
    "retrieval" :supported "replay" :supported "suspend_resume" :supported "saga" :supported
-   "a2a" :supported "durable_store" :supported "context_window" :supported})
+   "a2a" :supported "durable_store" :supported "context_window" :supported "llm_brain" :supported})
 
 (defn fixtures-dir []
   (io/file (spec/spec-root) "conformance" "v1" "fixtures"))

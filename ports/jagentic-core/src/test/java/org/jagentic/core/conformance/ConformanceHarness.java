@@ -35,7 +35,7 @@ public final class ConformanceHarness {
 
   /** Capability terms ({@code spec/v1/primitives.md}) the JVM local runtime implements. */
   public static final Set<String> CAPABILITIES = Set.of(
-      "routing", "rule_brain", "tools", "structured_tool_args", "guardrails", "verifier",
+      "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
       "saga", "a2a", "durable_store");
 
@@ -98,8 +98,9 @@ public final class ConformanceHarness {
       workflow = load(fixturePath.getParent().resolve(String.valueOf(fixture.get("workflow_ref"))).normalize());
     }
 
+    // provider: stub is resolved by GraphBuilder itself; anything else is not a fixture provider.
     GraphBuilder.Built built = GraphBuilder.build(workflow, llm -> {
-      throw new IllegalStateException("conformance fixtures do not use an LLM");
+      throw new IllegalStateException("conformance fixtures only use llm.provider: stub, got " + llm.get("provider"));
     });
     ConversationLog log = new ConversationLog.InMemory();
     LocalRuntime runtime = newRuntime(built, log);

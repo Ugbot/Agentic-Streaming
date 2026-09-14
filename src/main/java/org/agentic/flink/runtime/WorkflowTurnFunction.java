@@ -110,7 +110,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
    * @param chatClientFactory builds the {@link org.jagentic.core.llm.ChatClient} for paths with
    *     {@code brain: llm}; it is serialized with the operator. With the default
    *     {@link ChatClientFactories#failFast()} a spec that declares an {@code llm} brain is
-   *     rejected here, at job build time.
+   *     rejected here, at job build time, unless its provider is the spec's deterministic
+   *     {@code stub}, which {@link GraphBuilder} resolves without a factory.
    */
   public WorkflowTurnFunction(
       Map<String, Object> spec,
@@ -123,7 +124,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     copy.remove("cep"); // CEP is wired natively by the job graph, not by the turn graph
     this.spec = copy;
     WorkflowValidator.validate(this.spec);
-    if (ChatClientFactories.isFailFast(chatClientFactory)) {
+    if (ChatClientFactories.isFailFast(chatClientFactory) && !GraphBuilder.usesScriptedLlm(this.spec)) {
       List<String> llmPaths = llmBrainPaths(this.spec);
       if (!llmPaths.isEmpty()) {
         throw new IllegalArgumentException(

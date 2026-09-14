@@ -13,6 +13,7 @@ import org.jagentic.core.ChatMessage;
 import org.jagentic.core.ContextItem;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Priority;
+import org.jagentic.core.ToolNotPermitted;
 
 /**
  * A {@link Brain} that drives a bounded ReAct loop over a {@link ChatClient} (thought →
@@ -34,6 +35,8 @@ public final class LlmBrain implements Brain {
   private final int maxIterations;
   private Map<String, Object> outputSchema; // optional structured-output contract
   private ContextWindowManager contextManager; // optional transcript compaction (MoSCoW)
+  private boolean verbatimReply; // final text as the reply, without the "[name] " prefix
+  private boolean strictTools; // an undeclared tool fails the turn instead of being refused in-loop
 
   public LlmBrain(ChatClient client, String name) {
     this(client, name, "", null, 6);
@@ -57,6 +60,26 @@ public final class LlmBrain implements Brain {
   /** Compact the replayed transcript to a token budget (MoSCoW); returns this for chaining. */
   public LlmBrain withContextManager(ContextWindowManager contextManager) {
     this.contextManager = contextManager;
+    return this;
+  }
+
+  /**
+   * Return the model's final text as the reply verbatim, without the {@code "[name] "} prefix.
+   * The spec requires this for the scripted {@code stub} provider (primitives.md, section 8);
+   * returns this for chaining.
+   */
+  public LlmBrain withVerbatimReply() {
+    this.verbatimReply = true;
+    return this;
+  }
+
+  /**
+   * Fail the turn with {@link ToolNotPermitted} (error class {@code validation}) when the model
+   * calls a tool outside the declared set, instead of answering the model with an error
+   * observation and continuing the loop. Returns this for chaining.
+   */
+  public LlmBrain withStrictTools() {
+    this.strictTools = true;
     return this;
   }
 
@@ -90,6 +113,9 @@ public final class LlmBrain implements Brain {
       ChatResult r = client.chat(messages, specs);
       if (r.isToolCall()) {
         if (allowedTools != null && !allowedTools.contains(r.tool())) {
+          if (strictTools) {
+            throw new ToolNotPermitted(r.tool(), name, allowedTools);
+          }
           messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"" + r.tool() + "\"}"));
           messages.add(Map.of("role", "tool", "content",
               "error: tool " + r.tool() + " is not permitted for this agent"));
@@ -100,7 +126,8 @@ public final class LlmBrain implements Brain {
         messages.add(Map.of("role", "tool", "content", String.valueOf(observation)));
         continue;
       }
-      return "[" + name + "] " + finalize(r.text(), ctx);
+      String answer = finalize(r.text(), ctx);
+      return verbatimReply ? answer : "[" + name + "] " + answer;
     }
     return "[" + name + "] (stopped after " + maxIterations + " steps)";
   }

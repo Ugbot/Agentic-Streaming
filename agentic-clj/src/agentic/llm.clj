@@ -45,6 +45,40 @@
 (defn stub-chat-client [& responses]
   (->StubChatClient (atom (vec responses))))
 
+;; ---- the spec's `llm.provider: stub`: replay `llm.script` from the top on every turn ----
+
+(defn script-step
+  "How many script steps this turn has already taken: the tool observations after the latest user
+   message in the transcript. Stateless, so a new turn restarts the script and persisted history
+   from earlier turns does not advance it."
+  [messages]
+  (->> (reverse messages)
+       (take-while #(not= "user" (:role %)))
+       (filter #(= "tool" (:role %)))
+       count))
+
+(defn scripted-chat-client
+  "The deterministic `stub` provider (primitives.md, section 8): `script` is a vector of
+   {:tool .. :args ..} | {:text ..} steps, replayed from the top on every turn. Each turn's n-th call
+   answers with the n-th step; running past the end without a text step is a validation error."
+  [script]
+  (when (empty? script)
+    (throw (ex-info "llm.script must have at least one step for provider stub"
+                    {:error/class :validation :path ["llm" "script"]
+                     :message "llm.script must have at least one step for provider stub"})))
+  (let [steps (mapv (fn [step]
+                      (if (contains? step :tool)
+                        {:tool (:tool step) :args (into {} (or (:args step) {}))}
+                        {:text (str (:text step))}))
+                    script)]
+    (reify ChatClient
+      (chat [_ messages _tools]
+        (let [i (script-step messages)]
+          (if (< i (count steps))
+            (nth steps i)
+            (let [msg (str "llm.script ended after " (count steps) " step(s) without a final text")]
+              (throw (ex-info msg {:error/class :validation :path ["llm" "script"] :message msg})))))))))
+
 ;; ---- real providers (opt-in; clj-http) ----
 
 (defn ollama-chat-client [{:keys [base-url model] :or {base-url "http://localhost:11434" model "qwen2.5:3b"}}]
@@ -70,10 +104,13 @@
 
 (defn llm-brain
   "A brain fn driving a bounded ReAct loop over `chat-client`. opts: :name :system-prompt
-   :allowed-tools :max-iterations."
-  [chat-client {:keys [name system-prompt allowed-tools max-iterations context-window]
+   :allowed-tools :max-iterations :verbatim-reply? (return the final text without the `[name] `
+   prefix) :strict-tools? (a call to a tool outside :allowed-tools is a :validation error instead
+   of being ignored)."
+  [chat-client {:keys [name system-prompt allowed-tools max-iterations context-window
+                       verbatim-reply? strict-tools?]
                 :or {name "agent" system-prompt "" max-iterations 6}}]
-  (fn [_user-text context]
+  (fn [user-text context]
     (let [all-specs (tools/specs (:tools context))
           specs (if allowed-tools
                   (filterv #(contains? (set allowed-tools) (:name %)) all-specs)
@@ -86,15 +123,25 @@
                     (nil? context-window) history
                     (= "window" (:compaction context-window)) (log/retain-window history context-window)
                     :else (cw/compact-history history context-window))
-          transcript (mapv (fn [m] {:role (:role m) :content (:content m)}) history)]
+          transcript (mapv (fn [m] {:role (:role m) :content (:content m)}) history)
+          ;; the turn's own user message when the store has not persisted it yet
+          transcript (if (= user-text (:content (peek transcript)))
+                       transcript
+                       (conj transcript {:role "user" :content user-text}))]
       (loop [messages (into [sys] transcript) i 0]
         (if (>= i max-iterations)
           (str "[" name "] (stopped after " max-iterations " steps)")
           (let [r (chat chat-client messages specs)]
             (if (:tool r)
-              (let [obs (ctx/call-tool context (:tool r) (:args r))]
+              (let [_ (when (and strict-tools? allowed-tools (not (contains? (set allowed-tools) (:tool r))))
+                        (let [msg (str "tool " (:tool r) " is not in path " name " tools " (vec (sort allowed-tools)))]
+                          (throw (ex-info msg {:error/class :validation :message msg
+                                               :path ["agent" "paths" name "tools"]}))))
+                    obs (ctx/call-tool context (:tool r) (:args r))]
                 (recur (conj messages
                              {:role "assistant" :content (json/write-str {:tool (:tool r) :args (:args r)})}
                              {:role "tool" :content (str obs)})
                        (inc i)))
-              (str "[" name "] " (or (:text r) "(no answer)")))))))))
+              (if verbatim-reply?
+                (str (:text r))
+                (str "[" name "] " (or (:text r) "(no answer)"))))))))))

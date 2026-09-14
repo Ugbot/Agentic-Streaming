@@ -231,7 +231,7 @@ public final class RoutedGraph {
         reply = agent.brain.turn(event.text(), ctx);
       } catch (ToolFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
-      } catch (ToolRegistry.UnknownTool e) {
+      } catch (ToolRegistry.UnknownTool | ToolNotPermitted e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
       } catch (RuntimeException e) {
         for (AgentListener l : listeners) {

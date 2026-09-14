@@ -44,6 +44,14 @@
   (attr! c phase-attr "done")
   :failed)
 
+(defn- validation-error? [e] (= :validation (:error/class (ex-data e))))
+
+(defn- finish-validation-failure [c e]
+  (ctx/emit! c :turn-failed {:status "failed" :reason (ex-message e)
+                             :error {:class :validation :message (ex-message e)}})
+  (attr! c phase-attr "done")
+  :failed)
+
 (defn- complete! [graph c path reply]
   (when-let [s (:store c)]
     (store/associate-user s (:conversation-id c) (:user-id c))
@@ -79,9 +87,13 @@
     (loop [attempt 1]
       (let [outcome (try {:reply ((:brain agent) (:text c) c)}
                          (catch clojure.lang.ExceptionInfo e
-                           (if (ctx/tool-error? e) {:tool-error e} (throw e))))]
-        (if-let [e (:tool-error outcome)]
-          (finish-tool-failure c e)
+                           (cond (ctx/tool-error? e) {:tool-error e}
+                                 (validation-error? e) {:validation-error e}
+                                 :else (throw e))))]
+        (cond
+          (:tool-error outcome) (finish-tool-failure c (:tool-error outcome))
+          (:validation-error outcome) (finish-validation-failure c (:validation-error outcome))
+          :else
           (let [reply (:reply outcome)]
             (ctx/emit! c :reply-drafted {:reply reply})
             (if-let [reason (guardrail-reason graph :check-output reply)]
