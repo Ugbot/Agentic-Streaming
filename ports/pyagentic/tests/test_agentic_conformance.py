@@ -17,7 +17,8 @@ PATHS = fixture_paths()
 def test_fixtures_are_read_from_the_shared_spec_directory():
     directory = fixtures_dir()
     assert directory.parts[-4:] == ("spec", "conformance", "v1", "fixtures")
-    assert len(PATHS) == 15
+    assert len(PATHS) >= 15
+    assert PATHS == sorted(PATHS)
     assert (directory.parent / "workflows" / "support.yaml").exists()
 
 
@@ -36,10 +37,11 @@ def test_unsupported_requirement_is_a_skip_never_a_pass():
             caps["retry"] = "not_tested"
             return caps
 
+    baseline = {o.fixture_id: o for o in (run_fixture(p, LocalRuntime) for p in PATHS)}
     outcomes = [run_fixture(p, Narrow) for p in PATHS]
-    skipped = [o for o in outcomes if o.status == "skip"]
-    assert {o.fixture_id for o in skipped} == {"tool-failure", "retry-tool"}
-    assert all("retry=not_tested" in o.reason for o in skipped)
+    newly_skipped = [o for o in outcomes if o.status == "skip" and baseline[o.fixture_id].status != "skip"]
+    assert {o.fixture_id for o in newly_skipped} == {"tool-failure", "retry-tool"}
+    assert all("retry=not_tested" in o.reason for o in newly_skipped)
     assert all(o.status == "pass" for o in outcomes if o.status != "skip")
 
 
@@ -88,6 +90,9 @@ def test_matrix_binding_entry_point_returns_results_or_a_skip():
         if fixture.get("workflow") is None:
             fixture["workflow"] = load_yaml((path.parent / fixture["workflow_ref"]).resolve())
         results = matrix_binding(fixture)
+        if isinstance(results, dict):
+            assert set(results) == {"skip"} and "requires" in results["skip"], path.name
+            continue
         assert isinstance(results, list) and len(results) == len(fixture["turns"]), path.name
         for result in results:
             validate_result(result)

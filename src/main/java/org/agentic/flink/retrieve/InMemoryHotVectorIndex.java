@@ -102,7 +102,7 @@ public final class InMemoryHotVectorIndex implements HotVectorIndex {
       this.entries =
           new LinkedHashMap<>(16, 0.75f, false) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<String, Entry> eldest) {
+            protected boolean removeEldestEntry(Map.Entry<String, InMemoryHotVectorIndex.Entry> eldest) {
               return size() > Window.this.maxEntries;
             }
           };
