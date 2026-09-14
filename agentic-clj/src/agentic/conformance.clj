@@ -17,8 +17,8 @@
    "structured_tool_args" :supported "guardrails" :supported "verifier" :supported
    "ordering" :supported "idempotency" :supported "retry" :supported "memory" :supported
    "retrieval" :supported "replay" :supported "suspend_resume" :supported "saga" :supported
-   "a2a" :supported "durable_store" :supported "context_window" :supported "llm_brain" :supported
-   "cep" :supported "event_time" :supported})
+   "a2a" :supported "parallelism" :supported "durable_store" :supported "context_window" :supported
+   "llm_brain" :supported "cep" :supported "event_time" :supported})
 
 (defn fixtures-dir []
   (io/file (spec/spec-root) "conformance" "v1" "fixtures"))
@@ -96,8 +96,9 @@
 
 (defn- deliver-batch
   "Deliver a group of mutually `concurrent_with` turns: all are enqueued (arrive) in declared order
-   without waiting for any to finish, so they are in flight together and the runtime must serialize
-   them per conversation; the results come back in the declared order."
+   without waiting for any to finish, so they are in flight together: turns for different
+   conversations run at the same time on their own mailboxes (`parallelism`) and the runtime
+   serializes them per conversation; the results come back in the declared order."
   [system turns]
   (let [outcomes (mapv #(core/submit-async system (->event %)) turns)]
     (mapv (fn [p] (let [r @p] (if (instance? Throwable r) (throw r) r))) outcomes)))

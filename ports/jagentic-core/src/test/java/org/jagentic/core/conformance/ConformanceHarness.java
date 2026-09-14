@@ -30,6 +30,10 @@ import org.jagentic.core.pipeline.GraphBuilder;
  * repository, drives the {@link LocalRuntime}, and re-implements the comparator of
  * {@code spec/tools/run_conformance.py} over the normalized result documents
  * ({@code spec/v1/result.schema.json}).
+ *
+ * <p>{@code concurrent_with} turns are handed to {@link LocalRuntime#submitAsync} without waiting
+ * for one another, so they are in flight together on the runtime's per-conversation writers
+ * ({@code parallelism}); their results are collected in the fixture's declared order.
  */
 public final class ConformanceHarness {
 
@@ -37,7 +41,7 @@ public final class ConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "durable_store", "cep", "event_time");
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 

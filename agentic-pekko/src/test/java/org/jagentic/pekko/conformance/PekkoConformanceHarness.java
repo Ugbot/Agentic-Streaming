@@ -34,8 +34,10 @@ import org.jagentic.pekko.runtime.PekkoSystem;
  * of {@code spec/tools/run_conformance.py}, mirroring the core {@code ConformanceHarness}.
  *
  * <p>{@code restart_runtime} passivates every entity the fixture has touched so far: the next turn
- * recreates them from the journal alone. {@code concurrent_with} submits without waiting, so the
- * entity mailbox decides the order. {@code advance_time_ms} needs a logical clock, which this runtime
+ * recreates them from the journal alone. {@code concurrent_with} submits without waiting, so turns
+ * for different conversations are in flight on their own entities at once ({@code parallelism})
+ * while each entity mailbox decides the order of its own turns; results are collected in the
+ * fixture's declared order. {@code advance_time_ms} needs a logical clock, which this runtime
  * does not have; {@code timers} is therefore not declared and such a fixture is skipped.</p>
  */
 public final class PekkoConformanceHarness {
@@ -44,7 +46,7 @@ public final class PekkoConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "durable_store", "cep", "event_time");
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
   private static final Duration TIMEOUT = Duration.ofSeconds(30);

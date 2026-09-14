@@ -11,6 +11,7 @@ import random
 import threading
 import time
 from abc import ABC, abstractmethod
+from concurrent.futures import Future, ThreadPoolExecutor
 from importlib.metadata import entry_points
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -239,7 +240,7 @@ class LocalRuntime(Runtime):
         "context_window": "supported", "replay": "supported", "suspend_resume": "supported",
         "timers": "unsupported", "saga": "supported", "a2a": "supported", "cep": "supported",
         "event_time": "supported", "checkpoint_recovery": "unsupported",
-        "parallelism": "unsupported", "durable_store": "supported",
+        "parallelism": "supported", "durable_store": "supported",
     }
 
     def __init__(
@@ -269,6 +270,8 @@ class LocalRuntime(Runtime):
         self.degradations: List[str] = []
         self._gates: Dict[str, _ConversationGate] = {}
         self._gates_guard = threading.Lock()
+        self._workers: Optional[ThreadPoolExecutor] = None
+        self._tails: Dict[str, "Future[Dict[str, Any]]"] = {}
         self._closed = False
 
     def capabilities(self) -> Dict[str, str]:
@@ -326,10 +329,64 @@ class LocalRuntime(Runtime):
             raise ValidationError("deploy() a spec before submit()")
         turn = event if isinstance(event, Turn) else Turn(**dict(event))
         gate = self._gate(turn.conversation_id)
-        ticket = gate.take()
+        return self._run_ticketed(self.engine, turn, gate, gate.take())
+
+    def submit_async(self, event: Union[Turn, Mapping[str, Any]]) -> "Future[Dict[str, Any]]":
+        """Take the conversation's arrival ticket now, on the caller's thread, and process the
+        turn on a worker once the conversation's previous turn has finished: turns of one
+        conversation run one at a time in call order, turns of different conversations run at
+        the same time (the `parallelism` primitive). A queued turn does not hold a worker while
+        it waits for its predecessor, so a busy conversation cannot starve the others."""
+        if self._closed:
+            raise ValidationError("this runtime is closed")
+        if self.engine is None:
+            raise ValidationError("deploy() a spec before submit_async()")
+        engine = self.engine
+        turn = event if isinstance(event, Turn) else Turn(**dict(event))
+        outcome: "Future[Dict[str, Any]]" = Future()
+        with self._gates_guard:
+            gate = self._gates.get(turn.conversation_id)
+            if gate is None:
+                gate = self._gates[turn.conversation_id] = _ConversationGate()
+            ticket = gate.take()
+            workers = self._workers
+            if workers is None:
+                workers = self._workers = ThreadPoolExecutor(thread_name_prefix="agentic-turn")
+            previous = self._tails.get(turn.conversation_id)
+            self._tails[turn.conversation_id] = outcome
+
+        def start(_: object = None) -> None:
+            try:
+                workers.submit(self._complete, outcome, engine, turn, gate, ticket)
+            except RuntimeError as exc:  # the pool was shut down under a queued turn
+                outcome.set_exception(ValidationError(f"this runtime is closed ({exc})"))
+
+        if previous is None:
+            start()
+        else:
+            previous.add_done_callback(start)
+        return outcome
+
+    def _complete(self, outcome: "Future[Dict[str, Any]]", engine: Engine, turn: Turn,
+                  gate: _ConversationGate, ticket: int) -> None:
+        try:
+            result = self._run_ticketed(engine, turn, gate, ticket)
+        except Exception as exc:
+            self._drop_tail(turn.conversation_id, outcome)
+            outcome.set_exception(exc)
+        else:
+            self._drop_tail(turn.conversation_id, outcome)
+            outcome.set_result(result)
+
+    def _drop_tail(self, conversation_id: str, outcome: "Future[Dict[str, Any]]") -> None:
+        with self._gates_guard:
+            if self._tails.get(conversation_id) is outcome:
+                del self._tails[conversation_id]
+
+    def _run_ticketed(self, engine: Engine, turn: Turn, gate: _ConversationGate, ticket: int) -> Dict[str, Any]:
         gate.enter(ticket)
         try:
-            result = self.engine.handle(turn)
+            result = engine.handle(turn)
         finally:
             gate.leave()
         if self.degradations:
@@ -366,6 +423,10 @@ class LocalRuntime(Runtime):
 
     def close(self) -> None:
         self._closed = True
+        with self._gates_guard:
+            workers, self._workers = self._workers, None
+        if workers is not None:
+            workers.shutdown(wait=True)
         self.engine = None
 
 

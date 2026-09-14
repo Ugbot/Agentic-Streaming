@@ -65,10 +65,12 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
     # Sequence patterns are the core's in-turn fold over the log (fixture cep-sequence).
     "cep": "supported",
     "event_time": "supported",
+    # LocalRuntime.submitAsync: one serial writer per conversation, different conversations in
+    # flight at once (python/tests/test_parallel_conversations_jvm.py).
+    "parallelism": "supported",
     # Not offered by LocalRuntime.
     "timers": "unsupported",
     "checkpoint_recovery": "unsupported",
-    "parallelism": "unsupported",
 }
 
 _FLINK_CAPABILITIES: Dict[str, str] = {
