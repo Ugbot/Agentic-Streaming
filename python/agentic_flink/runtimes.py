@@ -85,9 +85,14 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     "retry": "supported",
     "memory": "supported",
     "retrieval": "supported",
+    "context_window": "supported",
     "saga": "supported",
     "a2a": "supported",
     "parallelism": "supported",
+    "llm_brain": "supported",  # fixture llm-brain-scripted: the stub provider ships in the job graph
+    # Sequence patterns run inside WorkflowTurnFunction as the core's fold (fixture cep-sequence).
+    "cep": "supported",
+    "event_time": "supported",
     # restart() stops the job with a savepoint and restores a new job from it: the keyed
     # conversation log is the only state that comes back, and the recorded turns are not re-run.
     "replay": "supported",
@@ -99,10 +104,6 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     # collected, so nothing here is exercised; Python tools cannot ship in the job graph.
     "checkpoint_recovery": "unsupported",
     "timers": "unsupported",
-    "llm_brain": "not_tested",
-    "context_window": "not_tested",
-    "cep": "not_tested",
-    "event_time": "not_tested",
 }
 
 _FLINK_BATCH_CAPABILITIES: Dict[str, str] = {
