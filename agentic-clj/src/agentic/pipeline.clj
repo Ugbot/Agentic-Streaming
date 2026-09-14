@@ -17,6 +17,7 @@
             [agentic.retrieval :as r]
             [agentic.guardrail :as guard]
             [agentic.cep :as cep]
+            [agentic.cep-fold :as cep-fold]
             [agentic.core :as core]
             [agentic.store :as store]
             [agentic.log :as log]
@@ -233,6 +234,7 @@
              :policies policies
              :saga saga
              :context context
+             :cep (cep-fold/compile-patterns (:cep wf))
              :listeners []}
      :tools reg
      :retriever (build-retriever retrieval dim)
@@ -300,7 +302,7 @@
   (let [{:keys [graph tools retriever workflow]} (build document opts)]
     (assoc (core/local-system graph tools retriever stores)
            :workflow workflow
-           :cep (cep/compile-cep (:cep workflow)))))
+           :cep (cep/compile-cep (cep-fold/without-tool-actions (:cep workflow))))))
 
 (defn load-system
   "Load a workflow .yaml/.json/.edn into a runnable system, with the stores it configures. A

@@ -17,7 +17,8 @@
    "structured_tool_args" :supported "guardrails" :supported "verifier" :supported
    "ordering" :supported "idempotency" :supported "retry" :supported "memory" :supported
    "retrieval" :supported "replay" :supported "suspend_resume" :supported "saga" :supported
-   "a2a" :supported "durable_store" :supported "context_window" :supported "llm_brain" :supported})
+   "a2a" :supported "durable_store" :supported "context_window" :supported "llm_brain" :supported
+   "cep" :supported "event_time" :supported})
 
 (defn fixtures-dir []
   (io/file (spec/spec-root) "conformance" "v1" "fixtures"))
@@ -90,6 +91,7 @@
    :turn-id (get turn "turn_id")
    :user-id (get turn "user_id" "anonymous")
    :text (get turn "text" "")
+   :metadata (into {} (map (fn [[k v]] [(str k) (str v)])) (get turn "metadata"))
    :signal (get turn "signal")})
 
 (defn- deliver-batch

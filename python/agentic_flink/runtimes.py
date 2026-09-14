@@ -58,10 +58,11 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
     # The spec's scripted stub provider (fixture llm-brain-scripted) runs through jagentic-core's
     # ScriptedChatClient + LlmBrain; no test here drives a network provider.
     "llm_brain": "supported",
+    # Sequence patterns are the core's in-turn fold over the log (fixture cep-sequence).
+    "cep": "supported",
+    "event_time": "supported",
     # Not offered by LocalRuntime.
     "timers": "unsupported",
-    "cep": "unsupported",
-    "event_time": "unsupported",
     "checkpoint_recovery": "unsupported",
     "parallelism": "unsupported",
 }
@@ -91,8 +92,9 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     "checkpoint_recovery": "unsupported",
     "timers": "unsupported",
     "llm_brain": "supported",  # fixture llm-brain-scripted: the stub provider ships in the job graph
-    "cep": "not_tested",
-    "event_time": "not_tested",
+    # Sequence patterns run inside WorkflowTurnFunction as the core's fold (fixture cep-sequence).
+    "cep": "supported",
+    "event_time": "supported",
 }
 
 _PEKKO_CAPABILITIES: Dict[str, str] = {cap: "not_tested" for cap in CAPABILITY_IDS}

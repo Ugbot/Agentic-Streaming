@@ -43,7 +43,7 @@ public final class FlinkConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "durable_store");
+      "saga", "a2a", "durable_store", "cep", "event_time");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
@@ -119,7 +119,8 @@ public final class FlinkConformanceHarness {
         Map<String, Object> signal = (Map<String, Object>) turn.get("signal");
         Event event = signal != null
             ? Event.resume(conversationId, turnId, signal)
-            : Event.turn(conversationId, turnId, "anonymous", String.valueOf(turn.getOrDefault("text", "")));
+            : Event.turn(conversationId, turnId, "anonymous", String.valueOf(turn.getOrDefault("text", "")),
+                metadata(turn));
         if (turn.get("concurrent_with") != null) {
           batch.add(event);
         } else {
@@ -143,6 +144,17 @@ public final class FlinkConformanceHarness {
       }
     }
     return new Outcome(id, null, problems);
+  }
+
+  /** The fixture turn's {@code metadata} (string values, as the spec carries them), empty if none. */
+  public static Map<String, String> metadata(Map<String, Object> turn) {
+    Map<String, String> out = new LinkedHashMap<>();
+    if (turn.get("metadata") instanceof Map<?, ?> m) {
+      for (Map.Entry<?, ?> e : m.entrySet()) {
+        out.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+      }
+    }
+    return out;
   }
 
   private static void flush(MiniClusterWorkflowDriver driver, List<Event> batch,

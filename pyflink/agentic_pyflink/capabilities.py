@@ -39,6 +39,8 @@ PROOF: dict[str, str] = {
     "a2a": "conformance: a2a-delegation",
     "durable_store": "conformance: replay-after-restart, suspend-resume (state survives restart)",
     "parallelism": "test_runtime.py::test_parallel_job_keeps_per_conversation_order (parallelism=2)",
+    "cep": "conformance: cep-sequence",
+    "event_time": "conformance: cep-sequence",
 }
 
 CAPABILITIES: dict[str, str] = {cid: ("supported" if cid in PROOF else "not_tested") for cid in CAPABILITY_IDS}

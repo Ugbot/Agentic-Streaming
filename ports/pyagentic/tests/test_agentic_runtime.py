@@ -117,15 +117,16 @@ def test_deploy_lists_every_unsupported_requirement():
     spec = support_agent().build()
     doc = dict(spec.document)
     doc["timers"] = [{"id": "t", "after_ms": 1000, "tool": "lookup_charge"}]
-    doc["cep"] = [{"name": "pair", "pattern": [{"stage": "a", "where": {"text_contains": "a"}},
-                                                 {"stage": "b", "where": {"text_contains": "b"}, "contiguity": "followedBy"}]}]
+    doc["cep"] = [{"name": "pair", "pattern": [
+        {"stage": "a", "where": {"text_contains": "a"}},
+        {"stage": "b", "where": {"text_contains": "b"}, "contiguity": "followedBy"}]}]
     needs = required_capabilities(doc)
     assert {"timers", "cep"} <= set(needs)
     with pytest.raises(CapabilityError) as info:
         LocalRuntime().deploy(doc)
     assert info.value.runtime == "local"
     assert any(r.startswith("timers") for r in info.value.requirements)
-    assert any(r.startswith("cep") for r in info.value.requirements)
+    assert not any(r.startswith("cep") for r in info.value.requirements)
     assert "unsupported requirements" in str(info.value)
 
 

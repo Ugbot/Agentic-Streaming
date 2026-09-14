@@ -206,7 +206,8 @@ public final class GraphBuilder {
     }
 
     RoutedGraph graph = new RoutedGraph(router, paths, verifier, pathVerifiers, guardrails, List.of(), policies,
-        saga, suspendUntil, contextWindow);
+        saga, suspendUntil, contextWindow,
+        org.jagentic.core.cep.SequencePattern.compile((List<Map<String, Object>>) spec.get("cep")));
     return new Built(graph, tools, retriever, availability.degradations());
   }
 
