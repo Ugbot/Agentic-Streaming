@@ -163,11 +163,19 @@ public final class BankingA2AServer {
   // ---- outbound personal->CS client (also speaks message/send) ----
 
   static BankingTurnContext.CustomerServiceClient httpCsClient(String csUrl) {
+    return httpCsClient(csUrl, env("CS_AGENT_TOKEN", null));
+  }
+
+  /** {@code csToken} is the bearer token the CS gateway expects (its {@code AGENTIC_A2A_TOKEN}). */
+  static BankingTurnContext.CustomerServiceClient httpCsClient(String csUrl, String csToken) {
     if (csUrl == null || csUrl.isBlank()) {
       LOG.warn("CS_AGENT_URL not set — ask_customer_service unavailable");
       return null;
     }
-    return new HttpCsClient(csUrl);
+    if (csToken == null || csToken.isBlank()) {
+      LOG.warn("CS_AGENT_TOKEN not set — the CS gateway rejects ask_customer_service unless in dev mode");
+    }
+    return new HttpCsClient(csUrl, csToken);
   }
 
   /**
@@ -179,10 +187,12 @@ public final class BankingA2AServer {
   static final class HttpCsClient implements BankingTurnContext.CustomerServiceClient {
     private static final long serialVersionUID = 1L;
     private final String csUrl;
+    private final String csToken;
     private transient volatile HttpClient http;
 
-    HttpCsClient(String csUrl) {
+    HttpCsClient(String csUrl, String csToken) {
       this.csUrl = csUrl;
+      this.csToken = csToken == null || csToken.isBlank() ? null : csToken;
     }
 
     private HttpClient http() {
@@ -216,13 +226,16 @@ public final class BankingA2AServer {
         rpc.put("method", "message/send");
         rpc.putObject("params").set("message", msg);
 
-        HttpRequest request =
+        HttpRequest.Builder request =
             HttpRequest.newBuilder(URI.create(csUrl))
                 .timeout(Duration.ofSeconds(300))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofByteArray(JSON.writeValueAsBytes(rpc)))
-                .build();
-        HttpResponse<byte[]> resp = http().send(request, HttpResponse.BodyHandlers.ofByteArray());
+                .POST(HttpRequest.BodyPublishers.ofByteArray(JSON.writeValueAsBytes(rpc)));
+        if (csToken != null) {
+          request.header("Authorization", "Bearer " + csToken);
+        }
+        HttpResponse<byte[]> resp =
+            http().send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
         JsonNode result = JSON.readTree(resp.body()).path("result");
         return replyText(result);
       } catch (Exception e) {

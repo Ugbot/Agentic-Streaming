@@ -24,12 +24,13 @@ services:
     container_name: agentic-flink-notebook
     user: root
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     volumes:
       - ./:/home/jovyan/work:rw
     working_dir: /home/jovyan/work
     environment:
-      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-agentic}
+      # No default token: set JUPYTER_TOKEN in .env (see .env.example).
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:?set JUPYTER_TOKEN in .env}
       JUPYTER_ENABLE_LAB: "yes"
       # Runtime selector — override in .env at the repo root.
       AGENTIC_FLINK_MODE: ${AGENTIC_FLINK_MODE:-session}
