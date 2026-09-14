@@ -1,4 +1,5 @@
-"""The 15 shared fixtures (spec/conformance/v1) run in place against the JVM-backed runtimes.
+"""The shared fixtures (spec/conformance/v1, discovered from the directory) run in place against
+the JVM-backed runtimes.
 
 Each fixture is one test per runtime. A fixture whose ``requires`` the runtime does not support
 is a pytest *skip* (never a pass); a comparison mismatch is a failure; missing infrastructure
@@ -23,7 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RESULT_VALIDATOR = jsonschema.Draft202012Validator(
     json.loads((REPO_ROOT / "spec" / "v1" / "result.schema.json").read_text()))
 FIXTURES = sorted(default_fixtures_dir().glob("*.yaml"))
-assert len(FIXTURES) == 15, FIXTURES
+assert FIXTURES, f"no fixtures under {default_fixtures_dir()}"
+assert len({p.stem for p in FIXTURES}) == len(FIXTURES), FIXTURES
 
 RUNTIMES = {"local-jvm": {}, "flink-jvm": {"parallelism": 2}}
 
@@ -50,9 +52,9 @@ def test_fixture_results_validate_against_result_schema(fixture_path: Path, runt
     rt = get_runtime(runtime_name, **RUNTIMES[runtime_name])
     caps = rt.capabilities()
     unsupported = [c for c in fixture["requires"] if caps.get(c) not in ("supported", "partial")]
-    if unsupported or (runtime_name == "flink-jvm" and any(t.get("restart_runtime") for t in fixture["turns"])):
+    if unsupported:
         rt.close()
-        pytest.skip(f"{runtime_name} does not support {unsupported or ['restart_runtime']}")
+        pytest.skip(f"{runtime_name} does not support {unsupported}")
     try:
         rt.deploy(fixture_workflow(fixture_path, fixture))
         results = _drive(rt, fixture["turns"])

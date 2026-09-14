@@ -3,8 +3,10 @@
 * ``local-jvm`` — :class:`JvmLocalRuntime` over ``org.jagentic.core.LocalRuntime``: the canonical
   core, in-process, with the conversation log as the only state that survives ``restart()``.
 * ``flink-jvm`` — :class:`FlinkRuntime` over the Flink adapter (``FlinkPipelineRunner`` /
-  ``WorkflowTurnFunction``): each ``submit``/``submit_all`` runs a bounded streaming job on an
-  in-process local Flink environment and collects the normalized results.
+  ``WorkflowTurnFunction``): by default one long-running streaming job on an in-process local
+  Flink environment (``LocalWorkflowSession``), fed turn by turn, with ``restart()`` as
+  stop-with-savepoint plus restore; with ``durable=False`` each ``submit``/``submit_all`` runs
+  one bounded job instead.
 * ``pekko`` — :class:`PekkoRuntime` over ``org.jagentic.pekko.runtime.PekkoBackendProvider`` when
   the agentic-pekko jar is on the classpath.
 
@@ -18,6 +20,8 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import re
+import shutil
+import tempfile
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from . import _jvm
@@ -68,7 +72,41 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
 }
 
 _FLINK_CAPABILITIES: Dict[str, str] = {
-    # Proven by python/tests/test_conformance_jvm.py (flink) — one bounded job per submit_all.
+    # Proven by python/tests/test_conformance_jvm.py and test_flink_durable_restart.py (flink):
+    # one streaming job per deploy(), fed turn by turn through LocalWorkflowSession.
+    "routing": "supported",
+    "rule_brain": "supported",
+    "tools": "supported",
+    "structured_tool_args": "supported",
+    "guardrails": "supported",
+    "verifier": "supported",
+    "ordering": "supported",
+    "idempotency": "supported",
+    "retry": "supported",
+    "memory": "supported",
+    "retrieval": "supported",
+    "saga": "supported",
+    "a2a": "supported",
+    "parallelism": "supported",
+    # restart() stops the job with a savepoint and restores a new job from it: the keyed
+    # conversation log is the only state that comes back, and the recorded turns are not re-run.
+    "replay": "supported",
+    "suspend_resume": "supported",
+    # Durable in the same sense as the Flink JUnit binding: a savepoint on the local filesystem
+    # survives the job and its local cluster; the JVM process itself stays up across restart().
+    "durable_store": "supported",
+    # No kill-and-recover-from-checkpoint step is exposed, and timer-driven results are not
+    # collected, so nothing here is exercised; Python tools cannot ship in the job graph.
+    "checkpoint_recovery": "unsupported",
+    "timers": "unsupported",
+    "llm_brain": "not_tested",
+    "context_window": "not_tested",
+    "cep": "not_tested",
+    "event_time": "not_tested",
+}
+
+_FLINK_BATCH_CAPABILITIES: Dict[str, str] = {
+    # FlinkRuntime(durable=False): one bounded job per submit_all.
     "routing": "supported",
     "rule_brain": "supported",
     "tools": "supported",
@@ -296,16 +334,25 @@ def parse_duration_ms(value: Any) -> int:
 class FlinkRuntime(_JvmRuntime):
     """``flink-jvm``: run the workflow as a Flink job on an in-process local environment.
 
-    The Python binding cannot ship Python code into a Flink job graph and has no long-running
-    ingress, so each :meth:`submit` / :meth:`submit_all` executes one bounded job over the given
-    events (keyed by conversation, so per-conversation ordering and idempotency hold within the
-    batch) and returns the collected normalized results. Keyed state does not outlive the job."""
+    The Python binding cannot ship Python code into a Flink job graph, so ``kind: function``
+    tools are rejected at :meth:`deploy`. Two execution modes:
+
+    * ``durable=True`` (default): :meth:`deploy` starts one streaming job
+      (``org.agentic.flink.runtime.LocalWorkflowSession``) that stays up until :meth:`close`;
+      :meth:`submit` / :meth:`submit_all` feed it turn by turn, so keyed state (the conversation
+      log) persists across calls. :meth:`restart` stops the job with a savepoint under
+      ``savepoint_dir`` and starts a new job restored from it; the recorded turns are rebuilt from
+      the log and are not executed again (no brain or tool runs for them).
+    * ``durable=False``: each :meth:`submit` / :meth:`submit_all` executes one bounded job over
+      the given events (keyed by conversation, so per-conversation ordering and idempotency hold
+      within the batch). Keyed state does not outlive the job and :meth:`restart` is refused."""
 
     name = "flink-jvm"
     _capabilities = _FLINK_CAPABILITIES
 
     def __init__(self, *, parallelism: int = 1, checkpoint_interval: Optional[Any] = None,
-                 job_name: str = "agentic-flink", timeout: Any = "120s", **jvm: Any) -> None:
+                 job_name: str = "agentic-flink", timeout: Any = "120s", durable: bool = True,
+                 savepoint_dir: Optional[str] = None, **jvm: Any) -> None:
         super().__init__(**jvm)
         if int(parallelism) < 1:
             raise ValueError("parallelism must be >= 1")
@@ -313,7 +360,14 @@ class FlinkRuntime(_JvmRuntime):
         self.checkpoint_interval_ms = parse_duration_ms(checkpoint_interval) if checkpoint_interval is not None else None
         self.job_name = job_name
         self.timeout_ms = parse_duration_ms(timeout)
+        self.durable = bool(durable)
+        self.savepoint_dir = savepoint_dir
         self._options = None
+        self._session: Any = None
+        self._owned_savepoint_dir: Optional[str] = None
+
+    def capabilities(self) -> Dict[str, str]:
+        return dict(_FLINK_CAPABILITIES if self.durable else _FLINK_BATCH_CAPABILITIES)
 
     def _start_jvm(self) -> None:
         if _jvm.is_started():
@@ -340,7 +394,7 @@ class FlinkRuntime(_JvmRuntime):
         bindings = _bindings(spec)
         extra = {f"tools[{tid}]": "kind=function (Python) tools cannot run inside a Flink job graph"
                  for tid in sorted(t["id"] for t in doc.get("tools", []) if t.get("kind") == "function")}
-        _check_requirements(self.name, self._capabilities, doc, extra)
+        _check_requirements(self.name, self.capabilities(), doc, extra)
         self._start_jvm()
         FlinkRuntimeOptions = _jvm.jclass("org.agentic.flink.runtime.FlinkRuntimeOptions")
         WorkflowValidator = _jvm.jclass("org.jagentic.core.pipeline.WorkflowValidator")
@@ -351,15 +405,56 @@ class FlinkRuntime(_JvmRuntime):
         self._doc = doc
         self._built = jdoc  # the serialized configuration of the job
         self._bound = bindings
+        if self.durable:
+            self._start_session()
+
+    def _start_session(self) -> None:
+        LocalWorkflowSession = _jvm.jclass("org.agentic.flink.runtime.LocalWorkflowSession")
+        Duration = _jvm.jclass("java.time.Duration")
+        Paths = _jvm.jclass("java.nio.file.Paths")
+        if self.savepoint_dir is None:
+            self._owned_savepoint_dir = tempfile.mkdtemp(prefix="agentic-flink-jvm-")
+        target = self.savepoint_dir or self._owned_savepoint_dir
+        checkpoint = Duration.ofMillis(self.checkpoint_interval_ms) if self.checkpoint_interval_ms is not None else None
+        with java_calls():
+            self._session = LocalWorkflowSession(self._built, self._options, self.parallelism, checkpoint,
+                                                 Paths.get(target), Duration.ofMillis(self.timeout_ms), self.job_name)
+            self._session.start()
+
+    @property
+    def session(self) -> Any:
+        """The Java ``LocalWorkflowSession`` behind a durable runtime (``None`` when ``durable=False``
+        or nothing is deployed)."""
+        return self._session
+
+    def restart(self) -> None:
+        """Stop the streaming job with a savepoint and start a new job restored from it.
+
+        Only checkpointed keyed state (the conversation log, suspended turns) comes back; the
+        conversation is rebuilt from the log on its next turn and no brain or tool runs for the
+        turns already recorded. Refused with ``durable=False``."""
+        self._require_deployed()
+        if not self.durable or self._session is None:
+            raise RuntimeError("restart() needs FlinkRuntime(durable=True): a bounded job keeps no state to restore")
+        with java_calls():
+            self._session.restart()
 
     def submit(self, event: Event) -> Dict[str, Any]:
         return self.submit_all([event])[0]
 
     def submit_all(self, events: Sequence[Event]) -> List[Dict[str, Any]]:
-        """Run one bounded job over ``events`` and return their results in submission order."""
+        """Submit ``events`` and return their results in submission order: through the running
+        streaming job when durable, otherwise as one bounded job."""
         self._require_deployed()
         if not events:
             return []
+        if self.durable:
+            ArrayList = _jvm.jclass("java.util.ArrayList")
+            with java_calls():
+                jevents = ArrayList()
+                for e in events:
+                    jevents.add(_java_event(e))
+                return [_result(r) for r in self._session.submitAll(jevents)]
         StreamExecutionEnvironment = _jvm.jclass("org.apache.flink.streaming.api.environment.StreamExecutionEnvironment")
         Configuration = _jvm.jclass("org.apache.flink.configuration.Configuration")
         FlinkPipelineRunner = _jvm.jclass("org.agentic.flink.pipeline.FlinkPipelineRunner")
@@ -387,6 +482,13 @@ class FlinkRuntime(_JvmRuntime):
         return out
 
     def close(self) -> None:
+        if self._session is not None:
+            with java_calls():
+                self._session.close()
+            self._session = None
+        if self._owned_savepoint_dir is not None:
+            shutil.rmtree(self._owned_savepoint_dir, ignore_errors=True)
+            self._owned_savepoint_dir = None
         self._built: Any = None
         self._options = None
         self._closed = True
