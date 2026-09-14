@@ -178,7 +178,7 @@ public final class McpClient implements AutoCloseable {
   }
 
   private void startHttp() {
-    http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+    http = HttpClient.newBuilder().connectTimeout(spec.getConnectTimeout()).build();
   }
 
   private JsonNode rpc(String method, ObjectNode params) throws IOException {
@@ -232,7 +232,7 @@ public final class McpClient implements AutoCloseable {
       HttpRequest.Builder b =
           HttpRequest.newBuilder()
               .uri(URI.create(spec.getUrl()))
-              .timeout(Duration.ofSeconds(30))
+              .timeout(spec.getRequestTimeout())
               .header("Content-Type", "application/json")
               .POST(HttpRequest.BodyPublishers.ofString(payload));
       for (Map.Entry<String, String> h : spec.getHeaders().entrySet()) {

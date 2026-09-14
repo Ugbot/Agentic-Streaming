@@ -196,7 +196,7 @@ public final class LangChain4jChatConnection implements ChatConnection {
    * tool calls. Arguments are parsed with Jackson; a request whose arguments are not a JSON object
    * is dropped with a warning rather than guessed at.
    */
-  static List<org.agentic.flink.llm.ChatToolCall> toolCallsOf(AiMessage message) {
+  public static List<org.agentic.flink.llm.ChatToolCall> toolCallsOf(AiMessage message) {
     if (message == null || !message.hasToolExecutionRequests()) {
       return Collections.emptyList();
     }

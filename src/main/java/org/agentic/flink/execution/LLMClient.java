@@ -66,7 +66,7 @@ public class LLMClient implements Serializable {
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
   private static final Pattern TEXT_JSON_CALL =
-      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*(\\{.*?\\})", Pattern.DOTALL);
+      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\{");
   private static final Pattern TEXT_KV_CALL =
       Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]*)\\)");
 
@@ -285,7 +285,12 @@ public class LLMClient implements Serializable {
     Matcher json = TEXT_JSON_CALL.matcher(responseText);
     while (json.find()) {
       String toolName = json.group(1).trim();
-      String jsonParams = json.group(2);
+      int end = closingBrace(responseText, json.end() - 1);
+      if (end < 0) {
+        LOG.warn("Text tool call {} has unterminated JSON arguments", toolName);
+        break;
+      }
+      String jsonParams = responseText.substring(json.end() - 1, end + 1);
       try {
         Map<String, Object> parameters = JSON.readValue(jsonParams, MAP_TYPE);
         toolCalls.add(new ToolCall("call_" + (callCount++), toolName, parameters));
@@ -304,6 +309,32 @@ public class LLMClient implements Serializable {
       }
     }
     return toolCalls;
+  }
+
+  /**
+   * Index of the brace closing the JSON object that opens at {@code open}, honouring braces
+   * inside quoted strings; {@code -1} when the object is unterminated.
+   */
+  private static int closingBrace(String text, int open) {
+    int depth = 0;
+    boolean inString = false;
+    for (int i = open; i < text.length(); i++) {
+      char c = text.charAt(i);
+      if (inString) {
+        if (c == '\\') {
+          i++;
+        } else if (c == '"') {
+          inString = false;
+        }
+      } else if (c == '"') {
+        inString = true;
+      } else if (c == '{') {
+        depth++;
+      } else if (c == '}' && --depth == 0) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /**
