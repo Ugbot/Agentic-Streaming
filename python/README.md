@@ -80,7 +80,7 @@ Runtimes and what proves them:
 | name | over | jars | conformance (`python -m agentic_flink.conformance --runtime <name>`) |
 |---|---|---|---|
 | `local-jvm` (alias `local`) | `org.jagentic.core.LocalRuntime` | shaded jar | 15/15 pass |
-| `flink-jvm` | Flink adapter, bounded local job (`pyflink` is the separate agentic-pyflink package) | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) | 13 pass, 2 skip (`replay`, `suspend_resume`) |
+| `flink-jvm` | Flink adapter, one streaming job on a local cluster per `deploy()` (`LocalWorkflowSession`), `restart()` = stop with savepoint + restore; `durable=False` runs one bounded job per submit (`pyflink` is the separate agentic-pyflink package) | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) | 21 pass, 3 skip (see `docs/capabilities.md`) |
 | `pekko` | `agentic-pekko` `PekkoBackendProvider` | + `mvn -f agentic-pekko/pom.xml package` and `AGENTIC_PEKKO_CLASSPATH` | reachable; every capability `not_tested`, fixtures skip |
 
 Legacy `agentic_flink.Agent` (the LangChain4J `AgentBuilder` proxy) is unchanged; the
