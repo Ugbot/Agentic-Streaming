@@ -8,6 +8,7 @@
             [agentic.tools :as tools]
             [agentic.context :as ctx]
             [agentic.context-window :as cw]
+            [agentic.log :as log]
             [agentic.store :as store]))
 
 (defprotocol ChatClient
@@ -79,8 +80,12 @@
                   all-specs)
           sys {:role "system" :content (str system-prompt "\n" react-system (json/write-str specs))}
           history (store/history (:store context) (:conversation-id context))
-          ;; context-window: compact the replayed transcript to a token budget (MoSCoW) when configured.
-          history (if context-window (cw/compact-history history context-window) history)
+          ;; context-window: `compaction: window` retains the most recent max_items messages; any other
+          ;; configured context compacts the replayed transcript to a token budget (MoSCoW).
+          history (cond
+                    (nil? context-window) history
+                    (= "window" (:compaction context-window)) (log/retain-window history context-window)
+                    :else (cw/compact-history history context-window))
           transcript (mapv (fn [m] {:role (:role m) :content (:content m)}) history)]
       (loop [messages (into [sys] transcript) i 0]
         (if (>= i max-iterations)

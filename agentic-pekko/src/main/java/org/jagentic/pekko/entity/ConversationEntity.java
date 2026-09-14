@@ -31,6 +31,7 @@ import org.apache.pekko.persistence.typed.javadsl.SignalHandler;
 
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.ChatMessage;
+import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ConversationState;
 import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Event;
@@ -174,7 +175,17 @@ public final class ConversationEntity
   public static final class State {
     private final List<LogEvent> events = new ArrayList<>();
     private final Map<String, PendingTimer> timers = new LinkedHashMap<>();
+    private final ContextWindow window;
     private ConversationState folded = ConversationState.empty();
+
+    public State() {
+      this(ContextWindow.NONE);
+    }
+
+    /** @param window the workflow's {@code context} block; bounds the folded transcript */
+    public State(ContextWindow window) {
+      this.window = window == null ? ContextWindow.NONE : window;
+    }
 
     public List<LogEvent> events() {
       return List.copyOf(events);
@@ -195,7 +206,7 @@ public final class ConversationEntity
             + events.size() + " but replayed " + e.sequence());
       }
       events.add(e);
-      folded = ConversationState.fold(events);
+      folded = ConversationState.fold(events, window);
       if (e.is(EventType.TIMER_SCHEDULED)) {
         Map<String, Object> p = e.payload();
         String id = String.valueOf(p.get("timer_id"));
@@ -236,7 +247,7 @@ public final class ConversationEntity
 
   @Override
   public State emptyState() {
-    return new State();
+    return new State(deps.graph().contextWindow());
   }
 
   @Override

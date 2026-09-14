@@ -33,6 +33,8 @@ public final class AgentContext {
   @Deprecated
   public final List<String> toolCalls = new ArrayList<>();
   public List<AgentListener> listeners = List.of(); // set by RoutedGraph; tool-call hooks fire here
+  /** The workflow's {@code context} window; set by RoutedGraph, bounds the folded transcript. */
+  public ContextWindow contextWindow = ContextWindow.NONE;
 
   /** How retry back-off waits; the default sleeps the calling thread. Tests may inject a recorder. */
   public LongConsumer sleeper = AgentContext::sleep;
@@ -74,7 +76,7 @@ public final class AgentContext {
 
   /** The folded state of the whole conversation, including this turn's events so far. */
   public ConversationState conversationState() {
-    return log.state(conversationId);
+    return log.state(conversationId, contextWindow);
   }
 
   /** Reserves the next {@code call_index} for this turn. */

@@ -75,9 +75,10 @@ public final class LlmBrain implements Brain {
     }
     List<Map<String, String>> messages = new ArrayList<>();
     messages.add(Map.of("role", "system", "content", sys));
-    // The agent already appended the user turn; replay the persisted transcript, compacting
-    // it to the token budget (recency MoSCoW) if a ContextWindowManager is set.
-    List<ChatMessage> transcript = compact(ctx.store.history(ctx.conversationId));
+    // The agent already appended the user turn; replay the persisted transcript bounded to the
+    // workflow's context window, then compact it to the token budget (recency MoSCoW) if a
+    // ContextWindowManager is set.
+    List<ChatMessage> transcript = compact(ctx.contextWindow.retain(ctx.store.history(ctx.conversationId)));
     for (ChatMessage m : transcript) {
       messages.add(Map.of("role", m.role(), "content", m.content() == null ? "" : m.content()));
     }

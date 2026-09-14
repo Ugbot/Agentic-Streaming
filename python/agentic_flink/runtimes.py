@@ -47,6 +47,7 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
     "retry": "supported",
     "memory": "supported",
     "retrieval": "supported",
+    "context_window": "supported",
     "replay": "supported",
     "suspend_resume": "supported",
     "saga": "supported",
@@ -56,7 +57,6 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
     "durable_store": "partial",
     # Implemented in the core, not exercised by any test in this package.
     "llm_brain": "not_tested",
-    "context_window": "not_tested",
     # Not offered by LocalRuntime.
     "timers": "unsupported",
     "cep": "unsupported",
@@ -78,6 +78,7 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     "retry": "supported",
     "memory": "partial",  # conversation state lives in keyed state for the life of one job (one submit_all batch)
     "retrieval": "supported",
+    "context_window": "supported",
     "saga": "supported",
     "a2a": "supported",
     "parallelism": "supported",
@@ -89,7 +90,6 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     "checkpoint_recovery": "unsupported",
     "timers": "unsupported",
     "llm_brain": "not_tested",
-    "context_window": "not_tested",
     "cep": "not_tested",
     "event_time": "not_tested",
 }

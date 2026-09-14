@@ -66,7 +66,7 @@ public final class LocalRuntime implements Runtime {
 
   /** The folded state of one conversation: the {@code replay} verb, no side effects. */
   public ConversationState replay(String conversationId) {
-    return log.state(conversationId);
+    return log.state(conversationId, graph.contextWindow());
   }
 
   @Override

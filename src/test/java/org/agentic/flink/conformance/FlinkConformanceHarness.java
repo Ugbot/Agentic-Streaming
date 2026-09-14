@@ -42,7 +42,7 @@ public final class FlinkConformanceHarness {
   /** Capability terms ({@code spec/v1/primitives.md}) the Flink runtime implements and this suite exercises. */
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "tools", "structured_tool_args", "guardrails", "verifier",
-      "ordering", "idempotency", "retry", "memory", "retrieval", "replay", "suspend_resume",
+      "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
       "saga", "a2a", "durable_store");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());

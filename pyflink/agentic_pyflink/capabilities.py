@@ -31,6 +31,7 @@ PROOF: dict[str, str] = {
     "retry": "conformance: retry-tool",
     "memory": "conformance: memory-read-write",
     "retrieval": "conformance: retrieval",
+    "context_window": "conformance: context-window",
     "replay": "conformance: replay-after-restart (stop-with-savepoint + restore)",
     "suspend_resume": "conformance: suspend-resume",
     "saga": "conformance: saga-compensation",

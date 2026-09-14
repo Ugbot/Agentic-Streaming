@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jagentic.core.Agent;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.Brain;
+import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Event;
 import org.jagentic.core.Guardrail;
@@ -115,7 +116,10 @@ public final class GraphBuilder {
 
     ContextWindowManager contextManager = null;
     Map<String, Object> ctxSpec = (Map<String, Object>) spec.get("context");
-    if (ctxSpec != null) {
+    ContextWindow contextWindow = ContextWindow.fromMap(ctxSpec);
+    // compaction: window bounds the transcript by message count; the MoSCoW token budget applies
+    // on top of it only when max_tokens is declared.
+    if (ctxSpec != null && (!contextWindow.bounded() || ctxSpec.containsKey("max_tokens"))) {
       int budget = ctxSpec.containsKey("max_tokens")
           ? ((Number) ctxSpec.get("max_tokens")).intValue()
           : ((Number) ctxSpec.getOrDefault("max_items", 12)).intValue() * 64;
@@ -186,7 +190,7 @@ public final class GraphBuilder {
     }
 
     RoutedGraph graph = new RoutedGraph(router, paths, verifier, pathVerifiers, guardrails, List.of(), policies,
-        saga, suspendUntil);
+        saga, suspendUntil, contextWindow);
     return new Built(graph, tools, retriever, availability.degradations());
   }
 
