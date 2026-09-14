@@ -16,15 +16,24 @@ import argparse
 import os
 import re
 import sys
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Union, runtime_checkable
 
 import yaml
 
 from .errors import AgenticError
 from .events import Turn
 from .runtime import LocalRuntime, Runtime, get_runtime
+
+
+@runtime_checkable
+class AsyncSubmitting(Protocol):
+    """Runtimes that accept overlapping submissions (the fixtures' `concurrent_with`)."""
+
+    def submit_async(self, event: Union[Turn, Mapping[str, Any]]) -> "Future[Dict[str, Any]]": ...
+
 
 FIXTURE_SUBDIR = Path("spec") / "conformance" / "v1" / "fixtures"
 RESULT_DETAIL_KEY = "runtime_detail"  # excluded from every comparison
@@ -165,16 +174,10 @@ def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactor
     results: List[Dict[str, Any]] = []
     try:
         runtime.deploy(workflow)
-        for spec in fixture["turns"]:
-            if spec.get("restart_runtime"):
+        for batch in concurrent_batches(fixture["turns"]):
+            if batch[0].get("restart_runtime"):
                 runtime = _restart(runtime, workflow)
-            results.append(runtime.submit(Turn(
-                conversation_id=spec["conversation_id"],
-                turn_id=spec["turn_id"],
-                text=spec.get("text", ""),
-                signal=spec.get("signal"),
-                metadata=turn_metadata(spec),
-            )))
+            results.extend(_deliver_batch(runtime, batch))
     except AgenticError as exc:
         return Outcome(fixture_id, path, "fail", [f"raised {type(exc).__name__}: {exc}"], results)
     finally:
@@ -202,6 +205,41 @@ def matrix_binding(fixture: Mapping[str, Any]) -> Union[List[Dict[str, Any]], Di
     if len(outcome.results) < len(fixture["turns"]):
         raise AgenticError(outcome.reason)
     return outcome.results
+
+
+def concurrent_batches(turns: Sequence[Mapping[str, Any]]) -> List[List[Mapping[str, Any]]]:
+    """Consecutive turns joined by `concurrent_with` form one batch; every other turn is its own."""
+    batches: List[List[Mapping[str, Any]]] = []
+    i = 0
+    while i < len(turns):
+        turn = turns[i]
+        group = set(turn.get("concurrent_with") or [])
+        if not group:
+            batches.append([turn])
+            i += 1
+            continue
+        group.add(turn["turn_id"])
+        j = i
+        while j < len(turns) and turns[j]["turn_id"] in group:
+            j += 1
+        batches.append(list(turns[i:j]))
+        i = j
+    return batches
+
+
+def _deliver_batch(runtime: Runtime, batch: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Deliver one batch of mutually `concurrent_with` turns: on a runtime with `submit_async`
+    every turn is handed over in declared order without waiting for the previous one, so the
+    turns are in flight together and the runtime decides how they overlap (only within their
+    per-conversation order). The results come back in the declared order, whatever order the
+    turns finished in. A runtime without `submit_async` receives the turns one after another."""
+    turns = [Turn(conversation_id=spec["conversation_id"], turn_id=spec["turn_id"],
+                  text=spec.get("text", ""), signal=spec.get("signal"),
+                  metadata=turn_metadata(spec)) for spec in batch]
+    if len(turns) == 1 or not isinstance(runtime, AsyncSubmitting):
+        return [runtime.submit(turn) for turn in turns]
+    futures = [runtime.submit_async(turn) for turn in turns]
+    return [future.result() for future in futures]
 
 
 def _restart(runtime: Runtime, workflow: Mapping[str, Any]) -> Runtime:
