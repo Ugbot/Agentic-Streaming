@@ -4,7 +4,7 @@
 > Pulsar Functions is Apache Pulsar's lightweight serverless compute: a function
 > consumes from input topic(s), processes, and publishes to an output topic, with a
 > built-in durable **state store**. A working port lives in
-> [`../../ports/pulsar/`](../../ports/pulsar/) (compiles, runs, and is tested).
+> [`../../ports/experimental/pulsar/`](../../ports/experimental/pulsar/) (compiles, runs, and is tested).
 
 ## 1. Verdict
 
@@ -67,11 +67,11 @@ Flink's topic-in/topic-out streaming shape.
   }
   ```
 
-- **ConversationStore.** [`PulsarStateConversationStore`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/PulsarStateConversationStore.java)
+- **ConversationStore.** [`PulsarStateConversationStore`](../../ports/experimental/pulsar/src/main/java/org/jagentic/ports/pulsar/PulsarStateConversationStore.java)
   serializes the per-conversation envelope (bounded transcript + attributes + owner)
   into one state value under `conv/<cid>`, with a `user/<userId>` reverse index, the
   same SPI as every other port, now backed by Pulsar's durable state instead of Redis.
-- **KeyedStateStore.** [`PulsarStateKeyedStore`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/PulsarStateKeyedStore.java)
+- **KeyedStateStore.** [`PulsarStateKeyedStore`](../../ports/experimental/pulsar/src/main/java/org/jagentic/ports/pulsar/PulsarStateKeyedStore.java)
   maps each `(key,name)` scalar slot to a state key, the analogue of Flink keyed
   `ValueState`, persisted by the runtime.
 - **Single-writer per conversation (C2).** The `Key_Shared` subscription contract:
@@ -84,8 +84,8 @@ Flink's topic-in/topic-out streaming shape.
 
 ## 4. Worked example: banking router→path→verifier
 
-[`LocalDemo`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/LocalDemo.java)
-runs the function with **no cluster**, an [`InMemoryContext`](../../ports/pulsar/src/main/java/org/jagentic/ports/pulsar/InMemoryContext.java)
+[`LocalDemo`](../../ports/experimental/pulsar/src/main/java/org/jagentic/ports/pulsar/LocalDemo.java)
+runs the function with **no cluster**, an [`InMemoryContext`](../../ports/experimental/pulsar/src/main/java/org/jagentic/ports/pulsar/InMemoryContext.java)
 (a dynamic proxy over the state API) stands in for the broker + BookKeeper:
 
 ```

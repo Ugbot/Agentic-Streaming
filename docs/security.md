@@ -4,7 +4,7 @@ This page describes how the network-facing surfaces of this repository authentic
 how outbound HTTP egress is constrained, and which defaults exist only for local development.
 Everything here refers to the Flink main module, the Quarkus A2A gateway (`a2a-gateway/`),
 the Quarkus tool services (`tool-services/`) and the FastAPI gateway
-(`ports/gateway-fastapi/`). The compose stacks in the repository root follow the same rules.
+(`ports/experimental/gateway-fastapi/`). The compose stacks in the repository root follow the same rules.
 
 ## Token model
 

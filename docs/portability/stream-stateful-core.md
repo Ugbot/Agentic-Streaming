@@ -103,5 +103,5 @@ the agent definition is unchanged either way.
 Each module ships a cross-core parity test asserting byte-identical behaviour (the incident match,
 timer fire order, window counts, replay reproduction, suspend/resume, span trees) the way the FNV
 embedder and banking goldens already do. Run them with the usual per-core commands:
-`pytest ports/pyagentic` · `mvn -f ports/jagentic-core/pom.xml test` · `go test ./...` (in `ports/go`)
+`pytest ports/pyagentic` · `mvn -f ports/jagentic-core/pom.xml test` · `go test ./...` (in `ports/experimental/go`)
 · `clojure -X:test` (in `agentic-clj`).

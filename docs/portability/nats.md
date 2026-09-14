@@ -2,10 +2,10 @@
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > NATS JetStream adds persistent streams + a durable **key-value store** on top of the
-> NATS messaging system. A working port lives in [`../../ports/nats/`](../../ports/nats/)
+> NATS messaging system. A working port lives in [`../../ports/experimental/nats/`](../../ports/experimental/nats/)
 >, it **runs live** against a JetStream server and is covered by the adapter suite. A
 > pure-Go peer (same KV-state + stream design) lives in
-> [`../../ports/go/engines/natsjs/`](../../ports/go/engines/natsjs/).
+> [`../../ports/experimental/go/engines/natsjs/`](../../ports/experimental/go/engines/natsjs/).
 
 ## 1. Verdict
 
@@ -41,7 +41,7 @@ gives durability without a separate database.
 
 ## 3. The core abstractions on NATS JetStream
 
-- **Durable keyed state (C1) = JetStream KV.** [`NatsRuntime`](../../ports/nats/agentic_nats.py)
+- **Durable keyed state (C1) = JetStream KV.** [`NatsRuntime`](../../ports/experimental/nats/agentic_nats.py)
   stores the per-conversation envelope (transcript + attributes + owner) as one KV value
   under `conv_<cid>`, loaded before the turn and saved after:
 
@@ -69,7 +69,7 @@ gives durability without a separate database.
 
 ## 4. Worked example: banking router→path→verifier
 
-[`agentic_nats.py`](../../ports/nats/agentic_nats.py) runs the full round-trip against a
+[`agentic_nats.py`](../../ports/experimental/nats/agentic_nats.py) runs the full round-trip against a
 live JetStream server (`podman run -p 4222:4222 nats:latest -js`):
 
 ```

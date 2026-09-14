@@ -17,7 +17,7 @@ mvn -q -f ports/jagentic-core/pom.xml exec:java \
   -Dexec.args="../../examples/pipelines/banking.yaml --text 'what is my balance?'"
 
 # Go
-cd ports/go && go run ./cmd/pipeline ../../examples/pipelines/banking.yaml --text "what is my balance?"
+cd ports/experimental/go && go run ./cmd/pipeline ../../../examples/pipelines/banking.yaml --text "what is my balance?"
 ```
 
 Swap the engine with `--backend` (or the YAML `backend:` key). **nothing else changes**:

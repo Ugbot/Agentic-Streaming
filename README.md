@@ -4,8 +4,8 @@ Agentic Streaming builds agents as streaming, stateful, event-sourced systems: a
 state is a materialized view over an ordered log of events, one writer per conversation.
 Apache Flink is the most complete runtime. The same agent spec is conformance tested on seven
 runtimes across Python, the JVM, and Clojure (see [Runtimes](#runtimes)), and a further set
-of experimental adapters under `ports/` runs the banking example but is not conformance
-tested.
+of experimental adapters under `ports/experimental/` runs the banking example but is not
+conformance tested.
 
 The project was called Agentic Flink. It started as an agent framework for Apache Flink
 and grew past the name; Flink is still the richest runtime, but no longer the only one.
@@ -75,13 +75,16 @@ across a real process or cluster restart is proven only by these runtime-specifi
 
 ### Experimental adapters, not conformance tested
 
-The adapters under [`ports/`](ports/) (Faust, Kafka Streams, Temporal, Pulsar Functions, Ray,
-NATS JetStream, Quarkus, Spring, Celery, Dask, Airflow, the Go core with its gateway, and the
-two HTTP gateways) run the banking worked example on their engine and share the Python, Java,
-or Go core. None of them runs the agentic/v1 fixtures, none appears in the capability matrix,
-and their per-engine tests range from a live round trip to compile-only. Treat them as design
-studies with running code, not as supported runtimes; [`ports/README.md`](ports/README.md)
-says what each one has been verified to do.
+The adapters under [`ports/experimental/`](ports/experimental/) (Faust, Kafka Streams,
+Temporal, Pulsar Functions, Ray, NATS JetStream, Quarkus, Spring, Celery, Dask, Airflow, the Go
+core with its gateway, and the FastAPI gateway) predate the agentic/v1 spec. They run the
+banking worked example on their engine and share the Python, Java, or Go core. None of them
+runs the agentic/v1 fixtures, none appears in the capability matrix, none is on the acceptance
+path, and their per-engine tests range from a live round trip to compile-only. They may be
+removed. Treat them as design studies with running code, not as supported runtimes;
+[`ports/experimental/README.md`](ports/experimental/README.md) says what each one does and how
+to run it. The directory `ports/` itself now holds only the conformance tested cores
+(`jagentic-core`, `pyagentic`) and the portable pipeline CLI (`agentic-pipeline`).
 
 ## Quick start
 
@@ -109,7 +112,7 @@ python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is m
 # (podman run -d -p 4222:4222 nats:latest -js). Without the server it fails with
 # ConnectionRefusedError.
 python -m pip install nats-py
-PYTHONPATH=ports/agentic-pipeline:ports/nats \
+PYTHONPATH=ports/agentic-pipeline:ports/experimental/nats \
 python -m agentic_pipeline run examples/pipelines/banking.yaml --backend nats --text "card types?"
 
 # Agentic Pekko: the same spec on an event-sourced actor runtime.
@@ -280,7 +283,7 @@ one line of YAML.
 # The Python loader accepts backend: local | celery | nats and raises ValueError for
 # anything else. The Pekko, Flink, and Clojure runtimes take the same file through
 # their own entry points (PipelineMain, FlinkPipelineRunner, agentic.pipeline) and
-# override this key. Other names here are experimental adapters under ports/.
+# override this key. Other names here are experimental adapters under ports/experimental/.
 backend: nats
 agent:
   router:  { kind: keyword, default: general, rules: { payments: [balance], cards: [card] } }
@@ -654,7 +657,7 @@ In development:
   Flink framework (Apache Flink 2.2.1, native FLIP-27/143) and for Agentic Pekko, which is
   built separately after `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`
 - Clojure CLI (tools.deps) for Agentic Clojure under `agentic-clj/`
-- Go 1.24+ for the Go core, gateway, and engines under `ports/go/`
+- Go 1.24+ for the experimental Go core, gateway, and engines under `ports/experimental/go/`
 - Python 3.11+ for the pure-Python cores, ports, and the FastAPI gateway
 - Podman (with `podman compose`) for the optional Postgres, Redis, Ollama, and NATS services
 - Ollama for the local LLM examples
