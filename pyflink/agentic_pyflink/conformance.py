@@ -113,6 +113,8 @@ def run_fixture(path: Path, config: FlinkConfig | None = None, result_timeout: f
                 event["signal"] = turn["signal"]
             else:
                 event["text"] = turn.get("text", "")
+                if turn.get("metadata"):
+                    event["metadata"] = {str(k): str(v) for k, v in dict(turn["metadata"]).items()}
             if turn.get("concurrent_with"):
                 batch.append(event)
             else:

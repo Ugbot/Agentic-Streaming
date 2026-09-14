@@ -22,6 +22,7 @@ import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Event;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LocalRuntime;
+import org.jagentic.core.LogicalClock;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.pipeline.GraphBuilder;
 
@@ -30,14 +31,18 @@ import org.jagentic.core.pipeline.GraphBuilder;
  * repository, drives the {@link LocalRuntime}, and re-implements the comparator of
  * {@code spec/tools/run_conformance.py} over the normalized result documents
  * ({@code spec/v1/result.schema.json}).
+ *
+ * <p>{@code concurrent_with} turns are handed to {@link LocalRuntime#submitAsync} without waiting
+ * for one another, so they are in flight together on the runtime's per-conversation writers
+ * ({@code parallelism}); their results are collected in the fixture's declared order.
  */
 public final class ConformanceHarness {
 
   /** Capability terms ({@code spec/v1/primitives.md}) the JVM local runtime implements. */
   public static final Set<String> CAPABILITIES = Set.of(
-      "routing", "rule_brain", "tools", "structured_tool_args", "guardrails", "verifier",
-      "ordering", "idempotency", "retry", "memory", "retrieval", "replay", "suspend_resume",
-      "saga", "a2a", "durable_store");
+      "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
+      "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
@@ -98,24 +103,30 @@ public final class ConformanceHarness {
       workflow = load(fixturePath.getParent().resolve(String.valueOf(fixture.get("workflow_ref"))).normalize());
     }
 
+    // provider: stub is resolved by GraphBuilder itself; anything else is not a fixture provider.
     GraphBuilder.Built built = GraphBuilder.build(workflow, llm -> {
-      throw new IllegalStateException("conformance fixtures do not use an LLM");
+      throw new IllegalStateException("conformance fixtures only use llm.provider: stub, got " + llm.get("provider"));
     });
     ConversationLog log = new ConversationLog.InMemory();
-    LocalRuntime runtime = newRuntime(built, log);
+    LocalRuntime runtime = newRuntime(built, log, new LogicalClock.Manual());
 
     List<CompletableFuture<TurnResult>> pending = new ArrayList<>();
     for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
       if (Boolean.TRUE.equals(turn.get("restart_runtime"))) {
         pending.forEach(CompletableFuture::join);
-        runtime = newRuntime(built, log);
+        runtime = newRuntime(built, log, LogicalClock.Manual.recoveredFrom(log));
+      }
+      if (turn.get("advance_time_ms") != null) {
+        pending.forEach(CompletableFuture::join);
+        ((LogicalClock.Manual) runtime.clock()).advance(((Number) turn.get("advance_time_ms")).longValue());
       }
       String conversationId = String.valueOf(turn.get("conversation_id"));
       String turnId = String.valueOf(turn.get("turn_id"));
       Map<String, Object> signal = (Map<String, Object>) turn.get("signal");
       Event event = signal != null
           ? Event.resume(conversationId, turnId, signal)
-          : Event.turn(conversationId, turnId, "anonymous", String.valueOf(turn.getOrDefault("text", "")));
+          : Event.turn(conversationId, turnId, "anonymous", String.valueOf(turn.getOrDefault("text", "")),
+              metadata(turn));
       if (turn.get("concurrent_with") != null) {
         pending.add(runtime.submitAsync(event));
       } else {
@@ -140,10 +151,24 @@ public final class ConformanceHarness {
     return new Outcome(id, null, problems);
   }
 
-  /** A restart keeps only the log: every materialized view is rebuilt from it. */
-  private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log) {
+  /** The fixture turn's {@code metadata} (string values, as the spec carries them), empty if none. */
+  public static Map<String, String> metadata(Map<String, Object> turn) {
+    Map<String, String> out = new java.util.LinkedHashMap<>();
+    if (turn.get("metadata") instanceof Map<?, ?> m) {
+      for (Map.Entry<?, ?> e : m.entrySet()) {
+        out.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * A restart keeps only the log: every materialized view, pending timers and the logical clock
+   * included, is rebuilt from it.
+   */
+  private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log, LogicalClock clock) {
     return new LocalRuntime(built.graph(), new ConversationStore.InMemory(), new KeyedStateStore.InMemory(),
-        built.tools(), built.retriever(), log);
+        built.tools(), built.retriever(), log, clock);
   }
 
   /** Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance README. */

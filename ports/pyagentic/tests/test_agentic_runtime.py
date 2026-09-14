@@ -113,19 +113,33 @@ def test_capabilities_cover_every_v1_id_with_legal_values():
     assert set(caps.values()) <= CAPABILITY_VALUES
 
 
+def test_local_runtime_supports_every_capability_a_fixture_can_require():
+    caps = LocalRuntime().capabilities()
+    assert all(v in ("supported", "partial") for v in caps.values())
+
+
 def test_deploy_lists_every_unsupported_requirement():
+    withheld = random.choice([["timers"], ["cep"], ["timers", "cep"]])
+
+    class Withholding(LocalRuntime):
+        name = "withholding"
+
+        def capabilities(self) -> Dict[str, str]:
+            return {**super().capabilities(), **{cap: "unsupported" for cap in withheld}}
+
     spec = support_agent().build()
     doc = dict(spec.document)
     doc["timers"] = [{"id": "t", "after_ms": 1000, "tool": "lookup_charge"}]
-    doc["cep"] = [{"name": "pair", "pattern": [{"stage": "a", "where": {"text_contains": "a"}},
-                                                 {"stage": "b", "where": {"text_contains": "b"}, "contiguity": "followedBy"}]}]
+    doc["cep"] = [{"name": "pair", "pattern": [
+        {"stage": "a", "where": {"text_contains": "a"}},
+        {"stage": "b", "where": {"text_contains": "b"}, "contiguity": "followedBy"}]}]
     needs = required_capabilities(doc)
     assert {"timers", "cep"} <= set(needs)
     with pytest.raises(CapabilityError) as info:
-        LocalRuntime().deploy(doc)
-    assert info.value.runtime == "local"
-    assert any(r.startswith("timers") for r in info.value.requirements)
-    assert any(r.startswith("cep") for r in info.value.requirements)
+        Withholding().deploy(doc)
+    assert info.value.runtime == "withholding"
+    listed = {r.split(" ")[0] for r in info.value.requirements}
+    assert listed == set(withheld)
     assert "unsupported requirements" in str(info.value)
 
 

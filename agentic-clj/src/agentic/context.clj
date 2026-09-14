@@ -9,7 +9,7 @@
             [agentic.listener :as listener]))
 
 (defn make-context
-  [{:keys [conversation-id user-id turn-id text store state tools retriever listeners emit! policies]}]
+  [{:keys [conversation-id user-id turn-id text store state tools retriever listeners emit! events policies]}]
   {:conversation-id conversation-id
    :user-id user-id
    :turn-id turn-id
@@ -21,6 +21,7 @@
    :listeners (or listeners [])
    :policies (or policies {})
    :emit! (or emit! (fn [_type _payload] nil))
+   :events (or events (fn [_conversation-id] []))
    :tool-calls (atom [])
    :tool-index (atom -1)})
 

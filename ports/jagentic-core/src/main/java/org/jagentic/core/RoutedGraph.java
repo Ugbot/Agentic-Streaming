@@ -51,6 +51,9 @@ public final class RoutedGraph {
   private final Policies policies;
   private final SagaPlan saga; // may be null
   private final Map<String, String> suspendUntil;
+  private final ContextWindow contextWindow;
+  private final List<org.jagentic.core.cep.SequencePattern> cep;
+  private final List<TimerSpec> timers;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -81,6 +84,31 @@ public final class RoutedGraph {
                      Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
                      List<AgentListener> listeners, Policies policies, SagaPlan saga,
                      Map<String, String> suspendUntil) {
+    this(router, paths, verifier, pathVerifiers, guardrails, listeners, policies, saga, suspendUntil,
+        ContextWindow.NONE);
+  }
+
+  /**
+   * @param contextWindow the workflow's {@code context} block; bounds the transcript every turn's
+   *     {@link AgentContext#conversationState()} folds, and with it {@code state.transcript_length}
+   */
+  public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
+                     Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
+                     List<AgentListener> listeners, Policies policies, SagaPlan saga,
+                     Map<String, String> suspendUntil, ContextWindow contextWindow) {
+    this(router, paths, verifier, pathVerifiers, guardrails, listeners, policies, saga, suspendUntil,
+        contextWindow, List.of());
+  }
+
+  /**
+   * @param cep the workflow's sequence patterns with {@code on_match.kind: tool}, evaluated over
+   *     the conversation log after {@code routed} on every turn; empty when the workflow has none
+   */
+  public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
+                     Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
+                     List<AgentListener> listeners, Policies policies, SagaPlan saga,
+                     Map<String, String> suspendUntil, ContextWindow contextWindow,
+                     List<org.jagentic.core.cep.SequencePattern> cep) {
     if (paths == null || paths.isEmpty()) {
       throw new IllegalArgumentException("RoutedGraph requires at least one path");
     }
@@ -98,6 +126,39 @@ public final class RoutedGraph {
     this.policies = policies == null ? Policies.DEFAULTS : policies;
     this.saga = saga;
     this.suspendUntil = suspendUntil == null ? Map.of() : Map.copyOf(suspendUntil);
+    this.contextWindow = contextWindow == null ? ContextWindow.NONE : contextWindow;
+    this.cep = List.copyOf(cep == null ? List.of() : cep);
+    this.timers = List.of();
+  }
+
+  private RoutedGraph(RoutedGraph base, List<TimerSpec> timers) {
+    this.router = base.router;
+    this.paths = base.paths;
+    this.verifier = base.verifier;
+    this.pathVerifiers = base.pathVerifiers;
+    this.guardrails = base.guardrails;
+    this.listeners = base.listeners;
+    this.policies = base.policies;
+    this.saga = base.saga;
+    this.suspendUntil = base.suspendUntil;
+    this.contextWindow = base.contextWindow;
+    this.cep = base.cep;
+    this.timers = List.copyOf(timers == null ? List.of() : timers);
+  }
+
+  /**
+   * The same graph with the workflow's {@code timers} (spec section 8): scheduled on a conversation's
+   * first turn and fired, before {@code turn_received}, on the first later turn delivered at or past
+   * their deadline, reading {@link AgentContext#clock} for processing time and the folded watermark
+   * for event time.
+   */
+  public RoutedGraph withTimers(List<TimerSpec> timers) {
+    return new RoutedGraph(this, timers);
+  }
+
+  /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
+  public List<org.jagentic.core.cep.SequencePattern> cep() {
+    return cep;
   }
 
   public Policies policies() {
@@ -106,6 +167,15 @@ public final class RoutedGraph {
 
   public SagaPlan saga() {
     return saga;
+  }
+
+  public ContextWindow contextWindow() {
+    return contextWindow;
+  }
+
+  /** The workflow's declared timers, empty when it has none. */
+  public List<TimerSpec> timers() {
+    return timers;
   }
 
   public List<AgentListener> listeners() {
@@ -127,6 +197,7 @@ public final class RoutedGraph {
 
   public TurnResult handle(Event event, AgentContext ctx) {
     ctx.listeners = listeners; // so callTool can fire tool-call hooks
+    ctx.contextWindow = contextWindow;
     ConversationState before = ctx.conversationState();
 
     if (event.isResume() && before.suspended().containsKey(event.turnId())) {
@@ -141,7 +212,22 @@ public final class RoutedGraph {
     for (AgentListener l : listeners) {
       l.onTurnStart(event, ctx);
     }
-    ctx.record(EventType.TURN_RECEIVED, map("turn_id", event.turnId(), "text", event.text()));
+    Long eventTime = WorkflowTimers.eventTimeOf(event);
+    Long watermark = before.timers().watermarkAfter(eventTime);
+    Long processingNow = timers.isEmpty() ? null : WorkflowTimers.processingNow(timers, ctx);
+    boolean firstTurn = before.nextSequence() == 0;
+    if (!firstTurn && processingNow != null) {
+      WorkflowTimers.fireDue(timers, before.timers(), ctx, processingNow, watermark);
+    }
+    Map<String, Object> received = org.jagentic.core.cep.EventTime.annotate(
+        map("turn_id", event.turnId(), "text", event.text()), event);
+    if (processingNow != null) {
+      received.put(LogicalClock.PROCESSING_TIME_KEY, processingNow);
+    }
+    ctx.record(EventType.TURN_RECEIVED, received);
+    if (firstTurn && processingNow != null) {
+      WorkflowTimers.schedule(timers, ctx, processingNow, watermark);
+    }
 
     for (Guardrail g : guardrails) {
       String reason = g.checkInput(event.text());
@@ -169,6 +255,15 @@ public final class RoutedGraph {
     ctx.record(EventType.ROUTED, map("path", path));
     for (AgentListener l : listeners) {
       l.onRouted(path, ctx);
+    }
+    if (!cep.isEmpty()) {
+      try {
+        org.jagentic.core.cep.TurnPatterns.evaluate(cep, ctx);
+      } catch (ToolFailure e) {
+        return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
+      } catch (IllegalArgumentException e) {
+        return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
+      }
     }
 
     String until = suspendUntil.get(path);
@@ -212,7 +307,7 @@ public final class RoutedGraph {
         reply = agent.brain.turn(event.text(), ctx);
       } catch (ToolFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
-      } catch (ToolRegistry.UnknownTool e) {
+      } catch (ToolRegistry.UnknownTool | ToolNotPermitted e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
       } catch (RuntimeException e) {
         for (AgentListener l : listeners) {

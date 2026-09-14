@@ -22,6 +22,7 @@ CAPABILITY_IDS = (
 PROOF: dict[str, str] = {
     "routing": "conformance: routing-keyword, routing-default",
     "rule_brain": "conformance: routing-keyword, routing-default",
+    "llm_brain": "conformance: llm-brain-scripted (the spec's stub provider, replayed per turn)",
     "tools": "conformance: tool-invocation, tool-failure",
     "structured_tool_args": "conformance: tool-invocation (args: {user: anonymous})",
     "guardrails": "conformance: guardrail-rejection",
@@ -31,12 +32,15 @@ PROOF: dict[str, str] = {
     "retry": "conformance: retry-tool",
     "memory": "conformance: memory-read-write",
     "retrieval": "conformance: retrieval",
+    "context_window": "conformance: context-window",
     "replay": "conformance: replay-after-restart (stop-with-savepoint + restore)",
     "suspend_resume": "conformance: suspend-resume",
     "saga": "conformance: saga-compensation",
     "a2a": "conformance: a2a-delegation",
     "durable_store": "conformance: replay-after-restart, suspend-resume (state survives restart)",
     "parallelism": "test_runtime.py::test_parallel_job_keeps_per_conversation_order (parallelism=2)",
+    "cep": "conformance: cep-sequence",
+    "event_time": "conformance: cep-sequence",
 }
 
 CAPABILITIES: dict[str, str] = {cid: ("supported" if cid in PROOF else "not_tested") for cid in CAPABILITY_IDS}

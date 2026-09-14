@@ -31,6 +31,7 @@ import org.apache.pekko.persistence.typed.javadsl.SignalHandler;
 
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.ChatMessage;
+import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ConversationState;
 import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Event;
@@ -61,6 +62,12 @@ import org.jagentic.pekko.serialization.CborSerializable;
  * deliver, the entity arms a Pekko timer, and on expiry appends {@code timer_fired} and processes the
  * carried event as an ordinary turn (typically a {@link Event#resume resume signal} for a suspended
  * turn). Pending timers are re-armed from the fold after recovery, so a restart cannot lose them.</p>
+ *
+ * <p>Workflow {@code timers} declared in the document (spec section 8) are a different kind: the
+ * core graph schedules and fires them inside turns against {@link AgentDeps#clock()} and the
+ * conversation watermark, both folded from the journal by {@link ConversationState}. Their
+ * {@code timer_scheduled} entries carry {@code clock} and {@code due_ms} but no event to deliver, so
+ * no Pekko timer is armed for them; recovery rebuilds them through the same fold.</p>
  */
 public final class ConversationEntity
     extends EventSourcedBehavior<ConversationEntity.Command, ConversationEntity.Appended, ConversationEntity.State> {
@@ -174,7 +181,17 @@ public final class ConversationEntity
   public static final class State {
     private final List<LogEvent> events = new ArrayList<>();
     private final Map<String, PendingTimer> timers = new LinkedHashMap<>();
+    private final ContextWindow window;
     private ConversationState folded = ConversationState.empty();
+
+    public State() {
+      this(ContextWindow.NONE);
+    }
+
+    /** @param window the workflow's {@code context} block; bounds the folded transcript */
+    public State(ContextWindow window) {
+      this.window = window == null ? ContextWindow.NONE : window;
+    }
 
     public List<LogEvent> events() {
       return List.copyOf(events);
@@ -195,8 +212,8 @@ public final class ConversationEntity
             + events.size() + " but replayed " + e.sequence());
       }
       events.add(e);
-      folded = ConversationState.fold(events);
-      if (e.is(EventType.TIMER_SCHEDULED)) {
+      folded = ConversationState.fold(events, window);
+      if (e.is(EventType.TIMER_SCHEDULED) && e.payload().containsKey("event")) {
         Map<String, Object> p = e.payload();
         String id = String.valueOf(p.get("timer_id"));
         timers.put(id, new PendingTimer(id, ((Number) p.get("fire_at")).longValue(),
@@ -236,7 +253,7 @@ public final class ConversationEntity
 
   @Override
   public State emptyState() {
-    return new State();
+    return new State(deps.graph().contextWindow());
   }
 
   @Override
@@ -296,6 +313,7 @@ public final class ConversationEntity
     Event event = cmd.event();
     AgentContext ctx = new AgentContext(conversationId, event.turnId(), event.userId(), store,
         new KeyedStateStore.InMemory(), deps.tools(), deps.retriever(), log, deps.policies());
+    ctx.clock = deps.clock();
     TurnResult result;
     try {
       result = deps.graph().handle(event, ctx);

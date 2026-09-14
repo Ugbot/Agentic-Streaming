@@ -7,7 +7,7 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence, TypeVar
 
 from .errors import ValidationError
 
@@ -22,6 +22,8 @@ EVENT_TYPES: FrozenSet[str] = frozenset({
 TERMINAL_STATUSES: FrozenSet[str] = frozenset({
     "completed", "rejected", "unverified", "failed", "suspended", "duplicate",
 })
+
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -68,27 +70,62 @@ class ChatMessage:
     text: str
 
 
-def reduce_state(log: Iterable[Event]) -> Dict[str, Any]:
-    """The only definition of conversation state. Pure, total, and ignores unknown types."""
+def window_size(context: Optional[Mapping[str, Any]]) -> Optional[int]:
+    """The bound a workflow `context` block puts on the model-visible transcript.
+
+    `compaction: window` bounds it to `max_items` messages; `none` and `moscow` leave the
+    retained transcript alone (`spec/v1/primitives.md`, Context window), so they yield None.
+    """
+    if not context or context.get("compaction", "none") != "window":
+        return None
+    max_items = context.get("max_items")
+    if not isinstance(max_items, int) or isinstance(max_items, bool) or max_items < 1:
+        raise ValidationError("context.compaction window requires context.max_items >= 1")
+    return max_items
+
+
+def retain_window(messages: Sequence[T], context: Optional[Mapping[str, Any]]) -> List[T]:
+    """The retained tail of `messages` under `context`: the most recent `max_items`, in order."""
+    window = window_size(context)
+    if window is None or len(messages) <= window:
+        return list(messages)
+    return list(messages[len(messages) - window:])
+
+
+def reduce_state(log: Iterable[Event], context: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """The only definition of conversation state. Pure, total, and ignores unknown types.
+
+    Under a `context` block of `compaction: window`, `transcript_length` reports the retained
+    transcript, at most `max_items`; the log and `turn_count` are never compacted.
+    """
+    window = window_size(context)
     state: Dict[str, Any] = {"turn_count": 0, "transcript_length": 0}
     for event in log:
         if event.type == "turn_received":
             state["turn_count"] += 1
+            if event.payload.get("event_time_ms") is not None:
+                event_time = int(event.payload["event_time_ms"])
+                state["watermark_ms"] = max(state.get("watermark_ms", event_time), event_time)
+        elif event.type == "timer_fired":
+            state.setdefault("fired_timers", []).append(str(event.payload["timer_id"]))
         elif event.type == "memory_written":
             state["transcript_length"] += len(event.payload.get("messages", ()))
+            if window is not None:
+                state["transcript_length"] = min(state["transcript_length"], window)
         elif event.type == "retrieved":
             state["last_retrieved_ids"] = list(event.payload.get("ids", ()))
     return state
 
 
-def transcript(log: Iterable[Event]) -> List[ChatMessage]:
-    """The conversation memory as a fold over `memory_written` events."""
+def transcript(log: Iterable[Event], context: Optional[Mapping[str, Any]] = None) -> List[ChatMessage]:
+    """The conversation memory as a fold over `memory_written` events, bounded to the
+    retained window when `context` declares one."""
     messages: List[ChatMessage] = []
     for event in log:
         if event.type == "memory_written":
             for message in event.payload.get("messages", ()):
                 messages.append(ChatMessage(role=str(message["role"]), text=str(message["text"])))
-    return messages
+    return retain_window(messages, context)
 
 
 class EventLog(ABC):

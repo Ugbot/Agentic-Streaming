@@ -17,6 +17,7 @@
             [agentic.retrieval :as r]
             [agentic.guardrail :as guard]
             [agentic.cep :as cep]
+            [agentic.cep-fold :as cep-fold]
             [agentic.core :as core]
             [agentic.store :as store]
             [agentic.log :as log]
@@ -106,16 +107,12 @@
 ;; ---- brains ----
 
 (defn- build-chat-client
-  "The ChatClient from `llm:`. provider: stub (deterministic, from `script`) | ollama | openai."
+  "The ChatClient from `llm:`. provider: stub (deterministic, `script` replayed from the top on every
+   turn) | ollama | openai."
   [{:keys [provider script base-url model api-key] :or {provider "stub"} :as llm-spec}]
   (when llm-spec
     (case provider
-      "stub" (apply llm/stub-chat-client
-                    (mapv (fn [step]
-                            (if (contains? step :tool)
-                              {:tool (:tool step) :args (or (:args step) {})}
-                              {:text (or (:text step) "ok")}))
-                          script))
+      "stub" (llm/scripted-chat-client script)
       "ollama" (llm/ollama-chat-client (cond-> {}
                                          base-url (assoc :base-url base-url)
                                          model (assoc :model model)))
@@ -125,14 +122,25 @@
                                          api-key (assoc :api-key api-key)))
       nil)))
 
-(defn- build-brain [path-name {:keys [brain prompt tools max-iterations tool-triggers threshold]} dim top-k chat-client context]
+(defn scripted-llm?
+  "True when the workflow's `llm` section selects the spec's deterministic `stub` provider."
+  [llm-spec]
+  (and (some? llm-spec) (= "stub" (get llm-spec :provider "stub"))))
+
+(defn- build-brain [path-name {:keys [brain prompt tools max-iterations tool-triggers threshold]} dim top-k chat-client context
+                    & [{:keys [scripted?]}]]
   (if (= "llm" brain)
     (llm/llm-brain chat-client
                    {:name path-name :system-prompt (or prompt "")
                     :allowed-tools tools
+                    ;; primitives.md section 8: the scripted reply is verbatim and a scripted call
+                    ;; outside the path's tools is a validation error.
+                    :verbatim-reply? (boolean scripted?)
+                    :strict-tools? (boolean scripted?)
                     :max-iterations (as-int max-iterations 6)
                     :context-window (when context
                                       {:max-tokens (as-int (:max-tokens context) 512)
+                                       :max-items (:max-items context)
                                        :compaction (or (:compaction context) "moscow")})})
     (brain/keyword-brain path-name (cond-> {:tool-triggers tool-triggers :dim dim :top-k top-k}
                                      threshold (assoc :threshold threshold)))))
@@ -199,7 +207,7 @@
             (throw (spec/validation-error (str "backend " (:backend wf) " is not a Clojure runtime; one of "
                                                (str/join ", " (sort backends)))
                                           ["backend"])))
-        {:keys [agent retrieval embeddings context llm skills policies saga]} wf
+        {:keys [agent retrieval embeddings context llm skills policies saga timers]} wf
         dim (or (:dim embeddings) (:dim retrieval) 256)
         top-k (or (:top-k retrieval) 4)
         cc (or chat-client (build-chat-client llm)
@@ -211,7 +219,8 @@
         graph-paths (into {}
                           (map (fn [[name pspec]]
                                  [name (cond-> {:name name :prompt (or (:prompt pspec) "")
-                                                :brain (build-brain name pspec dim top-k cc context)}
+                                                :brain (build-brain name pspec dim top-k cc context
+                                                                    {:scripted? (and (nil? chat-client) (scripted-llm? llm))})}
                                          (contains? pspec :x-suspend-until)
                                          (assoc :suspend-until (:x-suspend-until pspec))
                                          (some? (:verifier pspec))
@@ -224,6 +233,9 @@
              :guardrails (mapv build-guardrail (:guardrails wf))
              :policies policies
              :saga saga
+             :context context
+             :cep (cep-fold/compile-patterns (:cep wf))
+             :timers (vec timers)
              :listeners []}
      :tools reg
      :retriever (build-retriever retrieval dim)
@@ -286,12 +298,13 @@
 ;; ---- systems ----
 
 (defn system-from
-  "A runnable system from a raw or canonical workflow document plus opened stores."
+  "A runnable system from a raw or canonical workflow document plus opened stores. `stores` may also
+   carry `:clock`, the processing clock workflow timers read (see agentic.core/local-system)."
   [document stores & [opts]]
   (let [{:keys [graph tools retriever workflow]} (build document opts)]
     (assoc (core/local-system graph tools retriever stores)
            :workflow workflow
-           :cep (cep/compile-cep (:cep workflow)))))
+           :cep (cep/compile-cep (cep-fold/without-tool-actions (:cep workflow))))))
 
 (defn load-system
   "Load a workflow .yaml/.json/.edn into a runnable system, with the stores it configures. A

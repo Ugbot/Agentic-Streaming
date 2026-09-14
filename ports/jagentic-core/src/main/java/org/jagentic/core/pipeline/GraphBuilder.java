@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jagentic.core.Agent;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.Brain;
+import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Event;
 import org.jagentic.core.Guardrail;
@@ -30,6 +31,7 @@ import org.jagentic.core.Retrieval;
 import org.jagentic.core.RoutedGraph;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.SagaPlan;
+import org.jagentic.core.TimerSpec;
 import org.jagentic.core.ToolRegistry;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.VectorStore;
@@ -42,6 +44,7 @@ import org.jagentic.core.inference.EmbeddingClassifier;
 import org.jagentic.core.inference.LexiconClassifier;
 import org.jagentic.core.llm.ChatClient;
 import org.jagentic.core.llm.LlmBrain;
+import org.jagentic.core.llm.ScriptedChatClient;
 import org.jagentic.core.store.McpStdioClient;
 
 /**
@@ -72,10 +75,20 @@ public final class GraphBuilder {
   /** Tool ids that {@code kind: failing} tools count attempts under; shared across turns like the reference. */
   public static final String FAIL_ATTEMPTS_KEY = "x-fail-attempts";
 
-  /** Supplies a ChatClient for an {@code llm:} spec (lets the loader choose the provider). */
+  /**
+   * Supplies a ChatClient for an {@code llm:} spec (lets the loader choose the provider). The
+   * spec's deterministic {@code provider: stub} needs no factory: {@link #build} resolves it to a
+   * {@link ScriptedChatClient} itself, so the factory is only consulted for real providers.
+   */
   @FunctionalInterface
   public interface ChatClientFactory {
     ChatClient create(Map<String, Object> llmSpec);
+  }
+
+  /** True when {@code spec} has an {@code llm} brain whose provider is the scripted {@code stub}. */
+  @SuppressWarnings("unchecked")
+  public static boolean usesScriptedLlm(Map<String, Object> spec) {
+    return spec.get("llm") instanceof Map<?, ?> llm && ScriptedChatClient.accepts((Map<String, Object>) llm);
   }
 
   private static final ObjectMapper JSON = new ObjectMapper();
@@ -115,7 +128,10 @@ public final class GraphBuilder {
 
     ContextWindowManager contextManager = null;
     Map<String, Object> ctxSpec = (Map<String, Object>) spec.get("context");
-    if (ctxSpec != null) {
+    ContextWindow contextWindow = ContextWindow.fromMap(ctxSpec);
+    // compaction: window bounds the transcript by message count; the MoSCoW token budget applies
+    // on top of it only when max_tokens is declared.
+    if (ctxSpec != null && (!contextWindow.bounded() || ctxSpec.containsKey("max_tokens"))) {
       int budget = ctxSpec.containsKey("max_tokens")
           ? ((Number) ctxSpec.get("max_tokens")).intValue()
           : ((Number) ctxSpec.getOrDefault("max_items", 12)).intValue() * 64;
@@ -148,10 +164,12 @@ public final class GraphBuilder {
       String brainKind = (String) ps.getOrDefault("brain", "rule");
       Brain brain;
       if ("llm".equals(brainKind)) {
-        if (chatClientFactory == null) {
+        Map<String, Object> llmSpec = (Map<String, Object>) spec.getOrDefault("llm", Map.of());
+        boolean scripted = ScriptedChatClient.accepts(llmSpec);
+        if (!scripted && chatClientFactory == null) {
           throw new IllegalArgumentException("spec uses an llm brain but no ChatClientFactory was provided");
         }
-        ChatClient client = chatClientFactory.create((Map<String, Object>) spec.getOrDefault("llm", Map.of()));
+        ChatClient client = scripted ? ScriptedChatClient.fromSpec(llmSpec) : chatClientFactory.create(llmSpec);
         List<String> pathTools = new ArrayList<>();
         if (ps.get("tools") instanceof List<?> declared) {
           for (Object t : declared) pathTools.add(String.valueOf(t));
@@ -166,6 +184,9 @@ public final class GraphBuilder {
         }
         if (contextManager != null) {
           lb.withContextManager(contextManager);
+        }
+        if (scripted) {
+          lb.withVerbatimReply().withStrictTools();
         }
         brain = lb;
       } else if ("rule".equals(brainKind)) {
@@ -186,7 +207,12 @@ public final class GraphBuilder {
     }
 
     RoutedGraph graph = new RoutedGraph(router, paths, verifier, pathVerifiers, guardrails, List.of(), policies,
-        saga, suspendUntil);
+        saga, suspendUntil, contextWindow,
+        org.jagentic.core.cep.SequencePattern.compile((List<Map<String, Object>>) spec.get("cep")));
+    List<TimerSpec> timers = TimerSpec.fromSpecs(spec.get("timers"));
+    if (!timers.isEmpty()) {
+      graph = graph.withTimers(timers);
+    }
     return new Built(graph, tools, retriever, availability.degradations());
   }
 

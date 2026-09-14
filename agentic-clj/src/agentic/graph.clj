@@ -9,6 +9,8 @@
       :guardrails [{:check-input (fn [text]->reason|nil) :check-output (fn [reply]->reason|nil)}]
       :policies   canonical `policies` block (retry, verification, on-tool-error, ...)
       :saga       canonical `saga` block, when the workflow runs a saga instead of a brain
+      :cep        [agentic.cep-fold patterns] evaluated in-turn after `routed`
+      :timers     canonical `timers` block (agentic.workflow-timers), scheduled on the first turn
       :listeners  [..]}
 
    Legacy transcript/attribute writes to the ConversationStore are kept as a projection of the log,
@@ -17,7 +19,9 @@
             [agentic.store :as store]
             [agentic.context :as ctx]
             [agentic.tools :as tools]
-            [agentic.listener :as listener]))
+            [agentic.cep-fold :as cep-fold]
+            [agentic.listener :as listener]
+            [agentic.workflow-timers :as wt]))
 
 (def phase-attr "phase")
 (def path-attr "path")
@@ -41,6 +45,14 @@
 (defn- finish-tool-failure [c e]
   (ctx/emit! c :turn-failed {:status "failed" :reason (ex-message e)
                              :error {:class :tool :message (ex-message e)}})
+  (attr! c phase-attr "done")
+  :failed)
+
+(defn- validation-error? [e] (= :validation (:error/class (ex-data e))))
+
+(defn- finish-validation-failure [c e]
+  (ctx/emit! c :turn-failed {:status "failed" :reason (ex-message e)
+                             :error {:class :validation :message (ex-message e)}})
   (attr! c phase-attr "done")
   :failed)
 
@@ -79,9 +91,13 @@
     (loop [attempt 1]
       (let [outcome (try {:reply ((:brain agent) (:text c) c)}
                          (catch clojure.lang.ExceptionInfo e
-                           (if (ctx/tool-error? e) {:tool-error e} (throw e))))]
-        (if-let [e (:tool-error outcome)]
-          (finish-tool-failure c e)
+                           (cond (ctx/tool-error? e) {:tool-error e}
+                                 (validation-error? e) {:validation-error e}
+                                 :else (throw e))))]
+        (cond
+          (:tool-error outcome) (finish-tool-failure c (:tool-error outcome))
+          (:validation-error outcome) (finish-validation-failure c (:validation-error outcome))
+          :else
           (let [reply (:reply outcome)]
             (ctx/emit! c :reply-drafted {:reply reply})
             (if-let [reason (guardrail-reason graph :check-output reply)]
@@ -126,13 +142,37 @@
                 (finish-tool-failure c e))
             (recur more (conj done step))))))))
 
+(defn received-payload
+  "The `turn_received` payload: turn id and text, plus the turn's metadata and its event time
+   (`metadata.event_time_ms` as a number) when it carries any."
+  [event]
+  (let [metadata (:metadata event)
+        event-time (cep-fold/event-time-ms metadata)]
+    (cond-> {:turn-id (:turn-id event) :text (:text event)}
+      (seq metadata) (assoc :metadata metadata)
+      (some? event-time) (assoc :event-time-ms event-time))))
+
+(defn- match-patterns
+  "Sequence CEP over the conversation's log, this turn included; a pattern completing on this turn
+   invokes its tool on this turn. Returns :failed when that tool failed, else nil."
+  [graph c]
+  (when (seq (:cep graph))
+    (let [outcome (try (cep-fold/evaluate! (:cep graph) c ((:events c) (:conversation-id c))) nil
+                       (catch clojure.lang.ExceptionInfo e
+                         (if (ctx/tool-error? e) {:tool-error e} (throw e))))]
+      (when-let [e (:tool-error outcome)]
+        (finish-tool-failure c e)))))
+
 (defn handle
-  "Process one fresh turn: turn_received → guardrails → routed → suspend, saga or brain. Returns the
-   terminal status keyword; the events are in the log."
+  "Process one fresh turn: turn_received → guardrails → routed → cep → suspend, saga or brain. Returns
+   the terminal status keyword; the events are in the log."
   [graph event c]
   (let [listeners (:listeners c) text (:text event)]
     (listener/fire listeners :on-turn-start {:event event :ctx c})
-    (ctx/emit! c :turn-received {:turn-id (:turn-id c) :text text})
+    (wt/fire-due! graph event c)
+    (ctx/emit! c :turn-received
+               (wt/received-payload graph event c (received-payload (assoc event :turn-id (:turn-id c)))))
+    (wt/schedule! graph event c)
     (if-let [reason (guardrail-reason graph :check-input text)]
       (finish-rejected graph c reason)
       (do
@@ -145,6 +185,8 @@
           (attr! c path-attr path)
           (listener/fire listeners :on-routed {:path path :ctx c})
           (cond
+            (= :failed (match-patterns graph c)) :failed
+
             (contains? agent :suspend-until)
             (do (ctx/emit! c :turn-suspended {:turn-id (:turn-id c) :path path :text text
                                               :until (:suspend-until agent)})

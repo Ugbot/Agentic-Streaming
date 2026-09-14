@@ -91,7 +91,9 @@ public final class FlinkPipelineRunner {
   public static DataStream<TurnResult> assembleResults(StreamExecutionEnvironment env, Map<String, Object> spec,
                                                        DataStream<Event> source, FlinkRuntimeOptions options,
                                                        ChatClientFactories.SerializableChatClientFactory chatClientFactory) {
-    List<Map<String, Object>> cepRules = (List<Map<String, Object>>) spec.get("cep");
+    // on_match tool rules are evaluated in-turn by WorkflowTurnFunction; the rest run as native CEP
+    List<Map<String, Object>> cepRules = org.jagentic.core.cep.SequencePattern.withoutToolActions(
+        (List<Map<String, Object>>) spec.get("cep"));
     DataStream<Event> agentInput = source;
 
     if (cepRules != null && !cepRules.isEmpty()) {

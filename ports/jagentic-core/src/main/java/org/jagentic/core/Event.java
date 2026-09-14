@@ -34,6 +34,12 @@ public record Event(String conversationId, String turnId, String userId, String 
     return new Event(conversationId, turnId, userId, text, Map.of(), null);
   }
 
+  /** A turn carrying metadata, such as {@code event_time_ms} for the event clock. */
+  public static Event turn(String conversationId, String turnId, String userId, String text,
+                           Map<String, String> metadata) {
+    return new Event(conversationId, turnId, userId, text, metadata == null ? Map.of() : metadata, null);
+  }
+
   /** The resume command for a suspended turn: same {@code turnId}, carrying the external signal. */
   public static Event resume(String conversationId, String turnId, Map<String, Object> signal) {
     return new Event(conversationId, turnId, null, "", Map.of(), signal == null ? Map.of() : signal);

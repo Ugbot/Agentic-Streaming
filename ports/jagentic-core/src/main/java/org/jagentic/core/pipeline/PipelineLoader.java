@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -18,10 +17,9 @@ import org.jagentic.core.LongTermStore;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.llm.ChatClient;
-import org.jagentic.core.llm.ChatResult;
 import org.jagentic.core.llm.OllamaChatClient;
 import org.jagentic.core.llm.OpenAIChatClient;
-import org.jagentic.core.llm.StubChatClient;
+import org.jagentic.core.llm.ScriptedChatClient;
 
 /**
  * Loads a {@code pipeline.yaml} (the same schema as the Python/Go loaders), builds the
@@ -100,7 +98,8 @@ public final class PipelineLoader {
 
     Runtime runtime = Backends.create(backend, built, conversation);
     List<org.jagentic.core.cep.CepWiring> cep =
-        org.jagentic.core.cep.CepSpec.compile((List<Map<String, Object>>) spec.get("cep"));
+        org.jagentic.core.cep.CepSpec.compile(org.jagentic.core.cep.SequencePattern.withoutToolActions(
+            (List<Map<String, Object>>) spec.get("cep")));
     List<String> degradations = new java.util.ArrayList<>(built.degradations());
     degradations.addAll(availability.degradations());
     return new PipelineSystem(backend, runtime, built, longTerm, conversation, cep, degradations);
@@ -174,19 +173,7 @@ public final class PipelineLoader {
       case "openai":
         return new OpenAIChatClient((String) llm.getOrDefault("model", "gpt-5.4-mini"));
       case "stub":
-        List<ChatResult> script = new ArrayList<>();
-        for (Map<String, Object> step : (List<Map<String, Object>>) llm.getOrDefault("script", List.of())) {
-          if (step.get("tool") != null) {
-            script.add(ChatResult.toolCall((String) step.get("tool"),
-                (Map<String, Object>) step.getOrDefault("args", Map.of())));
-          } else {
-            script.add(ChatResult.text((String) step.getOrDefault("text", "ok")));
-          }
-        }
-        if (script.isEmpty()) {
-          script.add(ChatResult.text("ok"));
-        }
-        return new StubChatClient(script);
+        return ScriptedChatClient.fromSpec(llm);
       default:
         throw new IllegalArgumentException("unknown llm provider " + provider);
     }

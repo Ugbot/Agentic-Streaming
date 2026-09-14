@@ -48,17 +48,49 @@
 
 ;; ---- folds ----
 
+(defn window-size
+  "The bound on the model-visible transcript a workflow `context` block declares: `max_items` when
+   `compaction` is `window`, else nil (`none` and `moscow` leave the retained transcript alone)."
+  [context]
+  (when (= "window" (:compaction context))
+    (let [n (:max-items context)]
+      (when-not (and (integer? n) (pos? n))
+        (throw (ex-info "context.compaction window requires context.max_items >= 1"
+                        {:error/class :validation :context context})))
+      (long n))))
+
+(defn retain-window
+  "The retained tail of `messages` under `context`: the most recent `max_items`, order preserved;
+   everything when the context does not declare a window."
+  [messages context]
+  (if-let [n (window-size context)]
+    (let [messages (vec messages)]
+      (if (> (count messages) n) (subvec messages (- (count messages) n)) messages))
+    messages))
+
+(defn- watermark
+  "The highest `event_time_ms` seen; a turn without one, or a late one, leaves it where it is."
+  [state payload]
+  (if-let [t (:event-time-ms payload)]
+    (assoc state :watermark-ms (max (get state :watermark-ms t) t))
+    state))
+
 (defn reduce-state
-  "Conversation state as a fold over its events — the only definition of state."
-  [events]
-  (reduce (fn [state {:keys [type payload]}]
-            (case type
-              :turn-received (update state :turn-count inc)
-              :memory-written (update state :transcript-length + (count (:messages payload)))
-              :retrieved (assoc state :last-retrieved-ids (vec (:ids payload)))
-              state))
-          {:turn-count 0 :transcript-length 0}
-          events))
+  "Conversation state as a fold over its events — the only definition of state. With a workflow
+   `context` block of `compaction: window`, `:transcript-length` reports the retained transcript, at
+   most `max_items`; the log and `:turn-count` are never compacted."
+  [events & [context]]
+  (let [window (window-size context)]
+    (reduce (fn [state {:keys [type payload]}]
+              (case type
+                :turn-received (watermark (update state :turn-count inc) payload)
+                :memory-written (let [n (+ (:transcript-length state) (count (:messages payload)))]
+                                  (assoc state :transcript-length (if window (min n window) n)))
+                :retrieved (assoc state :last-retrieved-ids (vec (:ids payload)))
+                :timer-fired (update state :fired-timers (fnil conj []) (:timer-id payload))
+                state))
+            {:turn-count 0 :transcript-length 0}
+            events)))
 
 (defn dense?
   "True when the sequences are exactly 0..n-1 in order."
@@ -90,8 +122,9 @@
 (defn turn-result
   "The normalized result of turn `turn-id` derived from the conversation log: status from the terminal
    event, path from `routed`, reply from `turn_completed` (or the last draft when verification gave
-   up), tool calls from the tool events, and the state folded up to this turn's last event."
-  [cid turn-id events]
+   up), tool calls from the tool events, and the state folded up to this turn's last event under the
+   workflow's `context` block."
+  [cid turn-id events & [context]]
   (let [whole (turn-events events turn-id)
         mine (last-delivery whole)
         by-type (group-by :type mine)
@@ -115,7 +148,7 @@
      :status status
      :path (:path (:payload (last (filter #(= :routed (:type %)) whole))))
      :reply reply
-     :state (reduce-state upto)
+     :state (reduce-state upto context)
      :tool-calls (vec (keep tool-call mine))
      :events (mapv #(select-keys % [:type :sequence :payload]) mine)
      :error error}))

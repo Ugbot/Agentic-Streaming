@@ -52,6 +52,11 @@ import org.jagentic.core.TurnResult;
  * static because MiniCluster tasks share the test JVM. Events already pulled from the queue but not
  * yet checkpointed are lost on failure, like any at-most-once source; the tests only fail the job
  * when nothing but the poison marker is in flight.
+ *
+ * <p>The source chain (generator, poison map, heartbeat filter) always runs at parallelism 1 so
+ * events reach {@code keyBy(conversationId)} in submission order; the keyed workflow operator and
+ * the sink run at the driver's {@code parallelism}, so distinct conversations execute on distinct
+ * subtasks concurrently while each conversation stays on one subtask.
  */
 public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
@@ -71,6 +76,7 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
   private final Duration timeout;
   private final boolean strictTypes;
   private final boolean checkpointing;
+  private final int parallelism;
   private JobClient job;
   private int consumed = 0;
 
@@ -81,6 +87,22 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
                                    Path savepointDir, Duration timeout, boolean strictTypes, boolean checkpointing) {
+    this(cluster, spec, options, savepointDir, timeout, strictTypes, checkpointing, 1);
+  }
+
+  /** A driver at the given operator parallelism (the workflow runs the same job at 1 or more subtasks). */
+  public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
+                                   Path savepointDir, int parallelism) {
+    this(cluster, spec, options, savepointDir, Duration.ofSeconds(60), false, true, parallelism);
+  }
+
+  public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
+                                   Path savepointDir, Duration timeout, boolean strictTypes, boolean checkpointing,
+                                   int parallelism) {
+    if (parallelism < 1) {
+      throw new IllegalArgumentException("parallelism must be at least 1, got " + parallelism);
+    }
+    this.parallelism = parallelism;
     this.cluster = Objects.requireNonNull(cluster);
     this.spec = Objects.requireNonNull(spec);
     this.options = Objects.requireNonNull(options);
@@ -95,6 +117,10 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   public String driverId() {
     return driverId;
+  }
+
+  public int parallelism() {
+    return parallelism;
   }
 
   /** Starts a fresh job (empty state). */
@@ -227,14 +253,14 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
     if (savepoint != null) {
       conf.set(StateRecoveryOptions.SAVEPOINT_PATH, savepoint);
     }
-    StreamExecutionEnvironment env = new TestStreamEnvironment(cluster, conf, 1, List.of(), List.of());
-    env.setParallelism(1);
+    StreamExecutionEnvironment env = new TestStreamEnvironment(cluster, conf, parallelism, List.of(), List.of());
+    env.setParallelism(parallelism);
 
     DataGeneratorSource<Event> gen = new DataGeneratorSource<>(new QueueGenerator(driverId), Long.MAX_VALUE,
         RateLimiterStrategy.perSecond(400), WorkflowTurnFunction.EVENT_TYPE);
-    DataStream<Event> source = env.fromSource(gen, WatermarkStrategy.noWatermarks(), "turns")
-        .map(new FailOnce(driverId)).returns(WorkflowTurnFunction.EVENT_TYPE)
-        .filter(e -> !HEARTBEAT.equals(e.conversationId()));
+    DataStream<Event> source = env.fromSource(gen, WatermarkStrategy.noWatermarks(), "turns").setParallelism(1)
+        .map(new FailOnce(driverId)).setParallelism(1).returns(WorkflowTurnFunction.EVENT_TYPE)
+        .filter(e -> !HEARTBEAT.equals(e.conversationId())).setParallelism(1);
 
     FlinkPipelineRunner.assembleResults(env, spec, source, options)
         .sinkTo(new CollectingSink(driverId));

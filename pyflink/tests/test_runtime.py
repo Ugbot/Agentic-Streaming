@@ -116,21 +116,24 @@ def test_capabilities_vocabulary_and_proof() -> None:
     assert set(CAPABILITIES.values()) <= {"supported", "partial", "unsupported", "not_tested"}
     for cid, status in CAPABILITIES.items():
         assert (status == "supported") == (cid in PROOF), cid
-    assert CAPABILITIES["llm_brain"] == "not_tested"
+    assert CAPABILITIES["llm_brain"] == "supported"
+    assert CAPABILITIES["timers"] == "not_tested"
     assert CAPABILITIES["checkpoint_recovery"] == "not_tested"
 
 
 def test_deploy_warns_on_untested_requirements_and_rejects_unsupported(support_workflow, monkeypatch) -> None:
     rt = FlinkRuntime()
-    llm_doc = json.loads(json.dumps(support_workflow))
-    llm_doc["agent"]["paths"]["billing"]["brain"] = "llm"
+    timer_doc = json.loads(json.dumps(support_workflow))
+    timer_doc["timers"] = [{"id": "nudge", "after_ms": 1000, "tool": "lookup_charge"}]
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         from agentic_pyflink.capabilities import check_requirements
         from agentic_pyflink.workflow import required_capabilities
 
-        check_requirements(required_capabilities(llm_doc), rt.capabilities())
-    assert any("llm_brain" in str(w.message) for w in caught)
+        required = required_capabilities(timer_doc)
+        assert "timers" in required
+        check_requirements(required, rt.capabilities())
+    assert any("timers" in str(w.message) for w in caught)
 
     monkeypatch.setitem(CAPABILITIES, "tools", "unsupported")
     with pytest.raises(CapabilityError, match="tools"):

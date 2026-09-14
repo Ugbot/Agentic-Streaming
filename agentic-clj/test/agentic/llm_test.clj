@@ -1,6 +1,9 @@
 (ns agentic.llm-test
   (:require [clojure.test :refer [deftest is testing]]
             [agentic.llm :as llm]
+            [agentic.pipeline :as pipeline]
+            [agentic.core :as core]
+            [agentic.event :as ev]
             [agentic.tools :as tools]
             [agentic.context :as ctx]
             [agentic.store :as store]
@@ -21,6 +24,70 @@
           reply (brain "please echo" context)]
       (is (= "[assistant] done" reply))
       (is (= ["echo"] (mapv :tool @(:tool-calls context)))))))
+
+(defn- scripted-fixture
+  "A workflow with the spec's stub provider: one scripted tool call with random structured args,
+   then a random final text. `path-tools` is the payments path's declared tools."
+  [account answer path-tools]
+  {"spec_version" "agentic/v1"
+   "agent" {"router" {"kind" "keyword" "default" "general" "rules" {"payments" ["balance"]}}
+            "paths" {"payments" (cond-> {"brain" "llm" "prompt" "payments"}
+                                  path-tools (assoc "tools" path-tools))
+                     "general" {"brain" "rule"}}
+            "verifier" {"kind" "none"}}
+   "tools" [{"id" "get_balance" "kind" "constant" "value" 1234.56}
+            {"id" "hidden" "kind" "constant" "value" 1}]
+   "llm" {"provider" "stub"
+          "script" [{"tool" "get_balance" "args" {"account" account "currency" "USD"}}
+                    {"text" answer}]}})
+
+(defn- run-scripted [spec & texts]
+  (let [{:keys [graph tools retriever]} (pipeline/build spec)
+        sys (core/local-system graph tools retriever)]
+    (mapv #(core/submit sys (ev/event "c1" "u" %)) texts)))
+
+(deftest scripted-chat-client-replays-from-the-top-each-turn
+  (let [account (str "acct-" (+ 1000 (rand-int 9000)))
+        answer (str "Your balance is " (inc (rand-int 100000)) " USD.")
+        spec (scripted-fixture account answer ["get_balance"])
+        [r1 r2] (run-scripted spec "what is my balance?" "what is my balance?")]
+    (testing "the final text is the reply verbatim, no [path] prefix, and the turn completes"
+      (is (true? (:ok r1)) (pr-str r1))
+      (is (= "payments" (:path r1)))
+      (is (= answer (:reply r1))))
+    (testing "one structured tool call per turn with the fixture's exact args"
+      (is (= 1 (count (:tool-calls r1))))
+      (is (= {:tool "get_balance" :index 0 :attempt 1 :args {"account" account "currency" "USD"}}
+             (select-keys (first (:tool-calls r1)) [:tool :index :attempt :args]))))
+    (testing "the second turn replays the script from step one"
+      (is (true? (:ok r2)) (pr-str r2))
+      (is (= answer (:reply r2)))
+      (is (= ["get_balance"] (mapv :tool (:tool-calls r2)))))
+    (testing "the rule path keeps its [path] prefix"
+      (let [[r] (run-scripted spec "hello")]
+        (is (= "general" (:path r)))
+        (is (re-find #"^\[general\] " (:reply r)))))))
+
+(deftest scripted-call-outside-declared-tools-is-a-validation-failure
+  (let [spec (scripted-fixture "acct-1" "never" ["hidden"])
+        [r] (run-scripted spec "what is my balance?")]
+    (is (false? (:ok r)))
+    (is (= :failed (:status r)))
+    (is (= "validation" (name (get-in r [:error :class]))) (pr-str (:error r)))
+    (is (re-find #"get_balance" (get-in r [:error :message])))
+    (is (empty? (:tool-calls r)))))
+
+(deftest scripted-script-without-final-text-fails-validation
+  (let [spec (assoc-in (scripted-fixture "acct-1" "x" ["get_balance"]) ["llm" "script"]
+                       [{"tool" "get_balance" "args" {}}])
+        [r] (run-scripted spec "what is my balance?")]
+    (is (false? (:ok r)))
+    (is (= "validation" (name (get-in r [:error :class]))) (pr-str (:error r)))))
+
+(deftest script-step-counts-tool-observations-of-the-current-turn-only
+  (is (= 0 (llm/script-step [{:role "system"} {:role "user"}])))
+  (is (= 2 (llm/script-step [{:role "user"} {:role "assistant"} {:role "tool"} {:role "assistant"} {:role "tool"}])))
+  (is (= 0 (llm/script-step [{:role "user"} {:role "tool"} {:role "assistant"} {:role "user"}]))))
 
 (deftest parse-react-json
   (is (= {:tool "t" :args {:a 1}} (llm/parse-react "{\"tool\":\"t\",\"args\":{\"a\":1}}")))

@@ -49,6 +49,7 @@ class PipelineTest {
     TurnResult res = sys.submit(new Event("c1", "demo", "what is my balance?"));
     assertEquals("payments", res.path);
     assertTrue(res.toolCalls.contains("get_balance"));
-    assertEquals("[payments] Your balance is 1234.56.", res.reply);
+    assertTrue(res.ok, () -> String.valueOf(res.error));
+    assertEquals("Your balance is 1234.56.", res.reply);
   }
 }

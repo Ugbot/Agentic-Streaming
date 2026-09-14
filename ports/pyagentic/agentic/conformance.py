@@ -16,15 +16,25 @@ import argparse
 import os
 import re
 import sys
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Union, runtime_checkable
 
 import yaml
 
 from .errors import AgenticError
 from .events import Turn
 from .runtime import LocalRuntime, Runtime, get_runtime
+from .workflow_timers import ManualClock
+
+
+@runtime_checkable
+class AsyncSubmitting(Protocol):
+    """Runtimes that accept overlapping submissions (the fixtures' `concurrent_with`)."""
+
+    def submit_async(self, event: Union[Turn, Mapping[str, Any]]) -> "Future[Dict[str, Any]]": ...
+
 
 FIXTURE_SUBDIR = Path("spec") / "conformance" / "v1" / "fixtures"
 RESULT_DETAIL_KEY = "runtime_detail"  # excluded from every comparison
@@ -136,14 +146,25 @@ class Outcome:
 RuntimeFactory = Callable[[], Runtime]
 
 
-def run_fixture(path: Path, make_runtime: RuntimeFactory = LocalRuntime) -> Outcome:
+def turn_metadata(spec: Mapping[str, Any]) -> Dict[str, str]:
+    """A fixture turn's `metadata` block as the string map a `Turn` carries."""
+    return {str(k): str(v) for k, v in dict(spec.get("metadata") or {}).items()}
+
+
+def fixture_runtime() -> LocalRuntime:
+    """The default runtime under a fixture: local, on a manual processing clock starting at
+    zero so `advance_time_ms` is the only thing that moves time."""
+    return LocalRuntime(clock=ManualClock())
+
+
+def run_fixture(path: Path, make_runtime: RuntimeFactory = fixture_runtime) -> Outcome:
     fixture = load_yaml(path)
     if fixture.get("workflow") is None:
         fixture["workflow"] = load_yaml((path.parent / fixture["workflow_ref"]).resolve())
     return run_fixture_document(fixture, make_runtime, path)
 
 
-def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactory = LocalRuntime,
+def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactory = fixture_runtime,
                          path: Optional[Path] = None) -> Outcome:
     """Run one fixture whose `workflow` is already resolved and compare it with `expect`."""
     fixture_id = fixture["id"]
@@ -160,15 +181,12 @@ def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactor
     results: List[Dict[str, Any]] = []
     try:
         runtime.deploy(workflow)
-        for spec in fixture["turns"]:
-            if spec.get("restart_runtime"):
+        for batch in concurrent_batches(fixture["turns"]):
+            if batch[0].get("restart_runtime"):
                 runtime = _restart(runtime, workflow)
-            results.append(runtime.submit(Turn(
-                conversation_id=spec["conversation_id"],
-                turn_id=spec["turn_id"],
-                text=spec.get("text", ""),
-                signal=spec.get("signal"),
-            )))
+            if batch[0].get("advance_time_ms"):
+                _advance(runtime, int(batch[0]["advance_time_ms"]))
+            results.extend(_deliver_batch(runtime, batch))
     except AgenticError as exc:
         return Outcome(fixture_id, path, "fail", [f"raised {type(exc).__name__}: {exc}"], results)
     finally:
@@ -198,6 +216,41 @@ def matrix_binding(fixture: Mapping[str, Any]) -> Union[List[Dict[str, Any]], Di
     return outcome.results
 
 
+def concurrent_batches(turns: Sequence[Mapping[str, Any]]) -> List[List[Mapping[str, Any]]]:
+    """Consecutive turns joined by `concurrent_with` form one batch; every other turn is its own."""
+    batches: List[List[Mapping[str, Any]]] = []
+    i = 0
+    while i < len(turns):
+        turn = turns[i]
+        group = set(turn.get("concurrent_with") or [])
+        if not group:
+            batches.append([turn])
+            i += 1
+            continue
+        group.add(turn["turn_id"])
+        j = i
+        while j < len(turns) and turns[j]["turn_id"] in group:
+            j += 1
+        batches.append(list(turns[i:j]))
+        i = j
+    return batches
+
+
+def _deliver_batch(runtime: Runtime, batch: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Deliver one batch of mutually `concurrent_with` turns: on a runtime with `submit_async`
+    every turn is handed over in declared order without waiting for the previous one, so the
+    turns are in flight together and the runtime decides how they overlap (only within their
+    per-conversation order). The results come back in the declared order, whatever order the
+    turns finished in. A runtime without `submit_async` receives the turns one after another."""
+    turns = [Turn(conversation_id=spec["conversation_id"], turn_id=spec["turn_id"],
+                  text=spec.get("text", ""), signal=spec.get("signal"),
+                  metadata=turn_metadata(spec)) for spec in batch]
+    if len(turns) == 1 or not isinstance(runtime, AsyncSubmitting):
+        return [runtime.submit(turn) for turn in turns]
+    futures = [runtime.submit_async(turn) for turn in turns]
+    return [future.result() for future in futures]
+
+
 def _restart(runtime: Runtime, workflow: Mapping[str, Any]) -> Runtime:
     restart = getattr(runtime, "restart", None)
     if not callable(restart):
@@ -209,7 +262,15 @@ def _restart(runtime: Runtime, workflow: Mapping[str, Any]) -> Runtime:
     return fresh
 
 
-def run_all(make_runtime: RuntimeFactory = LocalRuntime, only: Sequence[str] = (),
+def _advance(runtime: Runtime, ms: int) -> None:
+    clock = runtime.clock if isinstance(runtime, LocalRuntime) else None
+    if not isinstance(clock, ManualClock):
+        raise AgenticError(f"runtime {runtime.name!r} is not on a ManualClock; fixtures with advance_time_ms "
+                           f"cannot run against it")
+    clock.advance(ms)
+
+
+def run_all(make_runtime: RuntimeFactory = fixture_runtime, only: Sequence[str] = (),
             directory: Optional[Path] = None) -> List[Outcome]:
     paths = fixture_paths(directory)
     if only:

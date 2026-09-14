@@ -37,10 +37,11 @@ public final class ConversationState implements Serializable {
   private final Map<String, TurnRecord> turns;
   private final Map<String, Suspended> suspended;
   private final long nextSequence;
+  private final TimerState timers;
 
   private ConversationState(long turnCount, long transcriptLength, List<String> lastRetrievedIds,
                             List<ChatMessage> transcript, Map<String, TurnRecord> turns,
-                            Map<String, Suspended> suspended, long nextSequence) {
+                            Map<String, Suspended> suspended, long nextSequence, TimerState timers) {
     this.turnCount = turnCount;
     this.transcriptLength = transcriptLength;
     this.lastRetrievedIds = lastRetrievedIds;
@@ -48,6 +49,7 @@ public final class ConversationState implements Serializable {
     this.turns = turns;
     this.suspended = suspended;
     this.nextSequence = nextSequence;
+    this.timers = timers;
   }
 
   public static ConversationState empty() {
@@ -55,6 +57,15 @@ public final class ConversationState implements Serializable {
   }
 
   public static ConversationState fold(List<LogEvent> log) {
+    return fold(log, ContextWindow.NONE);
+  }
+
+  /**
+   * The fold under a workflow {@code context} block: the log is read whole, then the transcript
+   * (and {@code transcript_length}) is bounded to the retained window. {@code turn_count} and the
+   * per-turn records are unaffected.
+   */
+  public static ConversationState fold(List<LogEvent> log, ContextWindow window) {
     long turnCount = 0;
     long transcriptLength = 0;
     List<String> lastRetrieved = null;
@@ -174,7 +185,8 @@ public final class ConversationState implements Serializable {
           }
         }
         default -> {
-          // brain_started, timer_*, compensation_started/completed carry no state.
+          // brain_started, compensation_started/completed carry no state; timer_* and the clock
+          // readings are folded by TimerState below.
         }
       }
     }
@@ -182,9 +194,13 @@ public final class ConversationState implements Serializable {
     for (Builder b : builders.values()) {
       turns.put(b.turnId, b.build());
     }
+    if (window != null && window.bounded()) {
+      transcript = new ArrayList<>(window.retain(transcript));
+      transcriptLength = window.retainedLength(transcriptLength);
+    }
     return new ConversationState(turnCount, transcriptLength, lastRetrieved,
         Collections.unmodifiableList(transcript), Collections.unmodifiableMap(turns),
-        Collections.unmodifiableMap(suspended), expected);
+        Collections.unmodifiableMap(suspended), expected, TimerState.fold(log));
   }
 
   /** The {@code state} object of a normalized result (spec reference {@code reduce_state}). */
@@ -195,6 +211,7 @@ public final class ConversationState implements Serializable {
     if (lastRetrievedIds != null) {
       m.put("last_retrieved_ids", lastRetrievedIds);
     }
+    timers.reduceInto(m);
     return m;
   }
 
@@ -232,19 +249,25 @@ public final class ConversationState implements Serializable {
     return nextSequence;
   }
 
+  /** Watermark, pending and fired timers, and the recorded processing clock (section 8 of the spec). */
+  public TimerState timers() {
+    return timers;
+  }
+
   @Override
   public boolean equals(Object o) {
     return o instanceof ConversationState s && turnCount == s.turnCount
         && transcriptLength == s.transcriptLength
         && Objects.equals(lastRetrievedIds, s.lastRetrievedIds)
         && transcript.equals(s.transcript) && turns.equals(s.turns)
-        && suspended.equals(s.suspended) && nextSequence == s.nextSequence;
+        && suspended.equals(s.suspended) && nextSequence == s.nextSequence
+        && timers.equals(s.timers);
   }
 
   @Override
   public int hashCode() {
     return Objects.hash(turnCount, transcriptLength, lastRetrievedIds, transcript, turns, suspended,
-        nextSequence);
+        nextSequence, timers);
   }
 
   private static String str(Object o) {

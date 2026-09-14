@@ -18,10 +18,12 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
+from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
 from .errors import AgenticError, ToolError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec
+from .workflow_timers import WorkflowTimers
 
 Clock = Callable[[], int]
 Sleep = Callable[[float], None]
@@ -104,6 +106,8 @@ class Engine:
         self.verifier: Mapping[str, Any] = agent.get("verifier") or {"kind": "prefix"}
         self.policies: Mapping[str, Any] = doc.get("policies") or {}
         self.saga: Optional[Mapping[str, Any]] = doc.get("saga")
+        self.context: Mapping[str, Any] = doc.get("context") or {}
+        self.cep: List[SequencePattern] = compile_patterns(doc.get("cep"))
         self.llm: Mapping[str, Any] = doc.get("llm") or {}
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
@@ -112,6 +116,7 @@ class Engine:
         retrieval = doc.get("retrieval") or {}
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
         self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4))
+        self.timers = WorkflowTimers(doc.get("timers") or [], self.clock)
         self._results: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self._suspended: Dict[Tuple[str, str], _Pending] = {}
         self._guard = threading.Lock()
@@ -147,10 +152,10 @@ class Engine:
             self._suspended = suspended
 
     def state(self, conversation_id: str) -> Dict[str, Any]:
-        return reduce_state(self.log.read(conversation_id))
+        return reduce_state(self.log.read(conversation_id), self.context)
 
     def transcript(self, conversation_id: str) -> List[ChatMessage]:
-        return transcript(self.log.read(conversation_id))
+        return transcript(self.log.read(conversation_id), self.context)
 
     def suspended_turns(self, conversation_id: str) -> List[str]:
         with self._guard:
@@ -180,7 +185,15 @@ class Engine:
             return duplicate
 
         ctx = _TurnContext(turn, turn.text, self.clock())
-        self._append(ctx, "turn_received", {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id})
+        history = self.log.read(turn.conversation_id)
+        try:
+            self.timers.fire_due(turn, history, lambda kind, payload: self._append(ctx, kind, payload),
+                                 lambda tool_id, args: self._invoke(ctx, tool_id, args))
+        except ToolError as exc:
+            return self._finish(ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
+                                event=("turn_failed", {"status": "failed", "reason": str(exc)}))
+        self._append(ctx, "turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
+        self.timers.schedule(turn, history, lambda kind, payload: self._append(ctx, kind, payload))
         try:
             blocked = self._check_guardrails(self.global_guardrails, "input", turn.text)
             if blocked is not None:
@@ -189,6 +202,9 @@ class Engine:
 
             path = self._route(turn.text)
             self._append(ctx, "routed", {"path": path})
+            failed = self._match_patterns(ctx, path)
+            if failed is not None:
+                return failed
             spec = self.paths[path]
 
             blocked = self._check_guardrails(self._path_guardrails(spec), "input", turn.text)
@@ -248,6 +264,28 @@ class Engine:
         status = "unverified" if verification.get("on_exhausted", "unverified") == "unverified" else "failed"
         return self._finish(ctx, status, path, reply,
                             {"class": "verification", "message": "verifier rejected the reply"})
+
+    def _match_patterns(self, ctx: _TurnContext, path: str) -> Optional[Dict[str, Any]]:
+        """Sequence CEP over this conversation's log; a pattern completing on this turn invokes its
+        tool (recorded on this turn). Returns the failed result when that tool fails, else None."""
+        if not self.cep:
+            return None
+        turns = turns_of(self.log.read(ctx.turn.conversation_id))
+        for pattern in self.cep:
+            if pattern.completes_on(turns):
+                try:
+                    self._invoke(ctx, pattern.tool, pattern.match_args(ctx.turn.conversation_id))
+                except ToolError as exc:
+                    return self._finish(ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
+                                        event=("turn_failed", {"status": "failed", "reason": str(exc)}))
+        return None
+
+    def _received_payload(self, turn: Turn) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id}
+        event_time = event_time_ms(turn.metadata)
+        if event_time is not None:
+            payload["event_time_ms"] = event_time
+        return payload
 
     def _draft(self, ctx: _TurnContext, path: str) -> str:
         spec = self.paths[path]
@@ -500,7 +538,7 @@ class Engine:
             "status": status,
             "path": path,
             "reply": reply if status in ("completed", "unverified", "rejected") else None,
-            "state": reduce_state(e for e in log if e.sequence <= last_sequence),
+            "state": reduce_state((e for e in log if e.sequence <= last_sequence), self.context),
             "tool_calls": tool_calls,
             "events": [e.normalized() for e in events],
             "error": error,
