@@ -56,7 +56,10 @@
           "propertyNames": { "$ref": "#/$defs/identifier" },
           "additionalProperties": { "$ref": "#/$defs/path" }
         },
-        "verifier": { "$ref": "#/$defs/verifier" }
+        "verifier": {
+          "description": "Verifier for every path that does not declare its own (paths.<name>.verifier). Default kind: prefix.",
+          "$ref": "#/$defs/verifier"
+        }
       },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
@@ -93,7 +96,10 @@
         },
         "skills": { "type": "array", "items": { "type": "string" } },
         "guardrails": { "type": "array", "items": { "type": "string" } },
-        "verifier": { "$ref": "#/$defs/verifier" },
+        "verifier": {
+          "description": "Verifier for turns routed to this path. Overrides agent.verifier; when absent, agent.verifier applies, and when neither is declared the default is kind: prefix. kind: none here disables verification on this path.",
+          "$ref": "#/$defs/verifier"
+        },
         "max_iterations": { "type": "integer", "minimum": 1, "default": 6 },
         "threshold": { "type": "number" },
         "output_schema": { "type": "object" }

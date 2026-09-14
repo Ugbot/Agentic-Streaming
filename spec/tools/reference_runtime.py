@@ -240,7 +240,7 @@ class ReferenceRuntime:
                 return self._finish(conv, ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
                                     event=("turn_failed", {"reason": str(exc)}))
             self._append(conv, ctx, "reply_drafted", {"reply": reply})
-            if self._verify(reply):
+            if self._verify(path, reply):
                 return self._complete(conv, ctx, path, reply)
             self._append(conv, ctx, "verification_failed", {"reply": reply})
         on_exhausted = self.policies.get("verification", {}).get("on_exhausted", "unverified")
@@ -403,14 +403,20 @@ class ReferenceRuntime:
                     return rail.get("reason", "denied")
         return None
 
-    def _verify(self, reply: str) -> bool:
-        kind = self.verifier.get("kind", "prefix")
+    def _verifier_for(self, path: str) -> Dict[str, Any]:
+        """primitives.md section 5: the path's verifier, else `agent.verifier`, else `prefix`."""
+        path_verifier = self.paths[path].get("verifier")
+        return path_verifier if path_verifier is not None else self.verifier
+
+    def _verify(self, path: str, reply: str) -> bool:
+        verifier = self._verifier_for(path)
+        kind = verifier.get("kind", "prefix")
         if kind == "none":
             return True
         if kind == "prefix":
             return reply.startswith("[")
         if kind == "regex":
-            return re.search(self.verifier["pattern"], reply) is not None
+            return re.search(verifier["pattern"], reply) is not None
         raise SpecError(f"the reference runtime does not implement the {kind} verifier")
 
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,

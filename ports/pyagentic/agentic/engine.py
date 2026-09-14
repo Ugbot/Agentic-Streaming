@@ -348,8 +348,13 @@ class Engine:
                     return str(rail.get("reason", "denied"))
         return None
 
+    def _verifier_for(self, path_spec: Mapping[str, Any]) -> Mapping[str, Any]:
+        """primitives.md section 5: the path's verifier, else ``agent.verifier``, else ``prefix``."""
+        own = path_spec.get("verifier")
+        return own if own is not None else self.verifier
+
     def _verify(self, path_spec: Mapping[str, Any], reply: str) -> bool:
-        verifier = path_spec.get("verifier") or self.verifier
+        verifier = self._verifier_for(path_spec)
         custom = verifier.get("x-verifier")
         if custom is not None:
             return bool(self.bindings.verifiers[custom](reply))

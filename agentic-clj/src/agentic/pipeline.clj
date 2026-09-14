@@ -164,13 +164,18 @@
             default
             (throw (ex-info "no rule matched and router.default is not set" {:error/class :fatal})))))))
 
-(defn- build-verifier [{:keys [kind pattern] :or {kind "prefix"}}]
+(defn- build-verifier
+  "kind = prefix (default) | regex | none. `where` is the spec location for error messages:
+   [\"agent\" \"verifier\"] or [\"agent\" \"paths\" name \"verifier\"]."
+  [{:keys [kind pattern] :or {kind "prefix"}} where]
   (case kind
     "none" (fn [reply _] [true reply])
     "prefix" graph/prefix-verifier
-    "regex" (let [re (re-pattern pattern)]
-              (fn [reply _] [(boolean (and reply (re-find re reply))) reply]))
-    (throw (spec/validation-error (str "unsupported verifier kind " kind) ["agent" "verifier" "kind"]))))
+    "regex" (do (when-not (string? pattern)
+                  (throw (spec/validation-error "regex verifier needs a pattern" (conj where "pattern"))))
+                (let [re (re-pattern pattern)]
+                  (fn [reply _] [(boolean (and reply (re-find re reply))) reply])))
+    (throw (spec/validation-error (str "unsupported verifier kind " kind) (conj where "kind")))))
 
 (defn- build-guardrail [{:keys [kind stage deny reason lexicon blocked threshold]
                          :or {kind "regex" stage "input"}}]
@@ -208,11 +213,14 @@
                                  [name (cond-> {:name name :prompt (or (:prompt pspec) "")
                                                 :brain (build-brain name pspec dim top-k cc context)}
                                          (contains? pspec :x-suspend-until)
-                                         (assoc :suspend-until (:x-suspend-until pspec)))]))
+                                         (assoc :suspend-until (:x-suspend-until pspec))
+                                         (some? (:verifier pspec))
+                                         (assoc :verifier (build-verifier (:verifier pspec)
+                                                                          ["agent" "paths" name "verifier"])))]))
                           paths)]
     {:graph {:router (build-router (:router agent) (first (keys paths)))
              :paths graph-paths
-             :verifier (build-verifier (:verifier agent))
+             :verifier (build-verifier (:verifier agent) ["agent" "verifier"])
              :guardrails (mapv build-guardrail (:guardrails wf))
              :policies policies
              :saga saga

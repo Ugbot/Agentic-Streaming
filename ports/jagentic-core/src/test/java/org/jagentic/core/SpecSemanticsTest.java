@@ -157,6 +157,104 @@ class SpecSemanticsTest {
     }
   }
 
+  /** Four paths routed by their own name; the agent-level regex accepts replies from the first two only. */
+  private static Map<String, Object> verifierSpec(List<String> names, Map<String, Object> agentVerifier,
+                                                  Map<String, Map<String, Object>> pathVerifiers, int maxAttempts) {
+    Map<String, Object> paths = new LinkedHashMap<>();
+    Map<String, Object> rules = new LinkedHashMap<>();
+    for (String name : names) {
+      Map<String, Object> path = new LinkedHashMap<>(Map.of("brain", "rule", "prompt", "p"));
+      if (pathVerifiers.containsKey(name)) {
+        path.put("verifier", pathVerifiers.get(name));
+      }
+      paths.put(name, path);
+      rules.put(name, List.of(name));
+    }
+    Map<String, Object> agent = new LinkedHashMap<>();
+    agent.put("id", "a-" + rnd());
+    agent.put("router", Map.of("kind", "keyword", "default", names.get(0), "rules", rules));
+    agent.put("paths", paths);
+    if (agentVerifier != null) {
+      agent.put("verifier", agentVerifier);
+    }
+    Map<String, Object> s = new LinkedHashMap<>();
+    s.put("spec_version", "agentic/v1");
+    s.put("backend", "local");
+    s.put("agent", agent);
+    s.put("policies", Map.of("verification", Map.of("max_attempts", maxAttempts, "on_exhausted", "unverified")));
+    return s;
+  }
+
+  @Test
+  void pathVerifierOverridesAgentVerifierAndPathsWithoutOneFallBackToIt() {
+    List<String> names = List.of("audit" + rnd(), "chat" + rnd(), "billing" + rnd(), "account" + rnd());
+    String rejecting = names.get(0);
+    String lenient = names.get(1);
+    String fallbackAccepted = names.get(2);
+    String fallbackRejected = names.get(3);
+    int maxAttempts = ThreadLocalRandom.current().nextInt(2, 5);
+    Map<String, Object> agentVerifier = Map.of("kind", "regex",
+        "pattern", "^\\[(" + rejecting + "|" + fallbackAccepted + ")\\]");
+    LocalRuntime rt = runtime(verifierSpec(names, agentVerifier, Map.of(
+        rejecting, Map.of("kind", "regex", "pattern", "^never-" + rnd()),
+        lenient, Map.of("kind", "prefix")), maxAttempts));
+
+    TurnResult overridden = rt.submit(Event.turn("c", "t1", "u", rejecting));
+    assertEquals(TurnStatus.UNVERIFIED, overridden.status, "the path's regex judges, not the agent's");
+    assertEquals(rejecting, overridden.path());
+    assertEquals(TurnError.ErrorClass.VERIFICATION, overridden.error.errorClass());
+    assertEquals(maxAttempts, types(overridden.events).stream().filter("verification_failed"::equals).count());
+
+    TurnResult accepted = rt.submit(Event.turn("c", "t2", "u", lenient));
+    assertEquals(TurnStatus.COMPLETED, accepted.status, "the path's prefix accepts what the agent's regex rejects");
+    assertTrue(accepted.reply().startsWith("[" + lenient + "]"));
+    assertFalse(types(accepted.events).contains("verification_failed"));
+
+    TurnResult fallbackOk = rt.submit(Event.turn("c", "t3", "u", fallbackAccepted));
+    assertEquals(TurnStatus.COMPLETED, fallbackOk.status);
+    assertFalse(types(fallbackOk.events).contains("verification_failed"));
+
+    TurnResult fallbackKo = rt.submit(Event.turn("c", "t4", "u", fallbackRejected));
+    assertEquals(TurnStatus.UNVERIFIED, fallbackKo.status, "a path without a verifier uses agent.verifier");
+    assertEquals(fallbackRejected, fallbackKo.path());
+    assertEquals(maxAttempts, types(fallbackKo.events).stream().filter("verification_failed"::equals).count());
+  }
+
+  @Test
+  void pathVerifierNoneDisablesVerificationAndAbsentVerifiersDefaultToPrefix() {
+    List<String> names = List.of("open" + rnd(), "plain" + rnd());
+    String unverifiedPath = names.get(0);
+    String defaulted = names.get(1);
+    Map<String, Object> rejectAll = Map.of("kind", "regex", "pattern", "^never-" + rnd());
+    GraphBuilder.Built strictBuilt = GraphBuilder.build(
+        verifierSpec(names, rejectAll, Map.of(unverifiedPath, Map.of("kind", "none")), 1), null);
+    assertTrue(strictBuilt.graph().verifierFor(unverifiedPath).verify(rnd(), null).ok());
+    assertFalse(strictBuilt.graph().verifierFor(defaulted).verify("[" + rnd() + "]", null).ok());
+    LocalRuntime strict = runtime(strictBuilt, new ConversationLog.InMemory());
+    assertEquals(TurnStatus.COMPLETED, strict.submit(Event.turn("c", "t1", "u", unverifiedPath)).status,
+        "kind: none on the path wins over a rejecting agent.verifier");
+    assertEquals(TurnStatus.UNVERIFIED, strict.submit(Event.turn("c", "t2", "u", defaulted)).status);
+
+    GraphBuilder.Built built = GraphBuilder.build(verifierSpec(names, null, Map.of(), 1), null);
+    for (String name : names) {
+      RoutedGraph.Verifier byDefault = built.graph().verifierFor(name);
+      assertTrue(byDefault.verify("[" + rnd() + "] reply", null).ok());
+      assertFalse(byDefault.verify(rnd() + " reply", null).ok());
+    }
+    assertEquals(TurnStatus.COMPLETED,
+        runtime(built, new ConversationLog.InMemory()).submit(Event.turn("c", "t1", "u", defaulted)).status);
+  }
+
+  @Test
+  void pathVerifierErrorsNameThePathLocation() {
+    List<String> names = List.of("main" + rnd());
+    Map<String, Map<String, Object>> broken = Map.of(names.get(0), Map.of("kind", "regex"));
+    var e = org.junit.jupiter.api.Assertions.assertThrows(
+        org.jagentic.core.pipeline.WorkflowValidator.WorkflowValidationException.class,
+        () -> GraphBuilder.build(verifierSpec(names, null, broken, 1), null));
+    assertTrue(e.getMessage().contains("agent.paths." + names.get(0) + ".verifier.pattern"), e.getMessage());
+  }
+
   @Test
   void sagaCompensatesCompletedStepsInReverseOrder() {
     List<Map<String, Object>> tools = List.of(

@@ -128,6 +128,7 @@ public final class GraphBuilder {
     int topK = retrievalSpec == null ? 4 : ((Number) retrievalSpec.getOrDefault("top_k", 4)).intValue();
     Map<String, Agent> paths = new LinkedHashMap<>();
     Map<String, String> suspendUntil = new LinkedHashMap<>();
+    Map<String, RoutedGraph.Verifier> pathVerifiers = new LinkedHashMap<>();
     for (Map.Entry<String, Object> e : pathSpecs.entrySet()) {
       String name = e.getKey();
       Map<String, Object> ps = (Map<String, Object>) e.getValue();
@@ -135,8 +136,9 @@ public final class GraphBuilder {
         suspendUntil.put(name, String.valueOf(ps.get(RoutedGraph.SUSPEND_UNTIL)));
       }
       if (ps.get("verifier") != null) {
-        throw new WorkflowValidator.WorkflowValidationException("agent.paths." + name + ".verifier",
-            "per-path verifiers are not supported by this runtime; declare agent.verifier");
+        RoutedGraph.Verifier own = buildVerifier((Map<String, Object>) ps.get("verifier"),
+            "agent.paths." + name + ".verifier");
+        pathVerifiers.put(name, own == null ? RoutedGraph.Verifier.ACCEPT : own);
       }
       String prompt = (String) ps.getOrDefault("prompt", "You answer " + name + " questions.");
       var expanded = skills.expand((List<String>) ps.get("skills"));
@@ -176,20 +178,24 @@ public final class GraphBuilder {
     }
 
     RoutedGraph.Router router = buildRouter((Map<String, Object>) agent.get("router"), new ArrayList<>(paths.keySet()));
-    RoutedGraph.Verifier verifier = buildVerifier((Map<String, Object>) agent.get("verifier"));
+    RoutedGraph.Verifier verifier = buildVerifier((Map<String, Object>) agent.get("verifier"), "agent.verifier");
 
     List<Guardrail> guardrails = new ArrayList<>();
     for (Map<String, Object> g : (List<Map<String, Object>>) spec.getOrDefault("guardrails", List.of())) {
       guardrails.add(buildGuardrail(g, embedder));
     }
 
-    RoutedGraph graph = new RoutedGraph(router, paths, verifier, guardrails, List.of(), policies, saga,
-        suspendUntil);
+    RoutedGraph graph = new RoutedGraph(router, paths, verifier, pathVerifiers, guardrails, List.of(), policies,
+        saga, suspendUntil);
     return new Built(graph, tools, retriever, availability.degradations());
   }
 
-  /** kind = prefix (default) | regex | none. {@code schema} and {@code llm} verifiers are not implemented. */
-  static RoutedGraph.Verifier buildVerifier(Map<String, Object> vspec) {
+  /**
+   * kind = prefix (default) | regex | none; {@code none} is returned as null. {@code schema} and
+   * {@code llm} verifiers are not implemented. {@code where} is the spec location for error messages
+   * ({@code agent.verifier} or {@code agent.paths.<name>.verifier}).
+   */
+  static RoutedGraph.Verifier buildVerifier(Map<String, Object> vspec, String where) {
     Map<String, Object> v = vspec == null ? Map.of() : vspec;
     String kind = String.valueOf(v.getOrDefault("kind", "prefix"));
     switch (kind) {
@@ -200,13 +206,13 @@ public final class GraphBuilder {
       case "regex":
         Object pattern = v.get("pattern");
         if (pattern == null) {
-          throw new WorkflowValidator.WorkflowValidationException("agent.verifier.pattern",
+          throw new WorkflowValidator.WorkflowValidationException(where + ".pattern",
               "regex verifier needs a pattern");
         }
         Pattern p = Pattern.compile(String.valueOf(pattern));
         return (reply, ctx) -> new RoutedGraph.Verifier.Result(reply != null && p.matcher(reply).find(), reply);
       default:
-        throw new WorkflowValidator.WorkflowValidationException("agent.verifier.kind",
+        throw new WorkflowValidator.WorkflowValidationException(where + ".kind",
             "verifier kind " + kind + " is not implemented by this runtime (prefix|regex|none)");
     }
   }

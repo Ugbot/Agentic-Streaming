@@ -3,8 +3,9 @@
    log through the context and the caller derives the normalized result from the log afterwards
    (agentic.log/turn-result). A graph is a map:
      {:router     (fn [event ctx] -> path-key)
-      :paths      {path-key {:name :prompt :brain (fn [user-text ctx] -> reply) :suspend-until}}
-      :verifier   (fn [reply ctx] -> [ok? reply])
+      :paths      {path-key {:name :prompt :brain (fn [user-text ctx] -> reply) :suspend-until
+                             :verifier (fn [reply ctx] -> [ok? reply])}}   ; optional, per path
+      :verifier   (fn [reply ctx] -> [ok? reply])   ; for paths without their own
       :guardrails [{:check-input (fn [text]->reason|nil) :check-output (fn [reply]->reason|nil)}]
       :policies   canonical `policies` block (retry, verification, on-tool-error, ...)
       :saga       canonical `saga` block, when the workflow runs a saga instead of a brain
@@ -55,8 +56,14 @@
   (listener/fire (:listeners c) :on-turn-end {:path path :reply reply :ctx c})
   :completed)
 
-(defn- verify [graph reply c]
-  (if-let [v (:verifier graph)]
+(defn verifier-for
+  "The verifier that judges turns routed to `path`: the path's own when it declares one, else the
+   graph-level one (`agent.verifier`); nil when neither verifies."
+  [graph path]
+  (or (get-in graph [:paths path :verifier]) (:verifier graph)))
+
+(defn- verify [graph path reply c]
+  (if-let [v (verifier-for graph path)]
     (let [[ok? vreply] (v reply c)] [(boolean ok?) vreply])
     [true reply]))
 
@@ -79,7 +86,7 @@
             (ctx/emit! c :reply-drafted {:reply reply})
             (if-let [reason (guardrail-reason graph :check-output reply)]
               (finish-rejected graph c reason)
-              (let [[ok? vreply] (verify graph reply c)]
+              (let [[ok? vreply] (verify graph path reply c)]
                 (cond
                   ok? (complete! graph c path vreply)
 

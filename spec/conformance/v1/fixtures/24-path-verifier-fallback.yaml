@@ -1,0 +1,20 @@
+id: path-verifier-fallback
+description: "A path without a verifier is judged by agent.verifier, not by another path's verifier and not by the default. The billing reply matches the agent-level regex and completes; the account reply does not and ends unverified after max_attempts drafts, even though the default prefix verifier would have accepted it."
+requires: [routing, verifier]
+workflow_ref: ../workflows/verifiers.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
+  - {conversation_id: c1, turn_id: t2, text: "I lost my password"}
+expect:
+  - turn_id: t1
+    status: completed
+    path: billing
+    reply_matches: "^\\[billing\\]"
+    events_include: [routed, reply_drafted, turn_completed]
+    events_exclude: [verification_failed]
+  - turn_id: t2
+    status: unverified
+    path: account
+    error_class: verification
+    events_include: [routed, reply_drafted, verification_failed, reply_drafted, verification_failed]
+    events_exclude: [turn_completed]
