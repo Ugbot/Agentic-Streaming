@@ -36,7 +36,7 @@ java -version
 
 **If not, install Java:**
 1. Go to https://adoptium.net/
-2. Download Java 11 (or higher) for your operating system
+2. Download Java 21 (or higher) for your operating system
 3. Run the installer
 4. Verify: `java -version`
 

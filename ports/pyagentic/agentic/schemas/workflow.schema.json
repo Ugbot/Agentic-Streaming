@@ -32,7 +32,7 @@
     "stores": { "$ref": "#/$defs/stores" },
     "mcp": { "type": "array", "items": { "type": "object" } },
     "a2a": { "type": "array", "items": { "$ref": "#/$defs/peer" } },
-    "cep": { "type": "array", "items": { "type": "object" } },
+    "cep": { "type": "array", "items": { "$ref": "#/$defs/cep_pattern" } },
     "saga": { "$ref": "#/$defs/saga" },
     "timers": { "type": "array", "items": { "$ref": "#/$defs/timer" } },
     "channels": { "type": "array", "items": { "$ref": "#/$defs/channel" } },
@@ -348,14 +348,65 @@
     },
 
     "timer": {
+      "description": "Scheduled per conversation on its first turn, `after_ms` past the clock's reading at that moment. It fires on the first later turn of the conversation delivered at or after the deadline, appending `timer_fired` and invoking `tool` with `payload` before that turn is received.",
       "type": "object",
       "required": ["id", "after_ms"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "after_ms": { "type": "integer", "minimum": 0 },
+        "clock": {
+          "description": "processing: the runtime's logical clock (advanced by `advance_time_ms` in fixtures). event: the conversation's watermark, the highest `event_time_ms` turn metadata seen.",
+          "enum": ["processing", "event"],
+          "default": "processing"
+        },
         "tool": { "type": "string" },
         "payload": { "type": "object" }
       },
+      "additionalProperties": false
+    },
+
+    "cep_pattern": {
+      "description": "A sequence pattern over one conversation's turns. Stages match in order; a match completes on the turn satisfying the last stage and matches never overlap. `within` bounds the event-time span between the first and last matched turn and requires `ts`.",
+      "type": "object",
+      "required": ["name", "pattern"],
+      "properties": {
+        "name": { "$ref": "#/$defs/identifier" },
+        "key": { "enum": ["conversation_id"], "default": "conversation_id" },
+        "ts": { "type": "string", "pattern": "^metadata\\.[A-Za-z_][A-Za-z0-9_]*$", "description": "turn metadata key holding the integer event time in milliseconds" },
+        "within": { "type": "integer", "minimum": 0 },
+        "pattern": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "stage": { "$ref": "#/$defs/identifier" },
+              "where": {
+                "type": "object",
+                "properties": { "text_contains": { "type": "string", "description": "case-insensitive substring of the turn text" } },
+                "additionalProperties": false
+              },
+              "contiguity": {
+                "description": "next: the stage must match the turn immediately after the previous stage's turn, otherwise the partial match is dropped. followedBy: non-matching turns in between are skipped.",
+                "enum": ["next", "followedBy"],
+                "default": "next"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "on_match": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": { "enum": ["tool", "submit"] },
+            "tool": { "type": "string", "description": "kind tool: invoked on the matching turn with args {pattern, key}" },
+            "text": { "type": "string", "description": "kind submit: text of a derived turn injected into the conversation; `{key}` is replaced by the key" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "patternProperties": { "^x-": {} },
       "additionalProperties": false
     },
 

@@ -112,7 +112,11 @@ jobs:
         run: |
           python spec/tools/conformance_matrix.py --render build/conformance-matrix.json --write-docs build/capabilities.rendered.md
           # Compare only the capability table; runtime notes carry hostnames and durations.
-          normalize() { sed -n '/^## Capability matrix/,/^## /p' "$1" | grep '^|'; }
+          normalize() { sed -n '1,/^## Notes/p' "$1" | grep '^|'; }
+          if [ "$(normalize build/capabilities.rendered.md | wc -l)" -eq 0 ]; then
+            echo "::error::staleness check extracted no table rows from the rendered capabilities; the normalize() filter no longer matches the generator output"
+            exit 1
+          fi
           if ! diff <(normalize docs/capabilities.md) <(normalize build/capabilities.rendered.md); then
             echo "::error::docs/capabilities.md is stale for this checkout; regenerate with spec/tools/conformance_matrix.py --write-docs docs/capabilities.md"
             exit 1
