@@ -36,14 +36,15 @@ call, and a reply carrying **`1234.56`**; routes `"crypto cash-back"` to **`card
 python -m pip install -e ports/pyagentic
 PYTHONPATH=ports/agentic-pipeline \
 python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
-# nats needs nats-py, ports/nats on PYTHONPATH, and a JetStream server on 127.0.0.1:4222;
-# without the server it fails with ConnectionRefusedError.
+# nats is an experimental adapter under ports/experimental/. It needs nats-py, that directory
+# on PYTHONPATH, and a JetStream server on 127.0.0.1:4222; without the server it fails with
+# ConnectionRefusedError.
 python -m pip install nats-py
-PYTHONPATH=ports/agentic-pipeline:ports/nats \
+PYTHONPATH=ports/agentic-pipeline:ports/experimental/nats \
 python -m agentic_pipeline run examples/pipelines/banking.yaml --backend nats --text "what is my balance?"
 
-# Go core
-cd ports/go && go run ./cmd/pipeline ../../examples/pipelines/banking.yaml --text "what is my balance?"
+# Go core (experimental, not conformance tested)
+cd ports/experimental/go && go run ./cmd/pipeline ../../../examples/pipelines/banking.yaml --text "what is my balance?"
 
 # Agentic Pekko - the spec on the event-sourced actor runtime (backend: pekko via the SPI).
 # compile must be in the same invocation as exec:java or the class is not on the classpath.
@@ -70,7 +71,7 @@ cd agentic-clj && clojure -M:run
 | **Agentic Pekko** | `PipelineMain`, `backend: pekko` (BackendProvider SPI) | online / actor | event-sourced entity (memory · Postgres · Cassandra · Redis) |
 | **Agentic Clojure** | `agentic.pipeline/load-system` (`-M:run` demo) | online | Datomic immutable log (in-proc · Pro · Cloud) |
 | **Apache Flink** | `FlinkPipelineRunner` (YAML to a MiniCluster job, driven from `FlinkPipelineRunnerTest`) and the code-first Java/Python DSL | streamed | checkpoints / keyed state |
-| **Experimental adapters** (not conformance tested) | each `ports/<engine>` hosts the banking graph through its own entry point, not through `backend:` in the Python loader: faust, kafka-streams, temporal, pulsar, spring, quarkus, ray, dask, airflow | varies | varies, see [parity-matrix](../portability/parity-matrix.md) |
+| **Experimental adapters** (not conformance tested) | each `ports/experimental/<engine>` hosts the banking graph through its own entry point, not through `backend:` in the Python loader: faust, kafka-streams, temporal, pulsar, spring, quarkus, ray, dask, airflow. See [`ports/experimental/README.md`](../../ports/experimental/README.md) | varies | varies, see [parity-matrix](../portability/parity-matrix.md) |
 
 The richer specs work the same way: [`banking-llm.yaml`](../../examples/pipelines/banking-llm.yaml)
 (a bounded ReAct LLM brain on the payments path) and

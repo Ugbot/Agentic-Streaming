@@ -4,10 +4,10 @@
 > Temporal is a **durable execution** engine: workflow code whose state and progress
 > survive process crashes via an event-sourced history, with activities for the
 > non-deterministic / I/O work. A working port lives in
-> [`../../ports/temporal/`](../../ports/temporal/) (compiles, runs, and is tested
+> [`../../ports/experimental/temporal/`](../../ports/experimental/temporal/) (compiles, runs, and is tested
 > against an in-memory Temporal service). A pure-Go peer (entity workflow per
 > conversation, same design) lives in
-> [`../../ports/go/engines/temporal/`](../../ports/go/engines/temporal/).
+> [`../../ports/experimental/go/engines/temporal/`](../../ports/experimental/go/engines/temporal/).
 
 ## 1. Verdict
 
@@ -93,7 +93,7 @@ engine.
 
 ## 4. Worked example: banking router→path→verifier
 
-[`LocalDemo`](../../ports/temporal/src/main/java/org/jagentic/ports/temporal/LocalDemo.java)
+[`LocalDemo`](../../ports/experimental/temporal/src/main/java/org/jagentic/ports/temporal/LocalDemo.java)
 runs the workflows with **no external server**, an in-memory `TestWorkflowEnvironment`
 hosts the worker:
 

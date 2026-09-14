@@ -2,7 +2,7 @@
 
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Celery is the ubiquitous Python distributed **task queue** (on Redis/RabbitMQ). A
-> working port lives in [`../../ports/celery/`](../../ports/celery/), it **runs live**
+> working port lives in [`../../ports/experimental/celery/`](../../ports/experimental/celery/), it **runs live**
 > here in eager mode and is covered by the adapter test suite.
 
 ## 1. Verdict
@@ -40,7 +40,7 @@ streaming, but with the state externalized rather than living in an actor.
 
 ## 3. The core abstractions on Celery
 
-- **Agent / one turn = one task.** [`process_turn`](../../ports/celery/agentic_celery.py)
+- **Agent / one turn = one task.** [`process_turn`](../../ports/experimental/celery/agentic_celery.py)
   is a Celery task that builds an `AgentContext` over the shared stores and runs the
   portable graph. The task is stateless; all state is in the `ConversationStore`.
 
@@ -71,7 +71,7 @@ streaming, but with the state externalized rather than living in an actor.
 
 ## 4. Worked example: banking router→path→verifier
 
-[`agentic_celery.py`](../../ports/celery/agentic_celery.py)'s `CeleryRuntime(eager=True)`
+[`agentic_celery.py`](../../ports/experimental/celery/agentic_celery.py)'s `CeleryRuntime(eager=True)`
 runs the task body in-process with **no broker** (this is what the test uses):
 
 ```

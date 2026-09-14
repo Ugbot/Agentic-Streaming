@@ -7,7 +7,7 @@
 > the §9 six-section template. Code is Java; the pure core (§4a) is reused
 > *byte-for-byte*.
 >
-> Implementation status: the adapter under `ports/kafka-streams/` is experimental and not
+> Implementation status: the adapter under `ports/experimental/kafka-streams/` is experimental and not
 > conformance tested. Everything this document says about exactly-once
 > (`processing.guarantee=exactly_once_v2`, transactional read-process-write) describes what Kafka
 > Streams offers, not what the shipped adapter configures: the adapter does not set

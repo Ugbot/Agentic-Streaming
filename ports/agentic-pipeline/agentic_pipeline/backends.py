@@ -4,9 +4,12 @@ any registered backend.
 
 Registered backends are ``local`` (in-process, always available), ``celery`` and ``nats``.
 The last two need their engine package (``agentic-pipeline[celery]`` / ``[nats]``) and the
-adapter module from ``ports/celery`` / ``ports/nats`` importable; when either is missing
-:class:`BackendUnavailableError` names the exact fix. An unregistered name raises
-``ValueError`` listing the registered names.
+adapter module from ``ports/experimental/celery`` / ``ports/experimental/nats`` importable;
+when either is missing :class:`BackendUnavailableError` names the exact fix. An unregistered
+name raises ``ValueError`` listing the registered names.
+
+The celery and nats adapters are experimental (not conformance tested); ``local`` is the
+only backend on the acceptance path.
 """
 
 from __future__ import annotations
@@ -24,13 +27,21 @@ class BackendUnavailableError(RuntimeError):
     """A registered backend cannot be constructed here; the message says what to install."""
 
 
+EXPERIMENTAL_ADAPTERS_DIR = "ports/experimental"
+
+
+def adapter_path(ports_dir: str, module: str) -> str:
+    """Repository-relative path of a single-file experimental adapter module."""
+    return f"{EXPERIMENTAL_ADAPTERS_DIR}/{ports_dir}/{module}.py"
+
+
 def _import_adapter(module: str, ports_dir: str, extra: str):
     try:
         return __import__(module)
     except ImportError as exc:
         raise BackendUnavailableError(
             f"backend adapter module {module!r} is not importable ({exc}); it is the single-file module "
-            f"ports/{ports_dir}/{module}.py, put that directory on PYTHONPATH and install the engine with "
+            f"{adapter_path(ports_dir, module)}, put that directory on PYTHONPATH and install the engine with "
             f"pip install 'agentic-pipeline[{extra}]'") from exc
 
 

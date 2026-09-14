@@ -45,19 +45,6 @@ jobs:
       - name: agentic-flink (main module)
         run: ./mvnw -B -ntp install
 
-      - name: ports/kafka-streams
-        run: ./mvnw -B -ntp -f ports/kafka-streams/pom.xml test
-      - name: ports/spring
-        run: ./mvnw -B -ntp -f ports/spring/pom.xml test
-      - name: ports/quarkus
-        run: ./mvnw -B -ntp -f ports/quarkus/pom.xml test
-      - name: ports/temporal
-        run: ./mvnw -B -ntp -f ports/temporal/pom.xml test
-      - name: ports/pekko
-        run: ./mvnw -B -ntp -f ports/pekko/pom.xml test
-      - name: ports/pulsar
-        run: ./mvnw -B -ntp -f ports/pulsar/pom.xml test
-
       - name: agentic-pekko (actor runtime)
         run: ./mvnw -B -ntp -f agentic-pekko/pom.xml test
 
@@ -81,20 +68,52 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # The JVM engine adapters under ports/experimental/ predate agentic/v1, are not
+  # conformance tested, and are not on the acceptance path. This job is advisory:
+  # continue-on-error keeps a red adapter from failing the workflow, and it must
+  # not be listed as a required status check.
+  ports-experimental:
+    name: ports/experimental (JVM adapters, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: jagentic-core (shared JVM core)
+        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install -DskipTests
+
+      - name: ports/experimental/kafka-streams
+        run: ./mvnw -B -ntp -f ports/experimental/kafka-streams/pom.xml test
+      - name: ports/experimental/spring
+        run: ./mvnw -B -ntp -f ports/experimental/spring/pom.xml test
+      - name: ports/experimental/quarkus
+        run: ./mvnw -B -ntp -f ports/experimental/quarkus/pom.xml test
+      - name: ports/experimental/temporal
+        run: ./mvnw -B -ntp -f ports/experimental/temporal/pom.xml test
+      - name: ports/experimental/pulsar
+        run: ./mvnw -B -ntp -f ports/experimental/pulsar/pom.xml test
+
   go:
     name: Go
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: ports/go
+        working-directory: ports/experimental/go
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: ports/go/go.mod
-          cache-dependency-path: ports/go/go.sum
+          go-version-file: ports/experimental/go/go.mod
+          cache-dependency-path: ports/experimental/go/go.sum
 
       - name: go vet
         run: go vet ./...
@@ -140,7 +159,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # `celery` is needed because ports/tests exercises the Celery adapter
+      # `celery` is needed because ports/experimental/tests exercises the Celery adapter
       # against the real engine in eager mode (no broker required); without it
       # two tests hard-fail rather than skipping.
       - name: Install
@@ -152,4 +171,4 @@ jobs:
         run: python -m pytest ports/pyagentic/tests -q
 
       - name: port adapters
-        run: python -m pytest ports/tests -q
+        run: python -m pytest ports/experimental/tests -q

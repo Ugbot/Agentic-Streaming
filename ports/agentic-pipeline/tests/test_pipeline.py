@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 from agentic_pipeline import load
-from agentic_pipeline.backends import BackendUnavailableError, backend_names, make_backend
+from agentic_pipeline.backends import (
+    EXPERIMENTAL_ADAPTERS_DIR,
+    BackendUnavailableError,
+    adapter_path,
+    backend_names,
+    make_backend,
+)
 from agentic_pipeline.loader import LLM_PROVIDERS, _chat_client_factory, build_system
 from pyagentic.core import Event
 
@@ -43,8 +49,39 @@ def test_missing_engine_adapter_names_the_fix(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", no_celery)
-    with pytest.raises(BackendUnavailableError, match=r"ports/celery/agentic_celery.py.*agentic-pipeline\[celery\]"):
+    with pytest.raises(
+        BackendUnavailableError,
+        match=r"ports/experimental/celery/agentic_celery.py.*agentic-pipeline\[celery\]",
+    ):
         make_backend("celery", graph=None, tools=None, retriever=None)
+
+
+@pytest.mark.parametrize("ports_dir,module", [("celery", "agentic_celery"), ("nats", "agentic_nats")])
+def test_registered_engine_adapters_live_under_ports_experimental(ports_dir, module):
+    """The registry's error message names a file; that file must exist at the named path in
+    this checkout, so the message stays true when adapters move."""
+    rel = adapter_path(ports_dir, module)
+    assert rel == f"{EXPERIMENTAL_ADAPTERS_DIR}/{ports_dir}/{module}.py"
+    assert (_REPO / rel).is_file(), f"{rel} is missing from the checkout"
+
+
+def test_celery_backend_imports_adapter_from_ports_experimental(monkeypatch):
+    """With ports/experimental/celery on sys.path the registered celery backend constructs
+    from the adapter at its new location and routes identically to local."""
+    import sys as _sys
+
+    pytest.importorskip("celery")
+    monkeypatch.syspath_prepend(str(_REPO / EXPERIMENTAL_ADAPTERS_DIR / "celery"))
+    before = _sys.modules.pop("agentic_celery", None)
+    try:
+        system = load(BANKING, backend="celery")
+        adapter = _sys.modules["agentic_celery"]
+        assert Path(adapter.__file__).resolve() == (_REPO / adapter_path("celery", "agentic_celery")).resolve()
+        assert system.submit(Event("c1", "what is my balance?", "demo")).path == "payments"
+    finally:
+        _sys.modules.pop("agentic_celery", None)
+        if before is not None:
+            _sys.modules["agentic_celery"] = before
 
 
 @pytest.mark.parametrize("provider", ["ollama", "openai"])

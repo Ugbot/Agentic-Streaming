@@ -1,12 +1,20 @@
-# `ports/`: experimental engine adapters, compared
+# `ports/`: the shared cores, and the experimental engine adapters compared
 
-> Status: experimental adapters, not conformance tested. None of the engine adapters in this
-> directory run the 22 `agentic/v1` fixtures under `spec/conformance/v1`. The conformance tested
-> bindings are the ones listed in the generated [`docs/capabilities.md`](../docs/capabilities.md)
-> (reference, jvm-core, flink, pekko, clojure, python, pyflink, python-jvm, python-flink); of the
-> code in this directory only the shared cores `pyagentic` and `jagentic-core` are on that list.
-> The "Verified here" column below records what was checked for each adapter (compiles, imports,
-> or runs the banking example on the real engine) and nothing more.
+> Layout. `ports/` holds three things that are on the acceptance path: the conformance tested
+> cores [`jagentic-core/`](jagentic-core/) (JVM) and [`pyagentic/`](pyagentic/) (Python), and
+> the portable `pipeline.yaml` CLI [`agentic-pipeline/`](agentic-pipeline/). Everything else,
+> the engine adapters, the Go core, the FastAPI gateway and the adapter tests, lives under
+> [`experimental/`](experimental/) and is described in
+> [`experimental/README.md`](experimental/README.md).
+>
+> Status of `experimental/`: these adapters predate the `agentic/v1` spec and are not
+> conformance tested. None of them run the 22 `agentic/v1` fixtures under `spec/conformance/v1`.
+> The conformance tested bindings are the ones listed in the generated
+> [`docs/capabilities.md`](../docs/capabilities.md) (reference, jvm-core, flink, pekko, clojure,
+> python, pyflink, python-jvm, python-flink); of the code under `ports/` only the shared cores
+> `pyagentic` and `jagentic-core` are on that list. The adapters are not on the acceptance path
+> and may be removed. The "Verified here" column below records what was checked for each adapter
+> (compiles, imports, or runs the banking example on the real engine) and nothing more.
 
 Working implementations of the [`docs/portability/`](../docs/portability/) designs:
 the Agentic-Flink **essence** (per-conversation stateful agents that remember, route,
@@ -20,17 +28,18 @@ doors over the cores:
 
 ```
 ports/
-  pyagentic/      pure-Python essence + LocalRuntime     ← Faust/Ray/NATS/Celery/Dask/Airflow build on this
-  jagentic-core/  pure-Java essence + LocalRuntime       ← Kafka Streams/Pekko/Temporal/Pulsar/Spring/Quarkus build on this
-  go/             pure-Go essence (core/) + gateway + NATS + Temporal + cmds, one module
-  faust/ ray/ nats/ celery/ dask/ airflow/                       (Python adapters)
-  kafka-streams/ pekko/ temporal/ pulsar/ spring/ quarkus/       (JVM adapters; pekko/ is the original
-                                                                  POC - superseded by the first-class
-                                                                  top-level ../agentic-pekko/ module)
-  gateway-fastapi/   FastAPI HTTP gateway over pyagentic (local/celery/nats backends)
-  go/gateway/        stdlib net/http gateway over the Go core
-  agentic-pipeline/  declarative pipeline.yaml loader + backend shim (Python); Java in
-                     jagentic-core/.../pipeline, Go in go/pipeline
+  pyagentic/         pure-Python essence + LocalRuntime, conformance tested   <- experimental/{faust,ray,nats,celery,dask,airflow} build on this
+  jagentic-core/     pure-Java essence + LocalRuntime, conformance tested     <- experimental/{kafka-streams,temporal,pulsar,spring,quarkus} build on this
+  agentic-pipeline/  declarative pipeline.yaml loader + backend registry (Python); Java in
+                     jagentic-core/.../pipeline, Go in experimental/go/pipeline
+  experimental/      predates agentic/v1, not conformance tested, may be removed:
+    go/                pure-Go essence (core/) + gateway + NATS + Temporal + cmds, one module
+    faust/ ray/ nats/ celery/ dask/ airflow/                 (Python adapters)
+    kafka-streams/ temporal/ pulsar/ spring/ quarkus/        (JVM adapters)
+    pekko/             README only: the original POC was deleted, use ../agentic-pekko/
+    gateway-fastapi/   FastAPI HTTP gateway over pyagentic (local/celery/nats backends)
+    go/gateway/        stdlib net/http gateway over the Go core
+    tests/             pytest for the Python adapters' portable logic
 ```
 
 **Build once, deploy anywhere.** Define an agent in a `pipeline.yaml` (prompts, tools,
@@ -75,6 +84,8 @@ processed in order, with async I/O*.
 | **Airflow** | Python | orchestration | Routed graph → branching DAG; scheduled agentic + RAG ingestion + HITL. | `simulate()` runs yes |
 
 ¹ Faust/Ray *run* with their engine + a broker/cluster. They can't run on this box (Python 3.14, ahead of faust/ray wheels), so they're import-checked + engine-guarded; their agent logic is the tested `pyagentic` core.
+
+The Pekko row describes the top-level [`agentic-pekko/`](../agentic-pekko/) runtime, which is conformance tested; the `ports/pekko` proof-of-concept it grew out of has been deleted and [`experimental/pekko/`](experimental/pekko/) is a pointer README.
 
 **Core tests:** `pyagentic` 52 · `jagentic-core` 52 · `goagentic` (core+pipeline+stores) 47 · `agentic-pipeline` 11 · Python adapters · Pulsar adapter 2/2 · Temporal adapter 2/2 · Celery + Dask + Pekko + Pulsar + NATS + Temporal run on the real engine · all JVM modules compile. Live paths (Ollama, Qdrant, Postgres, Valkey, MCP) are verified when infra is up and skip cleanly otherwise.
 
@@ -158,46 +169,45 @@ only the wiring differs:
 
 ```bash
 # pure-Python core (no deps)
-cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q          # 52 pass
+cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q
 
 # Python adapters' portable logic (Dask + Celery + NATS use the real engine if available)
-cd ports && PYTHONPATH=pyagentic python -m pytest tests/ -q           # adapters (NATS test skips w/o a server)
-cd ports/agentic-pipeline && PYTHONPATH=.:../pyagentic python -m pytest -q   # 11 pass (declarative loader)
-python ports/celery/agentic_celery.py         # live banking turns, eager mode (no broker)
-podman run -d -p 4222:4222 nats:latest -js && python ports/nats/agentic_nats.py  # live JetStream + KV
-python ports/dask/agentic_dask.py             # batch RAG + recall@1 + replay
-python ports/airflow/agentic_banking_dag.py   # routing simulate (no scheduler)
+python -m pytest ports/experimental/tests -q                          # adapters (NATS test skips w/o a server)
+cd ports/agentic-pipeline && PYTHONPATH=.:../pyagentic python -m pytest -q   # declarative loader + backend registry
+python ports/experimental/celery/agentic_celery.py         # live banking turns, eager mode (no broker)
+podman run -d -p 4222:4222 nats:latest -js && python ports/experimental/nats/agentic_nats.py  # live JetStream + KV
+python ports/experimental/dask/agentic_dask.py             # batch RAG + recall@1 + replay
+python ports/experimental/airflow/agentic_banking_dag.py   # routing simulate (no scheduler)
 # faust:  faust -A agentic_faust:app worker -l info     (needs Kafka + faust-streaming)
-# ray:    python ports/ray/agentic_ray.py               (needs ray[default])
+# ray:    python ports/experimental/ray/agentic_ray.py  (needs ray[default])
 
-# pure-Java core + JVM engine modules
-mvn -f ports/jagentic-core/pom.xml test       # 52 pass
-mvn -f ports/kafka-streams/pom.xml compile
-mvn -f ports/spring/pom.xml compile
-mvn -f ports/quarkus/pom.xml compile
-mvn -f ports/pekko/pom.xml compile            # BUILD SUCCESS
-mvn -f ports/pekko/pom.xml -q exec:java       # runs the banking demo on real Pekko actors
-mvn -f ports/pulsar/pom.xml test              # 2 pass (banking + extended-graph through the seam)
-mvn -f ports/pulsar/pom.xml -q exec:java      # runs the banking Pulsar Function (in-memory Context)
-mvn -f ports/temporal/pom.xml test            # 2 pass (banking + extended-graph via worker factory)
-mvn -f ports/temporal/pom.xml -q compile exec:java   # runs banking workflows on an in-memory Temporal service
+# pure-Java core + JVM engine modules (install the core first)
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -f ports/experimental/kafka-streams/pom.xml test
+./mvnw -f ports/experimental/spring/pom.xml test
+./mvnw -f ports/experimental/quarkus/pom.xml test
+./mvnw -f ports/experimental/pulsar/pom.xml test              # banking + extended-graph through the seam
+./mvnw -f ports/experimental/pulsar/pom.xml -q exec:java      # runs the banking Pulsar Function (in-memory Context)
+./mvnw -f ports/experimental/temporal/pom.xml test            # banking + extended-graph via worker factory
+./mvnw -f ports/experimental/temporal/pom.xml -q compile exec:java   # runs banking workflows on an in-memory Temporal service
+./mvnw -f agentic-pekko/pom.xml test                          # the Pekko runtime of record (not under ports/)
 
 # pure-Go core + Go engines + Go gateway (one module)
-cd ports/go && go test ./...                  # core + gateway + temporal; natsjs runs if a JetStream server is up
+cd ports/experimental/go && go test ./...     # core + gateway + temporal; natsjs runs if a JetStream server is up
 go run ./cmd/demo                             # banking graph on the Go LocalRuntime
 go run ./cmd/gateway                          # HTTP gateway on :8080
 go run ./cmd/natsdemo                         # streamed NATS JetStream round-trip (needs a server)
 
 # HTTP gateways (front doors over the cores)
-PYTHONPATH=ports/gateway-fastapi /tmp/af-venv/bin/python -m pytest ports/gateway-fastapi/tests -q  # 9 pass
-uvicorn gateway_fastapi.__main__:app          # FastAPI gateway over pyagentic (from ports/gateway-fastapi)
+python -m pytest ports/experimental/gateway-fastapi/tests -q
+cd ports/experimental/gateway-fastapi && uvicorn gateway_fastapi.__main__:app   # FastAPI gateway over pyagentic
 ```
 
 ---
 
 ## A third core (Go) + HTTP gateways
 
-The essence isn't Python- or JVM-specific. [`ports/go/`](go/) is a **third core**, in
+The essence isn't Python- or JVM-specific. [`ports/experimental/go/`](experimental/go/) is a **third core**, in
 pure Go, with the same abstractions (`ConversationStore`, `KeyedStateStore`,
 `ToolRegistry`, `RoutedGraph`, `Retrieval`, `Banking`, `LocalRuntime`) and the same
 extensibility invariant, and it ships its own **NATS JetStream** and **Temporal**
@@ -212,8 +222,8 @@ can't tell them apart:
 
 | Gateway | Stack | Over | Backends |
 |---------|-------|------|----------|
-| [`gateway-fastapi/`](gateway-fastapi/) | FastAPI + Pydantic (Python) | `pyagentic` | local (default), celery, nats, via `AGENTIC_GATEWAY_BACKEND` |
-| [`go/gateway/`](go/gateway/) | stdlib `net/http` (Go) | `goagentic` core | the Go `LocalRuntime` (or any Go engine `Runtime`) |
+| [`experimental/gateway-fastapi/`](experimental/gateway-fastapi/) | FastAPI + Pydantic (Python) | `pyagentic` | local (default), celery, nats, via `AGENTIC_GATEWAY_BACKEND` |
+| [`experimental/go/gateway/`](experimental/go/gateway/) | stdlib `net/http` (Go) | `goagentic` core | the Go `LocalRuntime` (or any Go engine `Runtime`) |
 
 Both reuse their core verbatim; the FastAPI one can route turns to the Local, Celery, or
 NATS runtimes behind one HTTP surface.
@@ -279,7 +289,7 @@ adapter consumes the core factories (`Banking.buildGraph()` / `build_banking_gra
     add a brand-new `freeze_card` tool + `fraud` path **through the public API only**
     (no framework edits) and prove the core routes to and invokes them.
   - The adapter-level counterparts run that *same extension through a real engine seam*:
-    `test_adapters.py` (the live Celery task **and** the live NATS JetStream seam), the
+    `experimental/tests/test_adapters.py` (the live Celery task **and** the live NATS JetStream seam), the
     pulsar module's `BankingFunctionTest.extendedCoreGraphFlowsThroughThePulsarSeam`,
     and the temporal module's `ConversationWorkflowTest.extendedCoreGraphFlowsThroughTheWorkflow`
 , confirming a core addition reaches durable state on the engine without touching
