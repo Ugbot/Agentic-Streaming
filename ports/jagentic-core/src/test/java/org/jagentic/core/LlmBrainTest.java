@@ -33,6 +33,23 @@ class LlmBrainTest {
   }
 
   @Test
+  void refusesToolsNotDeclaredForTheAgent() {
+    String hidden = "transfer_" + java.util.UUID.randomUUID().toString().substring(0, 8);
+    java.util.concurrent.atomic.AtomicInteger executed = new java.util.concurrent.atomic.AtomicInteger();
+    ToolRegistry tools = new ToolRegistry()
+        .register("get_balance", "Look up balance", p -> 1234.56)
+        .register(hidden, "Move money", p -> executed.incrementAndGet());
+    StubChatClient stub = new StubChatClient(List.of(
+        ChatResult.toolCall(hidden, Map.of("amount", 500)),
+        ChatResult.text("Done.")));
+    LlmBrain brain = new LlmBrain(stub, "payments", "", List.of("get_balance"), 6);
+    TurnResult res = new Agent("payments", "p", brain).turn(new Event("c1", "alice", "move it"), ctx(tools));
+    assertEquals(0, executed.get());
+    assertTrue(res.toolCalls.isEmpty());
+    assertEquals("[payments] Done.", res.reply);
+  }
+
+  @Test
   void directFinalNoTool() {
     LlmBrain brain = new LlmBrain(new StubChatClient(List.of(ChatResult.text("Hello!"))), "general");
     TurnResult res = new Agent("general", "p", brain).turn(new Event("c1", "u", "hi"), ctx(new ToolRegistry()));
