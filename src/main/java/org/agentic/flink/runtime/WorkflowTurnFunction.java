@@ -88,6 +88,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
 
   private final Map<String, Object> spec;
   private final FlinkRuntimeOptions options;
+  private final ChatClientFactories.SerializableChatClientFactory chatClientFactory;
 
   private transient GraphBuilder.Built built;
   private transient ListState<LogEvent> log;
@@ -102,12 +103,53 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   }
 
   public WorkflowTurnFunction(Map<String, Object> spec, FlinkRuntimeOptions options) {
+    this(spec, options, ChatClientFactories.failFast());
+  }
+
+  /**
+   * @param chatClientFactory builds the {@link org.jagentic.core.llm.ChatClient} for paths with
+   *     {@code brain: llm}; it is serialized with the operator. With the default
+   *     {@link ChatClientFactories#failFast()} a spec that declares an {@code llm} brain is
+   *     rejected here, at job build time.
+   */
+  public WorkflowTurnFunction(
+      Map<String, Object> spec,
+      FlinkRuntimeOptions options,
+      ChatClientFactories.SerializableChatClientFactory chatClientFactory) {
     Objects.requireNonNull(spec, "spec");
     this.options = Objects.requireNonNull(options, "options");
+    this.chatClientFactory = Objects.requireNonNull(chatClientFactory, "chatClientFactory");
     Map<String, Object> copy = new HashMap<>(spec);
     copy.remove("cep"); // CEP is wired natively by the job graph, not by the turn graph
     this.spec = copy;
     WorkflowValidator.validate(this.spec);
+    if (ChatClientFactories.isFailFast(chatClientFactory)) {
+      List<String> llmPaths = llmBrainPaths(this.spec);
+      if (!llmPaths.isEmpty()) {
+        throw new IllegalArgumentException(
+            "agent.paths " + llmPaths + " declare brain: llm but no ChatClientFactory was"
+                + " configured; pass one to WorkflowTurnFunction(spec, options, factory)");
+      }
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  static List<String> llmBrainPaths(Map<String, Object> spec) {
+    List<String> out = new ArrayList<>();
+    Map<String, Object> agent = (Map<String, Object>) spec.get("agent");
+    if (agent == null) {
+      return out;
+    }
+    Map<String, Object> paths = (Map<String, Object>) agent.get("paths");
+    if (paths == null) {
+      return out;
+    }
+    for (Map.Entry<String, Object> e : paths.entrySet()) {
+      if (e.getValue() instanceof Map<?, ?> ps && "llm".equals(ps.get("brain"))) {
+        out.add(e.getKey());
+      }
+    }
+    return out;
   }
 
   public FlinkRuntimeOptions options() {
@@ -121,7 +163,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
 
   @Override
   public void open(OpenContext openContext) {
-    built = GraphBuilder.build(spec, null);
+    built = GraphBuilder.build(spec, chatClientFactory);
 
     ListStateDescriptor<LogEvent> logDesc = new ListStateDescriptor<>(LOG_STATE, LOG_EVENT_TYPE);
     ValueStateDescriptor<Long> seqDesc = new ValueStateDescriptor<>(SEQUENCE_STATE, Types.LONG);

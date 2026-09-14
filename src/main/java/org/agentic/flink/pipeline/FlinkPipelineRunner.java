@@ -20,6 +20,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.Collector;
 
 import org.agentic.flink.cep.CepSpecTranslator;
+import org.agentic.flink.runtime.ChatClientFactories;
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
 import org.agentic.flink.runtime.WorkflowTurnFunction;
 import org.jagentic.core.Event;
@@ -77,9 +78,19 @@ public final class FlinkPipelineRunner {
    * Assemble the job graph and return the normalized turn results, one per input event (and one per
    * timer-driven resume), in the shape of {@code spec/v1/result.schema.json}.
    */
-  @SuppressWarnings("unchecked")
   public static DataStream<TurnResult> assembleResults(StreamExecutionEnvironment env, Map<String, Object> spec,
                                                        DataStream<Event> source, FlinkRuntimeOptions options) {
+    return assembleResults(env, spec, source, options, ChatClientFactories.failFast());
+  }
+
+  /**
+   * {@link #assembleResults(StreamExecutionEnvironment, Map, DataStream, FlinkRuntimeOptions)} with
+   * the factory used for {@code brain: llm} paths; the default rejects such specs at build time.
+   */
+  @SuppressWarnings("unchecked")
+  public static DataStream<TurnResult> assembleResults(StreamExecutionEnvironment env, Map<String, Object> spec,
+                                                       DataStream<Event> source, FlinkRuntimeOptions options,
+                                                       ChatClientFactories.SerializableChatClientFactory chatClientFactory) {
     List<Map<String, Object>> cepRules = (List<Map<String, Object>>) spec.get("cep");
     DataStream<Event> agentInput = source;
 
@@ -101,7 +112,8 @@ public final class FlinkPipelineRunner {
       }
     }
 
-    return agentInput.keyBy(Event::conversationId).process(new WorkflowTurnFunction(spec, options));
+    return agentInput.keyBy(Event::conversationId)
+        .process(new WorkflowTurnFunction(spec, options, chatClientFactory));
   }
 
   /** A CEP match → a derived agent event (the native form of the portable {@code on_match: submit}). */

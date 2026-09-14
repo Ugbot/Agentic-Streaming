@@ -46,7 +46,11 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * @author Agentic Flink Team
  * @see Pattern
  * @see PatternConditions
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class CepPatternBuilder {
 
   private Pattern<AgentEvent, ?> pattern;

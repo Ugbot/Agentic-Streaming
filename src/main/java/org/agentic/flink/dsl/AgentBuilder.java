@@ -72,7 +72,10 @@ import java.util.*;
  *
  * @author Agentic Flink Team
  * @see Agent
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class AgentBuilder {
 
   // Core identity

@@ -64,7 +64,11 @@ import org.slf4j.LoggerFactory;
  * @author Agentic Flink Team
  * @see DocumentIngestionFunction
  * @see SemanticSearchFunction
+ *
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
+@Deprecated
 public class ResearchPipelineJob implements Serializable {
 
     private static final long serialVersionUID = 1L;

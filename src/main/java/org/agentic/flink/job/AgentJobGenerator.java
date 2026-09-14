@@ -83,18 +83,35 @@ import org.slf4j.LoggerFactory;
  * DataStream<AgentEvent> results = generator.generate(input);
  * }</pre>
  *
+ * <p><b>Execution model.</b> Single and multi agent pipelines run the LLM/tool loop on a Flink
+ * async operator ({@code AsyncDataStream.unorderedWait}) fed by the keyed CEP dispatcher, so
+ * the CEP operator never blocks and checkpoints proceed while turns are in flight. The async
+ * timeout is {@link Agent#getTimeout()} (default
+ * {@link org.agentic.flink.stream.AgentExecutionFunction#DEFAULT_TIMEOUT}) and cancels the
+ * running execution. Supervisor chain tiers still execute synchronously inside the CEP
+ * operator (see {@link SupervisorTierFunction} for the checkpoint impact); size their
+ * {@code Agent.timeout} accordingly.
+ *
  * @author Agentic Flink Team
  * @see AgentJob
  * @see Agent
  * @see SupervisorChain
+ * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction} with
+ *     {@code KeyedConversationLog}.
  */
+@Deprecated
 public class AgentJobGenerator implements Serializable {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(AgentJobGenerator.class);
 
+  /** Default number of in-flight agent turns per async operator subtask. */
+  public static final int DEFAULT_ASYNC_CAPACITY = 32;
+
   private final StreamExecutionEnvironment env;
   private final AgentJob job;
+  private final int asyncCapacity;
 
   // Side output tags for monitoring
   public static final OutputTag<AgentEvent> VALIDATION_FAILURES_TAG =
@@ -113,8 +130,20 @@ public class AgentJobGenerator implements Serializable {
    * @param job The agent job definition
    */
   public AgentJobGenerator(StreamExecutionEnvironment env, AgentJob job) {
+    this(env, job, DEFAULT_ASYNC_CAPACITY);
+  }
+
+  /**
+   * Creates a new job generator with an explicit async operator capacity (maximum number of
+   * agent turns in flight per subtask before backpressure).
+   */
+  public AgentJobGenerator(StreamExecutionEnvironment env, AgentJob job, int asyncCapacity) {
+    if (asyncCapacity <= 0) {
+      throw new IllegalArgumentException("asyncCapacity must be positive, got " + asyncCapacity);
+    }
     this.env = env;
     this.job = job;
+    this.asyncCapacity = asyncCapacity;
   }
 
   /**
@@ -179,10 +208,27 @@ public class AgentJobGenerator implements Serializable {
         agent.getStateMachine().generateCepPattern()
     );
 
-    // Process pattern matches → agent execution
-    SingleOutputStreamOperator<AgentEvent> processedEvents = patternStream
+    // Pattern matches → execution requests (keyed, non-blocking, dedups redelivered turns)
+    SingleOutputStreamOperator<AgentEvent> requests = patternStream
         .process(new AgentExecutionFunction(agent, job.getToolRegistry()))
-        .name("execute-" + agent.getAgentId());
+        .name("dispatch-" + agent.getAgentId());
+
+    // Execution requests → LLM/tool loop on the async operator with a cancelling timeout
+    org.agentic.flink.stream.AgentExecutionFunction asyncExecution =
+        new org.agentic.flink.stream.AgentExecutionFunction(agent, job.getToolRegistry());
+    DataStream<AgentEvent> results = AsyncDataStream.unorderedWait(
+        requests,
+        asyncExecution,
+        asyncExecution.getTimeout().toMillis(),
+        TimeUnit.MILLISECONDS,
+        asyncCapacity
+    ).name("execute-" + agent.getAgentId());
+
+    // Results plus CEP pattern timeouts and compensations → side output tags
+    SingleOutputStreamOperator<AgentEvent> processedEvents = results
+        .union(requests.getSideOutput(TIMEOUT_TAG), requests.getSideOutput(COMPENSATION_TAG))
+        .process(new AgentResultRouter())
+        .name("route-" + agent.getAgentId());
 
     // Wire storage if configured
     if (job.getStorageConfig() != null) {
