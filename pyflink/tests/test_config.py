@@ -70,7 +70,11 @@ def test_required_capabilities_follow_the_document() -> None:
         "tools": [{"name": "x", "compensation": "undo_x"}],
         "guardrails": [{"name": "g"}],
     }
-    assert required_capabilities(doc) == {
-        "routing", "rule_brain", "memory", "tools", "retry", "idempotency", "ordering", "saga", "guardrails",
+    needs = required_capabilities(doc)
+    assert isinstance(needs, list) and len(needs) == len(set(needs))
+    assert set(needs) == {
+        "routing", "rule_brain", "memory", "tools", "retry", "idempotency", "ordering", "guardrails", "verifier",
     }
-    assert required_capabilities({"spec_version": "agentic/v1", "agent": {}}) == {"routing", "rule_brain", "memory"}
+    assert set(required_capabilities({"spec_version": "agentic/v1", "agent": {"paths": {}}})) == {
+        "routing", "verifier", "memory", "ordering", "idempotency",
+    }

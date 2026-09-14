@@ -33,10 +33,16 @@ CAPABILITY_VALUES = frozenset({"supported", "partial", "unsupported", "not_teste
 
 # Runtime names that other packages of this project provide, with the extra that installs them.
 KNOWN_EXTRAS: Dict[str, str] = {
-    "flink": "pyagentic[flink]",
-    "pyflink": "pyagentic[pyflink]",
-    "jvm": "pyagentic[jvm]",
+    "flink-jvm": "pyagentic[flink]",
+    "local-jvm": "pyagentic[jvm]",
     "pekko": "pyagentic[jvm]",
+    "pyflink": "pyagentic[pyflink]",
+}
+
+# Names that used to be registered and now resolve to nothing; the error says what replaced them.
+RENAMED_RUNTIMES: Dict[str, str] = {
+    "flink": "'flink-jvm' (the JPype facade, agentic-flink) or 'pyflink' (agentic-pyflink)",
+    "jvm": "'local-jvm' (agentic-flink)",
 }
 
 Factory = Callable[..., "Runtime"]
@@ -166,7 +172,9 @@ def get_runtime(name: str = "local", **options: Any) -> Runtime:
         factory = LocalRuntime
     if factory is None:
         extra = KNOWN_EXTRAS.get(name)
+        renamed = RENAMED_RUNTIMES.get(name)
         hint = (f"install it with `pip install '{extra}'`" if extra
+                else f"it was renamed; use {renamed}" if renamed
                 else "install the package that provides it, or call register_runtime()")
         known = ", ".join(sorted(available_runtimes()))
         raise RuntimeNotAvailableError(

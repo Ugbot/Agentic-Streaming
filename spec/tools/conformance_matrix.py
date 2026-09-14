@@ -20,7 +20,7 @@ never a reimplementation of it:
 | python    | an installed `agentic.conformance` entry point (see below)       | here, on its results  |
 | pyflink   | `agentic_pyflink.conformance.run_all()` (PyFlink over the bridge jar) | inside the binding |
 | python-jvm | `agentic_flink.conformance.run_all('local-jvm')` (JPype facade)  | inside the binding    |
-| python-flink | `agentic_flink.conformance.run_all('flink')` (JPype facade)    | inside the binding    |
+| python-flink | `agentic_flink.conformance.run_all('flink-jvm')` (JPype facade)    | inside the binding    |
 
 The last three ship their own conformance module that imports `run_conformance.check_expectation`
 (the same comparator) and returns per-fixture pass/fail/skip outcomes rather than normalized results;
@@ -499,7 +499,7 @@ PYTHON_SUITES: Dict[str, PythonSuite] = {
         "python-jvm", "python/agentic_flink", "agentic_flink.conformance", "m.run_all('local-jvm')",
         "fixture_id", "o.status", "o.reason", "pip install -e python"),
     "python-flink": PythonSuite(
-        "python-flink", "python/agentic_flink", "agentic_flink.conformance", "m.run_all('flink')",
+        "python-flink", "python/agentic_flink", "agentic_flink.conformance", "m.run_all('flink-jvm')",
         "fixture_id", "o.status", "o.reason", "pip install -e python"),
 }
 

@@ -55,12 +55,12 @@ def check_requirements(required: Iterable[str], declared: Mapping[str, str]) -> 
     unsupported = [cid for cid in required if declared.get(cid, "unsupported") == "unsupported"]
     if unsupported:
         raise CapabilityError(
-            "the workflow needs capabilities the flink runtime does not support: " + ", ".join(unsupported)
+            "the workflow needs capabilities the pyflink runtime does not support: " + ", ".join(unsupported)
         )
     untested = [cid for cid in required if declared.get(cid) == "not_tested"]
     if untested:
         warnings.warn(
-            "the workflow uses capabilities the flink runtime implements but has not proven by test: "
+            "the workflow uses capabilities the pyflink runtime implements but has not proven by test: "
             + ", ".join(untested),
             stacklevel=3,
         )

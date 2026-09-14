@@ -30,17 +30,17 @@ dependencies = [
 [project.optional-dependencies]
 # Native PyFlink path targets the Flink 2.x line (matches the Java side's Flink 2.2).
 pyflink = ["apache-flink>=2.0", "cloudpickle>=2"]
-# The `flink` runtime (get_runtime("flink")) runs jobs in-process and needs the Flink
+# The `flink-jvm` runtime (get_runtime("flink-jvm")) runs jobs in-process and needs the Flink
 # distribution jars, which the shaded agentic-flink jar keeps out; the apache-flink wheel
 # ships them under pyflink/lib.
 flink = ["apache-flink>=2.0"]
-test = ["pytest>=7", "jsonschema>=4"]
+test = ["pytest>=7", "jsonschema>=4", "setuptools>=68"]
 all = ["agentic-flink[pyflink,flink,test]"]
 
 # Runtimes for the shared cross-runtime contract (`agentic.runtime.get_runtime(name)`).
 [project.entry-points."agentic.runtimes"]
 local-jvm = "agentic_flink.runtimes:local_jvm"
-flink = "agentic_flink.runtimes:flink"
+flink-jvm = "agentic_flink.runtimes:flink"
 pekko = "agentic_flink.runtimes:pekko"
 
 [project.urls]
@@ -54,7 +54,8 @@ where = ["."]
 include = ["agentic_flink*"]
 exclude = ["tests*"]
 
-# The shaded framework jar ships inside the wheel (copy target/agentic-flink-<v>-uber.jar to
-# agentic_flink/jars/ before `python -m build`; see README "Jars" and agentic_flink/jars/README.md).
+# The shaded framework jar ships inside the wheel. setup.py builds it (./mvnw) or copies it from
+# AGENTIC_FLINK_JAR / <repo>/target into agentic_flink/jars/ before package data is collected;
+# see agentic_flink/jars/README.md and PUBLISHING.md.
 [tool.setuptools.package-data]
 agentic_flink = ["jars/*.jar", "jars/README.md"]

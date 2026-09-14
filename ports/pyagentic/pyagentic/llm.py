@@ -11,7 +11,8 @@ Providers are dependency-free (urllib + json): ``OllamaChatClient`` and
 ``OpenAIChatClient`` use a JSON-mode protocol — the model must reply with
 ``{"tool": "...", "args": {...}}`` to call a tool or ``{"text": "..."}`` to answer — so
 no provider-specific function-calling API is needed. ``StubChatClient`` is a scripted,
-deterministic client for offline tests.
+deterministic client for offline tests. Every real client takes an explicit ``model``; none
+has a default model name (see ``require_model``).
 """
 
 from __future__ import annotations
@@ -170,11 +171,21 @@ class StubChatClient:
         return result
 
 
+def require_model(model: Optional[str], client: str) -> str:
+    """Model names are explicit: there is no default, because a default name that does not exist
+    on the provider fails only at the first real request. Raises ``ValueError`` when unset."""
+    if model is None or not str(model).strip():
+        raise ValueError(
+            f"{client} needs an explicit model name (model=...); there is no default. Name the model "
+            "you have deployed, for example OllamaChatClient(model='qwen2.5:3b') after 'ollama pull qwen2.5:3b'")
+    return str(model).strip()
+
+
 class _HttpChatClient:
     """Shared JSON-mode HTTP chat client. Subclasses set the URL + request shape."""
 
     def __init__(self, model: str, url: str, headers: Optional[Dict[str, str]] = None, timeout: float = 60.0):
-        self.model = model
+        self.model = require_model(model, type(self).__name__)
         self.url = url
         self.headers = {"Content-Type": "application/json", **(headers or {})}
         self.timeout = timeout
@@ -190,7 +201,7 @@ class _HttpChatClient:
 class OllamaChatClient(_HttpChatClient):
     """Talks to a local Ollama ``/api/chat`` endpoint (JSON mode)."""
 
-    def __init__(self, model: str = "qwen2.5:3b", base_url: Optional[str] = None, timeout: float = 60.0):
+    def __init__(self, model: str, base_url: Optional[str] = None, timeout: float = 60.0):
         base = (base_url or os.environ.get("AGENTIC_OLLAMA_URL") or "http://localhost:11434").rstrip("/")
         super().__init__(model, base + "/api/chat", timeout=timeout)
 
@@ -203,15 +214,15 @@ class LiteLLMChatClient:
     """Real chat via `litellm` — one API across OpenAI / Anthropic / Ollama / Gemini /
     etc. Uses the same JSON-mode ReAct protocol as the rest of the framework
     (``{"tool": ...}`` / ``{"text": ...}``), so ``LlmBrain`` works unchanged. ``model``
-    is a litellm model string, e.g. ``ollama/llama3.2`` or ``gpt-4o-mini`` or
-    ``anthropic/claude-3-5-haiku-latest``."""
+    is a litellm model string, e.g. ``ollama/llama3.2`` or ``anthropic/claude-3-5-haiku-latest``;
+    it is required, there is no default."""
 
-    def __init__(self, model: str = "ollama/llama3.2", api_base: Optional[str] = None,
+    def __init__(self, model: str, api_base: Optional[str] = None,
                  json_mode: bool = True, **kwargs) -> None:
+        self.model = require_model(model, type(self).__name__)
         import litellm  # opt-in heavy dep
 
         self._litellm = litellm
-        self.model = model
         self.json_mode = json_mode
         self._kwargs = dict(kwargs)
         if api_base:
@@ -236,7 +247,8 @@ class LiteLLMChatClient:
 class OpenAIChatClient(_HttpChatClient):
     """Talks to the OpenAI (or compatible) ``/chat/completions`` endpoint (JSON mode)."""
 
-    def __init__(self, model: str = "gpt-5.4-mini", api_key: Optional[str] = None, base_url: Optional[str] = None, timeout: float = 60.0):
+    def __init__(self, model: str, api_key: Optional[str] = None, base_url: Optional[str] = None, timeout: float = 60.0):
+        model = require_model(model, type(self).__name__)
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise RuntimeError("OPENAI_API_KEY not set")

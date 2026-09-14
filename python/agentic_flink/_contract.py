@@ -18,7 +18,7 @@ from __future__ import annotations
 import abc
 import threading
 from importlib import metadata
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
 ENTRY_POINT_GROUP = "agentic.runtimes"
 
@@ -34,7 +34,8 @@ CAPABILITY_IDS: Tuple[str, ...] = (
 # Runtime names this project provides elsewhere, with the extra that installs them.
 KNOWN_EXTRAS: Dict[str, str] = {
     "local-jvm": "agentic-flink",
-    "flink": "agentic-flink[flink]",
+    "flink-jvm": "agentic-flink[flink]",
+    "pyflink": "agentic-pyflink",
     "pekko": "agentic-flink (plus the agentic-pekko jars; no pip extra yet)",
     "local": "pyagentic",
 }
@@ -46,6 +47,7 @@ try:
         available_runtimes,
         get_runtime,
         register_runtime,
+        required_capabilities,
         unregister_runtime,
     )
 except ImportError:
@@ -155,6 +157,55 @@ except ImportError:
             raise RuntimeNotAvailableError(
                 f"factory for runtime {name!r} returned {type(runtime).__name__}, not a Runtime")
         return runtime
+
+    def required_capabilities(doc: Mapping[str, Any]) -> List[str]:  # type: ignore[no-redef]
+        """The capability ids a validated workflow document needs from any runtime.
+
+        Mirrors ``agentic.runtime.required_capabilities`` line for line; the pure package is the
+        source of truth and ``tests/test_capabilities_canonical.py`` checks the two agree on every fixture.
+        """
+        agent = doc["agent"]
+        paths: Mapping[str, Mapping[str, Any]] = agent["paths"]
+        policies = doc.get("policies") or {}
+        needs = ["routing"]
+        brains = {p.get("brain", "rule") for p in paths.values() if "x-brain" not in p}
+        if "rule" in brains:
+            needs.append("rule_brain")
+        if "llm" in brains:
+            needs.append("llm_brain")
+        if doc.get("tools") or doc.get("mcp") or doc.get("a2a"):
+            needs.append("tools")
+        if any("parameters" in t for t in doc.get("tools") or []):
+            needs.append("structured_tool_args")
+        if doc.get("guardrails"):
+            needs.append("guardrails")
+        verifiers = [agent.get("verifier") or {}] + [p.get("verifier") or {} for p in paths.values()]
+        if any(v.get("kind", "prefix") != "none" for v in verifiers):
+            needs.append("verifier")
+        if policies.get("ordering", "per-conversation") == "per-conversation":
+            needs.append("ordering")
+        if policies.get("idempotency", "turn-id") == "turn-id":
+            needs.append("idempotency")
+        if (policies.get("retry") or {}).get("kind", "none") != "none":
+            needs.append("retry")
+        needs.append("memory")
+        if doc.get("retrieval"):
+            needs.append("retrieval")
+        if doc.get("context"):
+            needs.append("context_window")
+        if any("x-suspend-until" in p for p in paths.values()):
+            needs.append("suspend_resume")
+        if doc.get("timers"):
+            needs.append("timers")
+        if doc.get("saga"):
+            needs.append("saga")
+        if doc.get("a2a"):
+            needs.append("a2a")
+        if doc.get("cep"):
+            needs.append("cep")
+        if doc.get("stores"):
+            needs.append("durable_store")
+        return needs
 else:
     CONTRACT_SOURCE = "agentic.runtime"
 
@@ -178,5 +229,6 @@ __all__ = [
     "available_runtimes",
     "get_runtime",
     "register_runtime",
+    "required_capabilities",
     "unregister_runtime",
 ]

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
-from .core import Agent, AgentContext, Event, RoutedGraph
+from .core import ROUTER_KINDS, Agent, RoutedGraph, keyword_router, static_router
 from .guardrails import RegexGuardrail
 from .llm import LlmBrain
 from .retrieval import InMemoryHotVectorIndex, TwoTierRetriever, hashing_embedder
@@ -182,21 +182,26 @@ def _build_guardrail(g: Dict[str, Any], embed):
 
 
 def _build_router(spec: Optional[Dict[str, Any]], paths: List[str]):
+    """``agent.router`` per ``spec/v1``: keyword (case-insensitive substring, declaration order,
+    ``default`` fallback) or static. ``default`` may only be omitted when there is exactly one path."""
     spec = spec or {}
     kind = spec.get("kind", "keyword")
-    default = spec.get("default") or (paths[-1] if paths else None)
-    if kind != "keyword":
-        raise ValueError(f"router kind {kind!r} not supported by GraphBuilder (use 'keyword')")
-    rules: Dict[str, List[str]] = spec.get("rules", {})
-
-    def router(event: Event, ctx: AgentContext) -> str:
-        low = event.text.lower()
-        for path, keywords in rules.items():
-            if any(kw.lower() in low for kw in keywords):
-                return path
-        return default
-
-    return router
+    if kind not in ROUTER_KINDS:
+        raise ValueError(f"router kind {kind!r} is not available in this runtime; supported kinds: {', '.join(ROUTER_KINDS)}")
+    default = spec.get("default")
+    if default is None:
+        if len(paths) != 1:
+            raise ValueError("router.default is required when the agent declares more than one path")
+        default = paths[0]
+    if default not in paths:
+        raise ValueError(f"router.default {default!r} is not a declared path; paths: {', '.join(paths)}")
+    rules: Dict[str, List[str]] = spec.get("rules") or {}
+    unknown = [p for p in rules if p not in paths]
+    if unknown:
+        raise ValueError(f"router.rules name undeclared paths: {', '.join(unknown)}; paths: {', '.join(paths)}")
+    if kind == "static":
+        return static_router(default)
+    return keyword_router(rules, default)
 
 
 def build(spec: Dict[str, Any], chat_client_factory: Optional[ChatClientFactory] = None):

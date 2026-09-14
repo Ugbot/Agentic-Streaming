@@ -17,7 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 # JVM-backed runtimes register themselves in the `agentic.runtimes` entry-point group.
 flink = ["agentic-flink>=0.1,<1"]
-pyflink = ["apache-flink>=2.0,<3"]
+pyflink = ["agentic-pyflink>=1.0.0a1,<2"]
 jvm = ["agentic-flink>=0.1,<1"]
 test = ["pytest>=7,<9"]
 dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "pip-tools>=7,<8"]

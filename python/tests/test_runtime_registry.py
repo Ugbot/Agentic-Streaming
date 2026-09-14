@@ -50,20 +50,21 @@ def test_runtime_is_an_abc_with_the_contract_methods():
 def test_pyproject_declares_the_entry_point_group_for_every_jvm_runtime():
     assert f'[project.entry-points."{ENTRY_POINT_GROUP}"]' in PYPROJECT
     for name, target in (("local-jvm", "agentic_flink.runtimes:local_jvm"),
-                         ("flink", "agentic_flink.runtimes:flink"),
+                         ("flink-jvm", "agentic_flink.runtimes:flink"),
                          ("pekko", "agentic_flink.runtimes:pekko")):
         assert f'{name} = "{target}"' in PYPROJECT
 
 
 def test_jvm_runtimes_are_selectable_by_name():
     names = available_runtimes()
-    assert {"local-jvm", "flink", "pekko", "local"} <= set(names)
+    assert {"local-jvm", "flink-jvm", "pekko", "local"} <= set(names)
+    assert "flink" not in names, "the bare name 'flink' is reserved: flink-jvm (JPype) vs pyflink (agentic-pyflink)"
     installed = {ep.name for ep in metadata.entry_points().select(group=ENTRY_POINT_GROUP)}
     if installed:  # pip-installed: discovery through the entry-point group itself
-        assert {"local-jvm", "flink", "pekko"} <= installed
+        assert {"local-jvm", "flink-jvm", "pekko"} <= installed
     rt = get_runtime("local-jvm")
     assert isinstance(rt, JvmLocalRuntime) and isinstance(rt, Runtime)
-    assert isinstance(get_runtime("flink", parallelism=2), FlinkRuntime)
+    assert isinstance(get_runtime("flink-jvm", parallelism=2), FlinkRuntime)
     assert isinstance(get_runtime("pekko"), PekkoRuntime)
 
 
@@ -80,7 +81,7 @@ def test_unknown_runtime_raises_and_names_the_extra_without_falling_back():
         get_runtime(name)
     msg = str(ei.value)
     assert name in msg and "install the package" in msg and "register_runtime" in msg
-    assert KNOWN_EXTRAS["flink"] == "agentic-flink[flink]"  # the hint used when `flink` is not installed
+    assert KNOWN_EXTRAS["flink-jvm"] == "agentic-flink[flink]"  # the hint used when `flink-jvm` is not installed
 
 
 def test_register_runtime_factory_and_options():

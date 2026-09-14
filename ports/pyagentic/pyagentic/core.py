@@ -10,7 +10,7 @@ by the engine (Kafka partition, Ray actor, …) or by the LocalRuntime here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Protocol
+from typing import Callable, Dict, List, Mapping, Optional, Protocol, Sequence
 
 from .memory import ChatMessage, ConversationStore, KeyedStateStore
 from .retrieval import TwoTierRetriever
@@ -108,6 +108,34 @@ Verifier = Callable[[str, AgentContext], "tuple[bool, str]"]
 
 PHASE_ATTR = "graph.phase"
 PATH_ATTR = "graph.path"
+
+ROUTER_KINDS = ("keyword", "static")
+
+
+def keyword_router(rules: Mapping[str, Sequence[str]], default: str) -> Router:
+    """The ``router.kind: keyword`` semantics of ``spec/v1`` (workflow.schema.json, fixtures 01/02):
+    ``rules`` maps a path name to its keywords; the turn text is matched case-insensitively as a
+    substring; the first path in declaration order with a hit wins; no hit routes to ``default``.
+    """
+    if not default:
+        raise ValueError("keyword_router needs a router.default path")
+    table = [(str(path), [str(k).lower() for k in keywords]) for path, keywords in rules.items()]
+
+    def route(event: Event, ctx: AgentContext) -> str:
+        low = (event.text or "").lower()
+        for path, keywords in table:
+            if any(k in low for k in keywords):
+                return path
+        return default
+
+    return route
+
+
+def static_router(default: str) -> Router:
+    """``router.kind: static``: every turn goes to ``default``."""
+    if not default:
+        raise ValueError("static_router needs a router.default path")
+    return lambda event, ctx: default
 
 
 class RoutedGraph:
