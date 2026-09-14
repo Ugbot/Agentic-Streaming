@@ -83,6 +83,14 @@ jobs:
           else
             echo "ports/pyagentic not present: python runtime will be reported as not_tested (binding absent)"
           fi
+          # pyflink / python-jvm / python-flink run their own conformance modules over the shaded jar.
+          if [ -f pyflink/pyproject.toml ]; then pip install -e pyflink; fi
+          if [ -f python/pyproject.toml ]; then pip install -e python; fi
+      - name: Build the shaded jar the Python-over-JVM bindings load
+        run: |
+          ./mvnw -B -ntp -q -f ports/jagentic-core/pom.xml install -DskipTests
+          ./mvnw -B -ntp -q install -DskipTests
+          if [ -f pyflink/java/pom.xml ]; then ./mvnw -B -ntp -q -f pyflink/java/pom.xml package -DskipTests; fi
       - name: Run the matrix
         run: |
           python spec/tools/conformance_matrix.py \

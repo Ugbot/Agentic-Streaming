@@ -28,7 +28,13 @@ def test_reference_runtime_passes_and_is_supported_only_where_a_fixture_proves_i
     proven = {c for f in FIXTURES.values() for c in f["requires"]}
     for cap in cm.CAPABILITIES:
         assert cells[cap]["value"] == ("supported" if cap in proven else "not_tested"), cap
-    assert cells["llm_brain"]["note"] == "no v1 fixture requires it"
+        if cap not in proven:
+            assert cells[cap]["note"] == "no v1 fixture requires it"
+
+    # a fixture nobody requires-covers is the only way a cell can stay not_tested for the reference
+    unproven = cm.RuntimeReport("reference", "b", "runner", cm.RAN)
+    unproven.fixtures = [f for f in report.fixtures if "llm_brain" not in f.requires]
+    assert cm.derive_capabilities(unproven)["llm_brain"] == {"value": "not_tested", "note": "no v1 fixture requires it"}
 
 
 def test_runner_comparator_rejects_schema_violations_and_ignores_runtime_detail() -> None:
@@ -104,11 +110,11 @@ def test_surefire_parser_maps_dynamic_tests_to_fixtures(tmp_path: Path) -> None:
         else:
             cases.append(f'<testcase name="{name}" classname="C" time="0.1"/>')
     cases.append('<testcase name="comparatorMatchesReferenceRules" classname="C" time="0.0"/>')
-    xml = '<?xml version="1.0"?><testsuite name="C" tests="16">' + "".join(cases) + "</testsuite>"
+    xml = f'<?xml version="1.0"?><testsuite name="C" tests="{len(cases)}">' + "".join(cases) + "</testsuite>"
     (tmp_path / "TEST-org.example.ConformanceTest.xml").write_text(xml, encoding="utf-8")
 
     outcomes = {o.fixture: o for o in cm.parse_surefire(tmp_path, FIXTURES, "ConformanceTest")}
-    assert len(outcomes) == 15
+    assert outcomes.keys() == FIXTURES.keys()
     assert outcomes["suspend-resume"].status == cm.SKIPPED
     assert outcomes["suspend-resume"].missing == ["suspend_resume"]
     assert outcomes["retry-tool"].status == cm.FAILED
@@ -127,13 +133,13 @@ def test_surefire_parser_maps_factory_named_cases_by_position(tmp_path: Path) ->
     (tmp_path / "TEST-org.example.PekkoConformanceTest.xml").write_text(
         '<testsuite name="C">' + "".join(cases) + "</testsuite>", encoding="utf-8")
     outcomes = {o.fixture: o for o in cm.parse_surefire(tmp_path, FIXTURES, "PekkoConformanceTest")}
-    assert len(outcomes) == 15
+    assert outcomes.keys() == FIXTURES.keys()
     assert outcomes["a2a-delegation"].status == cm.SKIPPED and outcomes["a2a-delegation"].missing == ["a2a"]
     assert outcomes["retrieval"].status == cm.PASSED
 
     wrong = '<testsuite name="C">' + "".join(
         '<testcase name="fixtures" classname="C"><skipped message="skip retrieval: requires [retrieval]"/></testcase>'
-        if i == 0 else '<testcase name="fixtures" classname="C"/>' for i in range(15)) + "</testsuite>"
+        if i == 0 else '<testcase name="fixtures" classname="C"/>' for i in range(len(FIXTURES))) + "</testsuite>"
     (tmp_path / "TEST-org.example.PekkoConformanceTest.xml").write_text(wrong, encoding="utf-8")
     with pytest.raises(cm.BindingError, match="reports \\['retrieval'\\]"):
         cm.parse_surefire(tmp_path, FIXTURES, "PekkoConformanceTest")
@@ -164,7 +170,10 @@ def test_clojure_outcomes_are_recompared_by_the_runner() -> None:
         for t in fixture["turns"]:
             if t.get("restart_runtime"):
                 runtime.restart()
-            results.append(runtime.submit(cm.Turn(t["conversation_id"], t["turn_id"], t.get("text", ""), t.get("signal"))))
+            if "advance_time_ms" in t:
+                runtime.advance(t["advance_time_ms"])
+            results.append(runtime.submit(cm.Turn(t["conversation_id"], t["turn_id"], t.get("text", ""), t.get("signal"),
+                                                 metadata=dict(t.get("metadata") or {}))))
         if fixture["id"] == "routing-default":
             results[0]["path"] = "billing"
         outcomes.append({"id": fixture["id"], "status": "passed", "problems": [], "results": results})
@@ -182,12 +191,47 @@ def test_clojure_output_without_marker_is_a_binding_error() -> None:
 
 
 def test_absent_bindings_and_toolchains_are_reported_not_omitted(tmp_path: Path) -> None:
-    reports = [cm.run_runtime(name, FIXTURES, tmp_path, tmp_path / "logs", None)
-               for name in ("jvm-core", "flink", "pekko", "clojure", "python")]
-    assert [r.status for r in reports] == [cm.NOT_TESTED] * 5
+    # python is located through entry points, not the checkout, so it is exercised with an absent module
+    reports = [cm.run_runtime(name, FIXTURES, tmp_path, tmp_path / "logs", "no_such_agentic_binding:run")
+               for name in ("jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink")]
+    assert [r.status for r in reports[:4]] == [cm.NOT_TESTED] * 4
+    assert reports[4].status == cm.ERROR
+    assert [r.status for r in reports[5:]] == [cm.NOT_TESTED] * 3
+    assert all("binding absent" in r.reason for r in reports[5:])
     assert all(r.reason for r in reports)
     artifact = cm.build_artifact(reports, FIXTURES, tmp_path)
-    assert [r["name"] for r in artifact["runtimes"]] == ["jvm-core", "flink", "pekko", "clojure", "python"]
+    assert [r["name"] for r in artifact["runtimes"]] == [
+        "jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink"]
+
+
+def test_python_suite_outcomes_map_to_fixture_outcomes() -> None:
+    suite = cm.PYTHON_SUITES["pyflink"]
+    rows = []
+    for fixture in FIXTURES.values():
+        if fixture["id"] == "saga-compensation":
+            rows.append({"id": fixture["id"], "status": "skip", "reason": "requires ['saga']", "problems": []})
+        elif fixture["id"] == "tool-failure":
+            rows.append({"id": fixture["id"], "status": "fail", "reason": None, "problems": ["status differs"]})
+        else:
+            rows.append({"id": fixture["id"], "status": "pass", "reason": None, "problems": []})
+    by_id = {o.fixture: o for o in cm.outcomes_from_python_suite(rows, FIXTURES, suite)}
+    assert len(by_id) == len(FIXTURES)
+    assert by_id["saga-compensation"].status == cm.SKIPPED and by_id["saga-compensation"].missing == ["saga"]
+    assert by_id["tool-failure"].status == cm.FAILED and by_id["tool-failure"].problems == ["status differs"]
+    assert by_id["routing-keyword"].status == cm.PASSED
+    with pytest.raises(cm.BindingError):
+        cm.outcomes_from_python_suite(rows[1:], FIXTURES, suite)
+    with pytest.raises(cm.BindingError):
+        cm.outcomes_from_python_suite([{**rows[0], "status": "maybe"}] + rows[1:], FIXTURES, suite)
+
+
+def test_python_suite_missing_module_is_not_tested(tmp_path: Path) -> None:
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x" / "conformance.py").write_text("", encoding="utf-8")
+    suite = cm.PythonSuite("x", "x", "no_such_agentic_suite.conformance", "m.run_all()", "id", "o.status", "o.reason", "pip install x")
+    report = cm.run_python_suite(suite, FIXTURES, tmp_path, tmp_path / "logs")
+    assert report.status == cm.NOT_TESTED
+    assert report.reason.startswith("toolchain unavailable:") and "pip install x" in report.reason
 
 
 def test_python_binding_hook_uses_the_runner_comparator() -> None:

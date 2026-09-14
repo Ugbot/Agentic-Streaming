@@ -1,18 +1,37 @@
 (ns agentic.conformance-test
   "Runs the shared v1 fixtures from spec/conformance/v1/fixtures against this runtime. Every fixture
    must pass or be an honest skip; a skip is reported, never counted as a pass."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [agentic.conformance :as conf]))
 
+(defn- justified-skip?
+  "A skip is legitimate only when the fixture requires a capability this runtime does not claim
+   and the reason names every such capability."
+  [fixture reason]
+  (let [undeclared (conf/unsupported fixture)]
+    (and (seq undeclared)
+         (string? reason)
+         (every? #(str/includes? reason %) undeclared))))
+
 (deftest shared-fixtures
-  (let [outcomes (conf/run-all)]
-    (is (= 15 (count outcomes)) "every fixture file in the spec is exercised")
-    (doseq [{:keys [id status problems]} outcomes]
+  (let [files    (conf/fixture-files)
+        outcomes (conf/run-all)
+        by-id    (into {} (map (juxt :id identity)) outcomes)]
+    (is (seq files) (str "no fixtures found at " (conf/fixtures-dir)))
+    (is (= (count files) (count outcomes)) "every fixture file in the spec is exercised")
+    (doseq [f files
+            :let [fixture (conf/read-fixture f)
+                  id      (get fixture "id")
+                  {:keys [status problems]} (get by-id id)]]
       (testing id
         (case status
           :passed (is true)
-          :skipped (println "SKIP" id (first problems))
-          :failed (is (empty? problems) (str id " " (pr-str problems))))))
+          :skipped (do (is (justified-skip? fixture (first problems))
+                           (str id " skipped without an undeclared capability named in " (pr-str problems)))
+                       (println "SKIP" id (first problems)))
+          :failed (is (empty? problems) (str id " " (pr-str problems)))
+          (is false (str id " produced no outcome")))))
     (println (conf/report outcomes))))
 
 (deftest comparison-rules
