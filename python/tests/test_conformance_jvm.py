@@ -25,7 +25,7 @@ RESULT_VALIDATOR = jsonschema.Draft202012Validator(
 FIXTURES = sorted(default_fixtures_dir().glob("*.yaml"))
 assert len(FIXTURES) == 15, FIXTURES
 
-RUNTIMES = {"local-jvm": {}, "flink": {"parallelism": 2}}
+RUNTIMES = {"local-jvm": {}, "flink-jvm": {"parallelism": 2}}
 
 pytestmark = pytest.mark.usefixtures("af")
 
@@ -50,7 +50,7 @@ def test_fixture_results_validate_against_result_schema(fixture_path: Path, runt
     rt = get_runtime(runtime_name, **RUNTIMES[runtime_name])
     caps = rt.capabilities()
     unsupported = [c for c in fixture["requires"] if caps.get(c) not in ("supported", "partial")]
-    if unsupported or (runtime_name == "flink" and any(t.get("restart_runtime") for t in fixture["turns"])):
+    if unsupported or (runtime_name == "flink-jvm" and any(t.get("restart_runtime") for t in fixture["turns"])):
         rt.close()
         pytest.skip(f"{runtime_name} does not support {unsupported or ['restart_runtime']}")
     try:

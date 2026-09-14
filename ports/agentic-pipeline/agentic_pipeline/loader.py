@@ -9,38 +9,41 @@ with ``submit(Event) -> TurnResult`` on the chosen backend.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
+from pyagentic import builder
+from pyagentic.core import Event
 
-_PORTS = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_PORTS / "pyagentic"))
+from . import backends
 
-from pyagentic import builder  # noqa: E402
-from pyagentic.core import Event  # noqa: E402
-
-from . import backends  # noqa: E402
+LLM_PROVIDERS = ("ollama", "openai", "stub")
 
 
 def _chat_client_factory(llm_spec: Dict[str, Any]):
-    """Build a ChatClient from the ``llm:`` section. ``stub`` needs an inline ``script``
+    """Build a ChatClient from the ``llm:`` section. ``ollama`` and ``openai`` require an
+    explicit ``model`` (there is no default model name). ``stub`` needs an inline ``script``
     of {tool|text, args} steps (handy for offline tests / deterministic demos)."""
     from pyagentic.llm import ChatResult, OllamaChatClient, OpenAIChatClient, StubChatClient
 
-    provider = (llm_spec or {}).get("provider", "ollama")
-    if provider == "ollama":
-        return OllamaChatClient(model=llm_spec.get("model", "qwen2.5:3b"), base_url=llm_spec.get("base_url"))
-    if provider == "openai":
-        return OpenAIChatClient(model=llm_spec.get("model", "gpt-5.4-mini"), base_url=llm_spec.get("base_url"))
+    llm_spec = llm_spec or {}
+    provider = llm_spec.get("provider", "ollama")
+    if provider in ("ollama", "openai"):
+        model = llm_spec.get("model")
+        if not model or not str(model).strip():
+            raise ValueError(
+                f"llm.model is required for provider {provider!r}; name the model you have deployed "
+                "(for example llm: {provider: ollama, model: qwen2.5:3b})")
+        client = OllamaChatClient if provider == "ollama" else OpenAIChatClient
+        return client(model=str(model), base_url=llm_spec.get("base_url"))
     if provider == "stub":
         script = [
             ChatResult(tool=s["tool"], args=s.get("args", {})) if s.get("tool") else ChatResult(text=s.get("text", ""))
             for s in llm_spec.get("script", [{"text": "ok"}])
         ]
         return StubChatClient(script)
-    raise ValueError(f"unknown llm provider {provider!r}")
+    raise ValueError(f"unknown llm provider {provider!r}; supported providers: {', '.join(LLM_PROVIDERS)}")
 
 
 class PipelineSystem:

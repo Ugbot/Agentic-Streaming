@@ -2,7 +2,7 @@
 
 * ``local-jvm`` — :class:`JvmLocalRuntime` over ``org.jagentic.core.LocalRuntime``: the canonical
   core, in-process, with the conversation log as the only state that survives ``restart()``.
-* ``flink`` — :class:`FlinkRuntime` over the Flink adapter (``FlinkPipelineRunner`` /
+* ``flink-jvm`` — :class:`FlinkRuntime` over the Flink adapter (``FlinkPipelineRunner`` /
   ``WorkflowTurnFunction``): each ``submit``/``submit_all`` runs a bounded streaming job on an
   in-process local Flink environment and collects the normalized results.
 * ``pekko`` — :class:`PekkoRuntime` over ``org.jagentic.pekko.runtime.PekkoBackendProvider`` when
@@ -291,14 +291,14 @@ def parse_duration_ms(value: Any) -> int:
 
 
 class FlinkRuntime(_JvmRuntime):
-    """``flink``: run the workflow as a Flink job on an in-process local environment.
+    """``flink-jvm``: run the workflow as a Flink job on an in-process local environment.
 
     The Python binding cannot ship Python code into a Flink job graph and has no long-running
     ingress, so each :meth:`submit` / :meth:`submit_all` executes one bounded job over the given
     events (keyed by conversation, so per-conversation ordering and idempotency hold within the
     batch) and returns the collected normalized results. Keyed state does not outlive the job."""
 
-    name = "flink"
+    name = "flink-jvm"
     _capabilities = _FLINK_CAPABILITIES
 
     def __init__(self, *, parallelism: int = 1, checkpoint_interval: Optional[Any] = None,
@@ -318,7 +318,7 @@ class FlinkRuntime(_JvmRuntime):
                 raise RuntimeNotAvailableError(
                     "the JVM is already running without the Flink distribution on its classpath; start it "
                     "with agentic_flink.start_jvm(extra_jars=agentic_flink.flink_jars()) before selecting "
-                    "the 'flink' runtime, or select 'flink' first in this process."
+                    "the 'flink-jvm' runtime, or select 'flink-jvm' first in this process."
                 )
             return
         try:
@@ -459,7 +459,7 @@ def register_jvm_runtimes() -> None:
     """Register the JVM runtimes explicitly (a source checkout that is not pip-installed has no
     entry points). ``local`` aliases ``local-jvm`` unless another package already provides it."""
     register_runtime("local-jvm", local_jvm)
-    register_runtime("flink", flink)
+    register_runtime("flink-jvm", flink)
     register_runtime("pekko", pekko)
     if "local" not in available_runtimes():
         register_runtime("local", local_jvm)

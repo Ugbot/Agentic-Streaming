@@ -1,29 +1,37 @@
-"""Backend registry — the shim that makes "choose a backend and the rest falls into
-place" real. Given a built ``(graph, tools, retriever)`` and a backend name, return a
-uniform runtime exposing ``submit(Event) -> TurnResult``. Every adapter is injectable
-(Phase 2), so the SAME built graph runs on any backend.
+"""Backend registry: given a built ``(graph, tools, retriever)`` and a backend name, return
+a uniform runtime exposing ``submit(Event) -> TurnResult``. The same built graph runs on
+any registered backend.
 
-Capability flags: ``online`` backends answer a turn synchronously (local/celery/nats);
-``streamed``/``batch`` engines (faust/dask/airflow) host the graph but aren't a single
-submit call — they're constructed the same way but driven by their engine.
+Registered backends are ``local`` (in-process, always available), ``celery`` and ``nats``.
+The last two need their engine package (``agentic-pipeline[celery]`` / ``[nats]``) and the
+adapter module from ``ports/celery`` / ``ports/nats`` importable; when either is missing
+:class:`BackendUnavailableError` names the exact fix. An unregistered name raises
+``ValueError`` listing the registered names.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-import sys
 import threading
-from pathlib import Path
 from typing import Any, Callable, Dict
 
-# Make the sibling pure-Python core + engine adapters importable.
-_PORTS = Path(__file__).resolve().parents[2]
-for sub in ("pyagentic", "celery", "nats"):
-    sys.path.insert(0, str(_PORTS / sub))
+from pyagentic.core import Event, TurnResult
+from pyagentic.runtime import LocalRuntime
 
-from pyagentic.core import Event, TurnResult  # noqa: E402
-from pyagentic.runtime import LocalRuntime  # noqa: E402
+
+class BackendUnavailableError(RuntimeError):
+    """A registered backend cannot be constructed here; the message says what to install."""
+
+
+def _import_adapter(module: str, ports_dir: str, extra: str):
+    try:
+        return __import__(module)
+    except ImportError as exc:
+        raise BackendUnavailableError(
+            f"backend adapter module {module!r} is not importable ({exc}); it is the single-file module "
+            f"ports/{ports_dir}/{module}.py, put that directory on PYTHONPATH and install the engine with "
+            f"pip install 'agentic-pipeline[{extra}]'") from exc
 
 
 class _LocalBackend:
@@ -46,10 +54,9 @@ class _CeleryBackend:
     capability = "online"
 
     def __init__(self, graph, tools, retriever, store=None):
-        import agentic_celery as cl  # type: ignore
-
+        cl = _import_adapter("agentic_celery", "celery", "celery")
         if cl.Celery is None:
-            raise RuntimeError("celery not installed: pip install celery")
+            raise BackendUnavailableError("celery is not installed: pip install 'agentic-pipeline[celery]'")
         cl.configure(graph=graph, tools=tools, retriever=retriever, store=store)
         self._rt = cl.CeleryRuntime(eager=True)
 
@@ -67,10 +74,9 @@ class _NatsBackend:
     def __init__(self, graph, tools, retriever, store=None):
         # NATS keeps durable per-conversation state in its own JetStream KV, so an
         # external `stores` selection doesn't apply here (the engine IS the store).
-        import agentic_nats as na  # type: ignore
-
+        na = _import_adapter("agentic_nats", "nats", "nats")
         if na.nats is None:
-            raise RuntimeError("nats-py not installed: pip install nats-py")
+            raise BackendUnavailableError("nats-py is not installed: pip install 'agentic-pipeline[nats]'")
         url = os.environ.get("AGENTIC_NATS_URL") or "nats://127.0.0.1:4222"
         self._rt = na.NatsRuntime(url=url, graph=graph, tools=tools, retriever=retriever)
         self._loop = asyncio.new_event_loop()
@@ -103,7 +109,7 @@ def make_backend(name: str, graph, tools, retriever, store=None):
     key = (name or "local").strip().lower()
     factory = _BACKENDS.get(key)
     if factory is None:
-        raise ValueError(f"unknown backend {key!r}; choose one of {sorted(_BACKENDS)}")
+        raise ValueError(f"unknown backend {key!r}; supported backends: {', '.join(backend_names())}")
     return factory(graph, tools, retriever, store=store)
 
 

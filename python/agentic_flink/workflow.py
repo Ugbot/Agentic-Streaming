@@ -31,6 +31,7 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Seque
 import yaml
 
 from ._contract import Runtime, get_runtime
+from ._contract import required_capabilities as _required_capabilities
 
 SPEC_VERSION = "agentic/v1"
 
@@ -183,53 +184,42 @@ class AgentSpec(MappingABC):
         return runtime.submit(event)
 
 
+# Where in the document each capability id comes from; used to explain CapabilityError.
+REQUIREMENT_LOCATIONS: Dict[str, str] = {
+    "routing": "agent.router",
+    "rule_brain": "agent.paths[*].brain=rule",
+    "llm_brain": "agent.paths[*].brain=llm",
+    "tools": "tools / mcp / a2a",
+    "structured_tool_args": "tools[*].parameters",
+    "guardrails": "guardrails",
+    "verifier": "agent.verifier / agent.paths[*].verifier",
+    "ordering": "policies.ordering",
+    "idempotency": "policies.idempotency",
+    "retry": "policies.retry",
+    "memory": "agent (conversation transcript)",
+    "retrieval": "retrieval",
+    "context_window": "context",
+    "suspend_resume": "agent.paths[*].x-suspend-until",
+    "timers": "timers",
+    "saga": "saga",
+    "a2a": "a2a",
+    "cep": "cep",
+    "durable_store": "stores",
+}
+
+
+def required_capabilities(doc: Mapping[str, Any]) -> List[str]:
+    """The capability ids a workflow document needs (``spec/v1/primitives.md`` section 6).
+
+    This is the canonical derivation of ``agentic.runtime`` (``ports/pyagentic``), re-exported by
+    :mod:`agentic_flink._contract`; every Python binding returns the same list for the same document.
+    """
+    return list(_required_capabilities(doc))
+
+
 def workflow_requirements(doc: Mapping[str, Any]) -> Dict[str, str]:
-    """Derive the capability ids a document exercises (see ``spec/v1/primitives.md`` §6)."""
-    req: Dict[str, str] = {"memory": "agent (conversation transcript)"}
-    agent = doc["agent"]
-    if agent.get("router"):
-        req["routing"] = "agent.router"
-    brains = {p.get("brain", "rule") for p in agent.get("paths", {}).values()}
-    if "rule" in brains:
-        req["rule_brain"] = "agent.paths[*].brain=rule"
-    if "llm" in brains or doc.get("llm") or (agent.get("router") or {}).get("kind") == "llm":
-        req["llm_brain"] = "agent.paths[*].brain=llm / llm"
-    verifier = agent.get("verifier") or {}
-    if verifier.get("kind", "prefix") != "none" or any(p.get("verifier") for p in agent["paths"].values()):
-        req["verifier"] = "agent.verifier"
-    if doc.get("tools") or any(p.get("tools") or p.get("tool_triggers") for p in agent["paths"].values()):
-        req["tools"] = "tools"
-    if any(t.get("parameters") for t in doc.get("tools", [])):
-        req["structured_tool_args"] = "tools[*].parameters"
-    if doc.get("guardrails") or any(p.get("guardrails") for p in agent["paths"].values()):
-        req["guardrails"] = "guardrails"
-    policies = doc.get("policies") or {}
-    if policies.get("ordering", "per-conversation") == "per-conversation":
-        req["ordering"] = "policies.ordering"
-    if policies.get("idempotency", "turn-id") == "turn-id":
-        req["idempotency"] = "policies.idempotency"
-    if (policies.get("retry") or {}).get("kind", "none") != "none":
-        req["retry"] = "policies.retry"
-    if doc.get("retrieval") or doc.get("embeddings"):
-        req["retrieval"] = "retrieval"
-    if doc.get("context"):
-        req["context_window"] = "context"
-    if doc.get("saga"):
-        req["saga"] = "saga"
-    if doc.get("a2a"):
-        req["a2a"] = "a2a"
-    if doc.get("mcp"):
-        req["tools"] = req.get("tools", "mcp")
-    if doc.get("cep"):
-        req["cep"] = "cep"
-    if doc.get("timers"):
-        req["timers"] = "timers"
-    if any(p.get("x-suspend-until") for p in agent["paths"].values()):
-        req["suspend_resume"] = "agent.paths[*].x-suspend-until"
-    stores = doc.get("stores") or {}
-    if any(stores.get(slot) for slot in ("conversation", "long_term")):
-        req["durable_store"] = "stores"
-    return req
+    """:func:`required_capabilities` mapped to the document location that needs each id."""
+    return {cap: REQUIREMENT_LOCATIONS.get(cap, cap) for cap in required_capabilities(doc)}
 
 
 class Agent:
@@ -464,4 +454,4 @@ def loads(text: str, *, tools: Optional[Mapping[str, ToolFn]] = None) -> AgentSp
     return AgentSpec(doc, tools)
 
 
-__all__ = ["Agent", "AgentSpec", "Event", "WorkflowError", "load", "loads", "workflow_requirements"]
+__all__ = ["Agent", "AgentSpec", "Event", "WorkflowError", "load", "loads", "required_capabilities", "workflow_requirements"]

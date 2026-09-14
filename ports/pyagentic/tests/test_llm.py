@@ -60,3 +60,25 @@ def test_stub_repeats_last_when_exhausted():
     c = StubChatClient([ChatResult(text="only")])
     assert c.chat([], []).text == "only"
     assert c.chat([], []).text == "only"  # repeats last
+
+
+def test_real_chat_clients_require_an_explicit_model(monkeypatch):
+    import random
+
+    import pytest
+
+    from pyagentic.llm import LiteLLMChatClient, OllamaChatClient, OpenAIChatClient, require_model
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    for client in (OllamaChatClient, OpenAIChatClient, LiteLLMChatClient):
+        with pytest.raises(TypeError):
+            client()  # type: ignore[call-arg]  # model is positional and required
+        for empty in ("", "   ", None):
+            with pytest.raises(ValueError, match="explicit model name"):
+                client(model=empty)  # type: ignore[arg-type]
+    name = "model-" + "".join(random.choice("abcdef0123456789") for _ in range(8))
+    assert OllamaChatClient(model=f" {name} ").model == name
+    assert OpenAIChatClient(model=name).model == name
+    assert require_model(name, "X") == name
+    with pytest.raises(ValueError, match="X needs an explicit model name"):
+        require_model(None, "X")

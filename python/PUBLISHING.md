@@ -4,9 +4,20 @@ This repo publishes the Python facade via **PyPI Trusted Publishing** (OIDC).
 No API tokens are stored in GitHub secrets. PyPI verifies the workflow's
 identity directly from GitHub.
 
-The Java framework jar is **not** bundled in the wheel. Users obtain it via
-their own classpath or the `AGENTIC_FLINK_JAR` env var (see
-[`docs/python.md`](../docs/python.md)).
+The Java framework jar **is** bundled in the wheel. `python/setup.py` copies
+`target/agentic-flink-<version>-uber.jar` into `agentic_flink/jars/` when the wheel or
+sdist is built (running `./mvnw` first when no jar exists yet), so a clean
+`pip install agentic-flink` can start the JVM. `AGENTIC_FLINK_JAR` remains a developer
+override at build time (which jar to bundle) and at run time (which jar to load, see
+[`docs/python.md`](../docs/python.md)). The uber jar is about 260 MiB, so the wheel is
+about 250 MiB; PyPI's default per-file limit is 100 MiB and a project file size limit
+increase must be requested at https://pypi.org/help/#file-size-limit before the first
+upload succeeds.
+
+The publish workflow derives the version from the release tag (`v<version>`) and fails
+before building when the tag and `python/pyproject.toml` disagree
+(`python/tools/check_release_version.py`), so a stale static version can never be
+published under a new tag.
 
 ---
 
@@ -78,7 +89,7 @@ That's the entire one-time setup.
 ### Real release
 
 1. Bump `version` in `python/pyproject.toml` to the real number
-   (e.g. `1.0.0`)
+   (e.g. `1.0.0`); the tag in the next step must be `v` plus exactly this value
 2. Commit, push, and tag:
    ```bash
    git tag v1.0.0
@@ -89,8 +100,13 @@ That's the entire one-time setup.
    gh release create v1.0.0 --generate-notes
    ```
    (Or use the GitHub UI: Releases → Draft a new release.)
-4. The `publish-pypi.yml` workflow fires automatically on release-publish.
-5. Watch it: https://github.com/Ugbot/Agentic-Flink/actions
+4. The `publish-pypi.yml` workflow fires automatically on release-publish. It checks the
+   tag against `pyproject.toml`, builds the core and the shaded jar with `./mvnw`, builds
+   the distributions, checks the artifact versions, installs the wheel into a clean venv
+   and runs `python/tests/smoke_clean_install.py` (JVM start plus fixture 01 on the
+   `local-jvm` runtime) before anything is uploaded. The manual `workflow_dispatch` run
+   takes the tag as an input.
+5. Watch it: https://github.com/Ugbot/Agentic-Streaming/actions
 
 PyPI cannot accept the same `version` twice. If a publish fails partway, bump
 to the next pre-release number rather than retrying with the same one.
@@ -102,17 +118,26 @@ to the next pre-release number rather than retrying with the same one.
 Always safe to build locally to check the artifacts before pushing:
 
 ```bash
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -DskipTests package          # optional: setup.py runs these two when target/ has no uber jar
 cd python
 pip install --upgrade build twine
-rm -rf dist build *.egg-info
+rm -rf dist build *.egg-info agentic_flink/jars/*.jar
 python -m build
+python tools/check_release_version.py v$(python -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])') dist/*
 python -m twine check dist/*
-# Optional: inspect the wheel contents
-unzip -l dist/*.whl
+unzip -l dist/*.whl | grep uber.jar
 ```
 
-You should see `agentic_flink/`, `agentic_flink-<ver>.dist-info/`, and the
-`LICENSE` inside the wheel.
+You should see `agentic_flink/`, `agentic_flink/jars/agentic-flink-<v>-uber.jar`,
+`agentic_flink-<ver>.dist-info/`, and the `LICENSE` inside the wheel. To prove the
+wheel works without the checkout:
+
+```bash
+python -m venv /tmp/smoke-venv && /tmp/smoke-venv/bin/pip install dist/*.whl
+cd /tmp && AGENTIC_SPEC_ROOT=<checkout>/spec /tmp/smoke-venv/bin/python \
+  <checkout>/python/tests/smoke_clean_install.py <checkout>/spec/conformance/v1/fixtures/01-routing-keyword.yaml
+```
 
 ---
 

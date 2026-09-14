@@ -69,8 +69,9 @@ second format. Runtime-specific knobs inside the document (`runtime.flink`: stat
 domain, resume delay) are read by the adapter exactly as in the JVM runner; deployment knobs live in
 `FlinkConfig`.
 
-The package registers `flink = agentic_pyflink.runtime:FlinkRuntime` in the `agentic.runtimes`
-entry-point group, which is how the shared `agentic.runtime.get_runtime("flink", parallelism=8,
+The package registers `pyflink = agentic_pyflink.runtime:FlinkRuntime` in the `agentic.runtimes`
+entry-point group (the JPype facade in `python/` registers `flink-jvm`; the bare name `flink` is
+not used by either package). That is how the shared `agentic.runtime.get_runtime("pyflink", parallelism=8,
 checkpoint_interval="30s")` surface discovers it (keyword arguments become `FlinkConfig` fields).
 
 ### Turn and result wire form

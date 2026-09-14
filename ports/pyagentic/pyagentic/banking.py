@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from .core import Agent, AgentContext, Event, RoutedGraph
+from .core import Agent, AgentContext, RoutedGraph, keyword_router
 from .retrieval import hashing_embedder
 from .tools import ToolRegistry
 
@@ -55,13 +55,14 @@ class RuleBrain:
         return f"[{self.name}] I can help with {self.name} questions. You said: {user_text!r}"
 
 
-def banking_router(event: Event, ctx: AgentContext) -> str:
-    low = event.text.lower()
-    if any(w in low for w in ("card", "crypto", "cash-back", "cashback")):
-        return "cards"
-    if any(w in low for w in ("transfer", "payment", "dispute", "charge", "limit", "balance")):
-        return "payments"
-    return "general"
+# The same table as examples/pipelines/banking.yaml `agent.router.rules`; keep the two in step.
+BANKING_ROUTES = {
+    "cards": ["card", "crypto", "cash-back", "cashback"],
+    "payments": ["balance", "transfer", "payment", "dispute", "charge", "limit"],
+}
+BANKING_DEFAULT_PATH = "general"
+
+banking_router = keyword_router(BANKING_ROUTES, BANKING_DEFAULT_PATH)
 
 
 def banking_verifier(reply: str, ctx: AgentContext) -> Tuple[bool, str]:

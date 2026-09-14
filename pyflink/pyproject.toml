@@ -26,9 +26,10 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7", "jsonschema>=4"]
 
-# Discovery hook for the shared Python surface (`agentic.runtime.get_runtime("flink")`).
+# Discovery hook for the shared Python surface (`agentic.runtime.get_runtime("pyflink")`).
+# `flink-jvm` is the JPype facade in python/ (agentic-flink); the two names never collide.
 [project.entry-points."agentic.runtimes"]
-flink = "agentic_pyflink.runtime:FlinkRuntime"
+pyflink = "agentic_pyflink.runtime:FlinkRuntime"
 
 [project.urls]
 Repository = "https://github.com/Ugbot/Agentic-Streaming"

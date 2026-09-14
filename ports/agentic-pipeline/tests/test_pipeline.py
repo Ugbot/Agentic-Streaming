@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from agentic_pipeline import load
-from agentic_pipeline.backends import backend_names
-from agentic_pipeline.loader import build_system
+from agentic_pipeline.backends import BackendUnavailableError, backend_names, make_backend
+from agentic_pipeline.loader import LLM_PROVIDERS, _chat_client_factory, build_system
 from pyagentic.core import Event
 
 _REPO = Path(__file__).resolve().parents[3]
@@ -20,7 +20,45 @@ BANKING_RAG = str(_REPO / "examples" / "pipelines" / "banking-rag.yaml")
 
 
 def test_backend_registry_has_core_backends():
-    assert {"local", "celery", "nats"}.issubset(set(backend_names()))
+    assert set(backend_names()) == {"local", "celery", "nats"}
+
+
+def test_unknown_backend_error_lists_the_supported_names():
+    with pytest.raises(ValueError) as info:
+        make_backend("faust", graph=None, tools=None, retriever=None)
+    message = str(info.value)
+    assert "'faust'" in message
+    for name in backend_names():
+        assert name in message
+
+
+def test_missing_engine_adapter_names_the_fix(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_celery(name, *args, **kwargs):
+        if name == "agentic_celery":
+            raise ImportError("No module named 'agentic_celery'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_celery)
+    with pytest.raises(BackendUnavailableError, match=r"ports/celery/agentic_celery.py.*agentic-pipeline\[celery\]"):
+        make_backend("celery", graph=None, tools=None, retriever=None)
+
+
+@pytest.mark.parametrize("provider", ["ollama", "openai"])
+def test_llm_section_requires_an_explicit_model(provider):
+    with pytest.raises(ValueError, match="llm.model is required"):
+        _chat_client_factory({"provider": provider})
+    with pytest.raises(ValueError, match="llm.model is required"):
+        _chat_client_factory({"provider": provider, "model": "  "})
+
+
+def test_unknown_llm_provider_lists_the_supported_ones():
+    with pytest.raises(ValueError) as info:
+        _chat_client_factory({"provider": "anthropic", "model": "x"})
+    assert all(p in str(info.value) for p in LLM_PROVIDERS)
 
 
 def test_banking_yaml_on_local():
@@ -39,7 +77,10 @@ def test_banking_yaml_guardrail_blocks():
 
 
 def test_same_yaml_runs_on_celery_with_identical_routing():
-    sys = load(BANKING, backend="celery")
+    try:
+        sys = load(BANKING, backend="celery")
+    except BackendUnavailableError as exc:
+        pytest.skip(str(exc))
     assert sys.backend_name == "celery"
     pay = sys.submit(Event("c1", "what is my balance?", "demo"))
     assert pay.path == "payments" and "get_balance" in pay.tool_calls

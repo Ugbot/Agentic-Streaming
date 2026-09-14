@@ -68,7 +68,7 @@ spec = load("spec/conformance/v1/workflows/support.yaml")      # same AgentSpec 
 
 result = spec.run(runtime="local-jvm", text="refund me", conversation_id="c1", turn_id="t1")
 
-rt = get_runtime("flink", parallelism=8)   # full control
+rt = get_runtime("flink-jvm", parallelism=8)   # full control
 rt.capabilities()                          # {capability: supported|partial|unsupported|not_tested}
 rt.deploy(spec)                            # raises CapabilityError listing what is missing
 rt.submit_all([...])                       # one bounded Flink job per batch
@@ -80,7 +80,7 @@ Runtimes and what proves them:
 | name | over | jars | conformance (`python -m agentic_flink.conformance --runtime <name>`) |
 |---|---|---|---|
 | `local-jvm` (alias `local`) | `org.jagentic.core.LocalRuntime` | shaded jar | 15/15 pass |
-| `flink` | Flink adapter, bounded local job | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) | 13 pass, 2 skip (`replay`, `suspend_resume`) |
+| `flink-jvm` | Flink adapter, bounded local job (`pyflink` is the separate agentic-pyflink package) | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) | 13 pass, 2 skip (`replay`, `suspend_resume`) |
 | `pekko` | `agentic-pekko` `PekkoBackendProvider` | + `mvn -f agentic-pekko/pom.xml package` and `AGENTIC_PEKKO_CLASSPATH` | reachable; every capability `not_tested`, fixtures skip |
 
 Legacy `agentic_flink.Agent` (the LangChain4J `AgentBuilder` proxy) is unchanged; the

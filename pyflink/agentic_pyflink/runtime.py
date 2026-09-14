@@ -33,6 +33,7 @@ from pyflink.common import Configuration
 from pyflink.datastream import DataStream, StreamExecutionEnvironment
 from pyflink.java_gateway import get_gateway
 
+from ._contract import Runtime, required_capabilities
 from .capabilities import CAPABILITIES, check_requirements
 from .config import FlinkConfig
 from .connectors import (
@@ -46,7 +47,7 @@ from .connectors import (
     encode_turn,
 )
 from .jars import as_urls, classpath_jars
-from .workflow import Workflow, as_workflow, required_capabilities, workflow_json
+from .workflow import Workflow, as_workflow, workflow_json
 
 BRIDGE_CLASS = "org.agentic.pyflink.PyFlinkJob"
 SAVEPOINT_PATH_KEY = "execution.state-recovery.path"
@@ -62,10 +63,14 @@ class ResultTimeoutError(TimeoutError):
     """No normalized result arrived within the deadline; the message says what was awaited."""
 
 
-class FlinkRuntime:
-    """Runs portable workflow documents on Flink from Python. See the module docstring."""
+class FlinkRuntime(Runtime):
+    """Runs portable workflow documents on Flink from Python. See the module docstring.
 
-    name = "flink"
+    Registered as ``pyflink`` in the ``agentic.runtimes`` entry-point group (``flink-jvm`` is the
+    JPype facade in ``agentic-flink``); implements the shared ``agentic.runtime.Runtime`` ABC.
+    """
+
+    name = "pyflink"
 
     def __init__(
         self,

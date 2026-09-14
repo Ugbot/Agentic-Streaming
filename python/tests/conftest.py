@@ -18,22 +18,19 @@ REPO_ROOT = HERE.parents[2]
 
 
 def _resolve_classpath() -> list[str]:
-    """Build the full runtime classpath. Cache it next to this file so we
-    don't shell out to Maven on every test run."""
+    """The framework's ``provided`` dependencies (Flink and friends), materialized by Maven and
+    cached in ``python/tests/.cp``. The cache is machine specific (absolute ``~/.m2`` paths), so
+    it is not committed and is rebuilt whenever any cached jar is missing."""
     cache = HERE.parent / ".cp"
-    if not cache.exists():
-        # Materialize the runtime classpath via Maven.
+    entries = [e for e in cache.read_text().strip().split(":") if e] if cache.exists() else []
+    if not entries or not all(Path(e).exists() for e in entries):
         subprocess.run(
-            [
-                "mvn",
-                "-q",
-                "dependency:build-classpath",
-                f"-Dmdep.outputFile={cache}",
-            ],
+            [str(REPO_ROOT / "mvnw"), "-q", "dependency:build-classpath", f"-Dmdep.outputFile={cache}"],
             check=True,
             cwd=str(REPO_ROOT),
         )
-    return cache.read_text().strip().split(":")
+        entries = [e for e in cache.read_text().strip().split(":") if e]
+    return entries
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -28,6 +28,9 @@ Sleep = Callable[[float], None]
 
 _RECORDED_CALL_EVENTS = frozenset({"tool_called", "delegated", "compensation_step"})
 
+# router.kind values this runtime implements (spec/v1 also names llm and classifier).
+ROUTER_KINDS = ("keyword", "static")
+
 
 def wall_clock_ms() -> int:
     return int(time.time() * 1000)
@@ -305,12 +308,14 @@ class Engine:
 
     def _route(self, text: str) -> str:
         kind = self.router.get("kind", "keyword")
-        if kind not in ("keyword", "static"):
-            raise ValidationError(f"router kind {kind!r} is not available in this runtime", "/agent/router/kind")
+        if kind not in ROUTER_KINDS:
+            raise ValidationError(
+                f"router kind {kind!r} is not available in this runtime; supported kinds: {', '.join(ROUTER_KINDS)}",
+                "/agent/router/kind")
         low = (text or "").lower()
         if kind == "keyword":
             for path, keywords in (self.router.get("rules") or {}).items():
-                if any(k.lower() in low for k in keywords):
+                if any(str(k).lower() in low for k in keywords):
                     return str(path)
         default = self.router.get("default")
         if default is None:

@@ -55,6 +55,25 @@ extra (`pip install 'pyagentic[flink]'`); nothing falls back silently.
   that `spec/tools/conformance_matrix.py` drives.
 - `pyagentic/` -- the earlier engine-agnostic essence kept for the Faust/Ray/Dask/Airflow ports.
 
+## Classes named `Agent`
+
+Several Python classes are called `Agent`. None is an alias of another; each has a distinct job,
+so they keep their names and are told apart by module.
+
+| Class | What it is | Use it when |
+|---|---|---|
+| `agentic.Agent` (`agentic/spec.py`) | Fluent builder for a v1 workflow document. `build()` returns an `AgentSpec`; `AgentSpec.run(...)` deploys it on a `Runtime`. | You write a workflow in Python instead of YAML. This is the canonical API. |
+| `pyagentic.core.Agent` | A path handler: `agent_id`, `system_prompt`, a `Brain`. `RoutedGraph` maps each path name to one of these. | You build a `RoutedGraph` by hand or through `pyagentic.builder.build()` for the Faust, Ray, Dask, Airflow, Celery and NATS ports. |
+| `agentic_flink.Agent` (`python/agentic_flink/agent.py`) | JPype handle on the Java `org.agentic.flink.dsl.Agent`, built with `Agent.builder()`. | You drive the Flink framework in process through the `agentic-flink` package. |
+| `agentic_flink.workflow.Agent` (exported as `agentic_flink.WorkflowAgent`) | The same fluent builder API as `agentic.Agent`, producing a document the JVM runtimes (`local-jvm`, `flink-jvm`, `pekko`) run. | You want the builder syntax and a JVM runtime without installing `pyagentic`. |
+| `agentic_flink.pyflink.Agent` | Declarative base class whose subclass attributes describe a PyFlink job plan. | You compile an agent into a PyFlink `DataStream` plan. |
+
+Routing is the same everywhere: `router.kind: keyword` matches `router.rules` case-insensitively as a
+substring of the turn text, the first path in declaration order wins, and no match goes to
+`router.default` (`agentic.engine.Engine._route`, `pyagentic.core.keyword_router`). `router.kind: static`
+sends every turn to `router.default`. The `llm` and `classifier` kinds are valid in the schema but no
+Python runtime implements them; both engines fail with a message that lists the supported kinds.
+
 ## Develop
 
 ```

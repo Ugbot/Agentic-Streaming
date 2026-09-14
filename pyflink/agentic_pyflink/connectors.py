@@ -10,6 +10,7 @@ Availability is checked up front: a connector whose Java classes are not on the 
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -54,8 +55,14 @@ def _java_class_present(name: str) -> bool:
         return False
 
 
-def turn_document(turn: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise a user-supplied turn mapping into the wire form; validates the required keys."""
+def turn_document(turn: Mapping[str, Any] | Any) -> dict[str, Any]:
+    """Normalise a user-supplied turn (a mapping or a dataclass such as ``agentic.events.Turn``)
+    into the wire form; validates the required keys."""
+    if not isinstance(turn, Mapping):
+        if dataclasses.is_dataclass(turn) and not isinstance(turn, type):
+            turn = dataclasses.asdict(turn)
+        else:
+            raise ValueError(f"a turn must be a mapping or a dataclass, got {type(turn).__name__}")
     cid = turn.get("conversation_id")
     turn_id = turn.get("turn_id")
     if not cid or not turn_id:

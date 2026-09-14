@@ -46,6 +46,10 @@ chat = LiteLLMChatClient(model="ollama/qwen2.5:3b")          # one API across pr
 embed = make_embedder({"provider": "ollama", "model": "nomic-embed-text"})
 brain = LlmBrain(chat, name="assistant", system_prompt="You are helpful.")
 ```
+`model` is required for `OllamaChatClient`, `OpenAIChatClient` and `LiteLLMChatClient`, and for
+`llm.provider: ollama|openai` in a `pipeline.yaml`; there is no default model name, an empty or
+missing one raises `ValueError` before any request is made. Name a model you have actually pulled
+or been granted access to.
 `pip install litellm` (chat+embeddings across providers); `qdrant-client`, `psycopg`,
 `duckdb`, `mcp` are optional extras for the matching backends.
 

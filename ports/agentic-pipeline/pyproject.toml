@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-pipeline"
+version = "0.1.0"
+description = "Declarative pipeline.yaml loader for the pure Python agentic core: build once, run on the local, Celery or NATS backend"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+dependencies = [
+    # The pure core. Not on PyPI: install from the checkout first (pip install -e ports/pyagentic).
+    "pyagentic>=1.0,<2",
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+# Engine packages for the non-local backends. The adapter modules themselves
+# (agentic_celery in ports/celery, agentic_nats in ports/nats) are single-file modules that
+# must be importable as well; see README "Backends".
+celery = ["celery>=5,<6"]
+nats = ["nats-py>=2,<3"]
+redis = ["redis>=5,<7"]
+test = ["pytest>=7,<9"]
+
+[project.scripts]
+agentic-pipeline = "agentic_pipeline.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["agentic_pipeline*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
