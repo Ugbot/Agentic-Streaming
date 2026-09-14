@@ -101,6 +101,7 @@ public class AgentExecutor implements Serializable, AutoCloseable {
   private final long backoffCapMillis;
 
   private transient volatile ExecutorService workers;
+  private transient volatile ConcurrentHashMap<String, CompletableFuture<ExecutionResult>> inFlightTurns;
   private transient LongUnaryOperator sleeper;
 
   private AgentExecutor(AgentExecutorBuilder builder) {
@@ -152,6 +153,20 @@ public class AgentExecutor implements Serializable, AutoCloseable {
 
   public TurnResultStore getTurnResultStore() {
     return turnResultStore;
+  }
+
+  private ConcurrentHashMap<String, CompletableFuture<ExecutionResult>> inFlightTurns() {
+    ConcurrentHashMap<String, CompletableFuture<ExecutionResult>> m = inFlightTurns;
+    if (m == null) {
+      synchronized (this) {
+        m = inFlightTurns;
+        if (m == null) {
+          m = new ConcurrentHashMap<>();
+          inFlightTurns = m;
+        }
+      }
+    }
+    return m;
   }
 
   private ExecutorService workers() {
@@ -216,12 +231,18 @@ public class AgentExecutor implements Serializable, AutoCloseable {
       return CompletableFuture.completedFuture(recorded.get());
     }
 
-    LOG.info("Starting agent execution for flow: {}, agent: {}, turn: {}",
-        inputEvent.getFlowId(), agent.getAgentId(), turnId);
-
     ExecutionContext context = new ExecutionContext(inputEvent, agent);
     Execution execution = new Execution(turnId);
     CancellableResult result = new CancellableResult(execution);
+    CompletableFuture<ExecutionResult> running = inFlightTurns().putIfAbsent(turnId, result);
+    if (running != null) {
+      LOG.info("Turn {} already in flight for flow: {}, joining it", turnId, inputEvent.getFlowId());
+      return running.thenApply(r -> r);
+    }
+    result.whenComplete((r, e) -> inFlightTurns().remove(turnId, result));
+
+    LOG.info("Starting agent execution for flow: {}, agent: {}, turn: {}",
+        inputEvent.getFlowId(), agent.getAgentId(), turnId);
 
     execution.worker =
         workers()

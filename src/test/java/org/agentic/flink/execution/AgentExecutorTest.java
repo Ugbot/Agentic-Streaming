@@ -304,6 +304,38 @@ public class AgentExecutorTest {
   }
 
   @Test
+  void concurrentDuplicateJoinsTheInFlightExecutionInsteadOfRunningTwice() throws Exception {
+    CountingTool tool = new CountingTool("slow");
+    tool.block = new CountDownLatch(1);
+    InMemoryTurnResultStore store = new InMemoryTurnResultStore();
+    String turnId = "t-" + UUID.randomUUID();
+    String answer = "answer-" + UUID.randomUUID();
+    try (AgentExecutor ex = executor(List.of(toolCall("slow", Map.of()), text(answer)), tool, store, 5)) {
+      CompletableFuture<ExecutionResult> first = ex.execute(turn(turnId));
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+      while (tool.executions.get() == 0 && System.nanoTime() < deadline) {
+        Thread.sleep(5);
+      }
+      int duplicates = ThreadLocalRandom.current().nextInt(1, 4);
+      List<CompletableFuture<ExecutionResult>> joined = new ArrayList<>();
+      for (int i = 0; i < duplicates; i++) {
+        joined.add(ex.execute(turn(turnId)));
+      }
+      assertTrue(joined.get(0).cancel(true), "cancelling a joiner does not cancel the primary");
+      assertFalse(first.isDone());
+      tool.block.countDown();
+
+      ExecutionResult r = first.get(10, TimeUnit.SECONDS);
+      assertEquals(answer, r.getOutput());
+      for (int i = 1; i < duplicates; i++) {
+        assertSame(r, joined.get(i).get(10, TimeUnit.SECONDS));
+      }
+      assertEquals(1, tool.executions.get(), "side-effecting tool ran once for the duplicated turn");
+      assertSame(r, ex.execute(turn(turnId)).get(10, TimeUnit.SECONDS));
+    }
+  }
+
+  @Test
   void storeIsBoundedAndExpires() throws Exception {
     int max = ThreadLocalRandom.current().nextInt(3, 10);
     InMemoryTurnResultStore store = new InMemoryTurnResultStore(max, Duration.ofMillis(30));
