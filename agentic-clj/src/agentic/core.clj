@@ -53,7 +53,8 @@
       :listeners (get-in system [:graph :listeners])
       :policies (get-in system [:graph :policies])
       :emit! (fn [type payload]
-               (log/append-event! elog cid {:turn-id turn-id :type type :payload payload}))})))
+               (log/append-event! elog cid {:turn-id turn-id :type type :payload payload}))
+      :events (fn [conversation-id] (log/conversation-events elog conversation-id))})))
 
 (defn- run-guarded
   "Run `f`; anything that is not a turn-level outcome is recorded as a fatal `turn_failed` so the log

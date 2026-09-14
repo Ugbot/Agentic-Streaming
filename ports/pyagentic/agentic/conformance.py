@@ -136,6 +136,11 @@ class Outcome:
 RuntimeFactory = Callable[[], Runtime]
 
 
+def turn_metadata(spec: Mapping[str, Any]) -> Dict[str, str]:
+    """A fixture turn's `metadata` block as the string map a `Turn` carries."""
+    return {str(k): str(v) for k, v in dict(spec.get("metadata") or {}).items()}
+
+
 def run_fixture(path: Path, make_runtime: RuntimeFactory = LocalRuntime) -> Outcome:
     fixture = load_yaml(path)
     if fixture.get("workflow") is None:
@@ -168,6 +173,7 @@ def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactor
                 turn_id=spec["turn_id"],
                 text=spec.get("text", ""),
                 signal=spec.get("signal"),
+                metadata=turn_metadata(spec),
             )))
     except AgenticError as exc:
         return Outcome(fixture_id, path, "fail", [f"raised {type(exc).__name__}: {exc}"], results)

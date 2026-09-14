@@ -52,6 +52,7 @@ public final class RoutedGraph {
   private final SagaPlan saga; // may be null
   private final Map<String, String> suspendUntil;
   private final ContextWindow contextWindow;
+  private final List<org.jagentic.core.cep.SequencePattern> cep;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -94,6 +95,19 @@ public final class RoutedGraph {
                      Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
                      List<AgentListener> listeners, Policies policies, SagaPlan saga,
                      Map<String, String> suspendUntil, ContextWindow contextWindow) {
+    this(router, paths, verifier, pathVerifiers, guardrails, listeners, policies, saga, suspendUntil,
+        contextWindow, List.of());
+  }
+
+  /**
+   * @param cep the workflow's sequence patterns with {@code on_match.kind: tool}, evaluated over
+   *     the conversation log after {@code routed} on every turn; empty when the workflow has none
+   */
+  public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
+                     Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
+                     List<AgentListener> listeners, Policies policies, SagaPlan saga,
+                     Map<String, String> suspendUntil, ContextWindow contextWindow,
+                     List<org.jagentic.core.cep.SequencePattern> cep) {
     if (paths == null || paths.isEmpty()) {
       throw new IllegalArgumentException("RoutedGraph requires at least one path");
     }
@@ -112,6 +126,12 @@ public final class RoutedGraph {
     this.saga = saga;
     this.suspendUntil = suspendUntil == null ? Map.of() : Map.copyOf(suspendUntil);
     this.contextWindow = contextWindow == null ? ContextWindow.NONE : contextWindow;
+    this.cep = List.copyOf(cep == null ? List.of() : cep);
+  }
+
+  /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
+  public List<org.jagentic.core.cep.SequencePattern> cep() {
+    return cep;
   }
 
   public Policies policies() {
@@ -160,7 +180,8 @@ public final class RoutedGraph {
     for (AgentListener l : listeners) {
       l.onTurnStart(event, ctx);
     }
-    ctx.record(EventType.TURN_RECEIVED, map("turn_id", event.turnId(), "text", event.text()));
+    ctx.record(EventType.TURN_RECEIVED, org.jagentic.core.cep.EventTime.annotate(
+        map("turn_id", event.turnId(), "text", event.text()), event));
 
     for (Guardrail g : guardrails) {
       String reason = g.checkInput(event.text());
@@ -188,6 +209,15 @@ public final class RoutedGraph {
     ctx.record(EventType.ROUTED, map("path", path));
     for (AgentListener l : listeners) {
       l.onRouted(path, ctx);
+    }
+    if (!cep.isEmpty()) {
+      try {
+        org.jagentic.core.cep.TurnPatterns.evaluate(cep, ctx);
+      } catch (ToolFailure e) {
+        return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
+      } catch (IllegalArgumentException e) {
+        return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
+      }
     }
 
     String until = suspendUntil.get(path);

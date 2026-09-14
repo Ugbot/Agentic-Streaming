@@ -98,7 +98,8 @@ public final class PipelineLoader {
 
     Runtime runtime = Backends.create(backend, built, conversation);
     List<org.jagentic.core.cep.CepWiring> cep =
-        org.jagentic.core.cep.CepSpec.compile((List<Map<String, Object>>) spec.get("cep"));
+        org.jagentic.core.cep.CepSpec.compile(org.jagentic.core.cep.SequencePattern.withoutToolActions(
+            (List<Map<String, Object>>) spec.get("cep")));
     List<String> degradations = new java.util.ArrayList<>(built.degradations());
     degradations.addAll(availability.degradations());
     return new PipelineSystem(backend, runtime, built, longTerm, conversation, cep, degradations);

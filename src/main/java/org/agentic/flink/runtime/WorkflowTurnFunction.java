@@ -35,6 +35,7 @@ import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LogEvent;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
+import org.jagentic.core.cep.SequencePattern;
 import org.jagentic.core.pipeline.GraphBuilder;
 import org.jagentic.core.pipeline.WorkflowValidator;
 
@@ -121,7 +122,13 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     this.options = Objects.requireNonNull(options, "options");
     this.chatClientFactory = Objects.requireNonNull(chatClientFactory, "chatClientFactory");
     Map<String, Object> copy = new HashMap<>(spec);
-    copy.remove("cep"); // CEP is wired natively by the job graph, not by the turn graph
+    // on_match tool rules are the portable in-turn fold; the rest is wired natively by the job graph
+    List<Map<String, Object>> inTurnCep = SequencePattern.toolActions(cepRules(spec));
+    if (inTurnCep.isEmpty()) {
+      copy.remove("cep");
+    } else {
+      copy.put("cep", inTurnCep);
+    }
     this.spec = copy;
     WorkflowValidator.validate(this.spec);
     if (ChatClientFactories.isFailFast(chatClientFactory) && !GraphBuilder.usesScriptedLlm(this.spec)) {
@@ -132,6 +139,11 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
                 + " configured; pass one to WorkflowTurnFunction(spec, options, factory)");
       }
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> cepRules(Map<String, Object> spec) {
+    return (List<Map<String, Object>>) spec.get("cep");
   }
 
   @SuppressWarnings("unchecked")

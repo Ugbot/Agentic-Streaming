@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
+from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
 from .errors import AgenticError, ToolError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
@@ -105,6 +106,7 @@ class Engine:
         self.policies: Mapping[str, Any] = doc.get("policies") or {}
         self.saga: Optional[Mapping[str, Any]] = doc.get("saga")
         self.context: Mapping[str, Any] = doc.get("context") or {}
+        self.cep: List[SequencePattern] = compile_patterns(doc.get("cep"))
         self.llm: Mapping[str, Any] = doc.get("llm") or {}
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
@@ -181,7 +183,7 @@ class Engine:
             return duplicate
 
         ctx = _TurnContext(turn, turn.text, self.clock())
-        self._append(ctx, "turn_received", {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id})
+        self._append(ctx, "turn_received", self._received_payload(turn))
         try:
             blocked = self._check_guardrails(self.global_guardrails, "input", turn.text)
             if blocked is not None:
@@ -190,6 +192,9 @@ class Engine:
 
             path = self._route(turn.text)
             self._append(ctx, "routed", {"path": path})
+            failed = self._match_patterns(ctx, path)
+            if failed is not None:
+                return failed
             spec = self.paths[path]
 
             blocked = self._check_guardrails(self._path_guardrails(spec), "input", turn.text)
@@ -249,6 +254,28 @@ class Engine:
         status = "unverified" if verification.get("on_exhausted", "unverified") == "unverified" else "failed"
         return self._finish(ctx, status, path, reply,
                             {"class": "verification", "message": "verifier rejected the reply"})
+
+    def _match_patterns(self, ctx: _TurnContext, path: str) -> Optional[Dict[str, Any]]:
+        """Sequence CEP over this conversation's log; a pattern completing on this turn invokes its
+        tool (recorded on this turn). Returns the failed result when that tool fails, else None."""
+        if not self.cep:
+            return None
+        turns = turns_of(self.log.read(ctx.turn.conversation_id))
+        for pattern in self.cep:
+            if pattern.completes_on(turns):
+                try:
+                    self._invoke(ctx, pattern.tool, pattern.match_args(ctx.turn.conversation_id))
+                except ToolError as exc:
+                    return self._finish(ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
+                                        event=("turn_failed", {"status": "failed", "reason": str(exc)}))
+        return None
+
+    def _received_payload(self, turn: Turn) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id}
+        event_time = event_time_ms(turn.metadata)
+        if event_time is not None:
+            payload["event_time_ms"] = event_time
+        return payload
 
     def _draft(self, ctx: _TurnContext, path: str) -> str:
         spec = self.paths[path]

@@ -102,6 +102,6 @@ def test_matrix_binding_entry_point_returns_results_or_a_skip():
     fixture = load_yaml(PATHS[0])
     fixture["workflow"] = load_yaml((PATHS[0].parent / fixture.get("workflow_ref", "")).resolve()) \
         if fixture.get("workflow") is None else fixture["workflow"]
-    fixture["requires"] = list(fixture["requires"]) + ["cep"]
+    fixture["requires"] = list(fixture["requires"]) + ["parallelism"]
     skipped = matrix_binding(fixture)
-    assert isinstance(skipped, dict) and "cep=unsupported" in skipped["skip"]
+    assert isinstance(skipped, dict) and "parallelism=unsupported" in skipped["skip"]

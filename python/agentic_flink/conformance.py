@@ -106,7 +106,8 @@ def _event(turn: Dict[str, Any]) -> Event:
     cid, tid = str(turn["conversation_id"]), str(turn["turn_id"])
     if turn.get("signal") is not None:
         return Event.resume(cid, tid, turn["signal"])
-    return Event.turn(cid, tid, str(turn.get("text", "")))
+    metadata = {str(k): str(v) for k, v in dict(turn.get("metadata") or {}).items()}
+    return Event.turn(cid, tid, str(turn.get("text", "")), metadata=metadata)
 
 
 def run_fixture(path: Path, runtime: Runtime, comparator=None) -> Outcome:
