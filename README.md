@@ -602,6 +602,7 @@ For shorter recipes, see [docs/cookbook.md](docs/cookbook.md).
 | [agentic-clj/README.md](agentic-clj/README.md) | Agentic Clojure, pure Clojure on Datomic |
 | [docs/portability/pekko.md](docs/portability/pekko.md), [clojure.md](docs/portability/clojure.md) | per-engine design notes for the two newest runtimes |
 | [docs/portability/pipelines.md](docs/portability/pipelines.md) | declarative `pipeline.yaml` schema and loaders (Python, JVM, Go) |
+| [docs/security.md](docs/security.md) | token model, egress policy and dev-only defaults for the network-facing services |
 | [docs/portability/parity-matrix.md](docs/portability/parity-matrix.md) | what each backend can do, plus limitations and three-core parity |
 | [docs/portability/choosing-a-backend.md](docs/portability/choosing-a-backend.md) | decision guide across Flink and the experimental adapters |
 | [docs/portability/stream-stateful-core.md](docs/portability/stream-stateful-core.md) | the stream-stateful core: CEP, timers, windows, replay, suspend/resume, tracing |

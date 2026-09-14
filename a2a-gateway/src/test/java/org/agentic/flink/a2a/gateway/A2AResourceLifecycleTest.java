@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a.gateway;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,11 +52,28 @@ final class A2AResourceLifecycleTest {
   }
 
   /** A2AResource wired with an echo Flink job + in-memory task store. */
-  private A2AResource resource(A2AGatewayConnector connector, A2ATaskStore store) {
+  /** Randomized per-run tokens for two distinct principals. */
+  static final String ALICE_TOKEN = "tok-" + UUID.randomUUID();
+  static final String BOB_TOKEN = "tok-" + UUID.randomUUID();
+  static final FakeHeaders ALICE = new FakeHeaders("Bearer " + ALICE_TOKEN);
+  static final FakeHeaders BOB = new FakeHeaders("Bearer " + BOB_TOKEN);
+
+  static GatewayConfig authedConfig() {
+    return new GatewayConfig(
+        org.agentic.flink.config.AgenticFlinkConfig.fromMap(
+            java.util.Map.of("a2a.auth.tokens", "alice=" + ALICE_TOKEN + ",bob=" + BOB_TOKEN)));
+  }
+
+  static A2AResource resource(A2AGatewayConnector connector, A2ATaskStore store) {
+    return resource(connector, store, authedConfig());
+  }
+
+  static A2AResource resource(A2AGatewayConnector connector, A2ATaskStore store, GatewayConfig cfg) {
     A2AResource r = new A2AResource();
-    r.config = new GatewayConfig();
+    r.config = cfg;
     r.connector = connector;
     r.taskStore = store;
+    r.auth = new GatewayAuth(cfg);
     return r;
   }
 
@@ -107,7 +125,7 @@ final class A2AResourceLifecycleTest {
       A2AResource resource = resource(connector, store);
 
       String ctx = "ctx-" + UUID.randomUUID();
-      String resp = resource.rpc(sendBody("ping " + UUID.randomUUID(), ctx, 1), new FakeHeaders(null));
+      String resp = resource.rpc(sendBody("ping " + UUID.randomUUID(), ctx, 1), ALICE);
       JsonNode node = JSON.readTree(resp);
 
       // The harness-facing result is still a Message echoing the reply.
@@ -137,34 +155,36 @@ final class A2AResourceLifecycleTest {
       A2AResource resource = resource(connector, store);
 
       String ctx = "ctx-" + UUID.randomUUID();
-      resource.rpc(sendBody("hello", ctx, 1), new FakeHeaders(null));
+      resource.rpc(sendBody("hello", ctx, 1), ALICE);
       String taskId = store.listTasksByContext(ctx).get(0).getId();
 
       // tasks/get -> Task envelope in completed state.
-      JsonNode got = JSON.readTree(resource.rpc(taskMethodBody("tasks/get", taskId, 2), new FakeHeaders(null)));
+      JsonNode got = JSON.readTree(resource.rpc(taskMethodBody("tasks/get", taskId, 2), ALICE));
       assertEquals("task", got.path("result").path("kind").asText());
       assertEquals(taskId, got.path("result").path("id").asText());
       assertEquals("completed", got.path("result").path("status").path("state").asText());
 
       // tasks/get for an unknown id -> JSON-RPC error.
       JsonNode missing =
-          JSON.readTree(resource.rpc(taskMethodBody("tasks/get", "nope-" + UUID.randomUUID(), 3), new FakeHeaders(null)));
+          JSON.readTree(resource.rpc(taskMethodBody("tasks/get", "nope-" + UUID.randomUUID(), 3), ALICE));
       assertTrue(missing.has("error"));
 
       // tasks/cancel on a fresh WORKING task -> CANCELED.
       A2ATask working =
-          A2ATask.submitted("live-" + UUID.randomUUID(), ctx, A2AMessage.userText(UUID.randomUUID().toString(), "x"), 0L)
+          A2AResource.ownedTask(
+                  "live-" + UUID.randomUUID(), ctx, A2AMessage.userText(UUID.randomUUID().toString(), "x"), 0L,
+                  new GatewayAuth(authedConfig()).authenticate("Bearer " + ALICE_TOKEN))
               .withState(A2ATaskState.WORKING, null, 0L);
       store.saveTask(working);
       JsonNode canceled =
-          JSON.readTree(resource.rpc(taskMethodBody("tasks/cancel", working.getId(), 4), new FakeHeaders(null)));
+          JSON.readTree(resource.rpc(taskMethodBody("tasks/cancel", working.getId(), 4), ALICE));
       assertEquals("canceled", canceled.path("result").path("status").path("state").asText());
       assertEquals(A2ATaskState.CANCELED, store.loadTask(working.getId()).orElseThrow().getState());
     }
   }
 
   @Test
-  @DisplayName("an Authorization header is extracted into the request claims propagated to the job")
+  @DisplayName("the authenticated subject, not the raw token, is propagated to the job as claims")
   void authorizationBecomesClaims() throws Exception {
     InProcA2ABridge bridge =
         new InProcA2ABridge("gw-req-" + UUID.randomUUID(), "gw-resp-" + UUID.randomUUID());
@@ -185,11 +205,174 @@ final class A2AResourceLifecycleTest {
       store.initialize(java.util.Map.of());
       A2AResource resource = resource(connector, store);
 
-      String resp =
-          resource.rpc(sendBody("who am i", "ctx-" + UUID.randomUUID(), 1), new FakeHeaders("Bearer tok-12345"));
+      String resp = resource.rpc(sendBody("who am i", "ctx-" + UUID.randomUUID(), 1), BOB);
       String reply = JSON.readTree(resp).path("result").path("parts").get(0).path("text").asText();
-      assertEquals("token=tok-12345", reply, "the job must observe the Bearer token from claims");
+      assertEquals("subject=bob token=null", reply, "the job must see the subject and never the token");
     }
+  }
+
+  @Test
+  @DisplayName("missing, malformed or wrong bearer tokens are rejected with the unauthorized RPC error")
+  void unauthenticatedCallsAreRejected() throws Exception {
+    InProcA2ABridge bridge =
+        new InProcA2ABridge("gw-req-" + UUID.randomUUID(), "gw-resp-" + UUID.randomUUID());
+    try (A2AGatewayConnector connector = bridge.openGateway()) {
+      InMemoryA2ATaskStore store = new InMemoryA2ATaskStore();
+      store.initialize(java.util.Map.of());
+      A2AResource resource = resource(connector, store);
+      String ctx = "ctx-" + UUID.randomUUID();
+      for (String header :
+          new String[] {null, "", "Bearer", "Bearer ", "Basic " + ALICE_TOKEN, "Bearer wrong-" + UUID.randomUUID(), ALICE_TOKEN}) {
+        JsonNode node = JSON.readTree(resource.rpc(sendBody("hi", ctx, 1), new FakeHeaders(header)));
+        assertEquals(A2AResource.RPC_UNAUTHORIZED, node.path("error").path("code").asInt(), "header=" + header);
+        JsonNode get = JSON.readTree(resource.rpc(taskMethodBody("tasks/get", "t-" + UUID.randomUUID(), 2), new FakeHeaders(header)));
+        assertEquals(A2AResource.RPC_UNAUTHORIZED, get.path("error").path("code").asInt(), "header=" + header);
+      }
+      assertTrue(store.listTasksByContext(ctx).isEmpty(), "no task may be created by an unauthenticated caller");
+    }
+  }
+
+  @Test
+  @DisplayName("with no token configured the gateway fails closed unless dev mode is explicitly enabled")
+  void failsClosedWithoutConfiguredToken() throws Exception {
+    InProcA2ABridge bridge =
+        new InProcA2ABridge("gw-req-" + UUID.randomUUID(), "gw-resp-" + UUID.randomUUID());
+    try (A2AGatewayConnector connector = bridge.openGateway()) {
+      startEchoJob(bridge);
+      InMemoryA2ATaskStore store = new InMemoryA2ATaskStore();
+      store.initialize(java.util.Map.of());
+
+      GatewayConfig closed = new GatewayConfig(org.agentic.flink.config.AgenticFlinkConfig.fromMap(java.util.Map.of()));
+      org.junit.jupiter.api.Assumptions.assumeTrue(closed.authTokens().isEmpty(), "AGENTIC_A2A_TOKEN is set in this environment");
+      A2AResource resource = resource(connector, store, closed);
+      JsonNode node = JSON.readTree(resource.rpc(sendBody("hi", "ctx-" + UUID.randomUUID(), 1), new FakeHeaders("Bearer " + UUID.randomUUID())));
+      assertEquals(A2AResource.RPC_UNAUTHORIZED, node.path("error").path("code").asInt());
+
+      GatewayConfig dev = new GatewayConfig(org.agentic.flink.config.AgenticFlinkConfig.fromMap(java.util.Map.of("a2a.auth.dev.mode", "true")));
+      A2AResource devResource = resource(connector, store, dev);
+      String ctx = "ctx-" + UUID.randomUUID();
+      JsonNode ok = JSON.readTree(devResource.rpc(sendBody("hi", ctx, 1), new FakeHeaders(null)));
+      assertEquals("message", ok.path("result").path("kind").asText());
+      assertEquals(GatewayAuth.DEV_SUBJECT, A2AResource.ownerOf(store.listTasksByContext(ctx).get(0)));
+    }
+  }
+
+  @Test
+  @DisplayName("tasks/get, tasks/cancel and pushNotificationConfig/* refuse tasks owned by another principal")
+  void ownerMismatchIsForbidden() throws Exception {
+    InProcA2ABridge bridge =
+        new InProcA2ABridge("gw-req-" + UUID.randomUUID(), "gw-resp-" + UUID.randomUUID());
+    try (A2AGatewayConnector connector = bridge.openGateway()) {
+      startEchoJob(bridge);
+      InMemoryA2ATaskStore store = new InMemoryA2ATaskStore();
+      store.initialize(java.util.Map.of());
+      A2AResource resource = resource(connector, store);
+      resource.setPushUrlPolicy(
+          org.agentic.flink.net.OutboundUrlPolicy.defaults().withResolver(h -> new java.net.InetAddress[] {java.net.InetAddress.getByName("93.184.216.34")}));
+
+      String ctx = "ctx-" + UUID.randomUUID();
+      resource.rpc(sendBody("hello", ctx, 1), ALICE);
+      A2ATask task = store.listTasksByContext(ctx).get(0);
+      assertEquals("alice", A2AResource.ownerOf(task));
+      String taskId = task.getId();
+
+      // Owner can read.
+      assertEquals("task", JSON.readTree(resource.rpc(taskMethodBody("tasks/get", taskId, 2), ALICE)).path("result").path("kind").asText());
+      // Other principal gets forbidden on every task-addressed method.
+      assertForbidden(resource.rpc(taskMethodBody("tasks/get", taskId, 3), BOB));
+      assertForbidden(resource.rpc(taskMethodBody("tasks/cancel", taskId, 4), BOB));
+      assertForbidden(resource.rpc(pushSetBody(taskId, "https://hooks.example.com/" + UUID.randomUUID(), 5), BOB));
+      assertForbidden(resource.rpc(pushIdBody("tasks/pushNotificationConfig/list", taskId, null, 6), BOB));
+      assertForbidden(resource.rpc(pushIdBody("tasks/pushNotificationConfig/get", taskId, "c1", 7), BOB));
+      assertForbidden(resource.rpc(pushIdBody("tasks/pushNotificationConfig/delete", taskId, "c1", 8), BOB));
+      // Unknown task ids are forbidden for push config too (no pre-registration on foreign ids).
+      assertForbidden(resource.rpc(pushSetBody("nope-" + UUID.randomUUID(), "https://hooks.example.com/x", 9), BOB));
+      assertEquals(A2ATaskState.COMPLETED, store.loadTask(taskId).orElseThrow().getState());
+
+      // Owner can register a public webhook and list it back.
+      JsonNode set = JSON.readTree(resource.rpc(pushSetBody(taskId, "https://hooks.example.com/" + UUID.randomUUID(), 10), ALICE));
+      assertFalse(set.has("error"), set.toString());
+      assertEquals(1, JSON.readTree(resource.rpc(pushIdBody("tasks/pushNotificationConfig/list", taskId, null, 11), ALICE)).path("result").size());
+
+      // A legacy task without owner metadata is not readable by anyone.
+      A2ATask legacy = A2ATask.submitted("legacy-" + UUID.randomUUID(), ctx, A2AMessage.userText(UUID.randomUUID().toString(), "x"), 0L);
+      store.saveTask(legacy);
+      assertForbidden(resource.rpc(taskMethodBody("tasks/get", legacy.getId(), 12), ALICE));
+    }
+  }
+
+  @Test
+  @DisplayName("push webhook URLs pointing at loopback, private, link-local or metadata addresses are rejected")
+  void pushWebhookUrlsAreValidated() throws Exception {
+    InProcA2ABridge bridge =
+        new InProcA2ABridge("gw-req-" + UUID.randomUUID(), "gw-resp-" + UUID.randomUUID());
+    try (A2AGatewayConnector connector = bridge.openGateway()) {
+      startEchoJob(bridge);
+      InMemoryA2ATaskStore store = new InMemoryA2ATaskStore();
+      store.initialize(java.util.Map.of());
+      A2AResource resource = resource(connector, store);
+      java.util.Random rnd = new java.util.Random();
+      // Hostnames resolve to a random private address; literal IPs resolve to themselves.
+      String privateIp = new String[] {"10.", "192.168.", "172.16."}[rnd.nextInt(3)] + rnd.nextInt(256) + "." + rnd.nextInt(1, 255);
+      if (privateIp.startsWith("10.")) {
+        privateIp = "10." + rnd.nextInt(256) + "." + rnd.nextInt(256) + "." + rnd.nextInt(1, 255);
+      }
+      final String resolved = privateIp;
+      resource.setPushUrlPolicy(
+          org.agentic.flink.net.OutboundUrlPolicy.defaults().withResolver(h ->
+              h.equals("hooks.example.com")
+                  ? new java.net.InetAddress[] {java.net.InetAddress.getByName("93.184.216.34")}
+                  : new java.net.InetAddress[] {java.net.InetAddress.getByName(resolved)}));
+
+      String ctx = "ctx-" + UUID.randomUUID();
+      resource.rpc(sendBody("hello", ctx, 1), ALICE);
+      String taskId = store.listTasksByContext(ctx).get(0).getId();
+
+      String[] bad = {
+        "http://127.0.0.1:8080/hook", "http://localhost/hook", "http://169.254.169.254/latest/meta-data",
+        "http://" + resolved + "/hook", "http://internal.corp/hook", "ftp://hooks.example.com/x",
+        "http://user:pw@hooks.example.com/x", "http://[::1]/hook", "http://0.0.0.0/hook",
+      };
+      int i = 2;
+      for (String url : bad) {
+        JsonNode node = JSON.readTree(resource.rpc(pushSetBody(taskId, url, i++), ALICE));
+        assertEquals(-32602, node.path("error").path("code").asInt(), "url should be rejected: " + url);
+      }
+      assertTrue(store.listPushConfigs(taskId).isEmpty(), "no rejected webhook may be persisted");
+
+      JsonNode ok = JSON.readTree(resource.rpc(pushSetBody(taskId, "https://hooks.example.com/ok", i), ALICE));
+      assertFalse(ok.has("error"), ok.toString());
+      assertEquals(1, store.listPushConfigs(taskId).size());
+    }
+  }
+
+  private static void assertForbidden(String rpcResponse) throws Exception {
+    JsonNode node = JSON.readTree(rpcResponse);
+    assertEquals(A2AResource.RPC_FORBIDDEN, node.path("error").path("code").asInt(), rpcResponse);
+  }
+
+  private static String pushSetBody(String taskId, String url, Object id) throws Exception {
+    var root = JSON.createObjectNode();
+    root.put("jsonrpc", "2.0");
+    root.put("id", String.valueOf(id));
+    root.put("method", "tasks/pushNotificationConfig/set");
+    var params = root.putObject("params");
+    params.put("taskId", taskId);
+    params.putObject("pushNotificationConfig").put("url", url);
+    return JSON.writeValueAsString(root);
+  }
+
+  private static String pushIdBody(String method, String taskId, String configId, Object id) throws Exception {
+    var root = JSON.createObjectNode();
+    root.put("jsonrpc", "2.0");
+    root.put("id", String.valueOf(id));
+    root.put("method", method);
+    var params = root.putObject("params");
+    params.put("taskId", taskId);
+    if (configId != null) {
+      params.put("pushNotificationConfigId", configId);
+    }
+    return JSON.writeValueAsString(root);
   }
 
   /** Echoes the inbound text as a COMPLETED artifact. */
@@ -211,9 +394,10 @@ final class A2AResourceLifecycleTest {
 
     @Override
     public A2AResponse map(A2ARequest req) {
+      Object subject = req.getClaims() == null ? null : req.getClaims().get("subject");
       Object token = req.getClaims() == null ? null : req.getClaims().get("token");
       A2AArtifact artifact =
-          A2AArtifact.text(UUID.randomUUID().toString(), "claims", "token=" + token);
+          A2AArtifact.text(UUID.randomUUID().toString(), "claims", "subject=" + subject + " token=" + token);
       return A2AResponse.completed(req.getTaskId(), req.getContextId(), List.of(artifact));
     }
   }

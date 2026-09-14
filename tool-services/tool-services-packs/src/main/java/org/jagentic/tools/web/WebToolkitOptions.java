@@ -14,6 +14,7 @@ public final class WebToolkitOptions implements Serializable {
   private final int maxDepth;
   private final boolean respectRobots;
   private final boolean followRedirects;
+  private final OutboundUrlPolicy urlPolicy;
 
   private WebToolkitOptions(
       String userAgent,
@@ -21,7 +22,8 @@ public final class WebToolkitOptions implements Serializable {
       int maxPageBytes,
       int maxDepth,
       boolean respectRobots,
-      boolean followRedirects) {
+      boolean followRedirects,
+      OutboundUrlPolicy urlPolicy) {
     this.userAgent =
         userAgent == null
             ? "AgenticFlink/1.0 (+https://github.com/Ugbot/Agentic-Flink)"
@@ -31,10 +33,11 @@ public final class WebToolkitOptions implements Serializable {
     this.maxDepth = Math.max(0, maxDepth);
     this.respectRobots = respectRobots;
     this.followRedirects = followRedirects;
+    this.urlPolicy = urlPolicy == null ? OutboundUrlPolicy.defaults() : urlPolicy;
   }
 
   public static WebToolkitOptions defaults() {
-    return new WebToolkitOptions(null, null, 0, 4, true, true);
+    return new WebToolkitOptions(null, null, 0, 4, true, true, null);
   }
 
   public String getUserAgent() {
@@ -61,33 +64,43 @@ public final class WebToolkitOptions implements Serializable {
     return followRedirects;
   }
 
+  /** Egress policy applied to every fetched URL and redirect target. */
+  public OutboundUrlPolicy getUrlPolicy() {
+    return urlPolicy;
+  }
+
   public WebToolkitOptions withUserAgent(String ua) {
     return new WebToolkitOptions(
-        ua, fetchTimeout, maxPageBytes, maxDepth, respectRobots, followRedirects);
+        ua, fetchTimeout, maxPageBytes, maxDepth, respectRobots, followRedirects, urlPolicy);
   }
 
   public WebToolkitOptions withFetchTimeout(Duration t) {
     return new WebToolkitOptions(
-        userAgent, t, maxPageBytes, maxDepth, respectRobots, followRedirects);
+        userAgent, t, maxPageBytes, maxDepth, respectRobots, followRedirects, urlPolicy);
   }
 
   public WebToolkitOptions withMaxPageBytes(int bytes) {
     return new WebToolkitOptions(
-        userAgent, fetchTimeout, bytes, maxDepth, respectRobots, followRedirects);
+        userAgent, fetchTimeout, bytes, maxDepth, respectRobots, followRedirects, urlPolicy);
   }
 
   public WebToolkitOptions withMaxDepth(int depth) {
     return new WebToolkitOptions(
-        userAgent, fetchTimeout, maxPageBytes, depth, respectRobots, followRedirects);
+        userAgent, fetchTimeout, maxPageBytes, depth, respectRobots, followRedirects, urlPolicy);
   }
 
   public WebToolkitOptions withRespectRobots(boolean b) {
     return new WebToolkitOptions(
-        userAgent, fetchTimeout, maxPageBytes, maxDepth, b, followRedirects);
+        userAgent, fetchTimeout, maxPageBytes, maxDepth, b, followRedirects, urlPolicy);
   }
 
   public WebToolkitOptions withFollowRedirects(boolean b) {
     return new WebToolkitOptions(
-        userAgent, fetchTimeout, maxPageBytes, maxDepth, respectRobots, b);
+        userAgent, fetchTimeout, maxPageBytes, maxDepth, respectRobots, b, urlPolicy);
+  }
+
+  public WebToolkitOptions withUrlPolicy(OutboundUrlPolicy policy) {
+    return new WebToolkitOptions(
+        userAgent, fetchTimeout, maxPageBytes, maxDepth, respectRobots, followRedirects, policy);
   }
 }

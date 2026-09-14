@@ -72,16 +72,13 @@ final class A2AStreamingTest {
       job = env.executeAsync("stream-working-then-done");
       Thread.sleep(300);
 
-      A2AResource resource = new A2AResource();
-      resource.config = new GatewayConfig();
-      resource.connector = connector;
-      resource.taskStore = newStore();
+      A2AResource resource = A2AResourceLifecycleTest.resource(connector, newStore());
 
       List<String> events = new CopyOnWriteArrayList<>();
       CountDownLatch done = new CountDownLatch(1);
       AtomicReference<Throwable> err = new AtomicReference<>();
       resource
-          .rpcStream(streamBody("stream me", "ctx-" + UUID.randomUUID()), new A2AResourceLifecycleTest.FakeHeaders(null))
+          .rpcStream(streamBody("stream me", "ctx-" + UUID.randomUUID()), A2AResourceLifecycleTest.ALICE)
           .subscribe()
           .with(events::add, t -> { err.set(t); done.countDown(); }, done::countDown);
 
@@ -131,7 +128,14 @@ final class A2AStreamingTest {
 
       PushDispatcher dispatcher = new PushDispatcher();
       dispatcher.taskStore = store;
-      // Drive a terminal response directly (bypassing the StartupEvent registration).
+      // Default policy refuses loopback: a stored loopback webhook must be skipped, not called.
+      dispatcher.setUrlPolicy(org.agentic.flink.net.OutboundUrlPolicy.defaults());
+      dispatcher.onResponse(
+          A2AResponse.completed(
+              taskId, "ctx-1", List.of(A2AArtifact.text(UUID.randomUUID().toString(), "r", "blocked"))));
+      assertEquals(false, hit.await(1, TimeUnit.SECONDS), "loopback webhook must not be called");
+      // The dev override pins the test server as reachable; drive a terminal response directly.
+      dispatcher.setUrlPolicy(org.agentic.flink.net.OutboundUrlPolicy.defaults().allowingPrivateAddresses());
       dispatcher.onResponse(
           A2AResponse.completed(
               taskId, "ctx-1", List.of(A2AArtifact.text(UUID.randomUUID().toString(), "r", "the result"))));
@@ -179,6 +183,24 @@ final class A2AStreamingTest {
               req.getTaskId(),
               req.getContextId(),
               List.of(A2AArtifact.text(UUID.randomUUID().toString(), "echo", "done: " + text))));
+    }
+  }
+
+  @Test
+  void streamRejectsUnauthenticatedCaller() throws Exception {
+    InProcA2ABridge bridge =
+        new InProcA2ABridge("gw-req-" + UUID.randomUUID(), "gw-resp-" + UUID.randomUUID());
+    try (A2AGatewayConnector connector = bridge.openGateway()) {
+      var store = newStore();
+      A2AResource resource = A2AResourceLifecycleTest.resource(connector, store);
+      String ctx = "ctx-" + UUID.randomUUID();
+      List<String> events =
+          resource
+              .rpcStream(streamBody("stream me", ctx), new A2AResourceLifecycleTest.FakeHeaders("Bearer nope-" + UUID.randomUUID()))
+              .collect().asList().await().atMost(java.time.Duration.ofSeconds(5));
+      assertEquals(1, events.size(), events.toString());
+      assertTrue(JSON.readTree(events.get(0)).path("status").path("message").asText().startsWith("Unauthorized"), events.get(0));
+      assertTrue(store.listTasksByContext(ctx).isEmpty());
     }
   }
 }

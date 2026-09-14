@@ -16,7 +16,7 @@ services:
   redis:
     image: redis:8
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   cs-agent:
     build:
@@ -27,7 +27,7 @@ services:
     depends_on:
       - redis
     ports:
-      - "9002:9002"
+      - "127.0.0.1:9002:9002"
     environment:
       A2A_BANKING_ROLE: "cs"
       QUARKUS_HTTP_PORT: "9002"
@@ -44,7 +44,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBED_PROVIDER: ${EMBED_PROVIDER:-gemini}
       ENV_API_URL: ${ENV_API_URL:-http://host.docker.internal:8090}
-      ENV_API_TOKEN: ${CS_ENV_API_TOKEN:-dev-agent-token}
+      ENV_API_TOKEN: ${CS_ENV_API_TOKEN:?set CS_ENV_API_TOKEN in .env}
+      # Shared bearer token callers must present to this gateway (see docs/security.md).
+      AGENTIC_A2A_TOKEN: ${CS_A2A_TOKEN:?set CS_A2A_TOKEN in .env}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -54,7 +56,7 @@ services:
     depends_on:
       - cs-agent
     ports:
-      - "9001:9001"
+      - "127.0.0.1:9001:9001"
     environment:
       A2A_BANKING_ROLE: "personal"
       QUARKUS_HTTP_PORT: "9001"
@@ -72,6 +74,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       EMBED_PROVIDER: ${EMBED_PROVIDER:-gemini}
       ENV_API_URL: ${ENV_API_URL:-http://host.docker.internal:8090}
-      ENV_API_TOKEN: ${PERSONAL_ENV_API_TOKEN:-dev-user-token}
+      ENV_API_TOKEN: ${PERSONAL_ENV_API_TOKEN:?set PERSONAL_ENV_API_TOKEN in .env}
+      AGENTIC_A2A_TOKEN: ${PERSONAL_A2A_TOKEN:?set PERSONAL_A2A_TOKEN in .env}
+      # Token the personal agent presents to the CS gateway (must equal CS_A2A_TOKEN).
+      CS_AGENT_TOKEN: ${CS_A2A_TOKEN:?set CS_A2A_TOKEN in .env}
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -14,8 +14,10 @@ services:
     image: flink:1.20.1-scala_2.12-java17
     container_name: agentic-flink-jm
     command: jobmanager
+    # Dev only: the Flink REST API has no authentication and accepts jar uploads and job
+    # submission. It is published on loopback only; never expose it beyond this host.
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
@@ -46,14 +48,14 @@ services:
     # *and* publishers on the host can connect. Ports below match the notebook defaults; adjust
     # if you change the chain layout.
     ports:
-      - "5560:5560"
-      - "5561:5561"
-      - "5562:5562"
-      - "5563:5563"
-      - "5564:5564"
-      - "5559:5559" # control plane (PULL into L5)
-      - "5558:5558" # debug PUB out of L5
-      - "5557:5557" # alerts PUB out of L5 (live notebook tail)
+      - "127.0.0.1:5560:5560"
+      - "127.0.0.1:5561:5561"
+      - "127.0.0.1:5562:5562"
+      - "127.0.0.1:5563:5563"
+      - "127.0.0.1:5564:5564"
+      - "127.0.0.1:5559:5559" # control plane (PULL into L5)
+      - "127.0.0.1:5558:5558" # debug PUB out of L5
+      - "127.0.0.1:5557:5557" # alerts PUB out of L5 (live notebook tail)
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager

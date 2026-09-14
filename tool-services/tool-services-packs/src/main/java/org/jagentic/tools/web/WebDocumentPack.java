@@ -11,13 +11,25 @@ import org.jagentic.tools.ToolPack;
 
 /** Web + document pack — robots-aware fetch, link extraction, bounded crawl, and Tika
  * document extraction (PDF/DOCX/HTML/… → text). Built on the lifted, Flink-free
- * Fetcher/DocumentExtractor/WebFetchTool/ExtractLinksTool. Tools are id-prefixed {@code web_}. */
+ * Fetcher/DocumentExtractor/WebFetchTool/ExtractLinksTool. Tools are id-prefixed {@code web_}.
+ *
+ * <p>The no-arg constructor reads the egress policy from the environment: {@code
+ * TOOL_WEB_ALLOWED_HOSTS} (comma-separated exact hosts or {@code *.suffix}) and {@code
+ * TOOL_WEB_ALLOW_PRIVATE=true} (development only; permits loopback and private targets). */
 public final class WebDocumentPack implements ToolPack {
 
   private final WebToolkitOptions options;
 
   public WebDocumentPack() {
-    this(WebToolkitOptions.defaults());
+    this(WebToolkitOptions.defaults().withUrlPolicy(policyFromEnv()));
+  }
+
+  static OutboundUrlPolicy policyFromEnv() {
+    OutboundUrlPolicy p = OutboundUrlPolicy.fromAllowlist(System.getenv("TOOL_WEB_ALLOWED_HOSTS"));
+    if (Boolean.parseBoolean(System.getenv("TOOL_WEB_ALLOW_PRIVATE"))) {
+      p = p.allowingPrivateAddresses();
+    }
+    return p;
   }
 
   public WebDocumentPack(WebToolkitOptions options) {

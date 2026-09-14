@@ -27,6 +27,7 @@
         <!-- 1.18.40 was the first release to support JDK 25; staying current here keeps a
              future baseline bump from being blocked by annotation processing. -->
         <lombok.version>1.18.46</lombok.version>
+        <jackson.version>2.18.10</jackson.version>
         <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
         <junit.version>5.10.2</junit.version>
         <!-- `release` rather than source/target: source/target lets javac link against the
@@ -344,27 +345,27 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.2</version>
+            <version>${jackson.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
-            <version>2.15.2</version>
+            <version>${jackson.version}</version>
         </dependency>
 
         <!-- Jackson Parameter Names Module for constructor detection -->
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-parameter-names</artifactId>
-            <version>2.15.2</version>
+            <version>${jackson.version}</version>
         </dependency>
 
         <!-- PostgreSQL JDBC Driver for Pluggable Storage -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.6.0</version>
+            <version>42.7.13</version>
         </dependency>
 
         <!-- HikariCP for JDBC Connection Pooling -->

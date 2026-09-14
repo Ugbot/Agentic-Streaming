@@ -45,6 +45,17 @@ public class ToolExecutionEngine implements Serializable {
 
     long startTime = System.currentTimeMillis();
 
+    if (context.getAgent() == null || !context.getAgent().canUseTool(toolCall.getToolName())) {
+      LOG.warn("Tool {} is not on the allowlist of agent {}",
+          toolCall.getToolName(),
+          context.getAgent() == null ? null : context.getAgent().getAgentId());
+      return CompletableFuture.completedFuture(
+          ToolCallResult.failure(
+              toolCall.getToolCallId(),
+              toolCall.getToolName(),
+              "Tool not permitted for this agent"));
+    }
+
     // Check if tool exists
     if (!toolRegistry.hasTool(toolCall.getToolName())) {
       LOG.error("Tool not found: {}", toolCall.getToolName());
