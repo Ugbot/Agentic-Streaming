@@ -124,12 +124,18 @@ def test_deploy_rejects_workflows_needing_unsupported_capabilities(af):
         "spec_version: agentic/v1\n"
         "agent:\n  id: t\n  router: {kind: keyword, rules: {}, default: p}\n"
         "  paths: {p: {brain: rule, prompt: hi}}\n"
-        "timers: [{name: nudge, after: 5s}]\n"
+        "timers: [{id: nudge, after_ms: 5000}]\n"
+        "cep:\n"
+        "  - name: burst\n    key: conversation_id\n    ts: metadata.event_time_ms\n    within: 1000\n"
+        "    pattern: [{stage: first, where: {text_contains: x}}]\n"
+        "    on_match: {kind: tool, tool: nudge}\n"
     )
     rt = get_runtime("local-jvm")
     with pytest.raises(CapabilityError) as ei:
         rt.deploy(spec)
-    assert any(r.startswith("timers ") for r in ei.value.requirements) and ei.value.runtime == "local-jvm"
+    assert any(r.startswith("cep ") for r in ei.value.requirements) and ei.value.runtime == "local-jvm"
+    # Workflow timers are supported by local-jvm, so they are not what the deploy rejects.
+    assert not any(r.startswith("timers ") for r in ei.value.requirements)
 
 
 def test_missing_framework_jar_message_is_actionable(monkeypatch, tmp_path: Path):

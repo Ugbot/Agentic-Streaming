@@ -23,6 +23,7 @@ from .errors import AgenticError, ToolError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec
+from .workflow_timers import WorkflowTimers
 
 Clock = Callable[[], int]
 Sleep = Callable[[float], None]
@@ -115,6 +116,7 @@ class Engine:
         retrieval = doc.get("retrieval") or {}
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
         self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4))
+        self.timers = WorkflowTimers(doc.get("timers") or [], self.clock)
         self._results: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self._suspended: Dict[Tuple[str, str], _Pending] = {}
         self._guard = threading.Lock()
@@ -183,7 +185,15 @@ class Engine:
             return duplicate
 
         ctx = _TurnContext(turn, turn.text, self.clock())
-        self._append(ctx, "turn_received", self._received_payload(turn))
+        history = self.log.read(turn.conversation_id)
+        try:
+            self.timers.fire_due(turn, history, lambda kind, payload: self._append(ctx, kind, payload),
+                                 lambda tool_id, args: self._invoke(ctx, tool_id, args))
+        except ToolError as exc:
+            return self._finish(ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
+                                event=("turn_failed", {"status": "failed", "reason": str(exc)}))
+        self._append(ctx, "turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
+        self.timers.schedule(turn, history, lambda kind, payload: self._append(ctx, kind, payload))
         try:
             blocked = self._check_guardrails(self.global_guardrails, "input", turn.text)
             if blocked is not None:

@@ -20,6 +20,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.jagentic.core.Event;
+import org.jagentic.core.LogicalClock;
+import org.jagentic.core.TimerState;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.pipeline.GraphBuilder;
 import org.jagentic.pekko.runtime.AgentDeps;
@@ -34,11 +36,13 @@ import org.jagentic.pekko.runtime.PekkoSystem;
  * of {@code spec/tools/run_conformance.py}, mirroring the core {@code ConformanceHarness}.
  *
  * <p>{@code restart_runtime} passivates every entity the fixture has touched so far: the next turn
- * recreates them from the journal alone. {@code concurrent_with} submits without waiting, so turns
- * for different conversations are in flight on their own entities at once ({@code parallelism})
- * while each entity mailbox decides the order of its own turns; results are collected in the
- * fixture's declared order. {@code advance_time_ms} needs a logical clock, which this runtime
- * does not have; {@code timers} is therefore not declared and such a fixture is skipped.</p>
+ * recreates them from the journal alone, and the fixture's processing clock is rebuilt from the
+ * {@code processing_time_ms} the recovered journals recorded. {@code concurrent_with} submits without
+ * waiting, so turns for different conversations are in flight on their own entities at once
+ * ({@code parallelism}) while each entity mailbox decides the order of its own turns; results are
+ * collected in the fixture's declared order. {@code advance_time_ms} moves the
+ * {@link LogicalClock.Manual} the entities read through {@link AgentDeps#clock()}; a turn's
+ * {@code metadata} (including {@code event_time_ms}) is carried on the event.</p>
  */
 public final class PekkoConformanceHarness {
 
@@ -46,7 +50,7 @@ public final class PekkoConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time");
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
   private static final Duration TIMEOUT = Duration.ofSeconds(30);
@@ -114,21 +118,22 @@ public final class PekkoConformanceHarness {
 
     List<String> problems = new ArrayList<>();
     List<Map<String, Object>> results = new ArrayList<>();
-    try (PekkoSystem sys = new PekkoSystem(new AgentDeps(built.graph(), built.tools(), built.retriever()));
+    RestartableClock clock = new RestartableClock();
+    try (PekkoSystem sys = new PekkoSystem(new AgentDeps(built.graph(), built.tools(), built.retriever(), clock));
          PekkoRuntime runtime = new PekkoRuntime(sys.system(), TIMEOUT)) {
       List<CompletableFuture<TurnResult>> pending = new ArrayList<>();
       Set<String> touched = new LinkedHashSet<>();
       for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
-        if (turn.get("advance_time_ms") != null) {
-          problems.add("turn " + turn.get("turn_id") + ": advance_time_ms needs a logical clock the Pekko runtime"
-              + " does not provide (timers is not a declared capability)");
-          continue;
-        }
         if (Boolean.TRUE.equals(turn.get("restart_runtime"))) {
           pending.forEach(CompletableFuture::join);
           for (String cid : touched) {
             runtime.passivate(cid);
           }
+          clock.recover(runtime, touched);
+        }
+        if (turn.get("advance_time_ms") instanceof Number advance) {
+          pending.forEach(CompletableFuture::join);
+          clock.advance(advance.longValue());
         }
         String conversationId = String.valueOf(turn.get("conversation_id"));
         String turnId = String.valueOf(turn.get("turn_id"));
@@ -173,6 +178,35 @@ public final class PekkoConformanceHarness {
       }
     }
     return out;
+  }
+
+  /**
+   * The fixture's processing clock. It only moves on {@code advance_time_ms}; on {@code restart_runtime}
+   * it is rebuilt from the {@code processing_time_ms} recorded in the recovered journals, the way a
+   * runtime that keeps its clock in the log would recover it.
+   */
+  static final class RestartableClock implements LogicalClock {
+    private volatile LogicalClock.Manual current = new LogicalClock.Manual();
+
+    @Override
+    public long nowMs() {
+      return current.nowMs();
+    }
+
+    void advance(long ms) {
+      current.advance(ms);
+    }
+
+    void recover(PekkoRuntime runtime, Set<String> conversations) {
+      long recorded = 0L;
+      for (String cid : conversations) {
+        Long t = TimerState.fold(runtime.state(cid).events()).processingTimeMs();
+        if (t != null) {
+          recorded = Math.max(recorded, t);
+        }
+      }
+      current = new LogicalClock.Manual(recorded);
+    }
   }
 
   /** Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance README. */
