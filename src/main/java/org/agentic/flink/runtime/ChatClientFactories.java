@@ -1,12 +1,9 @@
 package org.agentic.flink.runtime;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import org.jagentic.core.llm.ChatClient;
-import org.jagentic.core.llm.ChatResult;
-import org.jagentic.core.llm.StubChatClient;
+import org.jagentic.core.llm.ScriptedChatClient;
 import org.jagentic.core.pipeline.GraphBuilder;
 
 /**
@@ -35,7 +32,9 @@ public final class ChatClientFactories {
 
   /**
    * Factory for the spec's deterministic {@code provider: stub}: the {@code llm.script} steps
-   * become a {@link StubChatClient}. Any other provider is rejected with the provider name.
+   * become a {@link ScriptedChatClient}. Any other provider is rejected with the provider name.
+   * {@link GraphBuilder} resolves the stub provider itself, so this factory is only needed when a
+   * caller wants to be explicit about it.
    */
   public static SerializableChatClientFactory stub() {
     return Stub.INSTANCE;
@@ -60,27 +59,13 @@ public final class ChatClientFactories {
     INSTANCE;
 
     @Override
-    @SuppressWarnings("unchecked")
     public ChatClient create(Map<String, Object> llmSpec) {
-      Object provider = llmSpec == null ? null : llmSpec.get("provider");
-      if (!"stub".equals(provider)) {
+      if (!ScriptedChatClient.accepts(llmSpec)) {
         throw new IllegalArgumentException(
-            "ChatClientFactories.stub() only supports llm.provider: stub, got " + provider);
+            "ChatClientFactories.stub() only supports llm.provider: stub, got "
+                + (llmSpec == null ? null : llmSpec.get("provider")));
       }
-      List<ChatResult> script = new ArrayList<>();
-      for (Map<String, Object> step
-          : (List<Map<String, Object>>) llmSpec.getOrDefault("script", List.of())) {
-        if (step.get("tool") != null) {
-          script.add(ChatResult.toolCall((String) step.get("tool"),
-              (Map<String, Object>) step.getOrDefault("args", Map.of())));
-        } else {
-          script.add(ChatResult.text((String) step.getOrDefault("text", "ok")));
-        }
-      }
-      if (script.isEmpty()) {
-        script.add(ChatResult.text("ok"));
-      }
-      return new StubChatClient(script);
+      return ScriptedChatClient.fromSpec(llmSpec);
     }
   }
 }

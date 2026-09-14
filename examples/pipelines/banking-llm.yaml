@@ -11,7 +11,7 @@ llm:
   model: qwen2.5:3b
   script:                           # only used by the stub provider (deterministic)
     - {tool: get_balance, args: {user: demo}}
-    - {text: "Your balance is 1234.56."}
+    - {text: "Your balance is 1234.56."}  # the stub's text step is the reply verbatim (no [path] prefix)
 
 agent:
   router:
@@ -22,7 +22,8 @@ agent:
       payments: [balance, transfer, payment]
   paths:
     cards:    {brain: rule, prompt: You answer card questions.}
-    payments: {brain: llm,  prompt: You are a payments specialist., tools: [get_balance]}
+    # verifier: none because the scripted stub reply carries no [payments] prefix for the prefix verifier
+    payments: {brain: llm,  prompt: You are a payments specialist., tools: [get_balance], verifier: {kind: none}}
     general:  {brain: rule, prompt: You answer general questions.}
   verifier:
     kind: prefix

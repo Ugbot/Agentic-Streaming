@@ -106,16 +106,12 @@
 ;; ---- brains ----
 
 (defn- build-chat-client
-  "The ChatClient from `llm:`. provider: stub (deterministic, from `script`) | ollama | openai."
+  "The ChatClient from `llm:`. provider: stub (deterministic, `script` replayed from the top on every
+   turn) | ollama | openai."
   [{:keys [provider script base-url model api-key] :or {provider "stub"} :as llm-spec}]
   (when llm-spec
     (case provider
-      "stub" (apply llm/stub-chat-client
-                    (mapv (fn [step]
-                            (if (contains? step :tool)
-                              {:tool (:tool step) :args (or (:args step) {})}
-                              {:text (or (:text step) "ok")}))
-                          script))
+      "stub" (llm/scripted-chat-client script)
       "ollama" (llm/ollama-chat-client (cond-> {}
                                          base-url (assoc :base-url base-url)
                                          model (assoc :model model)))
@@ -125,11 +121,21 @@
                                          api-key (assoc :api-key api-key)))
       nil)))
 
-(defn- build-brain [path-name {:keys [brain prompt tools max-iterations tool-triggers threshold]} dim top-k chat-client context]
+(defn scripted-llm?
+  "True when the workflow's `llm` section selects the spec's deterministic `stub` provider."
+  [llm-spec]
+  (and (some? llm-spec) (= "stub" (get llm-spec :provider "stub"))))
+
+(defn- build-brain [path-name {:keys [brain prompt tools max-iterations tool-triggers threshold]} dim top-k chat-client context
+                    & [{:keys [scripted?]}]]
   (if (= "llm" brain)
     (llm/llm-brain chat-client
                    {:name path-name :system-prompt (or prompt "")
                     :allowed-tools tools
+                    ;; primitives.md section 8: the scripted reply is verbatim and a scripted call
+                    ;; outside the path's tools is a validation error.
+                    :verbatim-reply? (boolean scripted?)
+                    :strict-tools? (boolean scripted?)
                     :max-iterations (as-int max-iterations 6)
                     :context-window (when context
                                       {:max-tokens (as-int (:max-tokens context) 512)
@@ -212,7 +218,8 @@
         graph-paths (into {}
                           (map (fn [[name pspec]]
                                  [name (cond-> {:name name :prompt (or (:prompt pspec) "")
-                                                :brain (build-brain name pspec dim top-k cc context)}
+                                                :brain (build-brain name pspec dim top-k cc context
+                                                                    {:scripted? (and (nil? chat-client) (scripted-llm? llm))})}
                                          (contains? pspec :x-suspend-until)
                                          (assoc :suspend-until (:x-suspend-until pspec))
                                          (some? (:verifier pspec))

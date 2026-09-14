@@ -22,6 +22,7 @@ CAPABILITY_IDS = (
 PROOF: dict[str, str] = {
     "routing": "conformance: routing-keyword, routing-default",
     "rule_brain": "conformance: routing-keyword, routing-default",
+    "llm_brain": "conformance: llm-brain-scripted (the spec's stub provider, replayed per turn)",
     "tools": "conformance: tool-invocation, tool-failure",
     "structured_tool_args": "conformance: tool-invocation (args: {user: anonymous})",
     "guardrails": "conformance: guardrail-rejection",

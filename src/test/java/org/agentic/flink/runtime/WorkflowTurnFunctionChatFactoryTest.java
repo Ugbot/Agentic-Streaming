@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,11 +21,15 @@ import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import org.jagentic.core.Event;
+import org.jagentic.core.ToolCall;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
 import org.junit.jupiter.api.Test;
 
-/** F4: the ChatClientFactory is injected and serializable; llm brains fail at job build without one. */
+/**
+ * F4: the ChatClientFactory is injected and serializable; llm brains with a real provider fail at
+ * job build without one, while the spec's scripted {@code provider: stub} needs none.
+ */
 class WorkflowTurnFunctionChatFactoryTest {
 
   @SuppressWarnings("unchecked")
@@ -32,6 +37,13 @@ class WorkflowTurnFunctionChatFactoryTest {
     Map<String, Object> fixture = FlinkConformanceHarness.load(
         FlinkConformanceHarness.fixturesDir().resolve("16-llm-brain-scripted.yaml"));
     return (Map<String, Object>) fixture.get("workflow");
+  }
+
+  /** Fixture 16's workflow pointed at a real (network) provider instead of the stub. */
+  private static Map<String, Object> llmRealProviderWorkflow() {
+    Map<String, Object> wf = new HashMap<>(llmScriptedWorkflow());
+    wf.put("llm", Map.of("provider", "openai", "model", "m-" + UUID.randomUUID(), "base_url", "http://127.0.0.1:1"));
+    return wf;
   }
 
   private static KeyedOneInputStreamOperatorTestHarness<String, Event, TurnResult> harness(WorkflowTurnFunction fn)
@@ -65,9 +77,32 @@ class WorkflowTurnFunctionChatFactoryTest {
   @Test
   void llmBrainWithoutFactoryFailsAtConstructionNamingThePaths() {
     IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> new WorkflowTurnFunction(llmScriptedWorkflow()));
+        () -> new WorkflowTurnFunction(llmRealProviderWorkflow()));
     assertTrue(e.getMessage().contains("payments"), e.getMessage());
     assertTrue(e.getMessage().contains("ChatClientFactory"), e.getMessage());
+  }
+
+  @Test
+  void scriptedStubProviderRunsWithTheDefaultFactory() throws Exception {
+    Map<String, Object> wf = llmScriptedWorkflow();
+    String cid = "c-" + UUID.randomUUID();
+    try (var h = harness(new WorkflowTurnFunction(wf))) {
+      h.open();
+      h.processElement(new StreamRecord<>(Event.turn(cid, "t1", "u", "what is my balance?")));
+      h.processElement(new StreamRecord<>(Event.turn(cid, "t2", "u", "what is my balance?")));
+      List<TurnResult> out = outputs(h);
+      assertEquals(2, out.size());
+      for (TurnResult r : out) {
+        assertEquals(TurnStatus.COMPLETED, r.status, String.valueOf(r.error));
+        assertEquals("Your balance is 1234.56 USD.", r.reply(), "script replayed from the top, reply verbatim");
+        assertEquals(1, r.calls.size());
+        ToolCall call = r.calls.get(0);
+        assertEquals("get_balance", call.tool());
+        assertEquals(0, call.index());
+        assertEquals(1, call.attempt());
+        assertEquals(Map.of("account", "acct-42", "currency", "USD"), call.args());
+      }
+    }
   }
 
   @Test
@@ -99,7 +134,9 @@ class WorkflowTurnFunctionChatFactoryTest {
       assertEquals(2, out.size());
       TurnResult llm = out.get(0);
       assertEquals(TurnStatus.COMPLETED, llm.status);
-      assertTrue(llm.reply().endsWith("Your balance is 1234.56 USD."), llm.reply());
+      assertEquals("Your balance is 1234.56 USD.", llm.reply());
+      assertEquals(List.of("get_balance"), llm.toolCalls);
+      assertEquals(Map.of("account", "acct-42", "currency", "USD"), llm.calls.get(0).args());
       assertTrue(llm.events.stream().anyMatch(ev -> "tool_called".equals(ev.type())));
       TurnResult rule = out.get(1);
       assertEquals(TurnStatus.COMPLETED, rule.status);

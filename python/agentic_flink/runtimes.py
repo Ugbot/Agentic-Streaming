@@ -55,8 +55,9 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
     # The in-JVM log outlives restart() within one process (what the fixtures exercise); it is
     # not durability across a crash. Same narrow sense as the reference runtime.
     "durable_store": "partial",
-    # Implemented in the core, not exercised by any test in this package.
-    "llm_brain": "not_tested",
+    # The spec's scripted stub provider (fixture llm-brain-scripted) runs through jagentic-core's
+    # ScriptedChatClient + LlmBrain; no test here drives a network provider.
+    "llm_brain": "supported",
     # Not offered by LocalRuntime.
     "timers": "unsupported",
     "cep": "unsupported",
@@ -89,7 +90,7 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     "durable_store": "unsupported",
     "checkpoint_recovery": "unsupported",
     "timers": "unsupported",
-    "llm_brain": "not_tested",
+    "llm_brain": "supported",  # fixture llm-brain-scripted: the stub provider ships in the job graph
     "cep": "not_tested",
     "event_time": "not_tested",
 }

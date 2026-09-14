@@ -41,7 +41,7 @@ public final class FlinkConformanceHarness {
 
   /** Capability terms ({@code spec/v1/primitives.md}) the Flink runtime implements and this suite exercises. */
   public static final Set<String> CAPABILITIES = Set.of(
-      "routing", "rule_brain", "tools", "structured_tool_args", "guardrails", "verifier",
+      "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
       "saga", "a2a", "durable_store");
 
