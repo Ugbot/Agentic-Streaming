@@ -1,552 +1,249 @@
-# Getting Started with the Flink runtime
+# Getting started
 
-**Welcome!** This guide takes you from zero to running your first AI agent on the **Flink runtime** in
-about 15 minutes.
+This guide takes a fresh clone to a running agent. Every command on this page was run on a
+clean checkout with Java 21 and the committed Maven wrapper; the ones that do not work are
+listed as such rather than left out.
 
-> **Pick your runtime.** Agentic Streaming runs the same agent on several first-class runtimes. The
-> fastest path (no JVM, no infra) is the Python one-liner:
+> **Pick your runtime.** The fastest path (no JVM, no infrastructure) is the Python one:
 > ```bash
+> python -m pip install -e ports/pyagentic
+> PYTHONPATH=ports/agentic-pipeline \
 > python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
 > ```
-> For the same banking agent on **Flink · Pekko · Clojure · Python · Go** (and a dozen backends), see
-> [the banking agent on every runtime](examples/banking-everywhere.md). The rest of *this* page is the
-> Flink-runtime path.
+> For the same banking agent on Flink, Pekko, Clojure, Python and Go, and on the experimental
+> adapters under `ports/`, see [the banking agent on every runtime](examples/banking-everywhere.md).
+> The rest of this page is the JVM and Flink path.
 
-## What You'll Learn
+## What you will do
 
-By the end of this guide, you'll:
-- Have all tools installed
-- Run your first AI agent
-- Understand what's happening
-- Know how to modify the agent
-- Be ready to build your own
+- Install Java 21 and check the Maven wrapper.
+- Build `ports/jagentic-core` first, then the Flink module.
+- Run the shared conformance fixtures against the Flink binding.
+- Run a `pipeline.yaml` through the Flink runner from a test.
+- Know which example entry points work today and which do not.
 
-## Part 1: Setup (10 minutes)
+## Part 1: Setup
 
-### Step 1: Install Java
+### Step 1: Java 21
 
-Java is the programming language this framework uses.
+The whole repository targets Java 21. Older JDKs fail at compile time; a JDK 17 box needs a
+21 install alongside it.
 
-**Check if you have Java:**
 ```bash
 java -version
 ```
 
-**If you see version 11 or higher, you're good!** Skip to Step 2.
+You should see `openjdk version "21.` or later. If not, install a JDK 21 from
+https://adoptium.net/ (or unpack the tarball from
+https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse and set
+`JAVA_HOME` to it).
 
-**If not, install Java:**
-1. Go to https://adoptium.net/
-2. Download Java 21 (or higher) for your operating system
-3. Run the installer
-4. Verify: `java -version`
+### Step 2: Maven
 
-**Tip:** You should see something like `openjdk version "11.0.20"`
+Do not install Maven; use the committed wrapper. The root `pom.xml` runs the Enforcer plugin
+and rejects Maven older than 3.9, so a distribution-packaged `mvn` (3.6.3 on Ubuntu 22.04)
+fails with:
 
-### Step 2: Install Maven
-
-Maven builds Java projects (like npm for Node.js or pip for Python).
-
-**Check if you have Maven:**
-```bash
-mvn -version
+```
+Use the committed wrapper (./mvnw) or Maven 3.9+.
 ```
 
-**If you see version 3.6 or higher, you're good!** Skip to Step 3.
+`./mvnw` downloads the pinned Maven on first use. If `repo.maven.apache.org` is unreachable
+or rate limited, point the wrapper and the build at the Google mirror:
 
-**If not, install Maven:**
-
-**On Mac:**
 ```bash
-brew install maven
+export MVNW_REPOURL=https://maven-central.storage-download.googleapis.com/maven2
+./mvnw -s .mvn/settings-mirror.xml ...   # a settings file with <mirrorOf>central</mirrorOf>
 ```
 
-**On Linux:**
-```bash
-sudo apt-get install maven  # Ubuntu/Debian
-# or
-sudo yum install maven      # CentOS/RHEL
-```
+where the settings file declares one mirror with `<mirrorOf>central</mirrorOf>` and the same
+URL. The repository does not ship that file; write it locally when you need it.
 
-**On Windows:**
-1. Download from https://maven.apache.org/download.cgi
-2. Extract to `C:\Program Files\Maven`
-3. Add `C:\Program Files\Maven\bin` to your PATH
+### Step 3: Ollama (optional)
 
-### Step 3: Install Ollama
+The unit tests, the conformance fixtures, and the Python one-liner use stub brains and need
+no model. Ollama is only needed for the examples that call a live LLM.
 
-Ollama lets you run AI models locally (like ChatGPT on your computer!).
-
-**Download and install:**
-- Go to https://ollama.ai
-- Download for your operating system
-- Run the installer
-
-**Verify installation:**
-```bash
-ollama --version
-```
-
-**Start Ollama:**
 ```bash
 ollama serve
-```
-
-Leave this terminal window open! Ollama needs to keep running.
-
-**In a NEW terminal, download AI models:**
-```bash
-# Download a conversational AI model (like ChatGPT)
-ollama pull llama2:latest
-
-# Download an embedding model (for understanding text)
+ollama pull llama3.1:latest
 ollama pull nomic-embed-text
 ```
 
-This might take 5-10 minutes depending on your internet speed. The models are a few GB each.
+`SimpleAgentExample` and `QuickStartExample` are configured for `llama3.1:latest` at
+`http://localhost:11434`, but neither reaches Ollama on a fresh clone; see Part 4.
 
-**What's happening?** You're downloading AI models to your computer so you don't need internet or paid APIs to run agents!
+### Step 4: Qdrant, Postgres, Valkey (optional)
 
-### Step 4: (Optional) Install Qdrant
-
-Qdrant is a vector database for storing document embeddings. You only need this for RAG examples.
-
-**Using Docker (easiest):**
-```bash
-docker run -d -p 6333:6333 qdrant/qdrant
-```
-
-**Without Docker:**
-Download from https://qdrant.tech/documentation/guides/installation/
-
-**Skip this if you just want to try the basic agent first!**
-
-## Part 2: Build the Project (2 minutes)
-
-### Step 1: Navigate to the project
+Only the RAG and storage examples and the integration tests need them. Use Podman:
 
 ```bash
-cd /Users/bengamble/Agentic-Flink
+podman run -d -p 6333:6333 qdrant/qdrant
+podman run -d -p 5432:5432 -e POSTGRES_PASSWORD=agentic postgres:16
+podman run -d -p 6379:6379 valkey/valkey
 ```
 
-### Step 2: Build it
+Tests that need these skip cleanly when they are not running.
+
+## Part 2: Build
+
+### Step 1: Build order
+
+The Flink module (`agentic-flink`, the root `pom.xml`) and the Pekko module both depend on
+`ports/jagentic-core`, which is not a module of the root build. Install it first or the root
+build cannot resolve it:
 
 ```bash
-mvn clean package
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
 ```
 
-**What you'll see:**
-```
-[INFO] Scanning for projects...
-[INFO] Building agentic-flink 1.0.0-SNAPSHOT
-[INFO] Compiling 64 source files...
-[INFO] BUILD SUCCESS
-```
-
-This produces **two** jars under `target/`:
-- `agentic-flink-1.0.0-SNAPSHOT.jar`, a thin jar of just the framework classes (what other
-  Maven modules depend on, so they get clean transitive dependencies).
-- `agentic-flink-1.0.0-SNAPSHOT-uber.jar`, the fat, everything-bundled jar you run directly
-  with `java -cp` or submit with `flink run` (used throughout this guide).
-
-**If you get errors:**
-- Check Java version: `java -version` (must be 11+)
-- Check Maven version: `mvn -version` (must be 3.6+)
-- Make sure you're in the right directory: `ls pom.xml` should show the file
-
-## Part 3: Run Your First Agent (3 minutes)
-
-### The Simple Agent Example
-
-This example shows a basic agent that:
-1. Receives task requests
-2. Decides which tools to use
-3. Executes the tools
-4. Validates the results
-5. Completes or retries
-
-**Run it:**
-```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.SimpleAgentExample
-```
-
-### Understanding the Output
-
-You'll see a lot of output! Let's break it down:
-
-```
-[INFO] Starting Agentic Flink Example
-```
-The framework is starting up.
-
-```
-[INFO] Creating agent with ID: agent-001
-```
-Your agent is being created with a unique ID.
-
-```
-[INFO] Agent agent-001: Received event type=TOOL_CALL_REQUESTED
-[INFO] Agent agent-001: Executing tool=calculator
-```
-The agent received a task and decided to use the calculator tool.
-
-```
-[INFO] Tool execution result: 42
-```
-The tool ran and returned a result.
-
-```
-[INFO] Agent agent-001: Validation passed
-```
-The agent checked that the result is correct.
-
-```
-[INFO] Agent agent-001: Flow completed successfully
-```
-The agent finished the task!
-
-### What Just Happened?
-
-Let's trace the flow:
-
-```
-1. AgentEvent created → Task arrives
-2. Tool selected → "I need the calculator"
-3. Tool executed → Calculator runs: 2 + 40 = 42
-4. Validation → "Is 42 correct? Yes!"
-5. Completion → Task done!
-```
-
-## Part 4: Understanding the Code
-
-Let's look at the simple example code to understand what's happening.
-
-### Creating an Agent
-
-```java
-// Create a configuration for your agent
-AgentConfig config = new AgentConfig();
-config.setAgentId("agent-001");           // Give it a name
-config.setMaxIterations(10);              // Max retry attempts
-config.setValidationEnabled(true);        // Check results
-```
-
-**What this does:**
-- `agentId`: Unique identifier for this agent
-- `maxIterations`: How many times to retry if something fails
-- `validationEnabled`: Whether to verify results
-
-### Defining Tools
-
-```java
-// Define a calculator tool
-ToolDefinition calculator = new ToolDefinition();
-calculator.setToolId("calculator");
-calculator.setName("Calculator");
-calculator.setDescription("Performs mathematical calculations");
-
-// Add input schema - what parameters does the tool need?
-calculator.addInputParameter("operation", "string", "The math operation (+, -, *, /)");
-calculator.addInputParameter("a", "number", "First number");
-calculator.addInputParameter("b", "number", "Second number");
-
-// Add this tool to the agent's config
-config.addTool(calculator);
-```
-
-**What this does:**
-- Defines what the tool is called
-- Describes what it does
-- Specifies what inputs it needs
-
-### Creating Events
-
-```java
-// Create a task for the agent
-AgentEvent event = new AgentEvent();
-event.setFlowId("flow-123");              // Unique workflow ID
-event.setUserId("user-001");              // Who requested this
-event.setAgentId("agent-001");            // Which agent handles it
-event.setEventType(AgentEventType.TOOL_CALL_REQUESTED);
-
-// Add the tool request details
-ToolCallRequest request = new ToolCallRequest();
-request.setToolId("calculator");
-request.addParameter("operation", "+");
-request.addParameter("a", 2);
-request.addParameter("b", 40);
-
-event.putData("toolCallRequest", request);
-```
-
-**What this does:**
-- Creates a task (event) for the agent
-- Specifies which tool to use
-- Provides the parameters the tool needs
-
-## Part 5: Modify the Agent
-
-Let's make your first modification!
-
-### Challenge: Change the Calculation
-
-**Goal:** Make the calculator compute 100 + 500 instead of 2 + 40.
-
-**Edit the file:**
-```bash
-# Open the example in your favorite editor
-nano src/main/java/org/agentic/flink/example/SimpleAgentExample.java
-# or
-code src/main/java/org/agentic/flink/example/SimpleAgentExample.java
-```
-
-**Find this code:**
-```java
-request.addParameter("a", 2);
-request.addParameter("b", 40);
-```
-
-**Change it to:**
-```java
-request.addParameter("a", 100);
-request.addParameter("b", 500);
-```
-
-**Rebuild and run:**
-```bash
-mvn clean package
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.SimpleAgentExample
-```
-
-**Expected output:**
-```
-[INFO] Tool execution result: 600
-```
-
-**Congratulations!** You just modified an agent!
-
-## Part 6: Try Other Examples
-
-### RAG Agent (Documents and Search)
-
-This agent can read documents, remember them, and answer questions.
-
-**Prerequisites:** Qdrant must be running (see Step 4 of setup)
-
-**Run it:**
-```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.RagAgentExample
-```
-
-**What it does:**
-1. Ingests 3 documents about Apache Flink
-2. Stores them as embeddings in Qdrant
-3. Searches for "state management"
-4. Retrieves relevant sections
-5. Uses AI to answer questions using the documents
-
-### Context Management Example
-
-This shows how agents manage memory.
-
-**Run it:**
-```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.ContextManagementExample
-```
-
-**What it does:**
-1. Creates a context with many items
-2. Exceeds memory limits
-3. Automatically compacts (keeps important, removes unimportant)
-4. Stores high-value items in long-term memory
-
-## Part 7: Build Your Own Agent
-
-Now you're ready to create your own agent! Here's a template:
-
-### Step 1: Create Your Tool
-
-```java
-package org.agentic.flink.tools;
-
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
-public class MyFirstTool extends AbstractToolExecutor {
-
-    @Override
-    public String getToolId() {
-        return "my-first-tool";
-    }
-
-    @Override
-    public String getDescription() {
-        return "This is my first custom tool!";
-    }
-
-    @Override
-    public CompletableFuture<Object> execute(Map<String, Object> parameters) {
-        // Get the input parameter
-        String input = getRequiredParameter(parameters, "input");
-
-        // Do something with it
-        String result = "Hello, " + input + "!";
-
-        // Return the result
-        return CompletableFuture.completedFuture(result);
-    }
-
-    @Override
-    public boolean validateParameters(Map<String, Object> parameters) {
-        return parameters.containsKey("input");
-    }
-}
-```
-
-### Step 2: Create Your Agent
-
-```java
-package org.agentic.flink.example;
-
-import org.agentic.flink.core.*;
-import org.agentic.flink.tools.MyFirstTool;
-// ... other imports
-
-public class MyFirstAgentExample {
-
-    public static void main(String[] args) throws Exception {
-        // 1. Setup Flink
-        StreamExecutionEnvironment env =
-            StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
-
-        // 2. Create agent config
-        AgentConfig config = new AgentConfig();
-        config.setAgentId("my-agent");
-        config.setMaxIterations(5);
-
-        // 3. Register your tool
-        ToolExecutorRegistry registry = new ToolExecutorRegistry();
-        registry.register(new MyFirstTool());
-
-        // 4. Define the tool
-        ToolDefinition toolDef = new ToolDefinition();
-        toolDef.setToolId("my-first-tool");
-        toolDef.setName("My First Tool");
-        toolDef.setDescription("Greets someone");
-        toolDef.addInputParameter("input", "string", "Name to greet");
-        config.addTool(toolDef);
-
-        // 5. Create an event
-        AgentEvent event = new AgentEvent();
-        event.setFlowId("flow-001");
-        event.setUserId("user-001");
-        event.setAgentId("my-agent");
-        event.setEventType(AgentEventType.TOOL_CALL_REQUESTED);
-
-        // 6. Create tool request
-        ToolCallRequest request = new ToolCallRequest(
-            "request-001", "flow-001", "user-001", "my-agent");
-        request.setToolId("my-first-tool");
-        request.addParameter("input", "World");
-        event.putData("toolCallRequest", request);
-
-        // 7. Create data stream
-        DataStream<AgentEvent> events = env.fromElements(event);
-
-        // 8. Execute
-        events.print();
-        env.execute("My First Agent");
-    }
-}
-```
-
-### Step 3: Build and Run
+### Step 2: Build the Flink module
 
 ```bash
-mvn clean package
-
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.MyFirstAgentExample
+./mvnw -q clean package -DskipTests
 ```
 
-## Next Steps
+This produces two jars under `target/`:
 
-Now that you've got the basics, you can:
+- `agentic-flink-1.0.0-SNAPSHOT.jar`: the thin jar of framework classes that other Maven
+  modules depend on.
+- `agentic-flink-1.0.0-SNAPSHOT-uber.jar`: the shaded jar for `flink run`. It does not contain
+  Flink itself: `flink-streaming-java` and `flink-clients` are `provided` scope and are
+  excluded from the shade, because a Flink cluster supplies them. That is why running it
+  with a bare `java -cp` fails (Part 4).
 
-1. **Learn the concepts** - Read [concepts.md](concepts.md) to understand how everything works
-2. **Study examples** - Check out [reference/examples.md](reference/examples.md) for detailed walkthroughs
-3. **Build more tools** - Create tools that connect to your systems
-4. **Add validation** - Make your agents check their work
-5. **Enable memory** - Give your agents long-term memory with RAG
+### Step 3: Run the tests
 
-## Additional Resources
-
-- **[concepts.md](concepts.md)** - Deep dive into core concepts
-- **[reference/examples.md](reference/examples.md)** - Detailed example walkthroughs
-- **[reference/agent-framework.md](reference/agent-framework.md)** - Complete framework documentation
-- **[reference/troubleshooting.md](reference/troubleshooting.md)** - Common issues and solutions
-
-## Common Questions
-
-### Why is my agent not responding?
-
-**Check:**
-1. Is Ollama running? `curl http://localhost:11434`
-2. Did you download the models? `ollama list`
-3. Check the logs for errors
-
-### The build failed, what do I do?
-
-**Most common causes:**
-1. Java version too old: `java -version` (need 11+)
-2. Maven not found: `mvn -version`
-3. Internet connection (Maven downloads dependencies)
-
-**Solution:**
 ```bash
-# Clean and rebuild
-mvn clean
-mvn package
+./mvnw test
 ```
+
+Result on a fresh clone (2026-09-14):
+
+```
+Tests run: 818, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+## Part 3: Run an agent on Flink
+
+The two paths that work on a fresh clone are both tests, because they run inside the Flink
+MiniCluster with the test classpath.
+
+### The shared fixtures on the Flink binding
+
+```bash
+./mvnw -q test -Dtest=FlinkConformanceTest
+```
+
+```
+Tests run: 24, Failures: 0, Errors: 0, Skipped: 7
+```
+
+The 7 skips are the fixtures whose capabilities the Flink binding declares `unsupported`
+(`docs/capabilities.md` lists them). A skip is never a pass.
+
+### A `pipeline.yaml` through the Flink runner
+
+`FlinkPipelineRunner` assembles a real Flink job from a pipeline file: source, optional
+native CEP, `keyBy` on the conversation, the portable graph in a keyed operator, sink.
+`FlinkPipelineRunnerTest` drives `examples/pipelines/banking.yaml` through it:
+
+```bash
+./mvnw -q test -Dtest=FlinkPipelineRunnerTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+```
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0
+```
+
+Read `src/test/java/org/agentic/flink/pipeline/FlinkPipelineRunnerTest.java` to see how the
+runner is called; it is the reference for embedding the runner in your own job.
+
+### Durability
+
+Crash and restart durability on Flink is proven by
+`WorkflowTurnFunctionMiniClusterTest` (savepoint restart, checkpoint recovery after failure,
+and a registered timer surviving a savepoint restart):
+
+```bash
+./mvnw -q test -Dtest=WorkflowTurnFunctionMiniClusterTest
+```
+
+## Part 4: Example entry points that do not work from a fresh clone
+
+These are the commands earlier versions of this page told you to run. Each was tried on a
+fresh clone on 2026-09-14 and each fails. They are listed so nobody wastes time on them; the
+failures are tracked in [`docs/audit-backlog.md`](audit-backlog.md) under AGS-40.
+
+| Command | Failure |
+|---|---|
+| `java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample` | `NoClassDefFoundError: org/apache/flink/configuration/ReadableConfig`. The uber jar excludes the provided Flink runtime. |
+| `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `NoClassDefFoundError: org/apache/flink/connector/datagen/source/GeneratorFunction`. `flink-connector-datagen` is test scope. |
+| the same with `test-compile` and `-Dexec.classpathScope=test` | `Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable` during job graph construction. |
+| `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample -Dexec.classpathScope=test` | `Initial state has no outgoing transitions` from `AgentBuilder.build()`, before any Ollama call. |
+| `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner -Dexec.classpathScope=test -Dexec.args=examples/pipelines/banking.yaml` | `Could not deserialize stream node 4: ... SimpleUdfStreamOperatorFactory` at job submission. The same runner passes inside `FlinkPipelineRunnerTest`. |
+
+There is no `MyFirstAgentExample` in the repository; an earlier version of this page invented
+it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem
+as `SimpleAgentExample`.
+
+## Part 5: The other first-class runtimes
+
+Pekko, after the core install from Part 2:
+
+```bash
+./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
+  -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
+```
+
+Without `compile` in the same invocation the class is not on the exec classpath and the
+command fails with `ClassNotFoundException: org.jagentic.pekko.PipelineMain`.
+
+Clojure:
+
+```bash
+cd agentic-clj && clojure -M:run
+```
+
+This runs the banking demo (`agentic.main`) against the in-process Datomic store; `clojure -X:test`
+runs the suite, including the conformance fixtures.
+
+Python is the block at the top of this page. `ports/agentic-pipeline` has no package metadata,
+so it is not pip-installable and must be on `PYTHONPATH`; `ports/pyagentic` is installable.
+
+## Next steps
+
+1. [concepts.md](concepts.md) for how agents, tools, and events fit together.
+2. [reference/examples.md](reference/examples.md) for the example catalogue.
+3. [reference/agent-framework.md](reference/agent-framework.md) for the framework API.
+4. [reference/troubleshooting.md](reference/troubleshooting.md) for common failures.
+5. [portability/parity-matrix.md](portability/parity-matrix.md) and
+   [capabilities.md](capabilities.md) for what each runtime has proven.
+
+## Common questions
+
+### The build failed
+
+1. `java -version` must show 21 or later.
+2. Use `./mvnw`, not `mvn`.
+3. Did you run the `ports/jagentic-core` install first? Without it the root build fails to
+   resolve `org.jagentic:jagentic-core`.
+4. Maven downloads dependencies on first use; see the mirror note in Part 1 if Central is
+   unreachable.
 
 ### Can I use OpenAI instead of Ollama?
 
-**Yes!** Just change the config:
+Yes. The LLM provider is configured per agent (`AgentConfig.setLlmModel` and
+`addLlmProperty` in the code-first DSL, or `llm:` in a pipeline file). See
+[configuration.md](configuration.md).
 
-```java
-LLMConfig config = new LLMConfig();
-config.setAiModel(AiModel.OPENAI);
+### How do I see more logging?
 
-Map<String, String> props = new HashMap<>();
-props.put("apiKey", "your-api-key-here");
-props.put("modelName", "gpt-5.4-mini");
-config.setProperties(props);
+Add to `src/main/resources/log4j2.properties`:
+
 ```
-
-### How do I debug my agent?
-
-**Enable detailed logging:**
-```bash
-# Add to src/main/resources/log4j2.properties
 logger.agent.name = org.agentic.flink
 logger.agent.level = DEBUG
 ```
-
-## You Did It!
-
-You've successfully:
-- Set up the development environment
-- Built the project
-- Run your first AI agent
-- Modified an agent
-- Understood the code structure
-
-**Now go build something amazing!**
-
----
-
-**Next:** Read [concepts.md](concepts.md) to understand how agents work under the hood.

@@ -133,8 +133,14 @@ Some subsystems (e.g., `StorageFactory`) accept `Map<String, String>`. Use `toMa
 AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
 Map<String, String> allValues = config.toMap();
 
-ShortTermMemoryStore store = StorageFactory.createShortTermStore("redis", allValues);
+LongTermMemoryStore store = StorageFactory.createLongTermStore("postgres", allValues);
 ```
+
+`createShortTermStore` accepts only `"memory"`; short-term memory lives in Flink state
+(`FlinkStateShortTermMemory`), so `createShortTermStore("redis", ...)` throws
+`IllegalArgumentException`. `createLongTermStore` accepts `"memory"`, `"postgres"`, and
+`"postgresql"`; the Redis keys above configure the optional Redis stores (`RedisConversationStore`,
+`RedisA2ATaskStore`, the Redis A2A bridge), not a factory backend.
 
 The returned map contains every key that has a resolved non-null value, combining explicit properties, environment overrides, and defaults.
 

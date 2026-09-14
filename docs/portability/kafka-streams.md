@@ -6,6 +6,13 @@
 > (§3 = C1..C12), the Engine SPI (§4c), the capability matrix (§6), and follows
 > the §9 six-section template. Code is Java; the pure core (§4a) is reused
 > *byte-for-byte*.
+>
+> Implementation status: the adapter under `ports/kafka-streams/` is experimental and not
+> conformance tested. Everything this document says about exactly-once
+> (`processing.guarantee=exactly_once_v2`, transactional read-process-write) describes what Kafka
+> Streams offers, not what the shipped adapter configures: the adapter does not set
+> `processing.guarantee` and no test in this repository exercises transactional EOS. Treat C3 for
+> this port as a design target until that changes.
 
 ## 1. Verdict
 

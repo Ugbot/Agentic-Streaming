@@ -25,10 +25,14 @@ Java 21 target, Flink 2.2.1, LangChain4J 1.16.3.
 
 ## Build
 
+Use the committed wrapper. The root pom enforces Maven 3.9+, so a system `mvn` 3.6 fails.
+`ports/jagentic-core` is not in the root reactor and must be installed first.
+
 ```
-mvn clean test                        # unit tests
-mvn test -P integration-tests         # integration tests (requires containers)
-mvn clean package -P flink-agents     # build with optional Flink Agents plugin
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # always first
+./mvnw clean test                        # unit tests
+./mvnw test -P integration-tests         # integration tests (requires Podman containers)
+./mvnw clean package -P flink-agents     # build with optional Flink Agents plugin
 ```
 
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
@@ -37,7 +41,7 @@ Enable it with `-P flink-agents` after building Flink Agents from source.
 ## Key Patterns
 
 - **AgentBuilder DSL**: `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`
-- **StorageFactory**: `StorageFactory.createShortTermStore("redis", config)` -- factory for pluggable storage backends
+- **StorageFactory**: `StorageFactory.createLongTermStore("postgres", config)` -- factory for long-term backends (`memory`, `postgres`, `postgresql`). `createShortTermStore` accepts only `"memory"` and throws for anything else; short-term memory is Flink state (`FlinkStateShortTermMemory`)
 - **ToolExecutor interface**: Async tool execution via `CompletableFuture<Object> execute(Map<String, Object>)`
 - **@Tool annotations**: LangChain4J annotation-based tool discovery via ToolAnnotationRegistry
 - **ToolRegistry**: `ToolRegistry.builder().registerTool(name, executor).build()` -- central tool registration

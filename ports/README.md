@@ -1,4 +1,12 @@
-# `ports/`: Agentic-Flink on twelve engines, compared
+# `ports/`: experimental engine adapters, compared
+
+> Status: experimental adapters, not conformance tested. None of the engine adapters in this
+> directory run the 22 `agentic/v1` fixtures under `spec/conformance/v1`. The conformance tested
+> bindings are the ones listed in the generated [`docs/capabilities.md`](../docs/capabilities.md)
+> (reference, jvm-core, flink, pekko, clojure, python, pyflink, python-jvm, python-flink); of the
+> code in this directory only the shared cores `pyagentic` and `jagentic-core` are on that list.
+> The "Verified here" column below records what was checked for each adapter (compiles, imports,
+> or runs the banking example on the real engine) and nothing more.
 
 Working implementations of the [`docs/portability/`](../docs/portability/) designs:
 the Agentic-Flink **essence** (per-conversation stateful agents that remember, route,
@@ -54,7 +62,7 @@ processed in order, with async I/O*.
 | Engine | Lang | Streaming? | The one-line fit | Verified here |
 |--------|:----:|:----------:|------------------|---------------|
 | **Faust** | Python | yes, yes | `@app.agent` ≈ our agent; `Table` ≈ ConversationStore; native asyncio. Thinnest Python port. | imports clean, engine-guarded¹ |
-| **Kafka Streams** | Java | yes, yes | Closest analog, state stores + partitions + EOS; reuses the Java core; bridge async I/O. | `mvn compile` yes |
+| **Kafka Streams** | Java | yes, yes | Closest analog, state stores + partitions; reuses the Java core; bridge async I/O. Exactly-once (`processing.guarantee=exactly_once_v2`) is a design note in `docs/portability/kafka-streams.md`; the shipped adapter does not set it and no test exercises it. | `mvn compile` yes |
 | **Apache Pekko** | Java | ◑ actors | Actor-per-conversation via Cluster Sharding (C1+C2) **+ Persistence (C3)**, all native. | **runs on real Pekko** yes |
 | **Temporal** | Java | ◑ durable exec | Entity workflow per conversation; event-sourced **C1+C2+C3**, strongest durability. | **runs + tested** yes |
 | **Pulsar Functions** | Java | yes, yes | State store (C1+C3) + `Key_Shared` (C2), native, in Flink's topic-in/topic-out shape. | **runs + tested** yes |
@@ -80,7 +88,7 @@ From the keystone's capability inventory (C1-C12). Legend: **N**ative · **L**ib
 |------------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **C1** durable keyed state | N `Table` | N state store | N shard+persist | N event-source | N state store | N* actor +X | N KV store | X Redis/Fluss | X Redis/JPA | X store | L* Actor | X store, tiny XCom |
 | **C2** per-key ordering | N partition | N partition | N actor mailbox | N 1 exec/id | N Key_Shared | N actor mailbox | L subj+CAS | L partition | L partition | L queue+lock | - | - |
-| **C3** fault tolerance / EOS | L offsets | N txn EOS | N persistence | N replay+retry | N eff-once | X checkpoint | N JS+idemp | X broker+store | X broker+store | L acks+retry | L retry | N retry/idempotent |
+| **C3** fault tolerance / EOS | L offsets | N txn EOS (design only, not configured or tested here) | N persistence | N replay+retry | N eff-once | X checkpoint | N JS+idemp | X broker+store | X broker+store | L acks+retry | L retry | N retry/idempotent |
 | **C4** async I/O | N asyncio | L async-bridge | N ask/pipeToSelf | N activities | L resp-topic | N async actor | N asyncio | N Mutiny/vthreads | L Reactor/@Async | L chord/chain | L futures | L deferrable |
 | **C5** backpressure | L | L pause | N Pekko Streams | L task-queue | L flow-ctl | L | N flow-ctl | N reactive | L | L prefetch | L | - |
 | **C6** connectors | N Kafka | N Kafka | L Connectors | L activities | N Pulsar IO | L Serve/Data | L subjects | N SmallRye | N Cloud Stream | L brokers | L read_* | L hooks |
