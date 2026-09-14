@@ -48,7 +48,13 @@ python spec/tools/run_conformance.py duplicate-turn   # one fixture
 3. Deliver each turn in order. Honour `restart_runtime` by restarting or recovering the
    runtime, `advance_time_ms` by advancing logical time, `signal` by resuming the named
    turn, and `concurrent_with` by delivering the listed turns concurrently while still
-   expecting the declared order.
+   expecting the declared order. `restart_runtime` means: discard the runtime object and
+   every in-memory cache, then rebuild from the binding's declared store. A binding may
+   satisfy it with an in-process store that outlives the runtime object inside one test
+   process. Passing the fixtures that require `durable_store` therefore proves that state
+   is rebuilt from the log; it does not prove the store survives a process crash. Crash
+   durability is claimed and tested per runtime (see the Runtimes section of the
+   repository README for the list of those tests).
 4. Emit one normalized result per turn (`spec/v1/result.schema.json`).
 5. Compare with `check_expectation` in `spec/tools/run_conformance.py`, or an equivalent
    implementation of the rules below.
@@ -100,7 +106,23 @@ conformant; the matrix then records its comparison as made *inside the binding*.
   offsets, wall-clock timings, engine metrics. Two runtimes may differ there and still
   be conformant.
 - Wall-clock timestamps and `sequence` values are not compared across runtimes; ordering
-  is compared, absolute numbers are not.
+  is compared, absolute numbers are not. The reason is the previous rule: `events_include`
+  allows a runtime to emit events the fixture does not name (the reference, for example,
+  appends `turn_failed` after a `rejected` or `unverified` turn, and a runtime that skips a
+  capability emits none of that capability's events), and a runtime may number its log
+  with its own persistence mechanism. Both make the absolute `sequence` of a named event
+  differ between conformant runtimes, so a difference or apparent gap between two runtimes'
+  numbering for the same event carries no information about correctness. Within one runtime the log must
+  still be dense and monotonic per conversation (`spec/v1/primitives.md`, section 3); the
+  fixtures check that indirectly through replay and idempotency, not by comparing numbers.
+- Retry timing is not compared. Fixture `07-retry-tool` sets `initial_delay_ms: 0` and
+  asserts the attempt sequence (`attempt: 1`, `attempt: 2`, ...) on `tool_calls` and on the
+  `tool_called` and `tool_failed` events; whether a runtime slept between attempts is
+  `runtime_detail`.
+- The reference-only behaviours the fixtures depend on (the `anonymous` default user, the
+  `[path]` reply prefix, the FNV-1a hashing embedder, cosine scoring with the `0.15`
+  threshold, and guardrail stages) are stated normatively in `spec/v1/primitives.md`,
+  section 9.
 
 ## Adding a fixture
 

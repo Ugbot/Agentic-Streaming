@@ -5,7 +5,9 @@ Agentic-Flink speaks the **A2A protocol v1.0** in both directions:
 - **Outbound**: a Flink agent calls a remote A2A agent as a step in its workflow, either as an
   LLM-selectable tool or as an explicit, deterministic pipeline step.
 - **Inbound**: a standalone Quarkus **gateway** exposes the agents running in a Flink job to any
-  external A2A client (Agent Card discovery + JSON-RPC/SSE, gRPC, and HTTP/REST bindings).
+  external A2A client over Agent Card discovery plus JSON-RPC, with `message/stream` served as
+  SSE. JSON-RPC and SSE are the only inbound transports implemented; there is no gRPC server and
+  no A2A REST binding (see `a2a-gateway/README.md`).
 
 The two sides are connected to the Flink job by a pluggable **bridge** (`inproc` / `zeromq` /
 `redis`). A2A is built on the official [`a2a-java` SDK](https://github.com/a2aproject/a2a-java)
@@ -14,7 +16,7 @@ usage is confined to one adapter and the gateway.
 
 ```
  EXTERNAL A2A CLIENT                                   REMOTE A2A AGENT (peer)
-        │ JSON-RPC/gRPC/REST + SSE                              ▲
+        │ JSON-RPC + SSE                                        ▲
         ▼                                                       │ a2a-java SDK client (outbound)
  ┌──────────────────────┐      bridge (Channel)        ┌────────┴───────────────────────┐
  │  Quarkus A2A Gateway  │  inproc / zeromq / redis     │       Flink Agent Job          │
@@ -91,12 +93,14 @@ Outbound uses the official SDK via `SdkA2AClient` (JSON-RPC binding), discovered
 ## Inbound: the Quarkus gateway
 
 A standalone module under `a2a-gateway/` (built separately, see its `README.md`). It serves the
-Agent Card at `/.well-known/agent-card.json` and all three transport bindings, bridging each request
-into the Flink job and driving SSE + push from the job's responses.
+Agent Card at `/.well-known/agent-card.json` and the JSON-RPC methods (`message/send`,
+`message/stream` as SSE, `tasks/get`, `tasks/cancel`, and the push notification config methods),
+bridging each request into the Flink job and driving SSE + push from the job's responses.
 
 ```bash
-mvn -q install -DskipTests                 # install core
-mvn -f a2a-gateway/pom.xml package         # build the gateway
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests   # install jagentic-core
+./mvnw -q install -DskipTests              # install core
+./mvnw -f a2a-gateway/pom.xml package      # build the gateway
 java -jar a2a-gateway/target/quarkus-app/quarkus-run.jar
 curl http://localhost:9999/.well-known/agent-card.json
 ```

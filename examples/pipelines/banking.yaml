@@ -1,11 +1,11 @@
 # Agentic Streaming — a declarative banking agent (router -> path -> verifier).
 # Build it to the agentic system of your choice by changing `backend:`; the same spec
-# runs on any backend (local / celery / nats / ... — all adapters are injectable).
+# runs on every registered backend (Python: local, celery, nats; JVM: local, pekko).
 #
 #   python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
 #   python -m agentic_pipeline run examples/pipelines/banking.yaml --backend celery --text "card types?"
 
-backend: local                      # local | celery | nats | ...
+backend: local                      # Python: local | celery | nats (else ValueError). JVM: local, or a BackendProvider on the classpath such as pekko (else IllegalArgumentException)
 
 agent:
   router:

@@ -1,6 +1,7 @@
 # Agentic Streaming primitive specification, v1
 
-Status: draft-1. Version: `agentic/v1`.
+Status: frozen for conformance fixtures 01 to 22. Version: `agentic/v1`. See section 7 for what
+may still change under this version.
 
 This is the normative vocabulary every runtime implements. A runtime is conformant when it
 executes the workflow IR (`workflow.schema.json`) and produces the normalized turn result
@@ -147,6 +148,15 @@ policies:
 Retries never re-append `turn_received`. Each attempt appends its own `tool_called` or
 `tool_failed` events with an incrementing `attempt` in the payload.
 
+Retry timing is observable only through the event log, never through wall-clock
+measurement. What a runtime must expose is the sequence of attempts: attempt `n` appears as
+its own `tool_called` (and, on failure, `tool_failed`) event with `attempt: n`, in order,
+and the normalized `tool_calls` list carries the same `attempt` numbers. Whether the runtime
+actually sleeps for `initial_delay_ms` between attempts is not part of the contract and is not
+compared; the fixtures set `initial_delay_ms: 0` and `jitter: false`, and the reference
+runtime does not sleep at all. A runtime that honours the delay in production and skips it
+under test is conformant as long as the attempt numbering is identical.
+
 Degradation is explicit: no component may silently substitute an in-memory store for a
 configured durable store. A configured store that cannot be reached is a `fatal` error at
 build time unless the spec sets `stores.<name>.on_unavailable: degrade`.
@@ -162,8 +172,19 @@ Every runtime declares each capability as exactly one of:
 | `unsupported` | not available; the runtime rejects specs that require it, loudly |
 | `not_tested` | implemented but unproven; may not be described as supported in documentation |
 
-The capability matrix is generated from test results (Phase 5.2). A capability may not be
-called native in documentation without a test that proves it.
+The capability matrix (`docs/capabilities.md`) is generated from fixture outcomes by
+`spec/tools/conformance_matrix.py`. A capability may not be called native in documentation
+without a test that proves it.
+
+`durable_store` needs one more sentence. `durable_store: supported` means the three fixtures
+that require it (`replay-after-restart`, `suspend-resume`, `timer-survives-restart`) passed
+with the store the binding declares, and the binding honoured `restart_runtime` by discarding
+its runtime object and rebuilding from the store. Most bindings run that against an
+in-process store inside a single test process. It proves that state is rebuilt from the log
+rather than cached, not that the log survives a process crash, a node loss, or a cluster
+restart. Crash durability is a runtime claim, proven per runtime by tests that restart a real
+persistence mechanism (a Flink savepoint, a Pekko journal, a Datomic database, a file store);
+the list of those tests is kept in the repository README under Runtimes.
 
 Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured_tool_args`,
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
@@ -173,11 +194,26 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 ## 7. Versioning
 
 - The spec version is `agentic/v1` and appears as `spec_version` in every workflow document.
-- Additive fields are minor changes; a runtime must accept unknown fields under documented
-  extension points (`x-*` keys and `runtime:` blocks) and must reject unknown fields elsewhere.
-- Removing or re-meaning a field requires `agentic/v2`.
+- `agentic/v1` is frozen with respect to the conformance fixtures `01` to `22` under
+  `spec/conformance/v1/fixtures`. The behaviour those fixtures assert, the event types and
+  payload fields they observe, and the normalized result shape in `result.schema.json` do not
+  change under this version. A change that would make a currently passing runtime fail one of
+  them, or that would change what a fixture asserts, is a breaking change.
+- Additive changes are allowed under `agentic/v1`: new optional fields, new capability ids,
+  new event types, and new fixtures numbered `23` and up. They are governed by the
+  unknown-field rule: a runtime must accept unknown fields under the documented extension
+  points (`x-*` keys and `runtime:` blocks), must preserve unknown event types on replay and
+  ignore them in reducers (section 1), and must reject unknown fields elsewhere as a
+  `validation` error. A new fixture may only require capabilities a runtime can declare
+  `unsupported` and skip; it may not silently widen an existing capability.
+- Removing or re-meaning a field, an event type, or a payload key, changing a fixture's
+  expectation, or changing the normative defaults in section 9 requires `agentic/v2`, a new
+  directory `spec/v2`, and a new fixture set; v1 fixtures keep running against v1 runtimes.
 - A runtime declares the spec versions it accepts. Loading a newer major version is a
   `validation` error, not a best-effort parse.
+- `spec/tools/validate_spec.py` and `python -m pytest spec/tools` are the gate: they check the
+  schemas, every fixture, and the reference runtime against each other, and a change that
+  makes them fail is not an additive change.
 
 ## 8. Time, patterns, context, and the scripted brain
 
@@ -255,3 +291,54 @@ conversation's state, transcript, timers, and tool calls are its own. Section 3'
 guarantee is per conversation only. The fixture proves isolation under concurrent
 delivery; a runtime that processes keys serially may still pass it and must say so in its
 capability declaration.
+
+## 9. Reference defaults that are normative
+
+The fixtures assert on replies, tool arguments, and retrieval results that depend on details
+first encoded only in `spec/tools/reference_runtime.py`. Those details are part of the
+contract; a runtime that differs on any of them fails the corresponding fixture. Each item
+names the code it was checked against.
+
+- Default user. A turn without `user_id` has `user_id` equal to the string `anonymous`
+  (`Turn.user_id` default). A resumed turn is rebuilt from the suspended record and also
+  carries `anonymous`, whatever the original turn said. Fixture `03-tool-invocation` asserts
+  the resulting tool argument.
+- Rule-brain tool arguments. When a `tool_triggers` keyword matches (case-insensitive
+  substring on the turn text, first match in declaration order), the rule brain invokes the
+  tool with exactly one argument, `{"user": <user_id>}`, and replies
+  `[<path>] <tool_id> returned <result>` where `<result>` is the tool result rendered as text
+  (`_draft`).
+- Reply prefix. Every reply the rule brain produces starts with `[<path>] ` where `<path>` is
+  the routed path name: the tool reply above, the retrieval reply `[<path>] <passage text>`,
+  the fallback `[<path>] I can help with <path> questions. You said: "<turn text>"`, and the
+  saga reply `[<path>] saga completed`. The default `prefix` verifier accepts a reply if and
+  only if it starts with `[`. The scripted LLM brain (section 8) is the one exception: its
+  `{text}` step is the reply verbatim, with no prefix.
+- Hashing embedder. `embeddings.provider: hashing` is FNV-1a, 32-bit, over each token's
+  UTF-8 bytes, with offset basis `0x811C9DC5` and prime `0x01000193`. Tokens are the maximal
+  runs matching `[a-z0-9]+` after lower-casing the text. Each token adds `1.0` to slot
+  `fnv1a_32(token) mod dim`; the vector is then L2-normalized, and an all-zero vector stays
+  zero (`embed`). This is the embedder the Python, JVM, and Clojure cores share at byte parity;
+  the fixture `15-retrieval` depends on it producing the same order on every runtime.
+- Retrieval scoring and threshold. Candidates are scored by cosine similarity between the
+  query vector and each passage vector (`cosine`; zero if either norm is zero), sorted by
+  descending score and then ascending passage id, and cut to `retrieval.top_k`. The
+  `retrieved` event carries the ids in that order and reduces into `state.last_retrieved_ids`.
+  The top passage becomes the reply only if its score is strictly greater than the path's
+  `threshold`, default `0.15`; otherwise the fallback reply is used, and the `retrieved`
+  event is still emitted.
+- Guardrail stages. A guardrail's `stage` is `input` (default), `output`, or `both`. Input
+  guardrails run on the turn text after `turn_received` and before routing; a match appends
+  `guardrail_rejected` and ends the turn `rejected` with error class `guardrail`, so no
+  `routed` event is emitted for a rejected turn (`_check_guardrails`, `_handle`). The reference
+  runtime evaluates `input` and `both` rails at the input stage only and skips `output`
+  rails entirely; no v1 fixture exercises an output-stage rail. A runtime that implements
+  output rails runs them on the drafted reply after the verifier accepts it and before
+  `memory_written`, and a match ends the turn `rejected`; that placement is stated here so
+  implementations agree, but it is not conformance tested in v1 and a runtime may not describe
+  output guardrails as `supported` on the strength of the shared fixtures.
+- Sequence numbers. `sequence` is the position of the event in the conversation log, so it is
+  dense per conversation within one runtime (`_append`). Absolute values are not compared
+  across runtimes; see the comparison rules in `spec/conformance/v1/README.md` for why.
+- Retry observability. Section 5: attempts are observable through `attempt` numbers on
+  `tool_called` and `tool_failed` events and on `tool_calls`; delays are not observed.

@@ -295,6 +295,10 @@ Actively harmful: `GatewayConfig.java:47` `grpcUrl()` and `:52` `restUrl()`
 exist only to **advertise endpoints on the Agent Card that the gateway cannot
 serve**. A client that trusts the card and dials gRPC gets nothing.
 
+Status: the documentation half is retracted (`CLAUDE.md`, `a2a-gateway/README.md`,
+`docs/a2a.md`, `README.md` now state JSON-RPC and SSE only). The code half, dropping
+`grpcUrl()`/`restUrl()` from the Agent Card or implementing the servers, is still open.
+
 (Note `tool-services/` *does* ship real gRPC, quarkus-grpc, a `.proto`,
 `ToolGrpcService` and 3 passing tests. The capability exists, just not here.)
 
@@ -620,6 +624,12 @@ readers, so `withShortTermTtl` is inert. Meanwhile `ReActProcessFunction` keeps
 its own parallel `ListState` transcript, ignoring both `ShortTermMemory` and
 `ConversationStore`.
 
+Status: the four methods are no longer shown as working in `README.md` or `CLAUDE.md`
+(re-verified: `getShortTermMemorySpec`, `getVectorMemorySpec`, `getLongTermStore`,
+`getMemoryChannel` have no readers outside `dsl/`). Wiring, deleting, or throwing from
+`withShortTermTtl`, `withVectorMemory`, `withLongTermStore`, `withMemoryChannel` is still
+open for the code owner.
+
 Silent no-ops in a public API are the worst of three options: wire, delete, or
 throw. `dsl/` also has **no test directory at all**, covering `AgentBuilder`
 (874 LOC, largest file in the repo), `Agent` (459) and `SupervisorChain*` (637).
@@ -936,6 +946,15 @@ Flink-job example. The repo already knows: `TEST_REPORT.md:95` records using
 flink run", and `SuspiciousActivityCascadeExample.java:39` documents the
 workaround in its javadoc. Affects `examples-bin/run-{live-research,incident,
 moderation,rag}.sh` via `_common.sh:41`.
+
+Reproduced again from a fresh clone (Java 21, `./mvnw`): with the classpath scope fixed,
+`QuickStartExample` still fails in `AgentBuilder.build()` with `Initial state has no
+outgoing transitions` before any model call, and `FlinkPipelineRunner` fails on the compile
+classpath (`flink-connector-datagen` is test scoped) and on the test classpath at job
+submission with `Could not deserialize stream node 4:
+SimpleUdfStreamOperatorFactory`. Both are now listed as known broken in
+`docs/getting-started.md` instead of being advertised; the working Flink lane is
+`FlinkPipelineRunnerTest`.
 
 Other broken commands:
 - `docs/examples/banking-everywhere.md:50` runs `QuickStartExample` as "the
