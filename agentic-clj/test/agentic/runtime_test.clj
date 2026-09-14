@@ -4,7 +4,9 @@
    across a restart, replay of unknown events, and loader/backend selection."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [agentic.spec :as spec]
+            [agentic.graph :as graph]
             [agentic.pipeline :as pipeline]
             [agentic.core :as core]
             [agentic.log :as log]))
@@ -106,6 +108,78 @@
     (let [wf (assoc-in verify-workflow ["policies" "verification" "on_exhausted"] "fail")
           sys (pipeline/system-from wf (pipeline/open-stores (spec/load-workflow wf)))]
       (is (= :failed (:status (core/submit sys (turn "c1" "t1" "hello"))))))))
+
+(defn- rnd [prefix] (str prefix (subs (str (java.util.UUID/randomUUID)) 0 8)))
+
+(defn- path-verifier-workflow
+  "Four paths routed by their own name; the agent-level regex accepts replies from `rejecting`
+   and `fallback-ok` only. `rejecting` carries a never-matching regex, `lenient` a prefix verifier."
+  [[rejecting lenient fallback-ok _fallback-ko :as names] max-attempts]
+  {"spec_version" "agentic/v1" "backend" "local"
+   "agent" {"id" (rnd "verifiers-")
+            "router" {"kind" "keyword" "default" rejecting
+                      "rules" (into {} (map (fn [n] [n [n]]) names))}
+            "paths" {rejecting {"brain" "rule" "prompt" "p"
+                                "verifier" {"kind" "regex" "pattern" (str "^" (rnd "never-"))}}
+                     lenient {"brain" "rule" "prompt" "p" "verifier" {"kind" "prefix"}}
+                     fallback-ok {"brain" "rule" "prompt" "p"}
+                     _fallback-ko {"brain" "rule" "prompt" "p"}}
+            "verifier" {"kind" "regex" "pattern" (str "^\\[(" rejecting "|" fallback-ok ")\\]")}}
+   "policies" {"verification" {"max_attempts" max-attempts "on_exhausted" "unverified"}}})
+
+(deftest path-verifier-overrides-agent-verifier-and-absent-falls-back
+  (let [names (mapv rnd ["audit" "chat" "billing" "account"])
+        [rejecting lenient fallback-ok fallback-ko] names
+        max-attempts (+ 2 (rand-int 3))
+        wf (path-verifier-workflow names max-attempts)
+        sys (pipeline/system-from wf (pipeline/open-stores (spec/load-workflow wf)))
+        failed-count (fn [r] (count (filter #{:verification-failed} (types r))))]
+    (testing "the path's regex judges, not the agent's"
+      (let [r (core/submit sys (turn "c1" "t1" rejecting))]
+        (is (= :unverified (:status r)))
+        (is (= rejecting (:path r)))
+        (is (= :verification (get-in r [:error :class])))
+        (is (= max-attempts (failed-count r)))))
+    (testing "the path's prefix accepts what the agent's regex rejects"
+      (let [r (core/submit sys (turn "c1" "t2" lenient))]
+        (is (= :completed (:status r)))
+        (is (str/starts-with? (:reply r) (str "[" lenient "]")))
+        (is (zero? (failed-count r)))))
+    (testing "a path without a verifier uses agent.verifier"
+      (is (= :completed (:status (core/submit sys (turn "c1" "t3" fallback-ok)))))
+      (let [r (core/submit sys (turn "c1" "t4" fallback-ko))]
+        (is (= :unverified (:status r)))
+        (is (= fallback-ko (:path r)))
+        (is (= max-attempts (failed-count r)))))))
+
+(deftest path-verifier-none-disables-verification-and-absent-defaults-to-prefix
+  (let [open-path (rnd "open") plain (rnd "plain")
+        base {"spec_version" "agentic/v1" "backend" "local"
+              "agent" {"id" (rnd "a-")
+                       "router" {"kind" "keyword" "default" plain
+                                 "rules" {open-path [open-path] plain [plain]}}
+                       "paths" {open-path {"brain" "rule" "prompt" "p" "verifier" {"kind" "none"}}
+                                plain {"brain" "rule" "prompt" "p"}}}
+              "policies" {"verification" {"max_attempts" 1 "on_exhausted" "unverified"}}}
+        strict (assoc-in base ["agent" "verifier"] {"kind" "regex" "pattern" (str "^" (rnd "never-"))})
+        sys (pipeline/system-from strict (pipeline/open-stores (spec/load-workflow strict)))]
+    (testing "kind: none on the path wins over a rejecting agent.verifier"
+      (is (= :completed (:status (core/submit sys (turn "c1" "t1" open-path)))))
+      (is (= :unverified (:status (core/submit sys (turn "c1" "t2" plain))))))
+    (testing "neither declared: the path verifies with the default prefix"
+      (let [g (:graph (pipeline/build base))
+            v (graph/verifier-for g plain)]
+        (is (fn? v))
+        (is (= [true (str "[" plain "] x")] (v (str "[" plain "] x") nil)))
+        (is (false? (first (v (rnd "x") nil))))
+        (is (true? (first ((graph/verifier-for g open-path) (rnd "x") nil))) "kind: none accepts anything")
+        (is (= :completed (:status (core/submit (pipeline/system-from base (pipeline/open-stores (spec/load-workflow base)))
+                                                (turn "c1" "t1" plain)))))))
+    (testing "a broken path verifier is reported at the path's location"
+      (let [broken (assoc-in base ["agent" "paths" plain "verifier"] {"kind" "regex"})
+            e (try (pipeline/build broken) nil (catch clojure.lang.ExceptionInfo e e))]
+        (is (some? e))
+        (is (= ["agent" "paths" plain "verifier" "pattern"] (:path (ex-data e))) (pr-str (ex-data e)))))))
 
 (def saga-workflow
   {"spec_version" "agentic/v1" "backend" "local"

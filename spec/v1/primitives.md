@@ -1,6 +1,6 @@
 # Agentic Streaming primitive specification, v1
 
-Status: frozen for conformance fixtures 01 to 22. Version: `agentic/v1`. See section 7 for what
+Status: frozen for conformance fixtures 01 to 24. Version: `agentic/v1`. See section 7 for what
 may still change under this version.
 
 This is the normative vocabulary every runtime implements. A runtime is conformant when it
@@ -21,12 +21,12 @@ Names here are the contract. Language bindings adapt spelling (`conversationId` 
 | `Event` | an immutable record appended to a conversation log | `(conversation_id, sequence)` | durable |
 | `State` | the value obtained by reducing a conversation's events | derived | rebuilt by `replay` |
 | `Router` | maps an inbound turn to exactly one path | `router.kind` | pure |
-| `Path` | a named branch: brain, tools, guardrails, verifier | path name | pure config |
+| `Path` | a named branch: brain, tools, guardrails, and optionally its own verifier | path name | pure config |
 | `Brain` | produces a reply text for a turn | path-scoped | pure or model-backed |
 | `Tool` | a named, side-effecting function with structured arguments | `tool.id` | registry-scoped |
 | `ToolCall` | one structured invocation of a tool within a turn | `(turn_id, index)` | recorded as an event |
 | `Guardrail` | admits or rejects a turn's input or output | ordinal in the list | pure |
-| `Verifier` | accepts or rejects a candidate reply | path or workflow scoped | pure |
+| `Verifier` | accepts or rejects a candidate reply; a path's own takes precedence over the workflow's (section 5) | path or workflow scoped | pure |
 | `Memory` | the conversation transcript plus keyed scalars | `conversation_id` | durable |
 | `Context` | the model-visible window assembled from memory and retrieval | per turn | ephemeral |
 | `Store` | a durable backing for conversations, keyed state, facts, vectors | connection link | external |
@@ -148,6 +148,17 @@ policies:
 Retries never re-append `turn_received`. Each attempt appends its own `tool_called` or
 `tool_failed` events with an incrementing `attempt` in the payload.
 
+Verifier resolution. A verifier may be declared at `agent.verifier` and on any path at
+`agent.paths.<name>.verifier`. The verifier that judges a turn is the one on the path the
+turn was routed to; when that path declares none, `agent.verifier`; when neither is declared,
+the default `prefix` verifier of section 9. Resolution happens once per turn, after `routed`,
+and the same verifier judges every draft the brain produces for that turn, including drafts
+after a `verification_failed` and the brain run of a resumed turn. A path-level `kind: none`
+is a declaration: it disables verification on that path even when `agent.verifier` would
+reject. Which level supplied the verifier is not observable in the event log: the events,
+statuses, and error class are those of any verification, so a reducer that does not know
+about path-level verifiers reads the log unchanged.
+
 Retry timing is observable only through the event log, never through wall-clock
 measurement. What a runtime must expose is the sequence of attempts: attempt `n` appears as
 its own `tool_called` (and, on failure, `tool_failed`) event with `attempt: n`, in order,
@@ -194,18 +205,23 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 ## 7. Versioning
 
 - The spec version is `agentic/v1` and appears as `spec_version` in every workflow document.
-- `agentic/v1` is frozen with respect to the conformance fixtures `01` to `22` under
+- `agentic/v1` is frozen with respect to the conformance fixtures `01` to `24` under
   `spec/conformance/v1/fixtures`. The behaviour those fixtures assert, the event types and
   payload fields they observe, and the normalized result shape in `result.schema.json` do not
   change under this version. A change that would make a currently passing runtime fail one of
   them, or that would change what a fixture asserts, is a breaking change.
 - Additive changes are allowed under `agentic/v1`: new optional fields, new capability ids,
-  new event types, and new fixtures numbered `23` and up. They are governed by the
+  new event types, and new fixtures numbered `25` and up. They are governed by the
   unknown-field rule: a runtime must accept unknown fields under the documented extension
   points (`x-*` keys and `runtime:` blocks), must preserve unknown event types on replay and
   ignore them in reducers (section 1), and must reject unknown fields elsewhere as a
   `validation` error. A new fixture may only require capabilities a runtime can declare
   `unsupported` and skip; it may not silently widen an existing capability.
+- The path-level verifier (`agent.paths.<name>.verifier`, section 5) was added under
+  `agentic/v1` as such a change: the field was already optional in `workflow.schema.json`,
+  its absence keeps the previous behaviour exactly, it adds no event type or payload key, and
+  fixtures `23` and `24` prove it under the existing `verifier` capability. A runtime that
+  declares `verifier` supported must honour it; it may not ignore the field or reject it.
 - Removing or re-meaning a field, an event type, or a payload key, changing a fixture's
   expectation, or changing the normative defaults in section 9 requires `agentic/v2`, a new
   directory `spec/v2`, and a new fixture set; v1 fixtures keep running against v1 runtimes.

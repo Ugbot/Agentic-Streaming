@@ -1,0 +1,20 @@
+id: path-verifier-override
+description: "A path's own verifier replaces agent.verifier for turns routed to it, in both directions. The audit path's regex rejects a reply the agent-level verifier accepts, so the turn ends unverified after max_attempts drafts; the chat path's prefix verifier accepts a reply the agent-level verifier rejects, so that turn completes."
+requires: [routing, verifier]
+workflow_ref: ../workflows/verifiers.yaml
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "please audit my statement"}
+  - {conversation_id: c1, turn_id: t2, text: "just here to chat"}
+expect:
+  - turn_id: t1
+    status: unverified
+    path: audit
+    error_class: verification
+    events_include: [routed, reply_drafted, verification_failed, reply_drafted, verification_failed]
+    events_exclude: [turn_completed]
+  - turn_id: t2
+    status: completed
+    path: chat
+    reply_matches: "^\\[chat\\]"
+    events_include: [routed, reply_drafted, turn_completed]
+    events_exclude: [verification_failed]

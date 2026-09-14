@@ -386,6 +386,59 @@ def test_verification_is_bounded_and_on_exhausted_fail_is_honoured():
     assert [e["type"] for e in result["events"]].count("verification_failed") == 3
 
 
+def test_path_verifier_overrides_agent_verifier_and_absent_falls_back():
+    """primitives.md section 5: paths.<name>.verifier, else agent.verifier, else prefix."""
+    names = [rid(p) for p in ("audit", "chat", "billing", "account")]
+    rejecting, lenient, fallback_ok, fallback_ko = names
+    attempts = random.randint(2, 4)
+    agent = Agent(rid("a")).route(rules={n: [n] for n in names}, default=rejecting)
+    agent.path(rejecting, verifier={"kind": "regex", "pattern": f"^never-{rid()}"})
+    agent.path(lenient, verifier="prefix")
+    agent.path(fallback_ok)
+    agent.path(fallback_ko)
+    spec = (agent.verifier("regex", pattern=rf"^\[({rejecting}|{fallback_ok})\]")
+            .policies(verification={"max_attempts": attempts, "on_exhausted": "unverified"}).build())
+    rt = LocalRuntime()
+    rt.deploy(spec)
+    cid = rid("c")
+
+    overridden = rt.submit(Turn(cid, "t1", rejecting))
+    assert overridden["status"] == "unverified" and overridden["path"] == rejecting
+    assert overridden["error"]["class"] == "verification"
+    assert [e["type"] for e in overridden["events"]].count("verification_failed") == attempts
+
+    accepted = rt.submit(Turn(cid, "t2", lenient))
+    assert accepted["status"] == "completed" and accepted["reply"].startswith(f"[{lenient}]")
+
+    assert rt.submit(Turn(cid, "t3", fallback_ok))["status"] == "completed"
+    fallen = rt.submit(Turn(cid, "t4", fallback_ko))
+    assert fallen["status"] == "unverified" and fallen["path"] == fallback_ko
+    assert [e["type"] for e in fallen["events"]].count("verification_failed") == attempts
+
+
+def test_path_verifier_none_disables_verification_and_absent_defaults_to_prefix():
+    open_path, plain = rid("open"), rid("plain")
+    strict = (Agent(rid("a")).route(rules={open_path: [open_path], plain: [plain]}, default=plain)
+              .path(open_path, verifier="none").path(plain)
+              .verifier("regex", pattern=f"^never-{rid()}")
+              .policies(verification={"max_attempts": 1, "on_exhausted": "unverified"}).build())
+    rt = LocalRuntime()
+    rt.deploy(strict)
+    assert rt.submit(Turn(rid("c"), "t1", open_path))["status"] == "completed"
+    assert rt.submit(Turn(rid("c"), "t2", plain))["status"] == "unverified"
+
+    engine = rt.engine
+    assert engine._verifier_for(strict["agent"]["paths"][open_path]) == {"kind": "none"}
+    assert engine._verifier_for(strict["agent"]["paths"][plain]) == strict["agent"]["verifier"]
+
+    undeclared = Agent(rid("a")).route(rules={plain: [plain]}, default=plain).path(plain).build()
+    assert "verifier" not in undeclared["agent"]
+    rt2 = LocalRuntime()
+    rt2.deploy(undeclared)
+    assert rt2.engine._verifier_for(undeclared["agent"]["paths"][plain]) == {"kind": "prefix"}
+    assert rt2.submit(Turn(rid("c"), "t1", plain))["status"] == "completed"
+
+
 def test_python_verifier_and_brain_and_guardrail_bindings():
     seen: List[str] = []
 

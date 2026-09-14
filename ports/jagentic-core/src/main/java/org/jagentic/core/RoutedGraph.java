@@ -32,6 +32,9 @@ public final class RoutedGraph {
     Result verify(String reply, AgentContext ctx);
 
     record Result(boolean ok, String reply) {}
+
+    /** Accepts every reply unchanged: what a declared {@code kind: none} means. */
+    Verifier ACCEPT = (reply, ctx) -> new Result(true, reply);
   }
 
   public static final String PHASE_ATTR = "graph.phase";
@@ -42,6 +45,7 @@ public final class RoutedGraph {
   private final Router router;
   private final Map<String, Agent> paths;
   private final Verifier verifier; // may be null
+  private final Map<String, Verifier> pathVerifiers;
   private final List<Guardrail> guardrails;
   private final List<AgentListener> listeners;
   private final Policies policies;
@@ -64,12 +68,31 @@ public final class RoutedGraph {
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
                      List<Guardrail> guardrails, List<AgentListener> listeners, Policies policies,
                      SagaPlan saga, Map<String, String> suspendUntil) {
+    this(router, paths, verifier, Map.of(), guardrails, listeners, policies, saga, suspendUntil);
+  }
+
+  /**
+   * @param verifier the workflow-level verifier ({@code agent.verifier}) for paths without their own;
+   *     null means no verification on those paths
+   * @param pathVerifiers path name -> that path's own verifier ({@code agent.paths.<name>.verifier}),
+   *     which replaces {@code verifier} for turns routed to it; a path absent here falls back
+   */
+  public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier,
+                     Map<String, Verifier> pathVerifiers, List<Guardrail> guardrails,
+                     List<AgentListener> listeners, Policies policies, SagaPlan saga,
+                     Map<String, String> suspendUntil) {
     if (paths == null || paths.isEmpty()) {
       throw new IllegalArgumentException("RoutedGraph requires at least one path");
     }
     this.router = router;
     this.paths = new LinkedHashMap<>(paths);
     this.verifier = verifier;
+    this.pathVerifiers = pathVerifiers == null ? Map.of() : Map.copyOf(pathVerifiers);
+    for (String name : this.pathVerifiers.keySet()) {
+      if (!this.paths.containsKey(name)) {
+        throw new IllegalArgumentException("verifier declared for unknown path " + name);
+      }
+    }
     this.guardrails = List.copyOf(guardrails == null ? List.of() : guardrails);
     this.listeners = List.copyOf(listeners == null ? List.of() : listeners);
     this.policies = policies == null ? Policies.DEFAULTS : policies;
@@ -91,6 +114,15 @@ public final class RoutedGraph {
 
   public java.util.Set<String> pathNames() {
     return paths.keySet();
+  }
+
+  /**
+   * The verifier that judges turns routed to {@code path}: the path's own when it declares one,
+   * else the workflow-level one; null when neither verifies.
+   */
+  public Verifier verifierFor(String path) {
+    Verifier own = pathVerifiers.get(path);
+    return own != null ? own : verifier;
   }
 
   public TurnResult handle(Event event, AgentContext ctx) {
@@ -173,6 +205,7 @@ public final class RoutedGraph {
     }
     ctx.record(EventType.BRAIN_STARTED, map("path", path));
     Policies.VerificationPolicy vp = policies.verification();
+    Verifier pathVerifier = verifierFor(path);
     String reply = null;
     for (int attempt = 1; attempt <= vp.maxAttempts(); attempt++) {
       try {
@@ -189,9 +222,9 @@ public final class RoutedGraph {
       }
       ctx.record(EventType.REPLY_DRAFTED, map("reply", reply));
       boolean ok = true;
-      if (verifier != null) {
+      if (pathVerifier != null) {
         ctx.store.putAttribute(ctx.conversationId, PHASE_ATTR, "verifier");
-        Verifier.Result v = verifier.verify(reply, ctx);
+        Verifier.Result v = pathVerifier.verify(reply, ctx);
         ok = v.ok();
         reply = v.reply();
       }

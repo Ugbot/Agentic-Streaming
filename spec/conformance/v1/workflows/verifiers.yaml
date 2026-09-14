@@ -1,0 +1,45 @@
+# Verifier resolution (spec/v1/primitives.md, section 5): a path's own verifier judges the turns
+# routed to it; a path without one uses agent.verifier. The agent-level verifier here accepts
+# only replies from the audit and billing paths, so a turn routed to the other two paths shows
+# which verifier actually ran.
+#
+#   audit    path verifier rejects everything; agent.verifier would have accepted `[audit] ...`
+#   chat     path verifier accepts the prefix; agent.verifier would have rejected `[chat] ...`
+#   billing  no path verifier; agent.verifier accepts `[billing] ...`
+#   account  no path verifier; agent.verifier rejects `[account] ...`
+
+spec_version: agentic/v1
+backend: local
+
+agent:
+  id: verifiers
+  router:
+    kind: keyword
+    default: billing
+    rules:
+      audit: [audit]
+      chat: [chat]
+      account: [password]
+  paths:
+    audit:
+      brain: rule
+      prompt: You answer audit questions.
+      verifier: {kind: regex, pattern: "^NEVER_MATCHES"}
+    chat:
+      brain: rule
+      prompt: You make small talk.
+      verifier: {kind: prefix}
+    billing:
+      brain: rule
+      prompt: You answer billing questions.
+    account:
+      brain: rule
+      prompt: You answer account questions.
+  verifier:
+    kind: regex
+    pattern: "^\\[(audit|billing)\\]"
+
+policies:
+  ordering: per-conversation
+  idempotency: turn-id
+  verification: {max_attempts: 2, on_exhausted: unverified}

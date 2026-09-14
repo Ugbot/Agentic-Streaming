@@ -32,6 +32,8 @@ Clojure, and Python owners.
 | `cep-sequence` | a sequence pattern matches in order within its event-time window and fires `on_match` once |
 | `timer-survives-restart` | a pending timer and the logical clock survive a restart; the timer fires once |
 | `parallel-conversations` | concurrently delivered turns on different conversations are isolated |
+| `path-verifier-override` | `paths.<name>.verifier` replaces `agent.verifier` for turns routed to that path |
+| `path-verifier-fallback` | a path without a verifier is judged by `agent.verifier` |
 
 Run them against the reference runtime:
 

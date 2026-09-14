@@ -37,7 +37,7 @@ agent that runs in production, and you get to pick the engine that matches your 
 
 ## Runtimes
 
-The contract is the agentic/v1 spec under [`spec/v1`](spec/v1/primitives.md) and the 22
+The contract is the agentic/v1 spec under [`spec/v1`](spec/v1/primitives.md) and the 24
 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). A runtime counts as
 conformance tested only if it runs those fixtures through its own binding and reports the
 result into the generated [capability matrix](docs/capabilities.md). Today that is seven
