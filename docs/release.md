@@ -262,8 +262,8 @@ None of the following was run; the steps are written down so the release can be 
 
 ## What is intentionally not published
 
-- Nothing goes to Maven Central. The Maven modules (`org.agentic.flink:agentic-flink`,
-  `org.jagentic:jagentic-core`, `org.jagentic.pekko:agentic-pekko`, the PyFlink bridge, the A2A
+- Nothing goes to Maven Central. The Maven modules (`org.jagentic:agentic-flink`,
+  `org.jagentic:jagentic-core`, `org.jagentic:agentic-pekko`, the PyFlink bridge, the A2A
   gateway, `banking-job`, the tool services) keep their pom versions and have no
   `distributionManagement`, signing or central-publishing configuration. This is a decision, not
   an omission; the Java artifacts reach users inside the `agentic-flink` wheel (the shaded jar) and

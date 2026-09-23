@@ -1,6 +1,6 @@
 # Pekko runtime
 
-`agentic-pekko` (`org.jagentic.pekko`, module directory `agentic-pekko/`) runs `agentic/v1`
+`agentic-pekko` (`org.jagentic:agentic-pekko`, module directory `agentic-pekko/`) runs `agentic/v1`
 workflows on Apache Pekko: one persistent actor per conversation, Pekko Persistence as the event
 log, Cluster Sharding as the distributed single writer. It reuses `ports/jagentic-core` for the
 graph, tools, guardrails and memory, so the `pekko` column of the
