@@ -1,7 +1,7 @@
-name: Publish Python package to PyPI
+name: Publish Python packages to PyPI
 
 # Fires on every published GitHub Release.
-# Uses PyPI Trusted Publishing (OIDC) — no API tokens stored in this repo.
+# Uses PyPI Trusted Publishing (OIDC): no API tokens are stored in this repository.
 # Configure the trusted publisher once on https://pypi.org/manage/account/publishing/
 # (project: agentic-flink, owner: Ugbot, repo: Agentic-Streaming, workflow: publish-pypi.yml,
 #  environment: pypi).
@@ -10,9 +10,18 @@ name: Publish Python package to PyPI
 # OIDC token's `repository` claim exactly, so the trusted publisher must be
 # re-registered against Agentic-Streaming on pypi.org or this upload is rejected.
 #
-# The wheel bundles the shaded framework jar (python/setup.py copies target/agentic-flink-*-uber.jar
-# into package data), so the Maven build runs first. The version published is the one the release
-# tag names; the job fails when the tag and python/pyproject.toml disagree.
+# Version: none of the four pyproject.toml files carries a version. setuptools-scm reads it from
+# the release tag (v<PEP 440>, for example v1.0.0rc1), so the checkout must be exactly the tag
+# with its history (fetch-depth 0). tools/check_release_version.py fails the job when the tag is
+# not canonical, when any project resolves to a different version, or when an artifact is missing.
+#
+# All four distributions (pyagentic, agentic-flink, agentic-pyflink, agentic-pipeline) are built,
+# checked and smoke tested together and kept as a workflow artifact. Only the ones listed in
+# PUBLISH_DISTRIBUTIONS are uploaded; see docs/release.md for why the other three are not
+# uploaded yet and what has to happen before they can be added to the list.
+#
+# The agentic-flink wheel bundles the shaded framework jar (python/setup.py copies
+# target/agentic-flink-*-uber.jar into package data), so the Maven build runs first.
 
 on:
   release:
@@ -22,13 +31,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish (for example v1.0.0a2); must match python/pyproject.toml"
+        description: "Release tag to publish (for example v1.0.0rc1)"
         required: true
         type: string
 
+env:
+  # Space separated distribution names whose sdist and wheel are uploaded by the publish job.
+  PUBLISH_DISTRIBUTIONS: agentic-flink
+
 jobs:
   build:
-    name: Build sdist + wheel
+    name: Build, check and smoke test sdists and wheels
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
@@ -36,14 +49,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          # setuptools-scm derives the version from the tag, so it needs the tags and the history.
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Check tag against pyproject version
-        working-directory: python
+      - name: Install build tooling
+        run: python -m pip install --upgrade build twine setuptools-scm
+
+      - name: Check that the tag is canonical and that every project resolves to it
         run: python tools/check_release_version.py "$RELEASE_TAG"
 
       - name: Set up Java 21
@@ -59,37 +77,32 @@ jobs:
       - name: Build the shaded framework jar
         run: ./mvnw -B -ntp -DskipTests package
 
-      - name: Install build tooling
-        run: python -m pip install --upgrade build twine
-
-      - name: Build distributions
-        working-directory: python
+      - name: Build distributions (sdist and wheel for each of the four projects)
         run: |
-          python -m build
-          unzip -l dist/*.whl | grep -E 'agentic_flink/jars/agentic-flink-.*-uber\.jar'
+          set -euo pipefail
+          mkdir -p dist
+          for project in ports/pyagentic python pyflink ports/agentic-pipeline; do
+            echo "== $project"
+            (cd "$project" && rm -rf dist && python -m build)
+            cp "$project"/dist/* dist/
+          done
+          ls -l dist
+          unzip -l dist/agentic_flink-*.whl | grep -E 'agentic_flink/jars/agentic-flink-.*-uber\.jar'
 
-      - name: Check built artifacts carry the tagged version
-        working-directory: python
-        run: python tools/check_release_version.py "$RELEASE_TAG" dist/*
+      - name: Check that every artifact carries the tagged version (sdist and wheel, all four)
+        run: python tools/check_release_version.py "$RELEASE_TAG" --complete dist/*
 
       - name: Run twine check
-        working-directory: python
-        run: python -m twine check dist/*
+        run: python -m twine check --strict dist/*
 
-      - name: Smoke test the wheel in a clean venv
-        run: |
-          python -m venv /tmp/smoke-venv
-          /tmp/smoke-venv/bin/pip install python/dist/*.whl
-          mkdir -p /tmp/smoke && cp python/tests/smoke_clean_install.py /tmp/smoke/
-          cd /tmp/smoke
-          AGENTIC_SPEC_ROOT="$GITHUB_WORKSPACE/spec" /tmp/smoke-venv/bin/python smoke_clean_install.py \
-            "$GITHUB_WORKSPACE/spec/conformance/v1/fixtures/01-routing-keyword.yaml"
+      - name: Smoke test the wheels in a fresh virtualenv (install, import, one fixture per runtime)
+        run: RUNNER=venv DIST=dist tools/release_dry_run.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: python-dist
-          path: python/dist/*
+          path: dist/*
           if-no-files-found: error
 
   publish:
@@ -110,10 +123,21 @@ jobs:
           name: python-dist
           path: dist
 
+      - name: Select the distributions to upload
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          for name in $PUBLISH_DISTRIBUTIONS; do
+            stem="${name//-/_}"
+            cp dist/"$stem"-*.whl dist/"$stem"-*.tar.gz upload/
+          done
+          echo "uploading:"
+          ls -l upload
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist
-          # print-hash: makes the publish log show the wheel SHA256 — handy for
+          packages-dir: upload
+          # print-hash: makes the publish log show the wheel SHA256, for
           # cross-checking against the PyPI page later.
           print-hash: true

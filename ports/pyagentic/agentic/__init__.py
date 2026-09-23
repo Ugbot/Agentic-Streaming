@@ -6,22 +6,28 @@
     spec.run(runtime="local", text="refund me", conversation_id="c1", turn_id="t1")
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _distribution_version
+
 from .bindings import Bindings, BrainContext
 from .errors import (
-                     AgenticError,
-                     CapabilityError,
-                     GuardrailError,
-                     RuntimeNotAvailableError,
-                     ToolError,
-                     ValidationError,
-                     VerificationError,
+    AgenticError,
+    CapabilityError,
+    GuardrailError,
+    RuntimeNotAvailableError,
+    ToolError,
+    ValidationError,
+    VerificationError,
 )
 from .events import Event, Turn
 from .runtime import Runtime, available_runtimes, get_runtime, register_runtime
 from .spec import Agent, AgentSpec, load
 from .tools import Delegation
 
-__version__ = "1.0.0"
+try:
+    __version__ = _distribution_version("pyagentic")
+except PackageNotFoundError:  # imported from a checkout that was never installed
+    __version__ = "0+unknown"
 
 __all__ = [
     "Agent", "AgentSpec", "load", "Turn", "Event", "Delegation", "Bindings", "BrainContext",

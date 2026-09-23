@@ -1,26 +1,51 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyagentic"
-version = "1.0.0"
+# The version is the release tag (v<PEP 440>) of the repository, read by setuptools-scm.
+# The four Python packages of this repository share one tag, so they always ship together
+# with the same version; see docs/release.md.
+dynamic = ["version"]
 description = "Agentic Streaming v1 in pure Python: one workflow IR, the `agentic` API surface, and the local reference runtime"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Agentic Streaming contributors" }]
+keywords = ["agentic", "agents", "event-sourcing", "streaming", "workflow"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
 dependencies = [
     "PyYAML>=6.0,<7",
     "jsonschema>=4.18,<5",
 ]
 
 [project.optional-dependencies]
-# JVM-backed runtimes register themselves in the `agentic.runtimes` entry-point group.
-flink = ["agentic-flink>=0.1,<1"]
-pyflink = ["agentic-pyflink>=1.0.0a1,<2"]
-jvm = ["agentic-flink>=0.1,<1"]
+# JVM-backed runtimes register themselves in the `agentic.runtimes` entry-point group. They are
+# built from the same repository and the same tag as this package, so no version range is pinned
+# here: install the matching version of both.
+flink = ["agentic-flink; python_version >= '3.10'"]
+pyflink = ["agentic-pyflink; python_version >= '3.10'"]
+jvm = ["agentic-flink; python_version >= '3.10'"]
 test = ["pytest>=7,<9"]
-dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "pip-tools>=7,<8"]
+dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1"]
+
+[project.urls]
+Homepage = "https://github.com/Ugbot/Agentic-Streaming"
+Repository = "https://github.com/Ugbot/Agentic-Streaming"
+Issues = "https://github.com/Ugbot/Agentic-Streaming/issues"
+Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/ports/pyagentic/README.md"
 
 [project.entry-points."agentic.runtimes"]
 local = "agentic.runtime:LocalRuntime"
@@ -29,11 +54,25 @@ local = "agentic.runtime:LocalRuntime"
 [project.entry-points."agentic.conformance"]
 pyagentic = "agentic.conformance:matrix_binding"
 
+# Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
+# install or use the wheel.
+[dependency-groups]
+dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "build>=1.2", "twine>=5"]
+
+[tool.uv.sources]
+agentic-flink = { path = "../../python", editable = true }
+agentic-pyflink = { path = "../../pyflink", editable = true }
+
+[tool.setuptools_scm]
+root = "../.."
+local_scheme = "no-local-version"
+
 [tool.setuptools.packages.find]
 include = ["agentic*", "pyagentic*"]
 
 [tool.setuptools.package-data]
 agentic = ["py.typed", "schemas/*.json"]
+pyagentic = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

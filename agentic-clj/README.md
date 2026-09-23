@@ -99,6 +99,31 @@ clojure -M:mcp           # MCP stdio server over the tool registry
 clojure -M:time-travel   # Datomic transcript time-travel - replay the conversation `as-of` an earlier point
 ```
 
+## Packaging
+
+`build.clj` (tools.build, alias `:build`) turns this module into a library artifact with the
+coordinates `io.github.ugbot/agentic-clj`:
+
+```bash
+clojure -T:build version   # print the version the next two commands use
+clojure -T:build jar       # target/agentic-clj-<version>.jar with its pom (also copied to target/pom.xml)
+clojure -T:build install   # the same jar and pom into the local ~/.m2 repository
+clojure -T:build clean     # remove target/
+```
+
+The version is not written anywhere in this directory. `build/agentic/build/version.clj` derives it
+from the repository's release tags with the rule setuptools-scm applies to the Python distributions
+(`tools/check_release_version.py` at the repository root), so one tag names one version across
+every artifact: a checkout exactly at `v1.0.0rc1` builds `1.0.0rc1`; three commits after it build
+`1.0.0rc2.dev3`; a checkout with no `v*` tag builds `0.1.dev<commit count>`. A tag that is not `v` plus
+a canonical PEP 440 version fails the build. `test/agentic/build_version_test.clj` pins these rules.
+
+The pom lists the `:deps` of `deps.edn` (aliases excluded), the Apache-2.0 license, and the
+`<scm>` block with the tag when the build is exactly at one, otherwise the commit. A consumer
+resolves an installed build with `{:deps {io.github.ugbot/agentic-clj {:mvn/version "<version>"}}}`.
+Nothing in `build.clj` talks to Clojars; the publishing steps are written down, and deliberately
+not automated, in `docs/release.md` at the repository root.
+
 ### Time-travel over the transcript
 
 Because every message is an immutable datom, any past state of a conversation is just a query `as-of`

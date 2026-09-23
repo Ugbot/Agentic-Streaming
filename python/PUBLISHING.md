@@ -14,10 +14,13 @@ about 250 MiB; PyPI's default per-file limit is 100 MiB and a project file size 
 increase must be requested at https://pypi.org/help/#file-size-limit before the first
 upload succeeds.
 
-The publish workflow derives the version from the release tag (`v<version>`) and fails
-before building when the tag and `python/pyproject.toml` disagree
-(`python/tools/check_release_version.py`), so a stale static version can never be
-published under a new tag.
+`python/pyproject.toml` carries no version. setuptools-scm reads it from the release tag
+(`v<version>`), the same mechanism the other three Python distributions use, and the
+publish workflow fails before building when the tag is not canonical or any of the four
+projects resolves to a different version (`tools/check_release_version.py` at the
+repository root). The full release flow, including the other distributions and the
+Clojure artifact, is in [`docs/release.md`](../docs/release.md); this page keeps the
+PyPI account and trusted publisher setup for `agentic-flink`.
 
 ---
 
@@ -74,11 +77,13 @@ That's the entire one-time setup.
 
 ### Rehearse on TestPyPI first (recommended)
 
-1. Bump `version` in `python/pyproject.toml`
-   (e.g. `1.0.0a1` → `1.0.0a2` or `1.0.0rc1`)
-2. Commit and push to `main`
-3. Go to **Actions → Publish Python package to TestPyPI → Run workflow**
-4. After it succeeds, install from TestPyPI to verify:
+1. Tag the commit with a pre-release version and push the tag:
+   ```bash
+   git tag -a v1.0.0rc1 -m "agentic 1.0.0rc1"
+   git push origin v1.0.0rc1
+   ```
+2. Go to **Actions → Publish Python packages to TestPyPI → Run workflow** and enter the tag
+3. After it succeeds, install from TestPyPI to verify:
    ```bash
    pip install -i https://test.pypi.org/simple/ \
      --extra-index-url https://pypi.org/simple/ \
@@ -88,25 +93,25 @@ That's the entire one-time setup.
 
 ### Real release
 
-1. Bump `version` in `python/pyproject.toml` to the real number
-   (e.g. `1.0.0`); the tag in the next step must be `v` plus exactly this value
-2. Commit, push, and tag:
+1. Tag the commit with the release version and push the tag; the version is `v` plus a
+   canonical PEP 440 version, nothing is edited in `pyproject.toml`:
    ```bash
-   git tag v1.0.0
+   git tag -a v1.0.0 -m "agentic 1.0.0"
    git push origin v1.0.0
    ```
-3. Cut a GitHub Release pointing at the tag:
+2. Cut a GitHub Release pointing at the tag:
    ```bash
    gh release create v1.0.0 --generate-notes
    ```
    (Or use the GitHub UI: Releases → Draft a new release.)
-4. The `publish-pypi.yml` workflow fires automatically on release-publish. It checks the
-   tag against `pyproject.toml`, builds the core and the shaded jar with `./mvnw`, builds
-   the distributions, checks the artifact versions, installs the wheel into a clean venv
-   and runs `python/tests/smoke_clean_install.py` (JVM start plus fixture 01 on the
-   `local-jvm` runtime) before anything is uploaded. The manual `workflow_dispatch` run
-   takes the tag as an input.
-5. Watch it: https://github.com/Ugbot/Agentic-Streaming/actions
+3. The `publish-pypi.yml` workflow fires automatically on release-publish. It checks the
+   tag, builds the core and the shaded jar with `./mvnw`, builds all four distributions,
+   checks the artifact versions, runs `twine check`, and runs `tools/release_dry_run.sh`
+   in a fresh venv (imports, one fixture on the `local` and `local-jvm` runtimes, one
+   `agentic-pipeline` turn) before anything is uploaded. Only the distributions named in
+   the workflow's `PUBLISH_DISTRIBUTIONS` variable (today `agentic-flink`) are uploaded.
+   The manual `workflow_dispatch` run takes the tag as an input.
+4. Watch it: https://github.com/Ugbot/Agentic-Streaming/actions
 
 PyPI cannot accept the same `version` twice. If a publish fails partway, bump
 to the next pre-release number rather than retrying with the same one.
@@ -121,23 +126,22 @@ Always safe to build locally to check the artifacts before pushing:
 ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
 ./mvnw -DskipTests package          # optional: setup.py runs these two when target/ has no uber jar
 cd python
-pip install --upgrade build twine
+pip install --upgrade build twine setuptools-scm
 rm -rf dist build *.egg-info agentic_flink/jars/*.jar
 python -m build
-python tools/check_release_version.py v$(python -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])') dist/*
-python -m twine check dist/*
+python ../tools/check_release_version.py "$(python -m setuptools_scm)" dist/*
+python -m twine check --strict dist/*
 unzip -l dist/*.whl | grep uber.jar
 ```
 
-You should see `agentic_flink/`, `agentic_flink/jars/agentic-flink-<v>-uber.jar`,
-`agentic_flink-<ver>.dist-info/`, and the `LICENSE` inside the wheel. To prove the
-wheel works without the checkout:
-
-```bash
-python -m venv /tmp/smoke-venv && /tmp/smoke-venv/bin/pip install dist/*.whl
-cd /tmp && AGENTIC_SPEC_ROOT=<checkout>/spec /tmp/smoke-venv/bin/python \
-  <checkout>/python/tests/smoke_clean_install.py <checkout>/spec/conformance/v1/fixtures/01-routing-keyword.yaml
-```
+You should see `agentic_flink/`, `agentic_flink/py.typed`,
+`agentic_flink/jars/agentic-flink-<v>-uber.jar`, `agentic_flink-<ver>.dist-info/`, and the
+`LICENSE` inside the wheel. On a checkout that is not exactly at a tag the version is a
+development version such as `0.1.dev199`; the check above accepts it, the workflows do not.
+To prove the wheels work without the checkout, run `tools/release_dry_run.sh` at the
+repository root (Podman, `python:3.12`; `RUNNER=venv` for a virtualenv instead), which
+installs all four wheels into an empty environment and runs
+`python/tests/smoke_clean_install.py` among the other checks.
 
 ---
 

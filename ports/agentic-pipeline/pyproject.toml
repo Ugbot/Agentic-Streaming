@@ -1,17 +1,35 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-pipeline"
-version = "0.1.0"
+# The version is the release tag (v<PEP 440>) of the repository, read by setuptools-scm.
+# The four Python packages of this repository share one tag; see docs/release.md.
+dynamic = ["version"]
 description = "Declarative pipeline.yaml loader for the pure Python agentic core: build once, run on the local, Celery or NATS backend"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Agentic Streaming contributors" }]
+keywords = ["agentic", "agents", "pipeline", "yaml", "celery", "nats"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
 dependencies = [
-    # The pure core. Not on PyPI: install from the checkout first (pip install -e ports/pyagentic).
-    "pyagentic>=1.0,<2",
+    # The pure core (ports/pyagentic). Built from the same repository and tag as this package, so
+    # no version range is pinned: install the matching pyagentic wheel, or from a checkout
+    # `pip install -e ports/pyagentic -e ports/agentic-pipeline`.
+    "pyagentic",
     "PyYAML>=6.0,<7",
 ]
 
@@ -27,8 +45,28 @@ test = ["pytest>=7,<9"]
 [project.scripts]
 agentic-pipeline = "agentic_pipeline.__main__:main"
 
+[project.urls]
+Repository = "https://github.com/Ugbot/Agentic-Streaming"
+Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/ports/agentic-pipeline/README.md"
+
+# Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
+# install or use the wheel.
+[dependency-groups]
+dev = ["pytest>=7,<9", "build>=1.2", "twine>=5"]
+
+# The name `pyagentic` on PyPI is an unrelated project; uv resolves the core from the checkout.
+[tool.uv.sources]
+pyagentic = { path = "../pyagentic", editable = true }
+
+[tool.setuptools_scm]
+root = "../.."
+local_scheme = "no-local-version"
+
 [tool.setuptools.packages.find]
 include = ["agentic_pipeline*"]
+
+[tool.setuptools.package-data]
+agentic_pipeline = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

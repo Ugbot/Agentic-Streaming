@@ -77,10 +77,13 @@ Python runtime implements them; both engines fail with a message that lists the 
 ## Develop
 
 ```
-python -m venv .venv && .venv/bin/pip install -e '.[dev]'
+uv sync                                             # .venv from uv.lock (or: python -m venv .venv && .venv/bin/pip install -e '.[dev]')
 .venv/bin/pytest
 .venv/bin/ruff check agentic tests/test_agentic_*.py
 .venv/bin/mypy
 .venv/bin/python -m agentic.conformance             # 15 fixtures against the local runtime
-.venv/bin/pip-compile -o requirements.lock pyproject.toml   # refresh the lock
+uv lock                                             # refresh uv.lock after changing dependencies
 ```
+
+The version is not written in `pyproject.toml`; setuptools-scm derives it from the repository's
+release tag (see `docs/release.md`).
