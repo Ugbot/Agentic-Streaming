@@ -212,6 +212,11 @@ runs the suite, including the conformance fixtures.
 
 Python is the block at the top of this page. `ports/agentic-pipeline` has no package metadata,
 so it is not pip-installable and must be on `PYTHONPATH`; `ports/pyagentic` is installable.
+The two levels of the Python API (high-level `run(runtime=...)` and full-control
+`Runtime.deploy(spec)`) on pure Python, the JVM facade and PyFlink are in [python.md](python.md).
+
+What each of these runtimes is made of, and what they all guarantee for an `agentic/v1`
+workflow, is one page each under [runtimes/](runtimes/README.md).
 
 ## Next steps
 
@@ -219,8 +224,8 @@ so it is not pip-installable and must be on `PYTHONPATH`; `ports/pyagentic` is i
 2. [reference/examples.md](reference/examples.md) for the example catalogue.
 3. [reference/agent-framework.md](reference/agent-framework.md) for the framework API.
 4. [reference/troubleshooting.md](reference/troubleshooting.md) for common failures.
-5. [portability/parity-matrix.md](portability/parity-matrix.md) and
-   [capabilities.md](capabilities.md) for what each runtime has proven.
+5. [capabilities.md](capabilities.md) for what each runtime has proven, and
+   [runtimes/](runtimes/README.md) for what each runtime is made of.
 
 ## Common questions
 

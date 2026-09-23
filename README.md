@@ -43,20 +43,22 @@ conformance tested only if it runs those fixtures through its own binding and re
 result into the generated [capability matrix](docs/capabilities.md). Today that is seven
 runtimes and two facade bindings:
 
-| Runtime | Binding | Notes |
-|---------|---------|-------|
-| reference | `spec/tools/reference_runtime.py` | the oracle for the fixtures, not a production runtime |
-| jvm-core | `ports/jagentic-core` JUnit `ConformanceTest` | the Flink-free Java core |
-| flink | root module JUnit `FlinkConformanceTest` | the Flink framework, on a local MiniCluster |
-| pekko | `agentic-pekko` JUnit `PekkoConformanceTest` | event-sourced actors |
-| clojure | `agentic-clj` `agentic.conformance/run-all` | pure Clojure on Datomic |
-| python | `ports/pyagentic` `agentic.conformance:matrix_binding` | the pure Python core |
-| pyflink | `pyflink` `agentic_pyflink.conformance` | PyFlink operators |
-| python-jvm, python-flink | `python/agentic_flink` `conformance.run_all` | the JPype facade over jvm-core and over Flink |
+| Runtime | Binding | Notes | Page |
+|---------|---------|-------|------|
+| reference | `spec/tools/reference_runtime.py` | the oracle for the fixtures, not a production runtime | [common primitives](docs/runtimes/common-primitives.md) |
+| jvm-core | `ports/jagentic-core` JUnit `ConformanceTest` | the Flink-free Java core | [common primitives](docs/runtimes/common-primitives.md#the-cores) |
+| flink | root module JUnit `FlinkConformanceTest` | the Flink framework, on a local MiniCluster | [Flink](docs/runtimes/flink.md) |
+| pekko | `agentic-pekko` JUnit `PekkoConformanceTest` | event-sourced actors | [Pekko](docs/runtimes/pekko.md) |
+| clojure | `agentic-clj` `agentic.conformance/run-all` | pure Clojure on Datomic | [Clojure](docs/runtimes/clojure.md) |
+| python | `ports/pyagentic` `agentic.conformance:matrix_binding` | the pure Python core | [pure Python](docs/runtimes/python.md) |
+| pyflink | `pyflink` `agentic_pyflink.conformance` | PyFlink operators | [PyFlink](docs/runtimes/pyflink.md) |
+| python-jvm, python-flink | `python/agentic_flink` `conformance.run_all` | the JPype facade over jvm-core and over Flink | [Python facade](docs/runtimes/python-facade.md) |
 
 Which capability each of them passes, skips, or fails is in
 [`docs/capabilities.md`](docs/capabilities.md), regenerated from a run of the fixtures. A
-skipped fixture is an explicit `unsupported` declaration, never a pass.
+skipped fixture is an explicit `unsupported` declaration, never a pass. What each runtime is
+made of, and what agentic/v1 guarantees on all of them, is under
+[`docs/runtimes/`](docs/runtimes/README.md).
 
 Crash durability is a separate claim. `durable_store: supported` in the matrix means the three
 fixtures that require it (`replay-after-restart`, `suspend-resume`, `timer-survives-restart`)
@@ -195,15 +197,27 @@ the operator.
 <details>
 <summary><b>Build an agent: Python</b></summary>
 
-The [`agentic-flink` Python package](docs/python.md) has two paths: PyFlink-native (real
-Flink operators via PEMJA, see [`docs/pyflink-integration.md`](docs/pyflink-integration.md))
-and JPype standalone (an in-process JVM for notebooks and scripts).
+The Python API has two levels on the same agentic/v1 workflow, documented in
+[`docs/python.md`](docs/python.md): a high-level `load(...)` / `Agent` / `run(runtime=...)` API
+and a full-control `Runtime.deploy(spec)` API, each available on pure Python
+(`ports/pyagentic`), the JVM core and Flink through the JPype facade (`python/`), and PyFlink
+(`pyflink/`). One workflow, one line to pick the runtime:
+
+```python
+from agentic_flink import load   # or: from agentic import load  (pure Python)
+
+spec = load("spec/conformance/v1/workflows/support.yaml")
+result = spec.run(runtime="flink-jvm", text="what is my balance?", conversation_id="c1", turn_id="t1")
+```
+
+The facade also keeps the legacy Flink DSL (`Agent.builder()` and `@tool`), a pure-Flink API
+outside the agentic/v1 conformance matrix:
 
 ```python
 import agentic_flink as af
-from agentic_flink import Agent, ChatSetup, langchain4j_ollama, tool
+from agentic_flink import Agent, ChatSetup, flink_jars, langchain4j_ollama, tool
 
-af.start_jvm()
+af.start_jvm(extra_jars=flink_jars())
 
 @tool
 def add(a: int, b: int) -> int:
@@ -221,8 +235,9 @@ agent = (
 )
 ```
 
-Full guide: [`docs/python.md`](docs/python.md). Examples live under
-`python/agentic_flink/examples/`.
+Full guide: [`docs/python.md`](docs/python.md); the three Flink surfaces are told apart in
+[`docs/pyflink.md`](docs/pyflink.md). Examples live under `python/agentic_flink/examples/` and
+`docs/snippets/python/`.
 
 </details>
 
@@ -298,9 +313,10 @@ stores:  { conversation: { kind: redis, url: "${AGENTIC_REDIS_URL}" } }
 External services (Redis/Valkey, Kafka/Fluss, Postgres, NATS) sit behind interfaces and come
 up via [`examples/compose/externals.yml`](examples/compose/externals.yml).
 
-See the [pipeline reference](docs/portability/pipelines.md), the
-[parity matrix](docs/portability/parity-matrix.md) for what each backend can and cannot do,
-and [choosing a backend](docs/portability/choosing-a-backend.md).
+See the [pipeline reference](docs/portability/pipelines.md), the generated
+[capability matrix](docs/capabilities.md) and the [runtime pages](docs/runtimes/README.md) for
+what each conformance tested runtime can and cannot do, and
+[choosing a backend](docs/portability/choosing-a-backend.md).
 
 ## The model: an agent as a materialized view over a stream of events
 
@@ -332,7 +348,8 @@ value, in order, durably, per key. See the
 | Portability pack | three Flink-free cores (`pyagentic`, `jagentic-core`, `goagentic`), of which the Python and Java cores are conformance tested, plus experimental adapters for twelve other engines and two HTTP gateways that run the banking example but not the fixtures (see [Runtimes](#runtimes)). The cores are standalone agent frameworks: LLM and embedding libraries, structured output, skills, MCP and A2A clients, saga, context-window management, an in-process HNSW index, vector/long-term/conversation store SPIs (Qdrant, Postgres, Redis), web toolkit, and a DL inference SPI | [`ports/`](ports/) |
 | Declarative pipelines | one `pipeline.yaml` (or EDN) targeting any backend, with loaders in Python, the JVM, Go, and Clojure | [`pipelines.md`](docs/portability/pipelines.md) |
 | Tool services | the toolkit (web scraping, Tika, RAG, inference, utilities) as standalone, framework-agnostic tools any LLM or framework can call over MCP, REST, gRPC, or Kafka/Redis (Quarkus, no Flink) | [`tool-services/`](tool-services/), [`tool-services.md`](docs/portability/tool-services.md) |
-| Design docs | per-engine mapping, parity matrix, choosing a backend | [`docs/portability/`](docs/portability/) |
+| Runtime pages | what each conformance tested runtime is made of, with a matrix excerpt per page | [`docs/runtimes/`](docs/runtimes/README.md) |
+| Design docs | per-engine mapping, choosing a backend | [`docs/portability/`](docs/portability/) |
 
 ## Architecture
 
@@ -606,7 +623,8 @@ For shorter recipes, see [docs/cookbook.md](docs/cookbook.md).
 | [docs/portability/pekko.md](docs/portability/pekko.md), [clojure.md](docs/portability/clojure.md) | per-engine design notes for the two newest runtimes |
 | [docs/portability/pipelines.md](docs/portability/pipelines.md) | declarative `pipeline.yaml` schema and loaders (Python, JVM, Go) |
 | [docs/security.md](docs/security.md) | token model, egress policy and dev-only defaults for the network-facing services |
-| [docs/portability/parity-matrix.md](docs/portability/parity-matrix.md) | what each backend can do, plus limitations and three-core parity |
+| [docs/capabilities.md](docs/capabilities.md) | the generated agentic/v1 capability matrix, the only place a capability status is authored |
+| [docs/runtimes/](docs/runtimes/README.md) | one page per runtime: common primitives, Flink, Pekko, Clojure, pure Python, Python facade, PyFlink, experimental adapters |
 | [docs/portability/choosing-a-backend.md](docs/portability/choosing-a-backend.md) | decision guide across Flink and the experimental adapters |
 | [docs/portability/stream-stateful-core.md](docs/portability/stream-stateful-core.md) | the stream-stateful core: CEP, timers, windows, replay, suspend/resume, tracing |
 | [docs/concepts.md](docs/concepts.md) | core concepts: agents, events, tools, memory, the routed graph |
@@ -617,8 +635,9 @@ For shorter recipes, see [docs/cookbook.md](docs/cookbook.md).
 | [docs/channels.md](docs/channels.md) | `Channel<T>` SPI: Kafka, Postgres CDC, Redis, webhook, tool transport |
 | [docs/corpus.md](docs/corpus.md) | the `Corpus` abstraction and its three flavours |
 | [docs/web-toolkit.md](docs/web-toolkit.md) | Jsoup, crawler-commons, Tika: robots-aware fetch and extract |
-| [docs/python.md](docs/python.md) | the Python API (JPype standalone) and a pointer to PyFlink-native |
-| [docs/pyflink-integration.md](docs/pyflink-integration.md) | PyFlink-native: agent plan, CompileUtils, PEMJA |
+| [docs/python.md](docs/python.md) | the two-level Python API on agentic/v1 (pure Python, JVM facade, PyFlink) and the legacy Flink DSL |
+| [docs/pyflink.md](docs/pyflink.md) | the three ways Flink is reachable from Python, told apart |
+| [docs/pyflink-integration.md](docs/pyflink-integration.md) | the legacy DSL's declarative plan compiler for PyFlink |
 | [docs/cookbook.md](docs/cookbook.md) | short recipes for common SPI combinations |
 | [docs/examples/](docs/examples/) | long-form walkthroughs of the headline use cases |
 | [docs/getting-started.md](docs/getting-started.md) | setup guide and first steps |

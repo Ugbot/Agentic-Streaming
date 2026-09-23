@@ -1,16 +1,21 @@
-# PyFlink-native Python integration
+# PyFlink-native agent plans (legacy Flink DSL)
 
-The recommended path for shipping Python-defined agents as part of a real
-PyFlink job (`flink run -py ...`). Python builds a declarative
-**agent plan** (JSON) from decorated user code; the plan is handed to
-Java's `CompileUtils.attachAgent` via PyFlink's existing Py4J gateway,
-which inserts an `AgentPlanProcessFunction` into the job graph. At
-runtime the function invokes Python tools and actions through PEMJA
-(Python embedded in the JVM) on the operator's own thread, no IPC, no
+This page documents `agentic_flink.pyflink`, the Python front end of the legacy Flink
+framework: decorated Python classes compiled to an agent plan and attached to a PyFlink job.
+It is supported and kept. It does not take an `agentic/v1` workflow document and it has no
+column in the generated matrix, so nothing on this page is a conformance claim. The
+`agentic/v1` path for PyFlink is the `agentic-pyflink` package, documented on
+[python.md](python.md) and the [PyFlink runtime page](runtimes/pyflink.md); the overview of
+all three Python-on-Flink paths is [pyflink.md](pyflink.md). The plan format below is covered by
+`python/tests/test_pyflink_plan.py` and `python/tests/test_pyflink_examples.py`.
+
+Python builds a declarative agent plan (JSON) from decorated user code; the plan is handed to
+Java's `CompileUtils.attachAgent` via PyFlink's existing Py4J gateway, which inserts an
+`AgentPlanProcessFunction` into the job graph. At runtime the function invokes Python tools and
+actions through PEMJA (Python embedded in the JVM) on the operator's own thread, no IPC, no
 second process.
 
-This is parallel to Apache Flink Agents' upstream pattern, adapted to
-this framework's SPIs.
+This is parallel to Apache Flink Agents' upstream pattern, adapted to this framework's SPIs.
 
 ## Architecture
 
@@ -164,6 +169,8 @@ JVM or PyFlink installation, which is what lets the offline tests run.
 * You want JNI-level access to arbitrary Java classes (not just the
   agent operator surface).
 
-The two paths can coexist in one project but **cannot share a process**:
+The two paths can coexist in one project but cannot share a process:
 JPype boots a JVM inside Python; PyFlink launches the JVM separately and
-talks to it via Py4J. Pick one per process.
+talks to it via Py4J. Pick one per process. The same rule applies to the
+`agentic/v1` runtimes: `agentic_pyflink` (Py4J) and `agentic_flink`'s
+`flink-jvm` (JPype) are one-per-process too.
