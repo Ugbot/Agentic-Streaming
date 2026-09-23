@@ -62,6 +62,12 @@ import org.jagentic.pekko.serialization.CborSerializable;
  * deliver, the entity arms a Pekko timer, and on expiry appends {@code timer_fired} and processes the
  * carried event as an ordinary turn (typically a {@link Event#resume resume signal} for a suspended
  * turn). Pending timers are re-armed from the fold after recovery, so a restart cannot lose them.</p>
+ *
+ * <p>Workflow {@code timers} declared in the document (spec section 8) are a different kind: the
+ * core graph schedules and fires them inside turns against {@link AgentDeps#clock()} and the
+ * conversation watermark, both folded from the journal by {@link ConversationState}. Their
+ * {@code timer_scheduled} entries carry {@code clock} and {@code due_ms} but no event to deliver, so
+ * no Pekko timer is armed for them; recovery rebuilds them through the same fold.</p>
  */
 public final class ConversationEntity
     extends EventSourcedBehavior<ConversationEntity.Command, ConversationEntity.Appended, ConversationEntity.State> {
@@ -207,7 +213,7 @@ public final class ConversationEntity
       }
       events.add(e);
       folded = ConversationState.fold(events, window);
-      if (e.is(EventType.TIMER_SCHEDULED)) {
+      if (e.is(EventType.TIMER_SCHEDULED) && e.payload().containsKey("event")) {
         Map<String, Object> p = e.payload();
         String id = String.valueOf(p.get("timer_id"));
         timers.put(id, new PendingTimer(id, ((Number) p.get("fire_at")).longValue(),
@@ -307,6 +313,7 @@ public final class ConversationEntity
     Event event = cmd.event();
     AgentContext ctx = new AgentContext(conversationId, event.turnId(), event.userId(), store,
         new KeyedStateStore.InMemory(), deps.tools(), deps.retriever(), log, deps.policies());
+    ctx.clock = deps.clock();
     TurnResult result;
     try {
       result = deps.graph().handle(event, ctx);

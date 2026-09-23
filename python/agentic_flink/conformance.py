@@ -8,8 +8,10 @@ Semantics mirror ``spec/tools/run_conformance.py`` (whose ``check_expectation`` 
 reused verbatim when the spec tree is reachable): a fixture whose ``requires`` lists a capability
 the runtime does not report as ``supported`` or ``partial`` is a **skip**, never a pass; a
 fixture that needs a runtime restart is a skip unless the runtime exposes ``restart()``; a
-fixture with ``concurrent_with`` turns uses ``submit_async`` when available and one bounded
-``submit_all`` batch otherwise.
+fixture that advances the logical clock (``advance_time_ms``) is a skip unless the runtime
+exposes ``advance_time(ms)``; a fixture with ``concurrent_with`` turns uses ``submit_async``
+when available and one bounded ``submit_all`` batch otherwise. Turn ``metadata`` (event time)
+is passed through to the runtime as is. ``local-jvm`` runs the fixtures on its manual clock.
 """
 
 from __future__ import annotations
@@ -34,6 +36,13 @@ class Restartable(Protocol):
     """Runtimes that can model a fixture's ``restart_runtime`` (state dropped, log kept)."""
 
     def restart(self) -> None: ...
+
+
+@runtime_checkable
+class TimeAdvancing(Protocol):
+    """Runtimes on a logical processing clock the fixture drives (``advance_time_ms``)."""
+
+    def advance_time(self, ms: int) -> int: ...
 
 
 @runtime_checkable
@@ -122,6 +131,8 @@ def run_fixture(path: Path, runtime: Runtime, comparator=None) -> Outcome:
     needs_restart = any(t.get("restart_runtime") for t in turns)
     if needs_restart and not isinstance(runtime, Restartable):
         return Outcome(fixture_id, "skip", f"runtime {runtime.name!r} cannot model restart_runtime")
+    if any(t.get("advance_time_ms") for t in turns) and not isinstance(runtime, TimeAdvancing):
+        return Outcome(fixture_id, "skip", f"runtime {runtime.name!r} cannot model advance_time_ms")
     comparator = comparator or load_comparator()
 
     try:
@@ -155,6 +166,9 @@ def _drive(runtime: Runtime, turns: Sequence[Dict[str, Any]]) -> List[Dict[str, 
         if turn.get("restart_runtime") and isinstance(runtime, Restartable):
             drain()
             runtime.restart()
+        if turn.get("advance_time_ms") and isinstance(runtime, TimeAdvancing):
+            drain()
+            runtime.advance_time(int(turn["advance_time_ms"]))
         event = _event(turn)
         if turn.get("concurrent_with") is not None and isinstance(runtime, AsyncSubmitting):
             pending.append(runtime.submit_async(event))
@@ -177,6 +191,8 @@ def run_all(runtime_name: str, fixtures_dir: Optional[Path] = None, only: Sequen
     unknown = sorted(set(only) - set(ids))
     if unknown:
         raise KeyError(f"unknown fixture id(s) {unknown}; known: {sorted(ids)}")
+    if runtime_name == "local-jvm":
+        runtime_options = {"clock": "manual", **runtime_options}
     outcomes: List[Outcome] = []
     for fixture_id, path in ids.items():
         if only and fixture_id not in only:

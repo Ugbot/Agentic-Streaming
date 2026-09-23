@@ -4,12 +4,15 @@ mismatch is a failure. Missing fixtures are an error, not a skip."""
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
+from typing import Dict
 
 import pytest
 
 from agentic.conformance import Outcome, check_expectation, fixture_paths, fixtures_dir, load_yaml, run_fixture
 from agentic.runtime import LocalRuntime
+from agentic.workflow_timers import ManualClock
 
 PATHS = fixture_paths()
 
@@ -24,7 +27,7 @@ def test_fixtures_are_read_from_the_shared_spec_directory():
 
 @pytest.mark.parametrize("path", PATHS, ids=[p.stem for p in PATHS])
 def test_fixture(path: Path):
-    outcome = run_fixture(path, LocalRuntime)
+    outcome = run_fixture(path)
     if outcome.status == "skip":
         pytest.skip(outcome.reason)
     assert outcome.status == "pass", "\n".join(outcome.problems)
@@ -37,8 +40,8 @@ def test_unsupported_requirement_is_a_skip_never_a_pass():
             caps["retry"] = "not_tested"
             return caps
 
-    baseline = {o.fixture_id: o for o in (run_fixture(p, LocalRuntime) for p in PATHS)}
-    outcomes = [run_fixture(p, Narrow) for p in PATHS]
+    baseline = {o.fixture_id: o for o in (run_fixture(p) for p in PATHS)}
+    outcomes = [run_fixture(p, lambda: Narrow(clock=ManualClock())) for p in PATHS]
     newly_skipped = [o for o in outcomes if o.status == "skip" and baseline[o.fixture_id].status != "skip"]
     assert {o.fixture_id for o in newly_skipped} == {"tool-failure", "retry-tool"}
     assert all("retry=not_tested" in o.reason for o in newly_skipped)
@@ -99,9 +102,25 @@ def test_matrix_binding_entry_point_returns_results_or_a_skip():
         for expected, actual in zip(fixture["expect"], results):
             assert check_expectation(expected, actual) == [], path.name
 
+
+
+def test_fixture_is_skipped_naming_every_capability_the_runtime_withholds():
+    from agentic.conformance import fixture_runtime, run_fixture_document
+
+    withheld = random.choice([["timers"], ["cep"], ["timers", "event_time"]])
+
+    class Withholding(LocalRuntime):
+        name = "withholding"
+
+        def capabilities(self) -> Dict[str, str]:
+            return {**super().capabilities(), **{cap: "unsupported" for cap in withheld}}
+
     fixture = load_yaml(PATHS[0])
     fixture["workflow"] = load_yaml((PATHS[0].parent / fixture.get("workflow_ref", "")).resolve()) \
         if fixture.get("workflow") is None else fixture["workflow"]
-    fixture["requires"] = list(fixture["requires"]) + ["timers"]
-    skipped = matrix_binding(fixture)
-    assert isinstance(skipped, dict) and "timers=unsupported" in skipped["skip"]
+    fixture["requires"] = list(fixture["requires"]) + withheld
+    assert run_fixture_document(fixture, make_runtime=fixture_runtime).status == "pass"
+    skipped = run_fixture_document(fixture, make_runtime=Withholding)
+    assert skipped.status == "skip"
+    for cap in withheld:
+        assert f"{cap}=unsupported" in skipped.reason
