@@ -155,16 +155,18 @@ require_dir() {
   [ -d "$1" ] || die "missing directory $1. ${2:-}"
 }
 
-# Makes sure the shared JVM core is in the local Maven repository (the root module depends on
-# it but it is outside the root reactor). Installs it when absent.
+# Makes sure the shared JVM core (and the reactor parent pom it installs) is in the local Maven
+# repository at the version the root module depends on. Installs it when absent.
 ensure_jagentic_core() {
   require_java21
   require_mvnw
-  local repo
+  local repo version
   repo="$(mvn_q help:evaluate -Dexpression=settings.localRepository -DforceStdout 2>/dev/null || true)"
   [ -n "$repo" ] || repo="${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}"
-  if compgen -G "$repo/org/jagentic/jagentic-core/0.1.0/jagentic-core-0.1.0.jar" >/dev/null; then
-    ok "jagentic-core 0.1.0 is installed"
+  version="$(mvn_q -f ports/jagentic-core/pom.xml help:evaluate -Dexpression=project.version -DforceStdout 2>/dev/null || true)"
+  [ -n "$version" ] || version="1.0.0-SNAPSHOT"
+  if compgen -G "$repo/org/jagentic/jagentic-core/$version/jagentic-core-$version.jar" >/dev/null; then
+    ok "jagentic-core $version is installed"
   else
     info "installing ports/jagentic-core (first run only)"
     mvn_q -f ports/jagentic-core/pom.xml install -DskipTests
