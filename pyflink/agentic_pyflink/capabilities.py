@@ -40,7 +40,12 @@ PROOF: dict[str, str] = {
     "durable_store": "conformance: replay-after-restart, suspend-resume (state survives restart)",
     "parallelism": "test_runtime.py::test_parallel_job_keeps_per_conversation_order (parallelism=2)",
     "cep": "conformance: cep-sequence",
-    "event_time": "conformance: cep-sequence",
+    "event_time": "conformance: cep-sequence, event-time-timer; test_timers.py (watermark monotonicity)",
+    "timers": "conformance: timer-fires, event-time-timer, timer-survives-restart; test_timers.py",
+    "checkpoint_recovery": (
+        "conformance: timer-survives-restart (pending timer and manual clock survive stop-with-savepoint + restore); "
+        "test_timers.py::test_timer_scheduled_before_restart_fires_once_after_it"
+    ),
 }
 
 CAPABILITIES: dict[str, str] = {cid: ("supported" if cid in PROOF else "not_tested") for cid in CAPABILITY_IDS}

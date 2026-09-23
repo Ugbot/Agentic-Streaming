@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.agentic.flink.pipeline.FlinkPipelineRunner;
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
+import org.agentic.flink.runtime.ManualProcessingClock;
 import org.agentic.flink.runtime.TurnResultCodec;
 import org.agentic.flink.runtime.WorkflowTurnFunction;
 import org.agentic.flink.typeinfo.FlinkJson;
@@ -56,11 +57,27 @@ public final class PyFlinkJob {
    */
   public static DataStream<String> assemble(StreamExecutionEnvironment env, String workflowJson,
                                             DataStream<String> turns) throws IOException {
+    return assemble(env, workflowJson, turns, null);
+  }
+
+  /**
+   * As {@link #assemble(StreamExecutionEnvironment, String, DataStream)}, with workflow
+   * {@code timers} reading the {@link ManualProcessingClock} registered under {@code clockId}
+   * instead of the operator's processing time when {@code clockId} is not {@code null}. The Python
+   * side advances that clock through {@link ManualProcessingClock#named(String)} on the same JVM
+   * (PyFlink's local mode runs the cluster inside the gateway process), and keeps the id across
+   * a stop-with-savepoint restart so the reading and the restored pending timers stay aligned.
+   */
+  public static DataStream<String> assemble(StreamExecutionEnvironment env, String workflowJson,
+                                            DataStream<String> turns, String clockId) throws IOException {
     Map<String, Object> spec = parseWorkflow(workflowJson);
     DataStream<Event> events = turns.keyBy(new ConversationKey())
         .map(new JsonToEvent()).name("json->event");
-    DataStream<TurnResult> results =
-        FlinkPipelineRunner.assembleResults(env, spec, events, FlinkRuntimeOptions.fromSpec(spec));
+    FlinkRuntimeOptions options = FlinkRuntimeOptions.fromSpec(spec);
+    if (clockId != null) {
+      options = options.withManualClock(clockId);
+    }
+    DataStream<TurnResult> results = FlinkPipelineRunner.assembleResults(env, spec, events, options);
     return results.map(new ResultToJson()).name("result->json")
         .returns(TypeInformation.of(String.class));
   }
