@@ -102,3 +102,23 @@ def test_peer_tool_delegates(stub_agent):
     tool = peer_tool(stub_agent)
     out = tool({"conversation_id": "c1", "text": "delegate this", "user_id": "u"})
     assert out["reply"] == "echo: delegate this"
+
+
+@pytest.mark.parametrize("key", ["name", "id"])
+def test_builder_registers_declared_a2a_peers_as_tools(stub_agent, key):
+    from pyagentic.builder import build
+
+    spec = {
+        "agent": {
+            "router": {"kind": "keyword", "default": "triage", "rules": {"escalations": ["escalate"]}},
+            "paths": {
+                "triage": {"brain": "rule"},
+                "escalations": {"brain": "rule", "tool_triggers": {"escalate": "specialist"}},
+            },
+        },
+        "a2a": [{key: "specialist", "transport": "http", "url": stub_agent, "retries": 1}],
+    }
+    _graph, tools, _retriever = build(spec)
+    assert "specialist" in tools.ids()
+    out = tools.execute("specialist", {"conversation_id": "c9", "text": "over to you", "user_id": "u"})
+    assert out["reply"] == "echo: over to you"

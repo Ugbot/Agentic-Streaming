@@ -62,6 +62,10 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * </pre>
  */
 public class LiveResearchExample {
+  /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
+  public static final String RERANKER_MODEL_URI =
+      "djl://ai.djl.huggingface.pytorch/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1";
+
 
   public static void main(String[] args) throws Exception {
     String ollamaUrl = ConfigKeys.DEFAULT_OLLAMA_BASE_URL;
@@ -124,10 +128,10 @@ public class LiveResearchExample {
 
     DjlInferenceConnection reranker =
         DjlInferenceConnection.classification(
-            "djl://ai.djl.huggingface.pytorch/cross-encoder/ms-marco-MiniLM-L-6-v2");
+            RERANKER_MODEL_URI);
     InferenceSetup rerankerSetup =
         InferenceSetup.builder()
-            .withModelName("ms-marco-MiniLM-L-6-v2")
+            .withModelName("mmarco-mMiniLMv2-L12-H384-v1")
             .withModelUri(reranker.getDefaultModelUri())
             .build();
 

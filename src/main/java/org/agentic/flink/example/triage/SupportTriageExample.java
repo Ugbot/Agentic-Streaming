@@ -15,6 +15,10 @@ import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatClient;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
+import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.statemachine.AgentState;
+import org.agentic.flink.statemachine.AgentStateMachine;
+import org.agentic.flink.statemachine.AgentTransition;
 import dev.langchain4j.model.chat.ChatModel;
 import java.util.List;
 import java.util.Set;
@@ -41,21 +45,21 @@ import java.util.Set;
  *
  * <p><b>Prerequisites:</b>
  * <pre>
- *   docker compose up -d ollama
- *   docker compose exec ollama ollama pull qwen2.5:3b
- *
- *   # Add to your local pom (or set CLASSPATH):
- *   ai.djl.pytorch:pytorch-native-cpu:0.30.0
+ *   bash examples-bin/run-ollama.sh      # Podman: starts Ollama and pulls qwen2.5:3b
  * </pre>
  *
  * <p><b>To run:</b>
  * <pre>
- *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.triage.SupportTriageExample"
+ *   bash examples-bin/run-support-triage.sh
  * </pre>
  *
  * <p>See {@code docs/examples/support-triage.md} for the walkthrough.
  */
 public class SupportTriageExample {
+  /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
+  public static final String RERANKER_MODEL_URI =
+      "djl://ai.djl.huggingface.pytorch/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1";
+
 
   /** One inbound support ticket. */
   public record Ticket(String id, String customer, String subject, String body) {
@@ -67,6 +71,36 @@ public class SupportTriageExample {
 
   /** A draft reply with its rerank score. */
   public record Draft(String text, double score) {}
+
+  /**
+   * Single-shot triage flow: INITIALIZED starts execution, execution either completes or goes
+   * through supervisor review, and every non-terminal state has a way out so the machine
+   * validates. {@code AgentStateMachine.Builder#withStandardTransitions()} has no transition
+   * out of INITIALIZED, PAUSED or OFFLOADING, so the builder default cannot be used here.
+   */
+  static AgentStateMachine triageStateMachine() {
+    return AgentStateMachine.builder()
+        .withId("support-triage-sm")
+        .withGlobalTimeout(120)
+        .addTransition(step(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED))
+        .addTransition(step(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED))
+        .addTransition(step(AgentState.VALIDATING, AgentState.EXECUTING, AgentEventType.VALIDATION_PASSED))
+        .addTransition(step(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED))
+        .addTransition(step(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED))
+        .addTransition(
+            step(AgentState.EXECUTING, AgentState.SUPERVISOR_REVIEW, AgentEventType.SUPERVISOR_REVIEW_REQUESTED))
+        .addTransition(step(AgentState.EXECUTING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED))
+        .addTransition(step(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED))
+        .addTransition(step(AgentState.SUPERVISOR_REVIEW, AgentState.CORRECTING, AgentEventType.SUPERVISOR_REJECTED))
+        .addTransition(step(AgentState.PAUSED, AgentState.EXECUTING, AgentEventType.FLOW_RESUMED))
+        .addTransition(step(AgentState.OFFLOADING, AgentState.EXECUTING, AgentEventType.STATE_OFFLOADED))
+        .addTransition(step(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED))
+        .build();
+  }
+
+  private static AgentTransition step(AgentState from, AgentState to, AgentEventType on) {
+    return AgentTransition.builder().from(from).to(to).on(on).build();
+  }
 
   public static void main(String[] args) throws Exception {
     String ollamaUrl = ConfigKeys.DEFAULT_OLLAMA_BASE_URL;
@@ -120,10 +154,10 @@ public class SupportTriageExample {
     // ── 4. Cross-encoder reranker for candidate replies ─────────────────────────────────
     DjlInferenceConnection reranker =
         DjlInferenceConnection.classification(
-            "djl://ai.djl.huggingface.pytorch/cross-encoder/ms-marco-MiniLM-L-6-v2");
+            RERANKER_MODEL_URI);
     InferenceSetup rerankerSetup =
         InferenceSetup.builder()
-            .withModelName("ms-marco-MiniLM-L-6-v2")
+            .withModelName("mmarco-mMiniLMv2-L12-H384-v1")
             .withModelUri(reranker.getDefaultModelUri())
             .build();
     Scorer rerank = reranker.bind(null).asScorer();
@@ -147,6 +181,7 @@ public class SupportTriageExample {
             .withGuardrail(abuseFilter)
             .withListener(logger, metrics)
             .withMaxIterations(2)
+            .withStateMachine(triageStateMachine())
             .build();
 
     // ── 7. Process one sample ticket end-to-end ────────────────────────────────────────

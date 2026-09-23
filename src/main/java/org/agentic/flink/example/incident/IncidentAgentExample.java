@@ -16,6 +16,7 @@ import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 import org.agentic.flink.tools.ToolExecutor;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
@@ -67,7 +68,10 @@ public class IncidentAgentExample {
     env.setParallelism(1);
 
     DataStream<MetricSample> metrics =
-        env.fromElements(synthMetrics().toArray(new MetricSample[0]));
+        env.fromElements(synthMetrics().toArray(new MetricSample[0]))
+            .assignTimestampsAndWatermarks(
+                WatermarkStrategy.<MetricSample>forMonotonousTimestamps()
+                    .withTimestampAssigner((sample, previous) -> sample.ts()));
 
     // Per-host sliding-window z-score: GenericInferenceModel because the I/O shape (rolling
     // stats + decision) doesn't fit the typed surfaces.
@@ -114,16 +118,16 @@ public class IncidentAgentExample {
   }
 
   /** Synthetic stream: 18 normal samples then 3 spikes on the same host. */
-  private static java.util.List<MetricSample> synthMetrics() {
+  static java.util.List<MetricSample> synthMetrics() {
     java.util.List<MetricSample> list = new java.util.ArrayList<>();
     long t = System.currentTimeMillis();
     for (int i = 0; i < 18; i++) {
       list.add(new MetricSample("host-a", "latency_ms", 100 + (i % 5), t + i * 30_000L));
     }
-    // Three large spikes — should each trigger an anomaly.
+    // Three escalating spikes, each far enough above the widening window to stay anomalous.
     list.add(new MetricSample("host-a", "latency_ms", 920, t + 19 * 30_000L));
-    list.add(new MetricSample("host-a", "latency_ms", 950, t + 20 * 30_000L));
-    list.add(new MetricSample("host-a", "latency_ms", 970, t + 21 * 30_000L));
+    list.add(new MetricSample("host-a", "latency_ms", 1400, t + 20 * 30_000L));
+    list.add(new MetricSample("host-a", "latency_ms", 2600, t + 21 * 30_000L));
     return list;
   }
 
