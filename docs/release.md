@@ -33,8 +33,8 @@ in every artifact, including the Clojure jar (Maven treats the version as an opa
 same string is used on purpose so the two ecosystems can be compared literally).
 
 Tags that are not canonical are rejected by `tools/check_release_version.py` and by
-`clojure -T:build jar`: `v1.0`, `v1.0.0-rc1`, `v01.0.0`, `v1.0.0RC1`, `v1.0.0+local` and
-`release-1` all fail. Local version labels (`+something`) are never produced:
+`clojure -T:build jar`: `v1.0.0-rc1`, `v01.0.0`, `v1.0.0RC1`, `v1.0.0+local` and `release-1`
+all fail. Local version labels (`+something`) are never produced:
 `local_scheme = "no-local-version"` is set in all four `pyproject.toml` files.
 
 Between tags, or with uncommitted changes, both mechanisms produce a development version and the
