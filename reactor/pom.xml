@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.jagentic</groupId>
+    <artifactId>agentic-streaming-reactor</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Agentic Streaming reactor</name>
+    <description>Parent and aggregator for every first-class JVM module of Agentic Streaming.
+        `./mvnw -f reactor/pom.xml verify` from the repository root builds the whole tree in
+        dependency order; each module still builds on its own with `./mvnw -f MODULE/pom.xml`
+        once its upstream modules are installed.</description>
+
+    <!--
+    Layout decision (C1). The root pom.xml stays the Flink framework module (its sources live at
+    src/, its shaded jar at target/agentic-flink-*-uber.jar, and python/, pyflink/, the compose
+    files and every documented `./mvnw ...` command at the repository root depend on that). The
+    aggregator therefore lives here, one level down, and lists the root module as "..".
+    Every module names this pom as its parent through <relativePath>, so no install of the parent
+    is needed before a single module can be built. When a module is installed on its own
+    (`./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`, the documented first step in
+    many READMEs) this parent is installed alongside it (see the maven-install-plugin execution
+    below): the module's installed pom names this parent, and a downstream `-f MODULE/pom.xml`
+    build resolves that parent from the local repository, not through <relativePath>.
+
+    One groupId (org.jagentic) and one version (1.0.0-SNAPSHOT) for the whole reactor. The
+    framework jar keeps its artifactId, so the file name agentic-flink-1.0.0-SNAPSHOT-uber.jar
+    the Python packages glob for is unchanged. Java package names (org.agentic.flink.*,
+    org.jagentic.*) are unaffected by the Maven groupId.
+
+    ports/experimental/* are advisory adapters and are deliberately not modules of this reactor.
+    -->
+
+    <modules>
+        <module>../ports/jagentic-core</module>
+        <module>..</module>
+        <module>../agentic-pekko</module>
+        <module>../pyflink/java</module>
+        <module>../tool-services/tool-services-packs</module>
+        <module>../tool-services/tool-services-app</module>
+        <module>../banking-job</module>
+    </modules>
+
+    <properties>
+        <!-- Java 21 is the baseline for every JVM module (AGS-13). -->
+        <java.version>21</java.version>
+        <maven.compiler.release>${java.version}</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <flink.version>2.2.1</flink.version>
+        <langchain4j.version>1.16.3</langchain4j.version>
+        <junit.version>5.10.2</junit.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <quarkus.platform.version>3.30.6</quarkus.platform.version>
+
+        <maven.plugin.compiler.version>3.13.0</maven.plugin.compiler.version>
+        <maven.plugin.surefire.version>3.2.5</maven.plugin.surefire.version>
+        <maven.plugin.enforcer.version>3.5.0</maven.plugin.enforcer.version>
+        <maven.plugin.jar.version>3.4.2</maven.plugin.jar.version>
+        <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
+        <maven.plugin.exec.version>3.2.0</maven.plugin.exec.version>
+        <maven.plugin.install.version>3.1.4</maven.plugin.install.version>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven.plugin.compiler.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven.plugin.surefire.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-enforcer-plugin</artifactId>
+                    <version>${maven.plugin.enforcer.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>${maven.plugin.jar.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>${maven.plugin.shade.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>${maven.plugin.exec.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven.plugin.install.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- Fail fast, with a readable message, if the build JDK or Maven is too old. Declared
+                 once here and inherited by every module, so a module built on its own with
+                 `./mvnw -f MODULE/pom.xml` is checked the same way as the full reactor. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>enforce-build-environment</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,)</version>
+                                    <message>This project requires JDK 21 or newer (see docs/audit-backlog.md, AGS-13/AGS-14).</message>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.9,)</version>
+                                    <message>Use the committed wrapper (./mvnw) or Maven 3.9+.</message>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Install this parent pom together with any module that is installed on its own, so
+                 the per-module `./mvnw -f MODULE/pom.xml ...` commands keep working after
+                 `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests` (the installed
+                 jagentic-core pom refers to this parent by coordinates). Inside a reactor build
+                 this re-installs the same file the reactor's own install step wrote. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>install-reactor-parent</id>
+                        <phase>install</phase>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                        <configuration>
+                            <file>${maven.multiModuleProjectDirectory}/reactor/pom.xml</file>
+                            <pomFile>${maven.multiModuleProjectDirectory}/reactor/pom.xml</pomFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- The Quarkus A2A gateway is part of the reactor but opt-in: it is the slowest module
+             (Quarkus augmentation plus its own Flink stack) and nothing else depends on it.
+                 ./mvnw -f reactor/pom.xml -P a2a-gateway verify -->
+        <profile>
+            <id>a2a-gateway</id>
+            <modules>
+                <module>../a2a-gateway</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

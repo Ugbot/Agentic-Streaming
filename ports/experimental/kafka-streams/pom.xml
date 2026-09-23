@@ -19,7 +19,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <kafka.version>3.8.0</kafka.version>
-    <jagentic.core.version>0.1.0</jagentic.core.version>
+    <jagentic.core.version>1.0.0-SNAPSHOT</jagentic.core.version>
   </properties>
 
   <dependencies>

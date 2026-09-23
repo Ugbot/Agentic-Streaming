@@ -132,6 +132,11 @@ cd agentic-clj && clojure -M:run && cd ..
 ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests   # once, if not done above
 ./mvnw clean test
 
+# Every first-class JVM module (jagentic-core, the Flink framework, Pekko, the PyFlink
+# bridge, the tool services, the banking job) in one build, in dependency order, tests
+# included. Add -P a2a-gateway for the Quarkus A2A gateway. This is what CI runs.
+./mvnw -f reactor/pom.xml verify
+
 # Optional infrastructure for the LLM examples (Ollama, Postgres, Redis):
 podman compose up -d && podman compose exec ollama ollama pull qwen2.5:3b
 ```
@@ -673,8 +678,10 @@ In development:
 ## Requirements
 
 - Java 21 and the committed `./mvnw` (Maven 3.9.x; the build rejects older system Maven) for the
-  Flink framework (Apache Flink 2.2.1, native FLIP-27/143) and for Agentic Pekko, which is
-  built separately after `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`
+  Flink framework (Apache Flink 2.2.1, native FLIP-27/143), Agentic Pekko and the other JVM
+  modules. `./mvnw -f reactor/pom.xml verify` builds all of them in dependency order; a single
+  module still builds with `./mvnw -f <module>/pom.xml` after
+  `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests` (see [docs/getting-started.md](docs/getting-started.md))
 - Clojure CLI (tools.deps) for Agentic Clojure under `agentic-clj/`
 - Go 1.24+ for the experimental Go core, gateway, and engines under `ports/experimental/go/`
 - Python 3.11+ for the pure-Python cores, ports, and the FastAPI gateway

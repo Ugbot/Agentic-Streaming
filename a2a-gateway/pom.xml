@@ -3,26 +3,27 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.agentic.flink</groupId>
+    <parent>
+        <groupId>org.jagentic</groupId>
+        <artifactId>agentic-streaming-reactor</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../reactor/pom.xml</relativePath>
+    </parent>
+
     <artifactId>agentic-flink-a2a-gateway</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
     <name>Agentic Flink A2A Gateway</name>
     <description>Quarkus A2A (Agent2Agent) gateway bridging external A2A callers to a Flink agent job</description>
 
     <!--
-    Standalone module (no parent). Build explicitly after installing the core artifact:
-        mvn -q -pl . -am -f ../pom.xml install -DskipTests   # or: (cd .. && mvn install -DskipTests)
-        mvn -f a2a-gateway/pom.xml package
-    Kept out of the default core reactor to avoid converting the root to pom packaging. See README.
+    Opt-in module of reactor/pom.xml (profile a2a-gateway: Quarkus augmentation makes it the
+    slowest module and nothing else depends on it):
+        ./mvnw -f reactor/pom.xml -P a2a-gateway verify
+    On its own, after installing the framework jar:
+        ./mvnw install -DskipTests && ./mvnw -f a2a-gateway/pom.xml package
+    See README.
     -->
     <properties>
-        <java.version>21</java.version>
-        <maven.compiler.release>${java.version}</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <quarkus.platform.version>3.30.6</quarkus.platform.version>
         <a2a.version>1.0.0.Alpha3</a2a.version>
-        <flink.version>2.2.1</flink.version>
-        <agentic.flink.version>1.0.0-SNAPSHOT</agentic.flink.version>
     </properties>
 
     <dependencyManagement>
@@ -40,9 +41,9 @@
     <dependencies>
         <!-- Core: A2A bridge, value model, task store, config. -->
         <dependency>
-            <groupId>org.agentic.flink</groupId>
+            <groupId>org.jagentic</groupId>
             <artifactId>agentic-flink</artifactId>
-            <version>${agentic.flink.version}</version>
+            <version>${project.version}</version>
             <!-- Quarkus provides the logging backend (jboss-logmanager); drop core's log4j to
                  avoid a duplicate-SLF4J-binding / LoggerContext init clash. -->
             <exclusions>
@@ -134,7 +135,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
                 <configuration>
                     <release>${java.version}</release>
                     <parameters>true</parameters>

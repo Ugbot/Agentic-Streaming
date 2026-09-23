@@ -83,15 +83,53 @@ podman run -d -p 5432:5432 -e POSTGRES_PASSWORD=agentic postgres:16
 podman run -d -p 6379:6379 valkey/valkey
 ```
 
-Tests that need these skip cleanly when they are not running.
+Tests that need these skip cleanly when they are not running. In CI they are not allowed to:
+the workflow provisions the services and `tools/ci/skip_audit.py` fails the job for any skip
+whose reason is not listed in `tools/ci/skip-allowlist.txt`; every entry there states why
+(declared conformance capability gaps, Ollama, Fluss, and the two `AGENTIC_PEKKO_INTEGRATION`
+tests the workflow explains). To run the service-backed tests locally, start the services and
+export the same variables the `core` job in `.github/workflows/ci.yml` sets
+(`AGENTIC_TEST_PG_URL`, `AGENTIC_TEST_REDIS_URL`, `AGENTIC_KAFKA_BOOTSTRAP`, ...).
+
+The Testcontainers suites (`./mvnw test -P integration-tests`: `Postgres*Test`, `Redis*IT`)
+start their own containers through the Docker API. With Podman, start the compatibility
+socket and point Testcontainers at it; `src/test/resources/testcontainers.properties`
+already disables the startup checks Podman does not implement:
+
+```bash
+systemctl --user enable --now podman.socket        # or: podman system service --time=0 &
+export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+export TESTCONTAINERS_RYUK_DISABLED=true           # Ryuk needs a privileged container and Docker Hub short names; the tests stop their containers themselves
+./mvnw test -P integration-tests
+```
+
+GitHub-hosted runners provide Docker, which Testcontainers finds without configuration; both
+runtimes run the same tests.
 
 ## Part 2: Build
 
-### Step 1: Build order
+### Step 1: The reactor
 
-The Flink module (`agentic-flink`, the root `pom.xml`) and the Pekko module both depend on
-`ports/jagentic-core`, which is not a module of the root build. Install it first or the root
-build cannot resolve it:
+`reactor/pom.xml` is the parent and aggregator of every first-class JVM module: `ports/jagentic-core`,
+the Flink framework (the root `pom.xml`), `agentic-pekko`, `pyflink/java`, `tool-services/*`
+and `banking-job`. One command builds and tests all of them in dependency order, with one
+groupId (`org.jagentic`) and one version (`1.0.0-SNAPSHOT`):
+
+```bash
+./mvnw -f reactor/pom.xml verify                    # everything CI gates on
+./mvnw -f reactor/pom.xml verify -P a2a-gateway     # plus the Quarkus A2A gateway (slow, opt-in)
+./mvnw -f reactor/pom.xml install -DskipTests       # compile and install, no tests
+```
+
+The root `pom.xml` stays the Flink module, so every `./mvnw ...` command run from the
+repository root below still addresses the framework. The adapters under `ports/experimental/`
+are not part of the reactor; each has its own `pom.xml` and is built on its own.
+
+### Step 1b: Building one module at a time
+
+A single module builds with `-f <module>/pom.xml` once the modules it depends on are in the
+local repository. The Flink module and Pekko both depend on `ports/jagentic-core`, so install
+it first (this also installs the reactor parent pom the module refers to):
 
 ```bash
 ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
@@ -233,8 +271,9 @@ workflow, is one page each under [runtimes/](runtimes/README.md).
 
 1. `java -version` must show 21 or later.
 2. Use `./mvnw`, not `mvn`.
-3. Did you run the `ports/jagentic-core` install first? Without it the root build fails to
-   resolve `org.jagentic:jagentic-core`.
+3. Did you run the `ports/jagentic-core` install first? Without it a `./mvnw` run at the
+   repository root fails to resolve `org.jagentic:jagentic-core`. `./mvnw -f reactor/pom.xml verify`
+   needs no such step.
 4. Maven downloads dependencies on first use; see the mirror note in Part 1 if Central is
    unreachable.
 

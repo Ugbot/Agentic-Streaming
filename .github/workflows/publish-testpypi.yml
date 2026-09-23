@@ -13,6 +13,11 @@ name: Publish Python packages to TestPyPI
 # untagged commit would produce a development version that TestPyPI would accept but that no
 # release could ever reuse. TestPyPI never accepts the same version twice, so rehearse with a
 # pre-release tag (v1.0.0rc1) and cut the final tag (v1.0.0) only for publish-pypi.yml.
+#
+# The wheel bundles the shaded framework jar (python/setup.py copies
+# target/agentic-flink-*-uber.jar into package data), so the same Maven build as
+# publish-pypi.yml runs before `python -m build`; without it setup.py would run Maven
+# itself inside the build step, without Java set up on the runner.
 
 on:
   workflow_dispatch:
@@ -45,12 +50,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build tooling
-        run: python -m pip install --upgrade build twine setuptools-scm
-
-      - name: Check that the tag is canonical and that every project resolves to it
-        run: python tools/check_release_version.py "$RELEASE_TAG"
-
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
@@ -58,11 +57,17 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build the canonical core
-        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install -DskipTests
-
       - name: Build the shaded framework jar
-        run: ./mvnw -B -ntp -DskipTests package
+        run: ./mvnw -B -ntp -f reactor/pom.xml -pl :agentic-flink -am -DskipTests package
+
+      - name: Shaded framework jar is present
+        run: test "$(ls target/agentic-flink-*-uber.jar | wc -l)" -eq 1
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build twine setuptools-scm
+
+      - name: Check that the tag is canonical and that every project resolves to it
+        run: python tools/check_release_version.py "$RELEASE_TAG"
 
       - name: Build distributions (sdist and wheel for each of the four projects)
         run: |

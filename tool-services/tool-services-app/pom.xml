@@ -3,25 +3,25 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.jagentic</groupId>
+  <parent>
+    <groupId>org.jagentic</groupId>
+    <artifactId>agentic-streaming-reactor</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../reactor/pom.xml</relativePath>
+  </parent>
+
   <artifactId>tool-services-app</artifactId>
-  <version>0.1.0</version>
   <name>Agentic Tool Services — App</name>
   <description>Standalone Quarkus app that serves the tool packs over MCP (stdio + HTTP),
     REST/OpenAPI (and, in later phases, gRPC + Kafka/Redis pub-sub). Flink-free.</description>
 
   <!--
-  Standalone module (no parent). Build after installing jagentic-core + tool-services-packs:
-      mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
-      mvn -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
-      mvn -f tool-services/tool-services-app/pom.xml package
+  Module of reactor/pom.xml. On its own, build after installing jagentic-core + tool-services-packs:
+      ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+      ./mvnw -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
+      ./mvnw -f tool-services/tool-services-app/pom.xml package
+  quarkus.platform.version is inherited from the reactor parent.
   -->
-  <properties>
-    <java.version>21</java.version>
-        <maven.compiler.release>${java.version}</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <quarkus.platform.version>3.30.6</quarkus.platform.version>
-  </properties>
 
   <dependencyManagement>
     <dependencies>
@@ -40,7 +40,7 @@
     <dependency>
       <groupId>org.jagentic</groupId>
       <artifactId>tool-services-packs</artifactId>
-      <version>0.1.0</version>
+      <version>${project.version}</version>
     </dependency>
 
     <dependency>
@@ -112,7 +112,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
         <configuration>
           <parameters>true</parameters>
         </configuration>

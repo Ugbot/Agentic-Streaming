@@ -7,8 +7,9 @@ sure `agentic_flink/jars/agentic-flink-<version>-uber.jar` exists. Resolution or
 1. a jar already under `agentic_flink/jars/` (a previous build, or an sdist that ships it);
 2. `AGENTIC_FLINK_JAR` (developer override: an already built uber jar anywhere on disk);
 3. `<repo>/target/agentic-flink-*-uber.jar` from a previous Maven build of the checkout;
-4. otherwise run the Maven wrapper of the checkout:
-   `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests && ./mvnw -DskipTests package`.
+4. otherwise run the Maven wrapper of the checkout on the reactor, building the framework
+   module and what it depends on (jagentic-core) in one invocation:
+   `./mvnw -f reactor/pom.xml -pl :agentic-flink -am -DskipTests package`.
 
 Editable installs (`pip install -e python`) skip the hook because `agentic_flink._classpath`
 finds the jar under `<repo>/target/` directly. Set `AGENTIC_FLINK_SKIP_JAR=1` to build a wheel
@@ -33,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 JARS_DIR = HERE / "agentic_flink" / "jars"
 REPO_ROOT = HERE.parent
 MVNW = REPO_ROOT / ("mvnw.cmd" if os.name == "nt" else "mvnw")
-CORE_POM = REPO_ROOT / "ports" / "jagentic-core" / "pom.xml"
+REACTOR_POM = REPO_ROOT / "reactor" / "pom.xml"
 SKIP_ENV = "AGENTIC_FLINK_SKIP_JAR"
 OVERRIDE_ENV = "AGENTIC_FLINK_JAR"
 
@@ -77,16 +78,15 @@ def ensure_framework_jar() -> Path:
     if built:
         return _copy_into_jars(built[-1])
 
-    if not MVNW.is_file() or not CORE_POM.is_file():
+    if not MVNW.is_file() or not REACTOR_POM.is_file():
         raise JarBuildError(
             "no agentic-flink-*-uber.jar under agentic_flink/jars/ and this is not a repository "
-            f"checkout (no {MVNW} / {CORE_POM}). Set {OVERRIDE_ENV}=/path/to/agentic-flink-<v>-uber.jar, "
+            f"checkout (no {MVNW} / {REACTOR_POM}). Set {OVERRIDE_ENV}=/path/to/agentic-flink-<v>-uber.jar, "
             f"or build from a checkout of https://github.com/Ugbot/Agentic-Streaming, or set {SKIP_ENV}=1 "
             "to knowingly build a wheel without the jar."
         )
     try:
-        _run_maven(["-q", "-f", str(CORE_POM), "install", "-DskipTests"])
-        _run_maven(["-q", "-DskipTests", "package"])
+        _run_maven(["-q", "-f", str(REACTOR_POM), "-pl", ":agentic-flink", "-am", "-DskipTests", "package"])
     except (OSError, subprocess.CalledProcessError) as exc:
         raise JarBuildError(f"Maven build of the framework jar failed: {exc}") from exc
     built = _uber_jars(REPO_ROOT / "target")

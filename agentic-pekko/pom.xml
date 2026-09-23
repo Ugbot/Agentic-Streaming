@@ -4,9 +4,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.jagentic.pekko</groupId>
+  <parent>
+    <groupId>org.jagentic</groupId>
+    <artifactId>agentic-streaming-reactor</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../reactor/pom.xml</relativePath>
+  </parent>
+
   <artifactId>agentic-pekko</artifactId>
-  <version>0.1.0</version>
   <packaging>jar</packaging>
   <name>Agentic Pekko</name>
   <description>First-class Apache Pekko agent runtime: an event-sourced, cluster-sharded entity
@@ -14,14 +19,12 @@
     HTTP front door — reusing the Flink-free jagentic-core agent brain.</description>
 
   <!--
-  Standalone top-level module (no parent), kept out of the core reactor like a2a-gateway.
-  Build after installing the core:
-      mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
-      mvn -f agentic-pekko/pom.xml package
+  Module of reactor/pom.xml (built by `./mvnw -f reactor/pom.xml verify`). On its own, build
+  after installing the core:
+      ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+      ./mvnw -f agentic-pekko/pom.xml package
   -->
   <properties>
-    <maven.compiler.release>21</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <pekko.version>1.1.3</pekko.version>
     <!-- pekko-http has its own version line (not in pekko-bom); 1.1.x targets Pekko 1.1.x. -->
     <pekko.http.version>1.1.0</pekko.http.version>
@@ -50,7 +53,7 @@
     <dependency>
       <groupId>org.jagentic</groupId>
       <artifactId>jagentic-core</artifactId>
-      <version>0.1.0</version>
+      <version>${project.version}</version>
     </dependency>
 
     <!-- Typed actors + cluster sharding: one entity per conversationId (keyed, single-writer). -->
@@ -146,7 +149,7 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.10.2</version>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
 
@@ -156,7 +159,7 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
-      <version>1.20.4</version>
+      <version>${testcontainers.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -174,7 +177,7 @@
     <dependency>
       <groupId>org.junit.vintage</groupId>
       <artifactId>junit-vintage-engine</artifactId>
-      <version>5.10.2</version>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -184,12 +187,10 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.2.5</version>
         <configuration>
           <excludedGroups>integration</excludedGroups>
           <!-- The JUnit 4 (TCK) classes need a container; only the integration-tests profile
@@ -200,7 +201,6 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
-        <version>3.2.0</version>
         <configuration>
           <mainClass>${exec.mainClass}</mainClass>
         </configuration>
@@ -209,8 +209,9 @@
   </build>
 
   <profiles>
-    <!-- Real-infrastructure tests (Redis via Testcontainers on Podman + the persistence TCK):
-         mvn -f agentic-pekko/pom.xml test -P integration-tests -->
+    <!-- The unit suite plus the real-infrastructure tests (Redis via Testcontainers on Podman or
+         Docker, and the persistence TCK through the vintage engine) in one surefire run:
+         ./mvnw -f agentic-pekko/pom.xml test -P integration-tests -->
     <profile>
       <id>integration-tests</id>
       <build>
@@ -218,9 +219,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
-            <version>3.2.5</version>
             <configuration combine.self="override">
-              <groups>integration,org.jagentic.pekko.testing.IntegrationCategory</groups>
               <includes>
                 <include>**/*Test.java</include>
                 <include>**/*IT.java</include>

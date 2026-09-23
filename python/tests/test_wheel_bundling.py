@@ -26,7 +26,7 @@ def hook(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "REPO_ROOT", repo)
     monkeypatch.setattr(module, "JARS_DIR", repo / "python" / "agentic_flink" / "jars")
     monkeypatch.setattr(module, "MVNW", repo / "mvnw")
-    monkeypatch.setattr(module, "CORE_POM", repo / "ports" / "jagentic-core" / "pom.xml")
+    monkeypatch.setattr(module, "REACTOR_POM", repo / "reactor" / "pom.xml")
     monkeypatch.delenv(module.OVERRIDE_ENV, raising=False)
     monkeypatch.delenv(module.SKIP_ENV, raising=False)
     return module
@@ -67,8 +67,8 @@ def test_target_jar_is_copied_without_running_maven(hook, monkeypatch):
 
 def test_maven_is_run_in_a_checkout_when_no_jar_exists(hook, monkeypatch):
     hook.MVNW.write_text("#!/bin/sh\n")
-    hook.CORE_POM.parent.mkdir(parents=True)
-    hook.CORE_POM.write_text("<project/>")
+    hook.REACTOR_POM.parent.mkdir(parents=True)
+    hook.REACTOR_POM.write_text("<project/>")
     calls: list[list[str]] = []
 
     def fake_maven(args):
@@ -79,14 +79,13 @@ def test_maven_is_run_in_a_checkout_when_no_jar_exists(hook, monkeypatch):
     monkeypatch.setattr(hook, "_run_maven", fake_maven)
     out = hook.ensure_framework_jar()
     assert out.parent == hook.JARS_DIR
-    assert calls[0][:3] == ["-q", "-f", str(hook.CORE_POM)] and "install" in calls[0]
-    assert calls[1] == ["-q", "-DskipTests", "package"]
+    assert calls == [["-q", "-f", str(hook.REACTOR_POM), "-pl", ":agentic-flink", "-am", "-DskipTests", "package"]]
 
 
 def test_maven_that_produces_no_jar_fails(hook, monkeypatch):
     hook.MVNW.write_text("#!/bin/sh\n")
-    hook.CORE_POM.parent.mkdir(parents=True)
-    hook.CORE_POM.write_text("<project/>")
+    hook.REACTOR_POM.parent.mkdir(parents=True)
+    hook.REACTOR_POM.write_text("<project/>")
     monkeypatch.setattr(hook, "_run_maven", lambda args: None)
     with pytest.raises(hook.JarBuildError, match="produced no agentic-flink"):
         hook.ensure_framework_jar()
