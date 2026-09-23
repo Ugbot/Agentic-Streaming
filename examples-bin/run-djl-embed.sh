@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
-# Live DJL (Deep Java Library) embedding demo + micro-benchmark.
+# Live DJL (Deep Java Library) embedding demo and micro-benchmark.
 #
-# Loads a real sentence-transformer (all-MiniLM-L6-v2) through DJL/PyTorch, embeds a small corpus
-# into the RAG hot index, and verifies semantic recall (a paraphrased query retrieves the on-topic
-# passage as top-1), then prints mean embed latency. DJL's pytorch-engine auto-downloads the
-# platform-matched CPU native + the model on first run (cached under ~/.djl.ai); needs network the
-# first time, runs offline thereafter.
+# Loads sentence-transformers/all-MiniLM-L6-v2 through DJL/PyTorch, embeds a small corpus into
+# the RAG hot index, checks that a paraphrased query retrieves the on-topic passage as top-1,
+# and prints the mean embedding latency. It is a thin wrapper over the @Tag("djl") test
+# DjlRecallIT, run under the djl-native Maven profile; DJL tests are excluded from a plain
+# ./mvnw test because the PyTorch native library is not part of the default build.
 #
-#   bash examples-bin/run-djl-embed.sh
-#
-# This is just a thin wrapper over the @Tag("djl") test, run under the djl-native Maven profile
-# (which selects that test group). The native PyTorch lib is NOT in the default build, so DJL tests
-# are excluded from `mvn test` and only run here.
+# Prerequisites: JDK 21, the Maven wrapper, and outbound internet on the first run (DJL
+# downloads the model and the CPU native library into its cache directory, DJL_CACHE_DIR or
+# $HOME/.djl.ai by default). No API key, no containers.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$HERE/_common.sh"
 
-echo "Running live DJL embedding recall + benchmark (downloads model + native on first run)…"
-mvn test -P djl-native -Dtest=DjlRecallIT
+require_java21
+require_mvnw
+ensure_jagentic_core
+info "running DjlRecallIT (downloads the model and native library on first run)"
+cd "$REPO_ROOT"
+mvn_run test -P djl-native -Dtest=DjlRecallIT

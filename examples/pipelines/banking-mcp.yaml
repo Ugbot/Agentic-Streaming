@@ -1,20 +1,43 @@
-# Agentic Streaming — integration & control (Tier 3): an agent that pulls tools from an
+# Agentic Streaming, integration and control (Tier 3): an agent that pulls tools from an
 # external MCP server and can delegate to a peer agent over A2A. Both sections sit behind
-# SPIs and are selected by a connection link, so they're hot-swappable.
+# SPIs and are selected by a connection link, so they are hot-swappable.
 #
-# This spec needs live endpoints to load (an MCP stdio server + a peer A2A gateway), so it
-# is a documentation example rather than part of the offline test suite. Bring the peer up
-# with its gateway, point ${SPECIALIST_URL} at it, and adjust the MCP command to your server.
+# This spec needs live endpoints to load: an MCP stdio server and a peer A2A agent.
+# It uses the ones shipped in this repository.
 #
-#   SPECIALIST_URL=http://localhost:8080/agent \
-#     python -m agentic_pipeline run examples/pipelines/banking-mcp.yaml --text "what is my balance?"
+#   MCP server: the tool-services stdio server (util pack), spawned as a subprocess from the
+#   repository root. Build it once:
+#     ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+#     ./mvnw -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
+#     ./mvnw -q -f tool-services/tool-services-app/pom.xml package -DskipTests
+#   Peer agent: any A2A front door; here the Agentic Pekko HTTP front door on port 8085.
+#     AGENTIC_PEKKO_HTTP_PORT=8085 ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
+#       -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
+#
+# Prerequisite: AGENTIC_PEER_AGENT_URL must point at the peer. The jvm-core loader rejects the
+# document at load time when it is unset ("http peers need a url"); the Python loader loads it
+# and fails on the first delegation. The Python core also needs the MCP SDK (pip install mcp).
+#
+#   export AGENTIC_PEER_AGENT_URL=http://localhost:8085
+#   python -m agentic_pipeline run examples/pipelines/banking-mcp.yaml --text "what is my balance?"
+#   ./mvnw -q -f ports/jagentic-core/pom.xml compile exec:java \
+#     -Dexec.mainClass=org.jagentic.core.pipeline.PipelineCli \
+#     -Dexec.args="examples/pipelines/banking-mcp.yaml --text 'what is my balance?'"
+#
+# The stub brain is deterministic: it calls the constant get_balance tool, then the MCP tool
+# tools_util_add (proving the MCP tools are callable), then answers. The specialist peer is
+# registered but the scripted turn never delegates to it. Swap the llm section for
+# {provider: ollama, model: qwen2.5:3b, base_url: http://localhost:11434} to let a model drive
+# the ReAct loop and choose when to delegate.
 
 backend: local
 
 llm:
-  provider: stub                     # swap for ollama/openai to drive a real ReAct loop
-  script:
+  provider: stub                     # ollama | openai | stub
+  model: qwen2.5:3b                  # used by the ollama provider only
+  script:                            # used by the stub provider only (deterministic)
     - {tool: get_balance, args: {}}
+    - {tool: tools_util_add, args: {a: 1234.56, b: 0}}
     - {text: "Your balance is 1234.56."}
 
 agent:
@@ -27,7 +50,9 @@ agent:
     support:
       brain: llm
       prompt: "You are a banking assistant. Use MCP tools and delegate to the specialist when needed."
-      tools: [get_balance, fs_read_file, specialist]
+      tools: [get_balance, tools_util_add, specialist]
+      # verifier: none because the scripted stub reply carries no [support] prefix for the prefix verifier
+      verifier: {kind: none}
   verifier:
     kind: prefix
 
@@ -35,18 +60,19 @@ tools:
   - {id: get_balance, kind: constant, description: Look up the user's balance, value: 1234.56}
 
 # Register an external MCP server's tools. transport: stdio launches the server process;
-# its tools are surfaced into the registry id-prefixed by `name_` (here fs_read_file, ...).
+# its tools are surfaced into the registry id-prefixed by `name_` (here tools_util_add, ...).
 mcp:
-  - name: fs
+  - name: tools
     transport: stdio
-    command: [python, "-m", "mcp_server_filesystem"]
-    args: ["--root", "/srv/docs"]
+    command: [java, "-cp", "tool-services/tool-services-app/target/quarkus-app/app/*:tool-services/tool-services-app/target/quarkus-app/lib/main/*",
+              "org.jagentic.tools.app.mcp.StdioMain", "util"]
 
-# Register a peer agent as a tool (peer-as-tool over A2A). The peer can be any backend's
-# gateway; ${SPECIALIST_URL} is a connection link expanded from the environment.
+# Register a peer agent as a tool (peer-as-tool over A2A). The peer can be any A2A agent;
+# ${AGENTIC_PEER_AGENT_URL} is a connection link expanded from the environment.
 a2a:
   - id: specialist
-    url: "${SPECIALIST_URL}"
+    transport: http
+    url: "${AGENTIC_PEER_AGENT_URL}"
     description: "Delegate complex disputes to the fraud specialist agent."
     retries: 2
 

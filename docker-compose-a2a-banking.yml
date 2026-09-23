@@ -14,7 +14,7 @@
 # Local dev: LLM_PROVIDER=openai MODEL=gpt-5.4-nano OPENAI_API_KEY=... EMBED_PROVIDER=openai.
 services:
   redis:
-    image: redis:8
+    image: docker.io/library/redis:8
     ports:
       - "127.0.0.1:6379:6379"
 

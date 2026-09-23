@@ -12,7 +12,7 @@
 
 services:
   fluss-zookeeper:
-    image: zookeeper:3.9.2
+    image: docker.io/library/zookeeper:3.9.2
     container_name: agentic-flink-fluss-zk
     environment:
       ZOO_4LW_COMMANDS_WHITELIST: "*"
@@ -20,7 +20,7 @@ services:
       - agentic-flink-network
 
   fluss-coordinator:
-    image: fluss/fluss:0.7.0
+    image: docker.io/fluss/fluss:0.7.0
     container_name: agentic-flink-fluss-coordinator
     command: coordinatorServer
     depends_on:
@@ -38,7 +38,7 @@ services:
       - agentic-flink-network
 
   fluss-tablet:
-    image: fluss/fluss:0.7.0
+    image: docker.io/fluss/fluss:0.7.0
     container_name: agentic-flink-fluss-tablet
     command: tabletServer
     depends_on:

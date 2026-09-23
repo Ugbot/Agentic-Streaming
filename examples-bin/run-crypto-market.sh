@@ -1,41 +1,22 @@
 #!/usr/bin/env bash
-# Run the live-Coinbase crypto markets example. Same operator graph as the bond example,
-# different topics and a WebSocket bridge in place of the synthesizers.
-
+# Flink-runtime showcase: live Coinbase trades through Kafka into the same operator graph as
+# the bond example (CryptoMarketAgentExample).
+#
+# Prerequisites: JDK 21, the Maven wrapper, python3, Kafka at KAFKA_BOOTSTRAP (default
+# localhost:9092), and outbound internet for the Coinbase WebSocket bridge. Bring up Kafka and a
+# Flink 2.2.1 session cluster with
+#   bash examples-bin/run-markets-stack.sh
+# No API key is required; ANTHROPIC_API_KEY enables the optional LLM tier.
+#
+#   bash examples-bin/run-crypto-market.sh            # check, build the uber jar, print commands
+#   bash examples-bin/run-crypto-market.sh --submit   # additionally `flink run` the job
 set -euo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/.." && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$HERE/_common.sh"
+# shellcheck source=_markets.sh
+source "$HERE/_markets.sh"
 
-KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-localhost:9092}"
-
-err() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; }
-ok()  { printf '\033[32m✓\033[0m %s\n' "$*"; }
-info(){ printf '\033[34m→\033[0m %s\n' "$*"; }
-
-info "checking Kafka at $KAFKA_BOOTSTRAP"
-if ! (printf '' >/dev/tcp/${KAFKA_BOOTSTRAP%:*}/${KAFKA_BOOTSTRAP#*:}) 2>/dev/null; then
-  err "Kafka not reachable. Start it with:"
-  err "  podman compose -f docker-compose-kafka.yml up -d"
-  exit 1
-fi
-ok "Kafka reachable"
-
-JAR="$REPO/target/agentic-flink-1.0.0-SNAPSHOT-uber.jar"
-if [[ ! -f "$JAR" ]]; then
-  info "building jar..."
-  ( cd "$REPO" && mvn -q -DskipTests package )
-fi
-ok "jar at $JAR"
-
-cat <<EOF
-
-Start the Coinbase WebSocket bridge (needs internet):
-  python examples-bin/markets/coinbase_producer.py --products BTC-USD,ETH-USD,SOL-USD
-
-Optionally set ANTHROPIC_API_KEY for the LLM tier:
-  export ANTHROPIC_API_KEY=sk-ant-...
-
-Then submit the Flink job:
-  flink run "$JAR" \\
-      org.agentic.flink.example.markets.CryptoMarketAgentExample
-EOF
+[ $# -le 1 ] || die "usage: bash examples-bin/run-crypto-market.sh [--submit]"
+markets_main org.agentic.flink.example.markets.CryptoMarketAgentExample "${1:-}" \
+  "python3 examples-bin/markets/coinbase_producer.py --products BTC-USD,ETH-USD,SOL-USD"

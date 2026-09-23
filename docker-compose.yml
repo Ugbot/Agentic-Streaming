@@ -1,7 +1,7 @@
 services:
   # PostgreSQL - Durable storage for conversations
   postgres:
-    image: postgres:15-alpine
+    image: docker.io/library/postgres:15-alpine
     container_name: agentic-flink-postgres
     environment:
       POSTGRES_DB: agentic_flink
@@ -23,7 +23,7 @@ services:
 
   # Redis - Fast caching layer for active contexts
   redis:
-    image: redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     container_name: agentic-flink-redis
     # No committed credential: set REDIS_PASSWORD in .env (see .env.example).
     command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"
@@ -43,7 +43,7 @@ services:
 
   # Ollama - Local LLM inference
   ollama:
-    image: ollama/ollama:latest
+    image: docker.io/ollama/ollama:latest
     container_name: agentic-flink-ollama
     ports:
       - "127.0.0.1:11434:11434"
@@ -52,7 +52,7 @@ services:
     environment:
       - OLLAMA_HOST=0.0.0.0
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -66,7 +66,7 @@ services:
   # Optional: Qdrant vector database for RAG
   # Uncomment if you need vector search capabilities
   # qdrant:
-  #   image: qdrant/qdrant:latest
+  #   image: docker.io/qdrant/qdrant:latest
   #   container_name: agentic-flink-qdrant
   #   ports:
   #     - "127.0.0.1:6333:6333"
@@ -92,5 +92,6 @@ volumes:
   #   driver: local
 
 networks:
+  # Shared with every other compose file; create it once with examples-bin/setup-network.sh.
   agentic-flink-network:
-    driver: bridge
+    external: true

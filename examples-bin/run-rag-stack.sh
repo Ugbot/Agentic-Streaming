@@ -1,55 +1,44 @@
 #!/usr/bin/env bash
-# Brings up the RAG + Fluss stack: Ollama + Postgres + Redis + Fluss coordinator/tablet.
-# Polls readiness and prints next-step hints for notebooks 02/03 and the RagResearchExample.
-
+# Brings up the RAG plus Fluss stack in Podman: Ollama, Postgres, Redis, Fluss coordinator and
+# tablet (docker-compose-rag.yml). Waits for each service and prints the next steps for
+# notebooks 02/03 and run-rag.sh.
+#
+# Prerequisites: Podman with `podman compose` or podman-compose, curl, outbound internet for
+# the images. docker-compose.yml refuses to start without POSTGRES_PASSWORD and REDIS_PASSWORD:
+# export them or put them in .env (cp .env.example .env; generate values with openssl rand -hex 24).
 set -euo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/.." && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$HERE/_common.sh"
 
-ok()  { printf '\033[32m✓\033[0m %s\n' "$*"; }
-info(){ printf '\033[34m→\033[0m %s\n' "$*"; }
-err() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; }
+require_curl
+if [ -f "$REPO_ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$REPO_ROOT/.env"
+  set +a
+fi
+require_env POSTGRES_PASSWORD "Set it in .env (cp .env.example .env) or export it before running this script."
+require_env REDIS_PASSWORD "Set it in .env (cp .env.example .env) or export it before running this script."
 
-bash "$HERE/setup-network.sh"
+ensure_podman_network
+info "starting Ollama, Postgres, Redis and Fluss (docker-compose-rag.yml)"
+podman_compose -f docker-compose-rag.yml up -d
 
-info "starting Ollama + Postgres + Redis + Fluss"
-podman compose -f "$REPO/docker-compose-rag.yml" up -d
+wait_for_port 127.0.0.1 11434 120 "Ollama"
+wait_for_port 127.0.0.1 9123 120 "Fluss coordinator"
+wait_for_port 127.0.0.1 5432 120 "Postgres"
+check_ollama
 
-info "waiting for Ollama on localhost:11434"
-for _ in {1..60}; do
-  if curl -fsS http://localhost:11434/api/tags >/dev/null 2>&1; then
-    ok "Ollama reachable"
-    break
-  fi
-  sleep 1
-done
-
-info "waiting for Fluss coordinator on localhost:9123"
-for _ in {1..60}; do
-  if (printf '' >/dev/tcp/localhost/9123) 2>/dev/null; then
-    ok "Fluss coordinator reachable"
-    break
-  fi
-  sleep 1
-done
-
-info "waiting for Postgres on localhost:5432"
-for _ in {1..60}; do
-  if (printf '' >/dev/tcp/localhost/5432) 2>/dev/null; then
-    ok "Postgres reachable"
-    break
-  fi
-  sleep 1
-done
-
-cat <<'EOF'
+cat <<'TXT'
 
 RAG stack up. Next:
   - notebooks/03_scraper_researcher_fluss.ipynb (Fluss-backed durable vector store)
-  - notebooks/02_live_scrape_rag.ipynb           (live scrape → embed → answer)
+  - notebooks/02_live_scrape_rag.ipynb           (live scrape, embed, answer)
   - bash examples-bin/run-rag.sh                 (RagResearchExample standalone)
 
-Pull the embedding + chat models (one time, ~1GB each):
+The notebooks also use the nomic-embed-text embedding model (one time, about 300 MB):
   podman exec agentic-flink-ollama ollama pull nomic-embed-text
-  podman exec agentic-flink-ollama ollama pull qwen2.5:3b
-EOF
+
+Tear down: bash examples-bin/down-all.sh
+TXT

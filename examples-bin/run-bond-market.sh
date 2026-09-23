@@ -1,47 +1,23 @@
 #!/usr/bin/env bash
-# Run the (anonymised) bond markets classic-Flink + inline-agentic example.
-# Streaming Flink jobs need a real cluster — this script verifies Kafka is up,
-# builds the jar if needed, and prints the `flink run` command. Producers are
-# in examples-bin/markets/.
-
+# Flink-runtime showcase: anonymised bond market feeds through Kafka into the classic-Flink plus
+# inline-agentic operator graph (BondMarketAgentExample).
+#
+# Prerequisites: JDK 21, the Maven wrapper, python3, Kafka at KAFKA_BOOTSTRAP (default
+# localhost:9092). Bring up Kafka and a Flink 2.2.1 session cluster with
+#   bash examples-bin/run-markets-stack.sh
+# No API key is required; ANTHROPIC_API_KEY enables the optional LLM tier.
+#
+#   bash examples-bin/run-bond-market.sh            # check, build the uber jar, print commands
+#   bash examples-bin/run-bond-market.sh --submit   # additionally `flink run` the job
 set -euo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/.." && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$HERE/_common.sh"
+# shellcheck source=_markets.sh
+source "$HERE/_markets.sh"
 
-KAFKA_BOOTSTRAP="${KAFKA_BOOTSTRAP:-localhost:9092}"
-
-err() { printf '\033[31m✗\033[0m %s\n' "$*" >&2; }
-ok()  { printf '\033[32m✓\033[0m %s\n' "$*"; }
-info(){ printf '\033[34m→\033[0m %s\n' "$*"; }
-
-info "checking Kafka at $KAFKA_BOOTSTRAP"
-if ! (printf '' >/dev/tcp/${KAFKA_BOOTSTRAP%:*}/${KAFKA_BOOTSTRAP#*:}) 2>/dev/null; then
-  err "Kafka not reachable. Start it with:"
-  err "  podman compose -f docker-compose-kafka.yml up -d"
-  exit 1
-fi
-ok "Kafka reachable"
-
-JAR="$REPO/target/agentic-flink-1.0.0-SNAPSHOT-uber.jar"
-if [[ ! -f "$JAR" ]]; then
-  info "building jar..."
-  ( cd "$REPO" && mvn -q -DskipTests package )
-fi
-ok "jar at $JAR"
-
-cat <<EOF
-
-Start the anonymised bond producers in three separate shells:
-  python examples-bin/markets/bond_securities_producer.py
-  python examples-bin/markets/bond_inventory_producer.py
-  python examples-bin/markets/bond_trades_producer.py
-
-Optionally set ANTHROPIC_API_KEY to enable the LLM tier:
-  export ANTHROPIC_API_KEY=sk-ant-...
-
-Then submit the Flink job:
-  flink run "$JAR" \\
-      org.agentic.flink.example.markets.BondMarketAgentExample
-
-(Alerts print to the JobManager stdout / TaskManager logs.)
-EOF
+[ $# -le 1 ] || die "usage: bash examples-bin/run-bond-market.sh [--submit]"
+markets_main org.agentic.flink.example.markets.BondMarketAgentExample "${1:-}" \
+  "python3 examples-bin/markets/bond_securities_producer.py" \
+  "python3 examples-bin/markets/bond_inventory_producer.py" \
+  "python3 examples-bin/markets/bond_trades_producer.py"

@@ -1,7 +1,7 @@
 # Optional Kafka overlay for the content-moderation example.
 #
-# Boot together with the base compose:
-#   docker compose -f docker-compose.yml -f docker-compose-kafka.yml up -d
+# Boot together with the base compose (after examples-bin/setup-network.sh):
+#   podman compose -f docker-compose.yml -f docker-compose-kafka.yml up -d
 #
 # Produces a single-broker Kafka + a Zookeeper, with the broker advertised on
 # the host network at localhost:9092. Adequate for local development; not a
@@ -9,7 +9,7 @@
 
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
+    image: docker.io/confluentinc/cp-zookeeper:7.4.0
     container_name: agentic-flink-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -18,7 +18,7 @@ services:
       - agentic-flink-network
 
   kafka:
-    image: confluentinc/cp-kafka:7.4.0
+    image: docker.io/confluentinc/cp-kafka:7.4.0
     container_name: agentic-flink-kafka
     depends_on:
       - zookeeper

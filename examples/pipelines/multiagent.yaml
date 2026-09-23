@@ -1,12 +1,29 @@
-# Multi-agent: a triage agent that CALLS ANOTHER AGENT over HTTP (A2A-as-a-tool).
-# The `escalations` path fires the `ask_specialist` tool (kind: agent) when the user
-# asks to escalate — POSTing the turn to a peer agent's gateway and returning its reply.
-# Point `url` at any backend's gateway (FastAPI or Go); the peer can run on any engine.
+# Multi-agent: a triage agent that delegates to another agent over A2A HTTP.
+# The `escalations` path fires the `ask_specialist` peer when the user asks to
+# escalate; the peer is any agent that serves the A2A front door (POST /agent plus
+# GET /.well-known/agent-card.json), for example the Agentic Pekko HTTP front door.
 #
-#   # peer (any backend), e.g. the experimental FastAPI gateway (run from ports/experimental/gateway-fastapi):
-#   AGENTIC_GATEWAY_BACKEND=local uvicorn gateway_fastapi.__main__:app --port 8080
-#   # then run a turn that escalates:
+# Prerequisite: AGENTIC_PEER_AGENT_URL must point at a running peer. The jvm-core
+# loader rejects the document at load time when the variable is unset ("http peers
+# need a url"); the Python loader loads it and fails on the first escalation.
+#
+#   # peer: the Agentic Pekko front door on port 8085 (any A2A agent works)
+#   ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+#   AGENTIC_PEKKO_HTTP_PORT=8085 ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
+#     -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
+#   # then run a turn that escalates on either core:
+#   export AGENTIC_PEER_AGENT_URL=http://localhost:8085
 #   python -m agentic_pipeline run examples/pipelines/multiagent.yaml --text "please escalate this"
+#   ./mvnw -q -f ports/jagentic-core/pom.xml compile exec:java \
+#     -Dexec.mainClass=org.jagentic.core.pipeline.PipelineCli \
+#     -Dexec.args="examples/pipelines/multiagent.yaml --text 'please escalate this'"
+#
+# What the peer receives: the rule brain's tool trigger passes {user: <user id>} to the
+# peer tool, and the A2A client fills the turn envelope defaults, so the peer sees
+# {conversation_id: a2a, text: "", user_id: anonymous} and answers on its default path.
+# The example demonstrates the delegation wiring and the peer's reply flowing back into
+# the triage agent's answer, not a content hand-off. A non-escalating turn such as
+# "what time do you open?" never contacts the peer and answers on the triage path.
 
 backend: local
 
@@ -19,14 +36,17 @@ agent:
   paths:
     triage:
       brain: rule
-      prompt: You tryage and answer simple questions.
+      prompt: You triage and answer simple questions.
     escalations:
       brain: rule
       prompt: You escalate to a specialist agent.
       tool_triggers: {escalate: ask_specialist}
   verifier: {kind: prefix}
 
-tools:
-  # "agent" is an A2A-as-a-tool: POST {conversation_id,text,user_id} to a peer gateway's
-  # /agent and return its reply. Swap the URL for any backend's gateway.
-  - {id: ask_specialist, kind: agent, url: "${AGENTIC_PEER_AGENT_URL}"}
+# Peer agents (the spec's Peer primitive). Each peer is callable as a tool by its id.
+a2a:
+  - id: ask_specialist
+    transport: http
+    url: "${AGENTIC_PEER_AGENT_URL}"
+    retries: 1
+    description: Delegate the turn to the specialist agent.
