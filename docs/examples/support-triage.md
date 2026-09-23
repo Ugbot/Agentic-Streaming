@@ -44,7 +44,7 @@ Ticket
   │      • Vendor-neutral; switch to OpenAI by changing the connection
   │
   ▼  4. Scorer - cross-encoder rerank
-  │      • Cross-encoder/ms-marco-MiniLM-L-6-v2
+  │      • cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
   │      • Pair-scores (candidate, ticket-body); pick the best
   │
   ▼  5. Tone rewrite - LangChain4J escape hatch
@@ -86,9 +86,22 @@ LangChain4J-idiomatic thing.
 
 ## Running it
 
-See the inline README for the full command + prerequisites. The first run
-downloads the three HuggingFace models (~250 MB total) into DJL's cache; the
-second run is cache-warm and finishes in a few seconds.
+```bash
+bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
+bash examples-bin/run-support-triage.sh
+```
+
+Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama), and outbound internet on the
+first run: DJL downloads `distilbert-base-uncased-finetuned-sst-2-english` (sentiment),
+`facebook/bart-large-mnli` (zero-shot intent, about 1.6 GB),
+`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (reranker) and the PyTorch CPU native runtime
+into its cache directory. No API key. The script installs `ports/jagentic-core` when missing,
+resolves the provided-scope Flink dependencies and runs the example in a forked JVM. The second
+run is cache-warm and finishes in a few seconds.
+
+The example processes one synthetic ticket and prints `Triaging ...`, then either
+`Routed to human queue: ...` (negative sentiment) or `Intent: <label> (score=...)`,
+`Picked draft (score=...)` and the polished text under `=== Final reply ===`.
 
 ## Wiring it into a streaming job
 

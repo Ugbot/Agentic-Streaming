@@ -9,6 +9,25 @@
 > Source: `src/main/java/org/agentic/flink/example/rag/RagResearchExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/rag/README.md`
 
+## Running it
+
+```bash
+bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
+bash examples-bin/run-rag.sh
+```
+
+Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama), and outbound internet on the
+first run: DJL downloads `sentence-transformers/all-MiniLM-L6-v2` (embedder),
+`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` (reranker) and the PyTorch CPU native runtime
+(about 500 MB) into its cache directory. No API key. The script installs `ports/jagentic-core`
+when missing, resolves the provided-scope Flink dependencies and runs the example in a forked
+JVM in an embedded MiniCluster.
+
+The input is a fixed list of `(topic, question)` queries; each prints one `Answer[...]` record
+with the topic, the question, the grounded answer with `[1] [2] [3]` citations and the top
+rerank score. `bash examples-bin/run-rag-stack.sh` brings up the larger Podman stack (Ollama,
+Postgres, Redis, Fluss) that the RAG notebooks use; `run-rag.sh` itself needs only Ollama.
+
 ## Why this shape
 
 A retrieval-augmented assistant has four levers that all matter:
@@ -16,7 +35,8 @@ A retrieval-augmented assistant has four levers that all matter:
 1. **Embedder quality**: bad embeddings ≡ retrieving the wrong passages.
 2. **Vector store latency**: every query embeds + searches; cost compounds.
 3. **Rerank precision**: embedding similarity is a coarse signal. A
-   cross-encoder over the top-k catches "looks similar, is wrong" cases.
+   cross-encoder over the top-k catches "looks similar, is wrong" cases (the example uses
+   `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`).
 4. **Citations**: the LLM has to ground its answer or the system is just a
    confident summarizer.
 
@@ -117,8 +137,8 @@ search up to 10k vectors per key before the search side starts to matter.
 
 ## Failure modes
 
-- **Cold first run**: first call downloads model weights (~250 MB across the
-  three HF models). Subsequent runs are cache-warm.
+- **Cold first run**: first call downloads the two Hugging Face models plus the PyTorch
+  native runtime (about 500 MB). Subsequent runs are cache-warm.
 - **Dimension mismatch**: `FlinkStateVectorMemory.spec(384)` *must* match the
   embedder's actual dimension. The framework throws
   `IllegalArgumentException` at insert time if they disagree.
