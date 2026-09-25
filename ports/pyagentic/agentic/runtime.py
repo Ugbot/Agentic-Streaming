@@ -21,6 +21,7 @@ from .engine import Clock, Engine, Sleep, wall_clock_ms
 from .errors import CapabilityError, RuntimeNotAvailableError, ValidationError
 from .events import EventLog, FileEventLog, InMemoryEventLog, Turn
 from .tools import ToolRegistry, ToolSpec
+from .workflow_timers import ManualClock
 
 ENTRY_POINT_GROUP = "agentic.runtimes"
 
@@ -227,6 +228,10 @@ class LocalRuntime(Runtime):
     `log` is where events live. It defaults to a fresh `InMemoryEventLog`; pass the same
     log to a second `LocalRuntime` (or call `restart()`) to replay into a new instance.
     A `stores.conversation` block of kind `file` (or `store_dir=`) uses a `FileEventLog`.
+
+    `clock` is the processing clock workflow timers read and events are stamped with. It
+    defaults to wall time; a `ManualClock` moves only when advanced, and `restart()` rebuilds
+    a manual clock from the processing time the log recorded rather than carrying it over.
     """
 
     name = "local"
@@ -238,8 +243,8 @@ class LocalRuntime(Runtime):
         "verifier": "supported", "ordering": "supported", "idempotency": "supported",
         "retry": "supported", "memory": "supported", "retrieval": "supported",
         "context_window": "supported", "replay": "supported", "suspend_resume": "supported",
-        "timers": "unsupported", "saga": "supported", "a2a": "supported", "cep": "supported",
-        "event_time": "supported", "checkpoint_recovery": "unsupported",
+        "timers": "supported", "saga": "supported", "a2a": "supported", "cep": "supported",
+        "event_time": "supported", "checkpoint_recovery": "supported",
         "parallelism": "supported", "durable_store": "supported",
     }
 
@@ -406,7 +411,8 @@ class LocalRuntime(Runtime):
         if self.doc is None or self.log is None:
             raise ValidationError("nothing deployed; restart() needs a deployed workflow")
         self.close()
-        fresh = LocalRuntime(log=self.log, clock=self.clock, sleep=self.sleep)
+        clock = ManualClock.recovered_from(self.log) if isinstance(self.clock, ManualClock) else self.clock
+        fresh = LocalRuntime(log=self.log, clock=clock, sleep=self.sleep)
         fresh.rng = self.rng
         fresh.deploy(_Deployable(self.doc, self.bindings))
         return fresh

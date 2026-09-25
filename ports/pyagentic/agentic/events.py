@@ -103,6 +103,11 @@ def reduce_state(log: Iterable[Event], context: Optional[Mapping[str, Any]] = No
     for event in log:
         if event.type == "turn_received":
             state["turn_count"] += 1
+            if event.payload.get("event_time_ms") is not None:
+                event_time = int(event.payload["event_time_ms"])
+                state["watermark_ms"] = max(state.get("watermark_ms", event_time), event_time)
+        elif event.type == "timer_fired":
+            state.setdefault("fired_timers", []).append(str(event.payload["timer_id"]))
         elif event.type == "memory_written":
             state["transcript_length"] += len(event.payload.get("messages", ()))
             if window is not None:

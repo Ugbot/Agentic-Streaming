@@ -53,6 +53,7 @@ public final class RoutedGraph {
   private final Map<String, String> suspendUntil;
   private final ContextWindow contextWindow;
   private final List<org.jagentic.core.cep.SequencePattern> cep;
+  private final List<TimerSpec> timers;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -127,6 +128,32 @@ public final class RoutedGraph {
     this.suspendUntil = suspendUntil == null ? Map.of() : Map.copyOf(suspendUntil);
     this.contextWindow = contextWindow == null ? ContextWindow.NONE : contextWindow;
     this.cep = List.copyOf(cep == null ? List.of() : cep);
+    this.timers = List.of();
+  }
+
+  private RoutedGraph(RoutedGraph base, List<TimerSpec> timers) {
+    this.router = base.router;
+    this.paths = base.paths;
+    this.verifier = base.verifier;
+    this.pathVerifiers = base.pathVerifiers;
+    this.guardrails = base.guardrails;
+    this.listeners = base.listeners;
+    this.policies = base.policies;
+    this.saga = base.saga;
+    this.suspendUntil = base.suspendUntil;
+    this.contextWindow = base.contextWindow;
+    this.cep = base.cep;
+    this.timers = List.copyOf(timers == null ? List.of() : timers);
+  }
+
+  /**
+   * The same graph with the workflow's {@code timers} (spec section 8): scheduled on a conversation's
+   * first turn and fired, before {@code turn_received}, on the first later turn delivered at or past
+   * their deadline, reading {@link AgentContext#clock} for processing time and the folded watermark
+   * for event time.
+   */
+  public RoutedGraph withTimers(List<TimerSpec> timers) {
+    return new RoutedGraph(this, timers);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -144,6 +171,11 @@ public final class RoutedGraph {
 
   public ContextWindow contextWindow() {
     return contextWindow;
+  }
+
+  /** The workflow's declared timers, empty when it has none. */
+  public List<TimerSpec> timers() {
+    return timers;
   }
 
   public List<AgentListener> listeners() {
@@ -180,8 +212,22 @@ public final class RoutedGraph {
     for (AgentListener l : listeners) {
       l.onTurnStart(event, ctx);
     }
-    ctx.record(EventType.TURN_RECEIVED, org.jagentic.core.cep.EventTime.annotate(
-        map("turn_id", event.turnId(), "text", event.text()), event));
+    Long eventTime = WorkflowTimers.eventTimeOf(event);
+    Long watermark = before.timers().watermarkAfter(eventTime);
+    Long processingNow = timers.isEmpty() ? null : WorkflowTimers.processingNow(timers, ctx);
+    boolean firstTurn = before.nextSequence() == 0;
+    if (!firstTurn && processingNow != null) {
+      WorkflowTimers.fireDue(timers, before.timers(), ctx, processingNow, watermark);
+    }
+    Map<String, Object> received = org.jagentic.core.cep.EventTime.annotate(
+        map("turn_id", event.turnId(), "text", event.text()), event);
+    if (processingNow != null) {
+      received.put(LogicalClock.PROCESSING_TIME_KEY, processingNow);
+    }
+    ctx.record(EventType.TURN_RECEIVED, received);
+    if (firstTurn && processingNow != null) {
+      WorkflowTimers.schedule(timers, ctx, processingNow, watermark);
+    }
 
     for (Guardrail g : guardrails) {
       String reason = g.checkInput(event.text());

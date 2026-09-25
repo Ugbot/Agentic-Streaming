@@ -28,6 +28,7 @@ public final class LocalRuntime implements Runtime {
   private final ToolRegistry tools;
   private final Retrieval.TwoTierRetriever retriever;
   private final ConversationLog log;
+  private final LogicalClock clock;
   private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
   private final Map<String, CompletableFuture<?>> tails = new ConcurrentHashMap<>();
   private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -43,12 +44,24 @@ public final class LocalRuntime implements Runtime {
 
   public LocalRuntime(RoutedGraph graph, ConversationStore store, KeyedStateStore state,
                       ToolRegistry tools, Retrieval.TwoTierRetriever retriever, ConversationLog log) {
+    this(graph, store, state, tools, retriever, log, LogicalClock.system());
+  }
+
+  /**
+   * @param clock the processing-time clock workflow timers read (spec section 8); a
+   *     {@link LogicalClock.Manual} makes time advance only when told to, and
+   *     {@link LogicalClock.Manual#recoveredFrom} resumes it from the log after a restart
+   */
+  public LocalRuntime(RoutedGraph graph, ConversationStore store, KeyedStateStore state,
+                      ToolRegistry tools, Retrieval.TwoTierRetriever retriever, ConversationLog log,
+                      LogicalClock clock) {
     this.graph = graph;
     this.store = store;
     this.state = state;
     this.tools = tools;
     this.retriever = retriever;
     this.log = log == null ? new ConversationLog.InMemory() : log;
+    this.clock = clock == null ? LogicalClock.system() : clock;
     rebuildMaterializedViews();
   }
 
@@ -64,6 +77,11 @@ public final class LocalRuntime implements Runtime {
     return graph;
   }
 
+  /** The processing-time clock this runtime's turns read. */
+  public LogicalClock clock() {
+    return clock;
+  }
+
   /** The folded state of one conversation: the {@code replay} verb, no side effects. */
   public ConversationState replay(String conversationId) {
     return log.state(conversationId, graph.contextWindow());
@@ -76,6 +94,7 @@ public final class LocalRuntime implements Runtime {
     try {
       AgentContext ctx = new AgentContext(event.conversationId(), event.turnId(), event.userId(),
           store, state, tools, retriever, log, graph.policies());
+      ctx.clock = clock;
       return graph.handle(event, ctx);
     } finally {
       lock.unlock();

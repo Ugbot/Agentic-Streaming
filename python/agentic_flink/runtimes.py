@@ -68,9 +68,11 @@ _LOCAL_JVM_CAPABILITIES: Dict[str, str] = {
     # LocalRuntime.submitAsync: one serial writer per conversation, different conversations in
     # flight at once (python/tests/test_parallel_conversations_jvm.py).
     "parallelism": "supported",
-    # Not offered by LocalRuntime.
-    "timers": "unsupported",
-    "checkpoint_recovery": "unsupported",
+    # Workflow timers on the core's logical clock (LogicalClock.Manual, advanced by the fixture's
+    # advance_time_ms), event time from metadata.event_time_ms, and pending timers plus the clock
+    # rebuilt from the log across restart(): timer-fires, event-time-timer, timer-survives-restart.
+    "timers": "supported",
+    "checkpoint_recovery": "supported",
 }
 
 _FLINK_CAPABILITIES: Dict[str, str] = {
@@ -127,6 +129,8 @@ _FLINK_BATCH_CAPABILITIES: Dict[str, str] = {
     "parallelism": "supported",
     # The Python binding runs bounded jobs; keyed state does not outlive a job, so nothing can be
     # replayed or resumed across submit() calls and Python tools cannot ship in the job graph.
+    # Workflow timers stay unsupported: a bounded job reads Flink's own processing time and offers
+    # no handle to advance it (the fixtures' advance_time_ms), so a timer deadline cannot be reached.
     "replay": "unsupported",
     "suspend_resume": "unsupported",
     "durable_store": "unsupported",
@@ -249,16 +253,30 @@ class _JvmRuntime(Runtime):
 
 
 class JvmLocalRuntime(_JvmRuntime):
-    """``local-jvm``: the canonical core's in-process runtime."""
+    """``local-jvm``: the canonical core's in-process runtime.
+
+    ``clock`` selects the processing time workflow ``timers`` read: ``"system"`` (default) is
+    wall time; ``"manual"`` is the core's ``LogicalClock.Manual``, which starts at zero and moves
+    only through :meth:`advance_time`, so timers fire exactly when a test says they should (the
+    conformance runner uses it for the fixtures' ``advance_time_ms``). :meth:`restart` rebuilds a
+    manual clock from the processing time the log recorded, the same way it rebuilds every other
+    view, so a pending timer is neither re-scheduled nor fired twice.
+    """
 
     name = "local-jvm"
     _capabilities = _LOCAL_JVM_CAPABILITIES
+    CLOCKS = ("system", "manual")
 
-    def __init__(self, *, peers: Optional[Mapping[str, "JvmLocalRuntime"]] = None, **jvm: Any) -> None:
+    def __init__(self, *, peers: Optional[Mapping[str, "JvmLocalRuntime"]] = None, clock: str = "system",
+                 **jvm: Any) -> None:
         super().__init__(**jvm)
+        if clock not in self.CLOCKS:
+            raise ValueError(f"clock must be one of {self.CLOCKS}, got {clock!r}")
+        self.clock_kind = clock
         self._peers = dict(peers or {})
         self._log: Any = None
         self._runtime: Any = None
+        self._clock: Any = None
 
     def deploy(self, spec: Any) -> None:
         doc = _as_document(spec)
@@ -270,7 +288,10 @@ class JvmLocalRuntime(_JvmRuntime):
         self._built = self._build(doc, _bindings(spec), {n: p._runtime for n, p in self._peers.items()})
         self._doc = doc
         ConversationLog = _jvm.jclass("org.jagentic.core.ConversationLog$InMemory")
+        LogicalClock = _jvm.jclass("org.jagentic.core.LogicalClock")
+        ManualClock = _jvm.jclass("org.jagentic.core.LogicalClock$Manual")
         self._log = ConversationLog()
+        self._clock = ManualClock() if self.clock_kind == "manual" else LogicalClock.system()
         self._runtime = self._new_runtime()
 
     def _new_runtime(self):
@@ -279,12 +300,35 @@ class JvmLocalRuntime(_JvmRuntime):
         KeyedStateStore = _jvm.jclass("org.jagentic.core.KeyedStateStore$InMemory")
         with java_calls():
             return LocalRuntime(self._built.graph(), ConversationStore(), KeyedStateStore(),
-                                self._built.tools(), self._built.retriever(), self._log)
+                                self._built.tools(), self._built.retriever(), self._log, self._clock)
 
     def restart(self) -> None:
-        """Model a process restart: drop every materialized view, keep only the event log."""
+        """Model a process restart: drop every materialized view, keep only the event log.
+        The processing clock resumes from the highest reading the log recorded."""
         self._require_deployed()
+        if self.clock_kind == "manual":
+            ManualClock = _jvm.jclass("org.jagentic.core.LogicalClock$Manual")
+            with java_calls():
+                self._clock = ManualClock.recoveredFrom(self._log)
         self._runtime = self._new_runtime()
+
+    def advance_time(self, ms: int) -> int:
+        """Move logical processing time forward by ``ms`` (never backwards); returns the new reading.
+        Only a ``clock="manual"`` runtime can be advanced."""
+        self._require_deployed()
+        if self.clock_kind != "manual":
+            raise RuntimeError(f"runtime {self.name!r} reads wall time; construct it with clock='manual' to advance it")
+        if int(ms) < 0:
+            raise ValueError(f"logical time never moves backwards: advance by {ms}")
+        with java_calls():
+            self._clock.advance(int(ms))
+            return int(self._clock.nowMs())
+
+    def now_ms(self) -> int:
+        """The current logical processing time in milliseconds."""
+        self._require_deployed()
+        with java_calls():
+            return int(self._clock.nowMs())
 
     def submit(self, event: Event) -> Dict[str, Any]:
         self._require_deployed()

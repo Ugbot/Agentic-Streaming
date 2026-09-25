@@ -22,6 +22,7 @@ import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.streaming.api.TimeDomain;
+import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.jagentic.core.AgentContext;
@@ -62,6 +63,15 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *       registers a Flink timer (processing or event time), appends {@code timer_scheduled}, and
  *       on firing appends {@code timer_fired} and resumes the turn with a
  *       {@code {kind: "timer"}} signal. Pending timers live in keyed state so they survive restore.
+ *   <li><b>Workflow timers.</b> The document's {@code timers} (spec section 8) are handled by the
+ *       core graph over the keyed log: {@code timer_scheduled} on a conversation's first turn,
+ *       {@code timer_fired} plus the timer's tool call at the head of the first later turn whose
+ *       clock reads at or past the deadline. Processing time comes from
+ *       {@link FlinkRuntimeOptions#processingClock()} (the operator's processing time by default);
+ *       event time is the conversation watermark folded from {@code metadata.event_time_ms}. The
+ *       spec makes both clocks observable only through turns, so no Flink timer is registered for
+ *       them; the log in keyed state is the timer registry, and a savepoint or checkpoint carries
+ *       pending timers across a restore without re-scheduling or double-firing.
  *   <li><b>TTL.</b> {@link FlinkRuntimeOptions#stateTtl()} applies Flink state TTL to the log,
  *       counter and timer registry.
  *   <li><b>Serialization.</b> Log entries use {@link JsonTypeInfo}; results use
@@ -213,7 +223,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
           + " carried event for " + event.conversationId());
     }
     ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
-    TurnResult result = handle(event, keyedLog);
+    TurnResult result = handle(event, keyedLog, ctx.timerService());
 
     if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
       LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
@@ -241,11 +251,11 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
       return; // resumed by an explicit signal before the timer fired; the firing is recorded only
     }
     Map<String, Object> signal = payload("kind", TIMER_SIGNAL_KIND, "timer_id", timerId);
-    TurnResult result = handle(Event.resume(cid, turnId, signal), keyedLog);
+    TurnResult result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
     emit(withEvents(result, prepend(fired, result.events)), out);
   }
 
-  private TurnResult handle(Event event, ConversationLog keyedLog) {
+  private TurnResult handle(Event event, ConversationLog keyedLog, TimerService timerService) {
     ConversationState before = keyedLog.state(event.conversationId());
     ConversationStore store = new ConversationStore.InMemory();
     for (ChatMessage m : before.transcript()) {
@@ -254,6 +264,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     AgentContext agentCtx = new AgentContext(event.conversationId(), event.turnId(), event.userId(),
         store, new KeyedStateStore.InMemory(), built.tools(), built.retriever(), keyedLog,
         built.graph().policies());
+    ProcessingClock clock = options.processingClock();
+    agentCtx.clock = () -> clock.nowMs(timerService);
     return built.graph().handle(event, agentCtx);
   }
 
