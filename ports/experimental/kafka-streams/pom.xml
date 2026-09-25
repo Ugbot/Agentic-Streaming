@@ -74,7 +74,7 @@
         <version>3.5.0</version>
         <executions>
           <execution>
-            <id>enforce-jdk-and-maven</id>
+            <id>enforce-build-environment</id>
             <goals>
               <goal>enforce</goal>
             </goals>
@@ -82,9 +82,11 @@
               <rules>
                 <requireJavaVersion>
                   <version>[21,22)</version>
+                  <message>This project requires JDK 21 or newer.</message>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9,)</version>
+                  <message>Use the committed wrapper (./mvnw) or Maven 3.9+.</message>
                 </requireMavenVersion>
               </rules>
             </configuration>
