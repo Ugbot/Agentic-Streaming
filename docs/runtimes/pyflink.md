@@ -49,23 +49,23 @@ both must be built first.
 `agentic_pyflink/capabilities.py` declares a capability `supported` only when a test in
 `pyflink/tests` proves it, and lists that test in `PROOF`. Anything the Java adapter implements
 but this package has no test for is `not_tested`, and nothing is inferred from another runtime's
-results. `timers` and `checkpoint_recovery` are in that second group: the binding skips the three
-timer fixtures, and the matrix records both as unsupported for this column
-([pyflink notes](../capabilities.md#pyflink)). This page does not claim timers on PyFlink.
+results. `timers`, `event_time` and `checkpoint_recovery` are proven by `pyflink/tests/test_timers.py`
+and the three timer fixtures: `FlinkRuntime(clock="manual")` gives the job a serializable
+`ManualProcessingClock` that `advance_time(ms)` moves, the clock reading and pending timers survive
+`restart()` (stop with savepoint plus restore in the same JVM), and event-time timers read the
+conversation watermark ([pyflink notes](../capabilities.md#pyflink)).
 
 ## Where it stands
 
 <!-- matrix: pyflink -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
-Binding `pyflink`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `pyflink`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | pyflink |
 |---|---|
-| `timers` | [unsupported](../capabilities.md#pyflink) |
-| `checkpoint_recovery` | [unsupported](../capabilities.md#pyflink) |
 <!-- /matrix -->
 
 ## Related surfaces
