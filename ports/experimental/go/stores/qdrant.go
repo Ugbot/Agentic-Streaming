@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
 // QdrantVectorStore is a real core.VectorStore backed by a Qdrant server (REST API) —

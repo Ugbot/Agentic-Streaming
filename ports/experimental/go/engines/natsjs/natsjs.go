@@ -10,7 +10,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -228,7 +228,7 @@ func (r *Runtime) Consume(ctx context.Context) error {
 			_ = msg.Term()
 			return
 		}
-		res, err := r.Submit(ctx, core.NewEvent(t.ConversationID, t.UserID, t.Text))
+		res, err := r.Submit(ctx, core.Event{ConversationID: t.ConversationID, UserID: t.UserID, Text: t.Text})
 		if err != nil {
 			_ = msg.Nak()
 			return

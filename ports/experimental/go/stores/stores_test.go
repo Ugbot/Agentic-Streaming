@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
 func envOr(key, def string) string {

@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jagentic/goagentic/core"
-	"github.com/jagentic/goagentic/engines/natsjs"
-	"github.com/jagentic/goagentic/stores"
-	"gopkg.in/yaml.v3"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/engines/natsjs"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/stores"
 )
 
 // Runtime is the backend seam: process one turn.
@@ -59,8 +58,8 @@ func Load(path, backend string) (*System, error) {
 	if err != nil {
 		return nil, err
 	}
-	var spec map[string]any
-	if err := yaml.Unmarshal(data, &spec); err != nil {
+	spec, err := Parse(data)
+	if err != nil {
 		return nil, err
 	}
 	return BuildSystem(spec, backend)

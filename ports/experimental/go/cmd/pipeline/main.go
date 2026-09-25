@@ -1,15 +1,15 @@
 // Command pipeline builds a pipeline.yaml on the chosen backend and runs a turn.
 //
-//	go run ./cmd/pipeline ../../examples/pipelines/banking.yaml --text "what is my balance?"
-//	go run ./cmd/pipeline ../../examples/pipelines/banking.yaml --backend nats --text "card types?"
+//	go run ./cmd/pipeline ../../../examples/pipelines/banking.yaml --text "what is my balance?"
+//	go run ./cmd/pipeline ../../../examples/pipelines/banking.yaml --backend nats --text "card types?"
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/jagentic/goagentic/core"
-	"github.com/jagentic/goagentic/pipeline"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/pipeline"
 )
 
 func main() {
@@ -36,7 +36,7 @@ func main() {
 		fmt.Println("error:", err)
 		os.Exit(1)
 	}
-	res := system.Submit(core.NewEvent(conv, user, text))
+	res := system.Submit(core.Event{ConversationID: conv, UserID: user, Text: text})
 	fmt.Printf("backend=%s path=%s ok=%v\n", system.BackendName, res.Path, res.OK)
 	fmt.Printf("reply: %s\n", res.Reply)
 	if len(res.ToolCalls) > 0 {

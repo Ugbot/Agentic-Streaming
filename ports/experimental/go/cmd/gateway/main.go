@@ -12,8 +12,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/jagentic/goagentic/core"
-	"github.com/jagentic/goagentic/gateway"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/gateway"
 )
 
 func main() {

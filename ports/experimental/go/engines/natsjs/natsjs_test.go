@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 	"github.com/nats-io/nats.go"
 )
 
