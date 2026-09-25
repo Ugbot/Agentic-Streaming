@@ -9,6 +9,9 @@ Dask, Airflow) import this core and provide their own Runtime/state backing.
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _distribution_version
+
 from .core import Agent, AgentContext, Event, RoutedGraph, TurnResult
 from .memory import (
     ChatMessage,
@@ -218,4 +221,7 @@ __all__ = [
     "simple",
 ]
 
-__version__ = "0.1.0"
+try:
+    __version__ = _distribution_version("pyagentic")
+except PackageNotFoundError:  # imported from a checkout that was never installed
+    __version__ = "0+unknown"

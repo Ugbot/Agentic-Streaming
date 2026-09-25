@@ -1,22 +1,44 @@
-name: Publish Python package to TestPyPI
+name: Publish Python packages to TestPyPI
 
-# Manual dispatch only — use this to rehearse a release on TestPyPI before the
-# real one. Trusted Publishing must be configured separately on test.pypi.org.
-# (project: agentic-flink, owner: Ugbot, repo: Agentic-Streaming, workflow:
-#  publish-testpypi.yml, environment: testpypi).
+# Manual dispatch only. Use this to rehearse a release on TestPyPI before the real one: it runs
+# the same tag check, build, artifact check, twine check and smoke test as publish-pypi.yml,
+# then uploads to test.pypi.org instead of pypi.org. Trusted Publishing must be configured
+# separately on test.pypi.org (project: agentic-flink, owner: Ugbot, repo: Agentic-Streaming,
+# workflow: publish-testpypi.yml, environment: testpypi).
 #
 # NOTE: the repo was renamed Agentic-Flink -> Agentic-Streaming; re-register the
 # trusted publisher against the new name or the upload is rejected.
+#
+# The dispatch needs an existing tag because setuptools-scm reads the version from it; an
+# untagged commit would produce a development version that TestPyPI would accept but that no
+# release could ever reuse. TestPyPI never accepts the same version twice, so rehearse with a
+# pre-release tag (v1.0.0rc1) and cut the final tag (v1.0.0) only for publish-pypi.yml.
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to rehearse (for example v1.0.0rc1)"
+        required: true
+        type: string
+
+env:
+  # Space separated distribution names whose sdist and wheel are uploaded by the publish job.
+  # Keep in step with publish-pypi.yml; see docs/release.md.
+  PUBLISH_DISTRIBUTIONS: agentic-flink
 
 jobs:
   build:
-    name: Build sdist + wheel
+    name: Build, check and smoke test sdists and wheels
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -24,23 +46,50 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: python -m pip install --upgrade build
+        run: python -m pip install --upgrade build twine setuptools-scm
 
-      - name: Build distributions
-        working-directory: python
-        run: python -m build
+      - name: Check that the tag is canonical and that every project resolves to it
+        run: python tools/check_release_version.py "$RELEASE_TAG"
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build the canonical core
+        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install -DskipTests
+
+      - name: Build the shaded framework jar
+        run: ./mvnw -B -ntp -DskipTests package
+
+      - name: Build distributions (sdist and wheel for each of the four projects)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for project in ports/pyagentic python pyflink ports/agentic-pipeline; do
+            echo "== $project"
+            (cd "$project" && rm -rf dist && python -m build)
+            cp "$project"/dist/* dist/
+          done
+          ls -l dist
+          unzip -l dist/agentic_flink-*.whl | grep -E 'agentic_flink/jars/agentic-flink-.*-uber\.jar'
+
+      - name: Check that every artifact carries the tagged version (sdist and wheel, all four)
+        run: python tools/check_release_version.py "$RELEASE_TAG" --complete dist/*
 
       - name: Run twine check
-        working-directory: python
-        run: |
-          python -m pip install --upgrade twine
-          python -m twine check dist/*
+        run: python -m twine check --strict dist/*
+
+      - name: Smoke test the wheels in a fresh virtualenv (install, import, one fixture per runtime)
+        run: RUNNER=venv DIST=dist tools/release_dry_run.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: python-dist-test
-          path: python/dist/*
+          path: dist/*
           if-no-files-found: error
 
   publish:
@@ -59,9 +108,20 @@ jobs:
           name: python-dist-test
           path: dist
 
+      - name: Select the distributions to upload
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          for name in $PUBLISH_DISTRIBUTIONS; do
+            stem="${name//-/_}"
+            cp dist/"$stem"-*.whl dist/"$stem"-*.tar.gz upload/
+          done
+          echo "uploading:"
+          ls -l upload
+
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist
+          packages-dir: upload
           repository-url: https://test.pypi.org/legacy/
           print-hash: true

@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-flink"
-version = "1.0.0a1"
+# The version is the release tag (v<PEP 440>) of the repository, read by setuptools-scm.
+# The four Python packages of this repository share one tag; see docs/release.md.
+dynamic = ["version"]
 description = "Python bindings for the Agentic Flink framework (JPype thread-mode bridge)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 dependencies = [
     "JPype1>=1.5.0",
@@ -49,6 +52,16 @@ Repository = "https://github.com/Ugbot/Agentic-Streaming"
 Issues = "https://github.com/Ugbot/Agentic-Streaming/issues"
 Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/docs/python.md"
 
+# Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
+# install or use the wheel. The editable install skips the jar hook and finds the jar under
+# <repo>/target, so run the Maven build first (PUBLISHING.md, "Local dry-run").
+[dependency-groups]
+dev = ["pytest>=7", "jsonschema>=4", "setuptools>=68", "build>=1.2", "twine>=5"]
+
+[tool.setuptools_scm]
+root = ".."
+local_scheme = "no-local-version"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agentic_flink*"]
@@ -58,4 +71,4 @@ exclude = ["tests*"]
 # AGENTIC_FLINK_JAR / <repo>/target into agentic_flink/jars/ before package data is collected;
 # see agentic_flink/jars/README.md and PUBLISHING.md.
 [tool.setuptools.package-data]
-agentic_flink = ["jars/*.jar", "jars/README.md"]
+agentic_flink = ["py.typed", "jars/*.jar", "jars/README.md"]

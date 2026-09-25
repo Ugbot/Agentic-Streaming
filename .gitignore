@@ -26,10 +26,18 @@ replay_pid*
 # Build output
 target/
 
-# Python build output
+# Python build output (python -m build in ports/pyagentic, python, pyflink, ports/agentic-pipeline;
+# the publish workflows collect all four into dist/ at the root)
+/dist/
 python/dist/
 python/build/
 python/*.egg-info/
+ports/pyagentic/dist/
+ports/pyagentic/build/
+pyflink/dist/
+pyflink/build/
+ports/agentic-pipeline/dist/
+ports/agentic-pipeline/build/
 **/__pycache__/
 **/.pytest_cache/
 

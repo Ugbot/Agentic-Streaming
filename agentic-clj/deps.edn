@@ -20,4 +20,8 @@
   ;; clojure -M:mcp   — MCP stdio server exposing the tool registry
   :mcp {:main-opts ["-m" "agentic.mcp"]}
   ;; clojure -M:time-travel — Datomic transcript time-travel showcase (as-of replay)
-  :time-travel {:main-opts ["-m" "agentic.example.time-travel"]}}}
+  :time-travel {:main-opts ["-m" "agentic.example.time-travel"]}
+  ;; clojure -T:build jar | install | version | clean  (build.clj; see the packaging section of the README)
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.9"}}
+          :extra-paths ["build"]
+          :ns-default build}}}

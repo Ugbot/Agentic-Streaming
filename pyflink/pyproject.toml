@@ -1,14 +1,18 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-pyflink"
-version = "1.0.0a1"
+# The version is the release tag (v<PEP 440>) of the repository, read by setuptools-scm.
+# The four Python packages of this repository share one tag; see docs/release.md.
+dynamic = ["version"]
 description = "Run portable agentic/v1 workflow documents on Apache Flink from Python (PyFlink)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Agentic Streaming contributors" }]
 keywords = ["agentic", "flink", "pyflink", "agents", "streaming"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -17,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
     "apache-flink>=2.0,<3",
@@ -35,10 +40,24 @@ pyflink = "agentic_pyflink.runtime:FlinkRuntime"
 Repository = "https://github.com/Ugbot/Agentic-Streaming"
 Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/docs/python.md"
 
+# Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
+# install or use the wheel. The Java artifacts (the framework uber jar and the bridge jar under
+# pyflink/java) are not part of this wheel; agentic_pyflink.jars finds them in a source checkout
+# or through AGENTIC_FLINK_UBER_JAR / AGENTIC_PYFLINK_JAR.
+[dependency-groups]
+dev = ["pytest>=7", "jsonschema>=4", "build>=1.2", "twine>=5"]
+
+[tool.setuptools_scm]
+root = ".."
+local_scheme = "no-local-version"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agentic_pyflink*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+agentic_pyflink = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
