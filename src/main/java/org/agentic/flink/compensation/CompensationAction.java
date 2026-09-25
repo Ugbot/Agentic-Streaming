@@ -1,9 +1,9 @@
 package org.agentic.flink.compensation;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.core.AgentEvent;
 
 /**
  * Represents a single compensation action to undo an operation.
@@ -11,10 +11,11 @@ import java.util.Map;
  * <p>Each compensation action is typically the inverse of a successful operation.
  *
  * <p><b>Examples:</b>
+ *
  * <ul>
- *   <li>database-insert → database-delete</li>
- *   <li>api-create-order → api-cancel-order</li>
- *   <li>file-upload → file-delete</li>
+ *   <li>database-insert → database-delete
+ *   <li>api-create-order → api-cancel-order
+ *   <li>file-upload → file-delete
  * </ul>
  *
  * @author Agentic Flink Team
@@ -72,7 +73,7 @@ public class CompensationAction implements Serializable {
 
   @Override
   public String toString() {
-    return String.format("CompensationAction[name=%s, tool=%s, params=%s]",
-        actionName, toolName, parameters);
+    return String.format(
+        "CompensationAction[name=%s, tool=%s, params=%s]", actionName, toolName, parameters);
   }
 }

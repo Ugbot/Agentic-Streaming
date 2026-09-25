@@ -1,15 +1,15 @@
 package org.agentic.flink.feedback;
 
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
-import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 
 /**
@@ -29,7 +29,8 @@ public final class LlmCriticQualityCheck implements QualityCheck {
   private final String rubric;
   private transient ChatClient critic;
 
-  public LlmCriticQualityCheck(ChatConnection connection, ChatSetup setup, double threshold, String rubric) {
+  public LlmCriticQualityCheck(
+      ChatConnection connection, ChatSetup setup, double threshold, String rubric) {
     this.connection = connection;
     this.setup = setup;
     this.threshold = threshold;
@@ -44,7 +45,8 @@ public final class LlmCriticQualityCheck implements QualityCheck {
             .withTemperature(0.0)
             .withMaxResponseTokens(256)
             .build();
-    return new LlmCriticQualityCheck(LangChain4jChatConnection.anthropic(apiKey), s, threshold, rubric);
+    return new LlmCriticQualityCheck(
+        LangChain4jChatConnection.anthropic(apiKey), s, threshold, rubric);
   }
 
   private ChatClient critic() {

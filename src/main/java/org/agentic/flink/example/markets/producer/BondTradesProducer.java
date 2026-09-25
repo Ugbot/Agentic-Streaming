@@ -1,9 +1,9 @@
 package org.agentic.flink.example.markets.producer;
 
-import org.agentic.flink.example.markets.model.MarketRecords.Trade;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.example.markets.model.MarketRecords.Trade;
 
 /**
  * Java twin of {@code examples-bin/markets/bond_trades_producer.py}. Synthesizes anonymised trades
@@ -45,10 +45,15 @@ public final class BondTradesProducer {
     double qty = sampleQuantity(rng);
     double yld = clamp(rng.nextGaussian() * 1.5 + 4.25, 0.5, 9.5);
     return new Trade(
-        2_100_000_000L + seq, isin, System.currentTimeMillis(),
+        2_100_000_000L + seq,
+        isin,
+        System.currentTimeMillis(),
         SIDES.get(rng.nextInt(SIDES.size())),
-        round3(price), qty, round4(yld),
-        round2(rng.nextGaussian() * 40 + 150), round2(rng.nextGaussian() * 40 + 145),
+        round3(price),
+        qty,
+        round4(yld),
+        round2(rng.nextGaussian() * 40 + 150),
+        round2(rng.nextGaussian() * 40 + 145),
         round2(rng.nextGaussian() * 40 + 155),
         SECTORS.get(rng.nextInt(SECTORS.size())),
         FIRMS.get(rng.nextInt(FIRMS.size())),

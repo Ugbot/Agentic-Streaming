@@ -1,7 +1,7 @@
 package org.agentic.flink.llm.langchain4j;
 
-import org.agentic.flink.llm.ChatClient;
 import dev.langchain4j.model.chat.ChatModel;
+import org.agentic.flink.llm.ChatClient;
 
 /**
  * Escape hatch interface implemented by {@code ChatClient}s backed by LangChain4J.
@@ -18,8 +18,8 @@ import dev.langchain4j.model.chat.ChatModel;
  * }
  * }</pre>
  *
- * <p>Implementations of {@link ChatClient} may but are not required to provide this accessor.
- * Code that casts to this interface accepts the coupling.
+ * <p>Implementations of {@link ChatClient} may but are not required to provide this accessor. Code
+ * that casts to this interface accepts the coupling.
  */
 public interface LangChain4jChatClient extends ChatClient {
 

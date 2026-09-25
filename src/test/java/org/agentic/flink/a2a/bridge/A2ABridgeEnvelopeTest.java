@@ -59,7 +59,8 @@ class A2ABridgeEnvelopeTest {
     List<A2AArtifact> artifacts = new ArrayList<>();
     int n = random.nextInt(3);
     for (int i = 0; i < n; i++) {
-      artifacts.add(A2AArtifact.text(UUID.randomUUID().toString(), "a" + i, "v" + random.nextInt()));
+      artifacts.add(
+          A2AArtifact.text(UUID.randomUUID().toString(), "a" + i, "v" + random.nextInt()));
     }
     A2AResponse resp =
         new A2AResponse(
@@ -100,7 +101,8 @@ class A2ABridgeEnvelopeTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(obj);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return (T) ois.readObject();
     }
   }

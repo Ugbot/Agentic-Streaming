@@ -75,7 +75,8 @@ public final class InMemoryConversationStore implements ConversationStore {
     transcripts.compute(
         conversationId,
         (k, list) -> {
-          List<ChatMessage> l = list == null ? Collections.synchronizedList(new ArrayList<>()) : list;
+          List<ChatMessage> l =
+              list == null ? Collections.synchronizedList(new ArrayList<>()) : list;
           synchronized (l) {
             l.add(message);
             if (maxMessages > 0) {

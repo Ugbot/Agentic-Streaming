@@ -47,7 +47,9 @@ public final class BankingEmbeddings {
     return setup;
   }
 
-  /** True when the configured provider is {@code keyword} (use {@link KbSearchTool}, not vectors). */
+  /**
+   * True when the configured provider is {@code keyword} (use {@link KbSearchTool}, not vectors).
+   */
   public static boolean isKeyword() {
     return "keyword".equalsIgnoreCase(env("EMBED_PROVIDER", "djl"));
   }
@@ -73,7 +75,8 @@ public final class BankingEmbeddings {
         dim = dimOverride == null ? 1536 : dimOverride;
         break;
       case "ollama":
-        connection = new OllamaEmbeddingConnection(env("OLLAMA_BASE_URL", "http://localhost:11434"));
+        connection =
+            new OllamaEmbeddingConnection(env("OLLAMA_BASE_URL", "http://localhost:11434"));
         modelName = model == null ? "nomic-embed-text" : model;
         dim = dimOverride == null ? 768 : dimOverride;
         break;

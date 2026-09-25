@@ -1,12 +1,12 @@
 package org.agentic.flink.example.screening;
 
+import java.time.Duration;
 import org.agentic.flink.screening.BandPassDetector;
 import org.agentic.flink.screening.RepeatDetector;
 import org.agentic.flink.screening.ScreenItem;
 import org.agentic.flink.screening.ScreeningPipeline;
 import org.agentic.flink.screening.ScreeningResult;
 import org.agentic.flink.screening.VelocityDetector;
-import java.time.Duration;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -14,13 +14,13 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
 /**
- * Sensor/telemetry band-pass screening — the same {@link ScreeningPipeline} as
- * {@link PaymentScreeningExample}, different domain and detector config:
+ * Sensor/telemetry band-pass screening — the same {@link ScreeningPipeline} as {@link
+ * PaymentScreeningExample}, different domain and detector config:
  *
  * <ul>
- *   <li><b>band-pass</b> — readings must stay within an expected operating band; out-of-band fires;</li>
- *   <li><b>repeat</b> — the identical reading N times in a row signals a stuck sensor;</li>
- *   <li><b>velocity</b> — a burst of readings signals a flapping/chattering sensor.</li>
+ *   <li><b>band-pass</b> — readings must stay within an expected operating band; out-of-band fires;
+ *   <li><b>repeat</b> — the identical reading N times in a row signals a stuck sensor;
+ *   <li><b>velocity</b> — a burst of readings signals a flapping/chattering sensor.
  * </ul>
  *
  * <p>No ML/LLM tier here (numeric telemetry needs no language model) — it stops at the rules
@@ -84,8 +84,8 @@ public final class TelemetryScreeningExample {
       ScreeningResult r = pipeline.screen(item);
       out.collect(
           String.format(
-              "%-6s %-6s risk=%.2f | %s = %.1f", r.decidedBy, r.verdict, r.combinedRisk,
-              rd.sensorId(), rd.value()));
+              "%-6s %-6s risk=%.2f | %s = %.1f",
+              r.decidedBy, r.verdict, r.combinedRisk, rd.sensorId(), rd.value()));
     }
   }
 }

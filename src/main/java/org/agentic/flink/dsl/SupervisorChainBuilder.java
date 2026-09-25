@@ -1,9 +1,9 @@
 package org.agentic.flink.dsl;
 
-import org.agentic.flink.dsl.SupervisorChain.EscalationPolicy;
-import org.agentic.flink.dsl.SupervisorChain.SupervisorTier;
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.dsl.SupervisorChain.EscalationPolicy;
+import org.agentic.flink.dsl.SupervisorChain.SupervisorTier;
 
 /**
  * Fluent builder for creating SupervisorChain instances.
@@ -11,6 +11,7 @@ import java.util.List;
  * <p>Provides a declarative API for defining flexible N-tier supervisor hierarchies.
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * SupervisorChain chain = SupervisorChain.builder()
  *     .withId("quality-chain")
@@ -28,7 +29,6 @@ import java.util.List;
  *
  * @author Agentic Flink Team
  * @see SupervisorChain
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -211,10 +211,7 @@ public class SupervisorChainBuilder {
     private double qualityThreshold = 0.0;
 
     private TierBuilder(
-        SupervisorChainBuilder parent,
-        String tierName,
-        Agent agent,
-        int tierIndex) {
+        SupervisorChainBuilder parent, String tierName, Agent agent, int tierIndex) {
       this.parent = parent;
       this.tierName = tierName;
       this.agent = agent;
@@ -263,7 +260,7 @@ public class SupervisorChainBuilder {
      * @return parent chain builder
      */
     public SupervisorChainBuilder withEscalationPolicy(EscalationPolicy policy) {
-      parent.tiers.add(buildTier());  // Finalize this tier
+      parent.tiers.add(buildTier()); // Finalize this tier
       parent.currentTierBuilder = null;
       return parent.withEscalationPolicy(policy);
     }
@@ -274,7 +271,7 @@ public class SupervisorChainBuilder {
      * @return parent chain builder
      */
     public SupervisorChainBuilder withAutoEscalateOnScore(double threshold) {
-      parent.tiers.add(buildTier());  // Finalize this tier
+      parent.tiers.add(buildTier()); // Finalize this tier
       parent.currentTierBuilder = null;
       return parent.withAutoEscalateOnScore(threshold);
     }
@@ -295,12 +292,7 @@ public class SupervisorChainBuilder {
      */
     private SupervisorTier buildTier() {
       return new SupervisorTier(
-          tierIndex,
-          tierName,
-          agent,
-          requiresHumanApproval,
-          qualityThreshold
-      );
+          tierIndex, tierName, agent, requiresHumanApproval, qualityThreshold);
     }
   }
 
@@ -331,9 +323,7 @@ public class SupervisorChainBuilder {
    * @return 3-tier chain
    */
   public static SupervisorChain threeTierValidated(
-      Agent validatorAgent,
-      Agent executorAgent,
-      Agent supervisorAgent) {
+      Agent validatorAgent, Agent executorAgent, Agent supervisorAgent) {
     return SupervisorChain.builder()
         .withId("three-tier-validated")
         .addSimpleTier("validator", validatorAgent)
@@ -354,17 +344,14 @@ public class SupervisorChainBuilder {
    * @return 4-tier chain with human approval
    */
   public static SupervisorChain fourTierWithApproval(
-      Agent executorAgent,
-      Agent qaAgent,
-      Agent securityAgent,
-      Agent approvalAgent) {
+      Agent executorAgent, Agent qaAgent, Agent securityAgent, Agent approvalAgent) {
     return SupervisorChain.builder()
         .withId("four-tier-approval")
         .addSimpleTier("executor", executorAgent)
         .addSimpleTier("qa-review", qaAgent)
         .addSimpleTier("security-check", securityAgent)
         .addTier("final-approval", approvalAgent)
-            .withHumanApprovalRequired()
-            .build();
+        .withHumanApprovalRequired()
+        .build();
   }
 }

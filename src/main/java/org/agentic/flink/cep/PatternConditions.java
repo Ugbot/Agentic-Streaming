@@ -1,11 +1,11 @@
 package org.agentic.flink.cep;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
-import org.agentic.flink.statemachine.AgentState;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.statemachine.AgentState;
 import org.apache.flink.cep.pattern.conditions.IterativeCondition;
 import org.apache.flink.cep.pattern.conditions.SimpleCondition;
 
@@ -17,12 +17,14 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * for state transitions.
  *
  * <p><b>Condition Types:</b>
+ *
  * <ul>
- *   <li><b>SimpleCondition</b> - Stateless condition, checks only the event itself</li>
- *   <li><b>IterativeCondition</b> - Stateful condition, can access previous pattern matches</li>
+ *   <li><b>SimpleCondition</b> - Stateless condition, checks only the event itself
+ *   <li><b>IterativeCondition</b> - Stateful condition, can access previous pattern matches
  * </ul>
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * Pattern<AgentEvent, ?> pattern = Pattern.<AgentEvent>begin("start")
  *     .where(PatternConditions.eventTypeCondition(AgentEventType.FLOW_STARTED))
@@ -35,7 +37,6 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * @author Agentic Flink Team
  * @see SimpleCondition
  * @see IterativeCondition
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -386,8 +387,7 @@ public class PatternConditions {
    * @param targetCount The target count to reach
    * @return condition that matches when count >= target
    */
-  public static IterativeCondition<AgentEvent> aggregateCount(
-      String patternName, int targetCount) {
+  public static IterativeCondition<AgentEvent> aggregateCount(String patternName, int targetCount) {
     return new IterativeCondition<AgentEvent>() {
       @Override
       public boolean filter(AgentEvent event, Context<AgentEvent> ctx) throws Exception {

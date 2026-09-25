@@ -1,10 +1,9 @@
 package org.agentic.flink.plugins.flintagents.adapter;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.agents.api.Event;
 import org.apache.flink.agents.api.InputEvent;
 import org.apache.flink.agents.api.OutputEvent;

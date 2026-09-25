@@ -5,21 +5,21 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.memory.vector.FlinkStateVectorMemory;
-import org.agentic.flink.memory.vector.VectorMemorySpec;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.memory.vector.FlinkStateVectorMemory;
+import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Specs must round-trip through Java serialization because Flink ships them in the job graph.
- * If a spec accidentally captures a non-serializable field, the job submits cleanly on a single
- * JVM but blows up when a TaskManager tries to deserialize the graph.
+ * Specs must round-trip through Java serialization because Flink ships them in the job graph. If a
+ * spec accidentally captures a non-serializable field, the job submits cleanly on a single JVM but
+ * blows up when a TaskManager tries to deserialize the graph.
  */
 class MemorySpecSerializationTest {
 
@@ -77,7 +77,8 @@ class MemorySpecSerializationTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(obj);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return ois.readObject();
     }
   }

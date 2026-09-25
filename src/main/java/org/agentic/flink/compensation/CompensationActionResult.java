@@ -59,7 +59,8 @@ public class CompensationActionResult implements Serializable {
 
   @Override
   public String toString() {
-    return String.format("CompensationActionResult[action=%s, success=%s, error=%s]",
+    return String.format(
+        "CompensationActionResult[action=%s, success=%s, error=%s]",
         actionName, success, errorMessage);
   }
 }

@@ -16,8 +16,9 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
 public class AgentEvent implements Serializable {
 
   /**
-   * Serializes via JSON ({@link org.agentic.flink.typeinfo.FlinkJson}) instead of Kryo wherever this
-   * event flows (stream elements + keyed state). Mutable, so Flink object reuse deep-copies it.
+   * Serializes via JSON ({@link org.agentic.flink.typeinfo.FlinkJson}) instead of Kryo wherever
+   * this event flows (stream elements + keyed state). Mutable, so Flink object reuse deep-copies
+   * it.
    */
   public static final class Factory extends JsonTypeInfoFactory<AgentEvent> {
     public Factory() {
@@ -75,11 +76,12 @@ public class AgentEvent implements Serializable {
    * distinguish routing metadata from business payload.
    *
    * <p>Example metadata:
+   *
    * <ul>
-   *   <li>"priority" → "high" (route to fast-track supervisor)</li>
-   *   <li>"requires_approval" → true (route to approval tier)</li>
-   *   <li>"iteration_count" → 3 (track retry attempts)</li>
-   *   <li>"state" → "validating" (current agent state)</li>
+   *   <li>"priority" → "high" (route to fast-track supervisor)
+   *   <li>"requires_approval" → true (route to approval tier)
+   *   <li>"iteration_count" → 3 (track retry attempts)
+   *   <li>"state" → "validating" (current agent state)
    * </ul>
    */
   private Map<String, Object> metadata;
@@ -91,6 +93,7 @@ public class AgentEvent implements Serializable {
    * data needed to reverse the operation.
    *
    * <p>Example: If a tool call modified external state, compensationData might contain:
+   *
    * <pre>{@code
    * {
    *   "tool_name": "database_insert",
@@ -241,11 +244,12 @@ public class AgentEvent implements Serializable {
    * Creates a child event that inherits context from this parent.
    *
    * <p>The child event will have:
+   *
    * <ul>
-   *   <li>Same correlationId as parent</li>
-   *   <li>parentFlowId set to this event's flowId</li>
-   *   <li>New unique flowId</li>
-   *   <li>Inherits userId and agentId</li>
+   *   <li>Same correlationId as parent
+   *   <li>parentFlowId set to this event's flowId
+   *   <li>New unique flowId
+   *   <li>Inherits userId and agentId
    * </ul>
    *
    * @param childFlowId The flow ID for the child
@@ -263,21 +267,23 @@ public class AgentEvent implements Serializable {
    * Creates a compensation event for rollback.
    *
    * <p>The compensation event:
+   *
    * <ul>
-   *   <li>Has same flowId and correlationId</li>
-   *   <li>Copies compensationData to data field</li>
-   *   <li>Sets eventType to indicate compensation</li>
+   *   <li>Has same flowId and correlationId
+   *   <li>Copies compensationData to data field
+   *   <li>Sets eventType to indicate compensation
    * </ul>
    *
    * @return new compensation event
    */
   public AgentEvent createCompensationEvent() {
-    AgentEvent compensation = new AgentEvent(
-        this.flowId,
-        this.userId,
-        this.agentId,
-        AgentEventType.FLOW_FAILED  // Will be enhanced with COMPENSATION_REQUESTED later
-    );
+    AgentEvent compensation =
+        new AgentEvent(
+            this.flowId,
+            this.userId,
+            this.agentId,
+            AgentEventType.FLOW_FAILED // Will be enhanced with COMPENSATION_REQUESTED later
+            );
     compensation.setCorrelationId(this.correlationId);
     compensation.putMetadata("is_compensation", true);
     compensation.putMetadata("original_event_type", this.eventType.toString());
@@ -325,7 +331,8 @@ public class AgentEvent implements Serializable {
     copy.setParentFlowId(this.parentFlowId);
     copy.setCorrelationId(this.correlationId);
     copy.setMetadata(this.metadata != null ? new HashMap<>(this.metadata) : null);
-    copy.setCompensationData(this.compensationData != null ? new HashMap<>(this.compensationData) : null);
+    copy.setCompensationData(
+        this.compensationData != null ? new HashMap<>(this.compensationData) : null);
     copy.setCompletionTaskId(this.completionTaskId);
     return copy;
   }

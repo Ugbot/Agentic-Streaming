@@ -8,16 +8,17 @@ import java.util.List;
  * rolling window from {@link ScreenContext#recent(String)} — no extra state of its own.
  *
  * <p>A lightweight, framework-consistent stand-in for the "ML tier" of {@link ScreeningPipeline}
- * over numeric features (mirrors the inline z-score detector in
- * {@code IncidentAgentExample}'s {@code GenericInferenceModel}). For a trained anomaly model swap
- * in {@code DjlInferenceConnection}; the {@link ScreeningPipeline} keeps the same surface.
+ * over numeric features (mirrors the inline z-score detector in {@code IncidentAgentExample}'s
+ * {@code GenericInferenceModel}). For a trained anomaly model swap in {@code
+ * DjlInferenceConnection}; the {@link ScreeningPipeline} keeps the same surface.
  *
  * <p>Two modes:
+ *
  * <ul>
- *   <li>Default — read {@link ScreenItem#value()}.</li>
- *   <li>{@link #onAttr(String, Phase, double, int, double)} — read a numeric value from
- *       {@link ScreenItem#attrs()} by key (parsed as a double). Lets a single screening pipeline
- *       z-score several features carried in one item (e.g. spread, depth, volume).</li>
+ *   <li>Default — read {@link ScreenItem#value()}.
+ *   <li>{@link #onAttr(String, Phase, double, int, double)} — read a numeric value from {@link
+ *       ScreenItem#attrs()} by key (parsed as a double). Lets a single screening pipeline z-score
+ *       several features carried in one item (e.g. spread, depth, volume).
  * </ul>
  */
 public final class ZScoreDetector implements Detector {
@@ -83,7 +84,9 @@ public final class ZScoreDetector implements Detector {
     double z = (current - mean) / std;
     if (Math.abs(z) < zThreshold) return null;
     return new Signal(
-        name, phase, weight,
+        name,
+        phase,
+        weight,
         String.format(
             "%s=%.2f is %.2fσ from baseline mean %.2f (window=%d)",
             attrName == null ? "value" : attrName, current, z, mean, n));

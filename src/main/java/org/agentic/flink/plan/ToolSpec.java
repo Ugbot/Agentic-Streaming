@@ -12,11 +12,10 @@ import java.util.Map;
  * One tool registered on an agent. Two flavours, distinguished by {@link #getKind()}:
  *
  * <ul>
- *   <li>{@code "java"} — references a {@link org.agentic.flink.tools.ToolExecutor}
- *       implementation by fully-qualified class name; instantiated via
- *       {@link PlanReader}.
- *   <li>{@code "python"} — carries cloudpickle-encoded Python bytes; instantiated as a
- *       {@code PythonToolExecutor} that runs the callable through PEMJA.
+ *   <li>{@code "java"} — references a {@link org.agentic.flink.tools.ToolExecutor} implementation
+ *       by fully-qualified class name; instantiated via {@link PlanReader}.
+ *   <li>{@code "python"} — carries cloudpickle-encoded Python bytes; instantiated as a {@code
+ *       PythonToolExecutor} that runs the callable through PEMJA.
  * </ul>
  */
 public final class ToolSpec implements Serializable {

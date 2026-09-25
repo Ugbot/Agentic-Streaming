@@ -14,23 +14,23 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
-import org.agentic.flink.statemachine.AgentState;
-import org.agentic.flink.statemachine.AgentStateMachine;
-import org.agentic.flink.statemachine.AgentTransition;
+import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.ChatToolCall;
+import org.agentic.flink.statemachine.AgentState;
+import org.agentic.flink.statemachine.AgentStateMachine;
+import org.agentic.flink.statemachine.AgentTransition;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -82,7 +82,11 @@ public class AgentExecutorTest {
   }
 
   public static ChatResponse toolCall(String tool, Map<String, Object> args) {
-    return new ChatResponse("", "m", List.of(new ChatToolCall("id-" + tool, tool, args)), 1L,
+    return new ChatResponse(
+        "",
+        "m",
+        List.of(new ChatToolCall("id-" + tool, tool, args)),
+        1L,
         ChatResponse.FinishReason.TOOL_CALLS);
   }
 
@@ -105,15 +109,16 @@ public class AgentExecutorTest {
       if (b == null) {
         return CompletableFuture.completedFuture("ok-" + executions.get());
       }
-      return CompletableFuture.supplyAsync(() -> {
-        try {
-          b.await();
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          throw new CancellationException();
-        }
-        return "late";
-      });
+      return CompletableFuture.supplyAsync(
+          () -> {
+            try {
+              b.await();
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+              throw new CancellationException();
+            }
+            return "late";
+          });
     }
 
     @Override
@@ -128,16 +133,22 @@ public class AgentExecutorTest {
   }
 
   public static AgentStateMachine stateMachine() {
-    AgentStateMachine.Builder b = AgentStateMachine.builder()
-        .withId("sm-" + UUID.randomUUID()).withInitialState(AgentState.INITIALIZED);
+    AgentStateMachine.Builder b =
+        AgentStateMachine.builder()
+            .withId("sm-" + UUID.randomUUID())
+            .withInitialState(AgentState.INITIALIZED);
     b.addTransition(t(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED));
     b.addTransition(t(AgentState.EXECUTING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED));
-    b.addTransition(t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
-    b.addTransition(t(AgentState.CORRECTING, AgentState.COMPLETED, AgentEventType.CORRECTION_COMPLETED));
-    b.addTransition(t(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
+    b.addTransition(
+        t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
+    b.addTransition(
+        t(AgentState.CORRECTING, AgentState.COMPLETED, AgentEventType.CORRECTION_COMPLETED));
+    b.addTransition(
+        t(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
     b.addTransition(t(AgentState.PAUSED, AgentState.COMPLETED, AgentEventType.FLOW_RESUMED));
     b.addTransition(t(AgentState.OFFLOADING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED));
-    b.addTransition(t(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED));
+    b.addTransition(
+        t(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED));
     return b.build();
   }
 
@@ -146,12 +157,18 @@ public class AgentExecutorTest {
   }
 
   static Agent agent(int maxIterations) {
-    return Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("sys").withTools("charge", "slow")
-        .withMaxIterations(maxIterations).withStateMachine(stateMachine()).build();
+    return Agent.builder()
+        .withId("a-" + UUID.randomUUID())
+        .withSystemPrompt("sys")
+        .withTools("charge", "slow")
+        .withMaxIterations(maxIterations)
+        .withStateMachine(stateMachine())
+        .build();
   }
 
   private static AgentEvent turn(String turnId) {
-    AgentEvent e = new AgentEvent("flow-" + UUID.randomUUID(), "u", "a", AgentEventType.FLOW_STARTED);
+    AgentEvent e =
+        new AgentEvent("flow-" + UUID.randomUUID(), "u", "a", AgentEventType.FLOW_STARTED);
     e.putData("user_message", "hello " + UUID.randomUUID());
     e.putData("turn_id", turnId);
     return e;
@@ -165,9 +182,14 @@ public class AgentExecutorTest {
     if (tool != null) {
       reg.registerTool(tool.id, tool);
     }
-    AgentExecutor ex = AgentExecutor.builder().withAgent(agent).withLlmClient(llm)
-        .withToolRegistry(reg.build()).withTurnResultStore(store)
-        .withRetryBackoff(Duration.ofMillis(1), Duration.ofMillis(2)).build();
+    AgentExecutor ex =
+        AgentExecutor.builder()
+            .withAgent(agent)
+            .withLlmClient(llm)
+            .withToolRegistry(reg.build())
+            .withTurnResultStore(store)
+            .withRetryBackoff(Duration.ofMillis(1), Duration.ofMillis(2))
+            .build();
     ex.setSleeper(ms -> 0L);
     return ex;
   }
@@ -191,9 +213,13 @@ public class AgentExecutorTest {
     ScriptedConnection conn = new ScriptedConnection(List.of(text(answer)));
     Agent agent = agent(3);
     InMemoryTurnResultStore store = new InMemoryTurnResultStore();
-    try (AgentExecutor ex = AgentExecutor.builder().withAgent(agent)
-        .withLlmClient(LLMClient.builder().withModel("m").build(conn))
-        .withToolRegistry(ToolRegistry.empty()).withTurnResultStore(store).build()) {
+    try (AgentExecutor ex =
+        AgentExecutor.builder()
+            .withAgent(agent)
+            .withLlmClient(LLMClient.builder().withModel("m").build(conn))
+            .withToolRegistry(ToolRegistry.empty())
+            .withTurnResultStore(store)
+            .build()) {
       String turnId = "t-" + UUID.randomUUID();
       ExecutionResult first = ex.execute(turn(turnId)).get(10, TimeUnit.SECONDS);
       assertTrue(first.isSuccess());
@@ -230,10 +256,14 @@ public class AgentExecutorTest {
 
     InMemoryTurnResultStore fresh = new InMemoryTurnResultStore();
     fresh.putToolResult(turnId, 0, store.getToolResult(turnId, 0).get());
-    try (AgentExecutor ex = executor(List.of(toolCall("charge", args), text("done")), tool, fresh, 3)) {
+    try (AgentExecutor ex =
+        executor(List.of(toolCall("charge", args), text("done")), tool, fresh, 3)) {
       ExecutionResult r = ex.execute(turn(turnId)).get(10, TimeUnit.SECONDS);
       assertTrue(r.isSuccess());
-      assertEquals(1, tool.executions.get(), "side-effecting tool must not run twice for the same (turn, call)");
+      assertEquals(
+          1,
+          tool.executions.get(),
+          "side-effecting tool must not run twice for the same (turn, call)");
       assertEquals(1, r.getToolCalls().size());
     }
   }
@@ -245,14 +275,19 @@ public class AgentExecutorTest {
     int iterations = ThreadLocalRandom.current().nextInt(2, 5);
     List<Long> sleeps = new CopyOnWriteArrayList<>();
     Agent agent = agent(iterations);
-    try (AgentExecutor ex = AgentExecutor.builder().withAgent(agent)
-        .withLlmClient(LLMClient.builder().withModel("m").build(new ScriptedConnection(script)))
-        .withToolRegistry(ToolRegistry.empty()).withTurnResultStore(new InMemoryTurnResultStore())
-        .withRetryBackoff(Duration.ofMillis(100), Duration.ofMillis(350)).build()) {
-      ex.setSleeper(ms -> {
-        sleeps.add(ms);
-        return 0L;
-      });
+    try (AgentExecutor ex =
+        AgentExecutor.builder()
+            .withAgent(agent)
+            .withLlmClient(LLMClient.builder().withModel("m").build(new ScriptedConnection(script)))
+            .withToolRegistry(ToolRegistry.empty())
+            .withTurnResultStore(new InMemoryTurnResultStore())
+            .withRetryBackoff(Duration.ofMillis(100), Duration.ofMillis(350))
+            .build()) {
+      ex.setSleeper(
+          ms -> {
+            sleeps.add(ms);
+            return 0L;
+          });
       ExecutionResult r = ex.execute(turn("t-" + UUID.randomUUID())).get(10, TimeUnit.SECONDS);
       assertFalse(r.isSuccess());
       assertTrue(r.getErrorMessage().contains("scripted llm failure"), r.getErrorMessage());
@@ -260,8 +295,10 @@ public class AgentExecutorTest {
       for (long s : sleeps) {
         assertTrue(s >= 0 && s <= 351, "backoff within cap: " + s);
       }
-      long errorEvents = r.getEvents().stream()
-          .filter(e -> e.getEventType() == AgentEventType.ERROR_OCCURRED).count();
+      long errorEvents =
+          r.getEvents().stream()
+              .filter(e -> e.getEventType() == AgentEventType.ERROR_OCCURRED)
+              .count();
       assertEquals(iterations, errorEvents);
     }
   }
@@ -274,7 +311,8 @@ public class AgentExecutorTest {
     assertEquals(base + 1, AgentExecutor.backoffMillis(0, base, cap, 1.0));
     assertEquals(base * 4 + 1, AgentExecutor.backoffMillis(2, base, cap, 1.0));
     assertEquals(cap + 1, AgentExecutor.backoffMillis(20, base, cap, 1.0));
-    assertEquals(cap + 1, AgentExecutor.backoffMillis(62, base, cap, 1.0), "shift overflow guarded");
+    assertEquals(
+        cap + 1, AgentExecutor.backoffMillis(62, base, cap, 1.0), "shift overflow guarded");
     double u = ThreadLocalRandom.current().nextDouble();
     long v = AgentExecutor.backoffMillis(3, base, cap, u);
     assertTrue(v >= 0 && v <= Math.min(cap, base * 8) + 1);
@@ -286,7 +324,8 @@ public class AgentExecutorTest {
     tool.block = new CountDownLatch(1);
     InMemoryTurnResultStore store = new InMemoryTurnResultStore();
     String turnId = "t-" + UUID.randomUUID();
-    try (AgentExecutor ex = executor(List.of(toolCall("slow", Map.of()), text("never")), tool, store, 5)) {
+    try (AgentExecutor ex =
+        executor(List.of(toolCall("slow", Map.of()), text("never")), tool, store, 5)) {
       CompletableFuture<ExecutionResult> f = ex.execute(turn(turnId));
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
       while (tool.executions.get() == 0 && System.nanoTime() < deadline) {
@@ -310,7 +349,8 @@ public class AgentExecutorTest {
     InMemoryTurnResultStore store = new InMemoryTurnResultStore();
     String turnId = "t-" + UUID.randomUUID();
     String answer = "answer-" + UUID.randomUUID();
-    try (AgentExecutor ex = executor(List.of(toolCall("slow", Map.of()), text(answer)), tool, store, 5)) {
+    try (AgentExecutor ex =
+        executor(List.of(toolCall("slow", Map.of()), text(answer)), tool, store, 5)) {
       CompletableFuture<ExecutionResult> first = ex.execute(turn(turnId));
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
       while (tool.executions.get() == 0 && System.nanoTime() < deadline) {
@@ -330,7 +370,8 @@ public class AgentExecutorTest {
       for (int i = 1; i < duplicates; i++) {
         assertSame(r, joined.get(i).get(10, TimeUnit.SECONDS));
       }
-      assertEquals(1, tool.executions.get(), "side-effecting tool ran once for the duplicated turn");
+      assertEquals(
+          1, tool.executions.get(), "side-effecting tool ran once for the duplicated turn");
       assertSame(r, ex.execute(turn(turnId)).get(10, TimeUnit.SECONDS));
     }
   }
@@ -340,14 +381,18 @@ public class AgentExecutorTest {
     int max = ThreadLocalRandom.current().nextInt(3, 10);
     InMemoryTurnResultStore store = new InMemoryTurnResultStore(max, Duration.ofMillis(30));
     for (int i = 0; i < max + 2; i++) {
-      store.putTurnResult("t" + i, ExecutionResult.success("f", "a", "o" + i, List.of(), List.of()));
+      store.putTurnResult(
+          "t" + i, ExecutionResult.success("f", "a", "o" + i, List.of(), List.of()));
     }
     assertTrue(store.size() <= max);
     assertTrue(store.getTurnResult("t0").isEmpty(), "eldest evicted");
     assertTrue(store.getTurnResult("t" + (max + 1)).isPresent());
     Thread.sleep(60);
     assertTrue(store.getTurnResult("t" + (max + 1)).isEmpty(), "expired after ttl");
-    assertThrows(IllegalArgumentException.class, () -> new InMemoryTurnResultStore(0, Duration.ofSeconds(1)));
-    assertThrows(IllegalArgumentException.class, () -> new InMemoryTurnResultStore(5, Duration.ZERO));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new InMemoryTurnResultStore(0, Duration.ofSeconds(1)));
+    assertThrows(
+        IllegalArgumentException.class, () -> new InMemoryTurnResultStore(5, Duration.ZERO));
   }
 }

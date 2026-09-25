@@ -7,17 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatClient;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
  * The {@link ChatClient} contract: every implementation produces a {@link ChatResponse} with the
- * same fields filled in, regardless of transport. We can't talk to a real LLM in unit tests, so
- * we drive the stub {@link EchoChatConnection} and the LangChain4J connection's bind path (no
- * network) side-by-side and assert response-shape equivalence on the stub.
+ * same fields filled in, regardless of transport. We can't talk to a real LLM in unit tests, so we
+ * drive the stub {@link EchoChatConnection} and the LangChain4J connection's bind path (no network)
+ * side-by-side and assert response-shape equivalence on the stub.
  */
 class ChatClientContractTest {
 
@@ -41,7 +41,8 @@ class ChatClientContractTest {
   @Test
   @DisplayName("LangChain4jChatClient exposes the underlying model via the escape-hatch interface")
   void langChainEscapeHatch() throws Exception {
-    LangChain4jChatConnection connection = LangChain4jChatConnection.ollama("http://localhost:11434");
+    LangChain4jChatConnection connection =
+        LangChain4jChatConnection.ollama("http://localhost:11434");
     ChatClient client = connection.bind(null);
 
     // The cast is documented as implementation-coupled. We verify it works without making a
@@ -62,8 +63,7 @@ class ChatClientContractTest {
   @DisplayName("Anthropic provider builds a Claude model without making an API call")
   void anthropicProviderBuildsModel() {
     LangChain4jChatConnection connection = LangChain4jChatConnection.anthropic("test-key");
-    assertEquals(
-        LangChain4jChatConnection.Provider.ANTHROPIC, connection.getProvider());
+    assertEquals(LangChain4jChatConnection.Provider.ANTHROPIC, connection.getProvider());
     assertEquals("langchain4j:anthropic", connection.providerName());
     // Construction is offline; no network call until chat().
     Object model = connection.buildModel("claude-sonnet-4-6", 0.3, 2048);

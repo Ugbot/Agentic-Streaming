@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.ReopenableStore;
+import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,8 +45,8 @@ import org.slf4j.LoggerFactory;
  * <p>Fluss is the source of truth: every embedding is upserted into a primary-key table whose
  * changelog is replayed on {@link #initialize(Map)} to rebuild the in-memory index after a restart.
  * Because Fluss durably persists the changelog, a fresh process can fully reconstruct its search
- * state simply by scanning the table from the beginning. Similarity queries
- * ({@link #searchSimilar}/{@link #searchSimilarWithFilter}) are served entirely from the in-memory
+ * state simply by scanning the table from the beginning. Similarity queries ({@link
+ * #searchSimilar}/{@link #searchSimilarWithFilter}) are served entirely from the in-memory
  * brute-force index; point reads ({@link #getEmbedding}/{@link #getMetadata}) are served by a Fluss
  * primary-key lookup (falling back to the in-memory copy if Fluss has not yet propagated the row).
  *
@@ -290,7 +290,11 @@ public final class FlussVectorStore extends ReopenableStore implements VectorSto
       if (vec == null) continue;
       if (dimension > 0 && vec.length != dimension) {
         throw new IllegalArgumentException(
-            "embedding dimension " + vec.length + " != configured " + dimension + " for id "
+            "embedding dimension "
+                + vec.length
+                + " != configured "
+                + dimension
+                + " for id "
                 + e.getKey());
       }
       Map<String, Object> md =
@@ -384,7 +388,8 @@ public final class FlussVectorStore extends ReopenableStore implements VectorSto
     if (flowId == null) return;
     // Identify affected ids via the in-memory index (mirror of Fluss state), then delete each.
     List<String> toDelete = new ArrayList<>();
-    for (VectorSearchResult r : index().searchSimilarWithFilter(zeroQuery(), Integer.MAX_VALUE, null)) {
+    for (VectorSearchResult r :
+        index().searchSimilarWithFilter(zeroQuery(), Integer.MAX_VALUE, null)) {
       if (flowId.equals(r.getMetadata().get("flowId"))) {
         toDelete.add(r.getId());
       }

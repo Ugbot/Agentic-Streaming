@@ -2,10 +2,10 @@ package org.agentic.flink.completion;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.RepeatedTest;
@@ -335,9 +335,8 @@ class GoalPredicateTest {
     void satisfiedWhenAllSatisfied() {
       String key1 = UUID.randomUUID().toString();
       String key2 = UUID.randomUUID().toString();
-      GoalPredicate predicate = GoalPredicate.all(
-          GoalPredicate.stateExists(key1),
-          GoalPredicate.stateExists(key2));
+      GoalPredicate predicate =
+          GoalPredicate.all(GoalPredicate.stateExists(key1), GoalPredicate.stateExists(key2));
 
       Map<String, Object> state = new HashMap<>();
       state.put(key1, ThreadLocalRandom.current().nextInt());
@@ -351,9 +350,8 @@ class GoalPredicateTest {
     void notSatisfiedWhenOneFails() {
       String key1 = UUID.randomUUID().toString();
       String key2 = UUID.randomUUID().toString();
-      GoalPredicate predicate = GoalPredicate.all(
-          GoalPredicate.stateExists(key1),
-          GoalPredicate.stateExists(key2));
+      GoalPredicate predicate =
+          GoalPredicate.all(GoalPredicate.stateExists(key1), GoalPredicate.stateExists(key2));
 
       Map<String, Object> state = new HashMap<>();
       state.put(key1, ThreadLocalRandom.current().nextInt());
@@ -370,9 +368,10 @@ class GoalPredicateTest {
       double threshold1 = 100.0;
       double threshold2 = 100.0;
 
-      GoalPredicate predicate = GoalPredicate.all(
-          GoalPredicate.greaterThan(key1, threshold1),
-          GoalPredicate.greaterThan(key2, threshold2));
+      GoalPredicate predicate =
+          GoalPredicate.all(
+              GoalPredicate.greaterThan(key1, threshold1),
+              GoalPredicate.greaterThan(key2, threshold2));
 
       Map<String, Object> state = new HashMap<>();
       state.put(key1, 80.0); // 0.8 confidence
@@ -394,9 +393,8 @@ class GoalPredicateTest {
     void satisfiedWhenAnySatisfied() {
       String key1 = UUID.randomUUID().toString();
       String key2 = UUID.randomUUID().toString();
-      GoalPredicate predicate = GoalPredicate.any(
-          GoalPredicate.stateExists(key1),
-          GoalPredicate.stateExists(key2));
+      GoalPredicate predicate =
+          GoalPredicate.any(GoalPredicate.stateExists(key1), GoalPredicate.stateExists(key2));
 
       Map<String, Object> state = new HashMap<>();
       state.put(key2, "present-" + UUID.randomUUID());
@@ -409,9 +407,8 @@ class GoalPredicateTest {
     void notSatisfiedWhenNoneSatisfied() {
       String key1 = UUID.randomUUID().toString();
       String key2 = UUID.randomUUID().toString();
-      GoalPredicate predicate = GoalPredicate.any(
-          GoalPredicate.stateExists(key1),
-          GoalPredicate.stateExists(key2));
+      GoalPredicate predicate =
+          GoalPredicate.any(GoalPredicate.stateExists(key1), GoalPredicate.stateExists(key2));
 
       Map<String, Object> state = new HashMap<>();
       // Neither key present
@@ -427,9 +424,10 @@ class GoalPredicateTest {
       double threshold1 = 100.0;
       double threshold2 = 100.0;
 
-      GoalPredicate predicate = GoalPredicate.any(
-          GoalPredicate.greaterThan(key1, threshold1),
-          GoalPredicate.greaterThan(key2, threshold2));
+      GoalPredicate predicate =
+          GoalPredicate.any(
+              GoalPredicate.greaterThan(key1, threshold1),
+              GoalPredicate.greaterThan(key2, threshold2));
 
       Map<String, Object> state = new HashMap<>();
       state.put(key1, 80.0); // 0.8 confidence
@@ -492,11 +490,12 @@ class GoalPredicateTest {
       String numericKey = UUID.randomUUID().toString();
       double threshold = ThreadLocalRandom.current().nextDouble(0.1, 1.0);
 
-      GoalPredicate goal = GoalPredicate.all(
-          GoalPredicate.stateExists(existsKey),
-          GoalPredicate.any(
-              GoalPredicate.greaterThan(numericKey, threshold),
-              GoalPredicate.eventCount(AgentEventType.FLOW_COMPLETED, 1)));
+      GoalPredicate goal =
+          GoalPredicate.all(
+              GoalPredicate.stateExists(existsKey),
+              GoalPredicate.any(
+                  GoalPredicate.greaterThan(numericKey, threshold),
+                  GoalPredicate.eventCount(AgentEventType.FLOW_COMPLETED, 1)));
 
       // Scenario 1: existsKey present + numeric above threshold -> satisfied
       Map<String, Object> state1 = new HashMap<>();
@@ -532,10 +531,10 @@ class GoalPredicateTest {
       // not(all(stateExists(a), not(stateExists(b))))
       // Satisfied when NOT (a exists AND b does NOT exist)
       // i.e., satisfied when a missing OR b exists
-      GoalPredicate goal = GoalPredicate.not(
-          GoalPredicate.all(
-              GoalPredicate.stateExists(a),
-              GoalPredicate.not(GoalPredicate.stateExists(b))));
+      GoalPredicate goal =
+          GoalPredicate.not(
+              GoalPredicate.all(
+                  GoalPredicate.stateExists(a), GoalPredicate.not(GoalPredicate.stateExists(b))));
 
       Map<String, Object> stateAOnly = new HashMap<>();
       stateAOnly.put(a, "val");
@@ -545,7 +544,8 @@ class GoalPredicateTest {
       Map<String, Object> stateBoth = new HashMap<>();
       stateBoth.put(a, "val");
       stateBoth.put(b, "val");
-      // a exists AND b exists -> not(stateExists(b)) is false -> inner all is false -> NOT makes true
+      // a exists AND b exists -> not(stateExists(b)) is false -> inner all is false -> NOT makes
+      // true
       assertTrue(goal.isSatisfied(stateBoth, Collections.emptyList()));
 
       Map<String, Object> empty = new HashMap<>();
@@ -613,11 +613,12 @@ class GoalPredicateTest {
       String key2 = UUID.randomUUID().toString();
       double threshold = ThreadLocalRandom.current().nextDouble(1.0, 100.0);
 
-      GoalPredicate predicate = GoalPredicate.all(
-          GoalPredicate.stateExists(key1),
-          GoalPredicate.any(
-              GoalPredicate.greaterThan(key2, threshold),
-              GoalPredicate.not(GoalPredicate.stateExists(UUID.randomUUID().toString()))));
+      GoalPredicate predicate =
+          GoalPredicate.all(
+              GoalPredicate.stateExists(key1),
+              GoalPredicate.any(
+                  GoalPredicate.greaterThan(key2, threshold),
+                  GoalPredicate.not(GoalPredicate.stateExists(UUID.randomUUID().toString()))));
 
       Map<String, Object> state = new HashMap<>();
       if (ThreadLocalRandom.current().nextBoolean()) {
@@ -658,9 +659,8 @@ class GoalPredicateTest {
     void compositeDiagnostics() {
       String key1 = UUID.randomUUID().toString();
       String key2 = UUID.randomUUID().toString();
-      GoalPredicate predicate = GoalPredicate.all(
-          GoalPredicate.stateExists(key1),
-          GoalPredicate.stateExists(key2));
+      GoalPredicate predicate =
+          GoalPredicate.all(GoalPredicate.stateExists(key1), GoalPredicate.stateExists(key2));
 
       Map<String, Object> state = new HashMap<>();
       state.put(key1, "val1");
@@ -757,17 +757,20 @@ class GoalPredicateTest {
     @Test
     @DisplayName("NOT mode should reject multiple children")
     void notRejectsMultipleChildren() {
-      assertThrows(IllegalArgumentException.class, () ->
-          new CompositeGoalPredicate(
-              CompositeGoalPredicate.CompositeMode.NOT,
-              List.of(GoalPredicate.stateExists("a"), GoalPredicate.stateExists("b"))));
+      assertThrows(
+          IllegalArgumentException.class,
+          () ->
+              new CompositeGoalPredicate(
+                  CompositeGoalPredicate.CompositeMode.NOT,
+                  List.of(GoalPredicate.stateExists("a"), GoalPredicate.stateExists("b"))));
     }
 
     @Test
     @DisplayName("composite with empty children should throw")
     void compositeRejectsEmptyChildren() {
-      assertThrows(IllegalArgumentException.class, () ->
-          new CompositeGoalPredicate(CompositeGoalPredicate.CompositeMode.AND, List.of()));
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> new CompositeGoalPredicate(CompositeGoalPredicate.CompositeMode.AND, List.of()));
     }
 
     @Test
@@ -779,8 +782,7 @@ class GoalPredicateTest {
     @Test
     @DisplayName("NumericThresholdPredicate should reject null key")
     void numericThresholdRejectsNullKey() {
-      assertThrows(IllegalArgumentException.class, () ->
-          new NumericThresholdPredicate(null, 1.0));
+      assertThrows(IllegalArgumentException.class, () -> new NumericThresholdPredicate(null, 1.0));
     }
 
     @Test
@@ -792,8 +794,9 @@ class GoalPredicateTest {
     @Test
     @DisplayName("EventCountPredicate should reject non-positive target count")
     void eventCountRejectsZeroTarget() {
-      assertThrows(IllegalArgumentException.class, () ->
-          new EventCountPredicate(AgentEventType.FLOW_COMPLETED, 0));
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> new EventCountPredicate(AgentEventType.FLOW_COMPLETED, 0));
     }
 
     @Test

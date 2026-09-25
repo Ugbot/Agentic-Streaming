@@ -1,19 +1,18 @@
 package org.agentic.flink.inference;
 
-import org.agentic.flink.embedding.EmbeddingClient;
-import org.agentic.flink.embedding.EmbeddingSetup;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
+import org.agentic.flink.embedding.EmbeddingClient;
+import org.agentic.flink.embedding.EmbeddingSetup;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
  * Deterministic stub {@link InferenceConnection} for tests.
  *
- * <p>Echoes scripted outputs from each task surface so tests can exercise the wiring without a
- * real model. Default labels: {@code "safe"} for classification, {@code 0.5} for scoring, a
- * zero-vector for embedding, and an empty map for the generic task. Callers override per-test.
+ * <p>Echoes scripted outputs from each task surface so tests can exercise the wiring without a real
+ * model. Default labels: {@code "safe"} for classification, {@code 0.5} for scoring, a zero-vector
+ * for embedding, and an empty map for the generic task. Callers override per-test.
  */
 public final class EchoInferenceConnection implements InferenceConnection {
   private static final long serialVersionUID = 1L;
@@ -66,8 +65,7 @@ public final class EchoInferenceConnection implements InferenceConnection {
     @Override
     public Classifier asClassifier() {
       return (input, setup) ->
-          new ClassificationResult(
-              classifierLabel, classifierScore, classifierProbabilities);
+          new ClassificationResult(classifierLabel, classifierScore, classifierProbabilities);
     }
 
     @Override

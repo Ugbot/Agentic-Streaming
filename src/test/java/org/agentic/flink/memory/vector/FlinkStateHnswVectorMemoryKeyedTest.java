@@ -27,7 +27,8 @@ class FlinkStateHnswVectorMemoryKeyedTest {
   private static final int DIM = 8;
 
   /** Input: (key, op, payload). Output: "key:op:result". */
-  static final class Op extends KeyedProcessFunction<String, Tuple3<String, String, float[]>, String> {
+  static final class Op
+      extends KeyedProcessFunction<String, Tuple3<String, String, float[]>, String> {
     private static final long serialVersionUID = 1L;
     private final VectorMemorySpec spec;
     private transient FlinkStateHnswVectorMemory memory;
@@ -42,11 +43,13 @@ class FlinkStateHnswVectorMemoryKeyedTest {
     }
 
     @Override
-    public void processElement(Tuple3<String, String, float[]> in, Context ctx, Collector<String> out)
-        throws Exception {
+    public void processElement(
+        Tuple3<String, String, float[]> in, Context ctx, Collector<String> out) throws Exception {
       switch (in.f1) {
         case "put" -> {
-          memory.put(in.f0 + "-" + UUID.randomUUID(), in.f2,
+          memory.put(
+              in.f0 + "-" + UUID.randomUUID(),
+              in.f2,
               new ContextItem(in.f0, ContextPriority.SHOULD, MemoryType.SHORT_TERM));
           out.collect(in.f0 + ":put:" + memory.size());
         }
@@ -64,12 +67,14 @@ class FlinkStateHnswVectorMemoryKeyedTest {
     }
   }
 
-  private static KeyedOneInputStreamOperatorTestHarness<String, Tuple3<String, String, float[]>, String> harness()
-      throws Exception {
+  private static KeyedOneInputStreamOperatorTestHarness<
+          String, Tuple3<String, String, float[]>, String>
+      harness() throws Exception {
     KeyedOneInputStreamOperatorTestHarness<String, Tuple3<String, String, float[]>, String> h =
         new KeyedOneInputStreamOperatorTestHarness<>(
             new KeyedProcessOperator<>(new Op(FlinkStateHnswVectorMemory.spec(DIM))),
-            t -> t.f0, Types.STRING);
+            t -> t.f0,
+            Types.STRING);
     return h;
   }
 
@@ -95,7 +100,10 @@ class FlinkStateHnswVectorMemoryKeyedTest {
 
   private static void send(
       KeyedOneInputStreamOperatorTestHarness<String, Tuple3<String, String, float[]>, String> h,
-      String key, String op, float[] v) throws Exception {
+      String key,
+      String op,
+      float[] v)
+      throws Exception {
     h.processElement(new StreamRecord<>(Tuple3.of(key, op, v), 0L));
   }
 
@@ -136,7 +144,8 @@ class FlinkStateHnswVectorMemoryKeyedTest {
       for (int i = 3; i < rb.length; i++) assertEquals(b, rb[i]);
 
       send(h, a, "rebuilds", new float[0]);
-      assertTrue(drain(h).get(0).endsWith(":rebuilds:2"), "one rebuild per touched key after restore");
+      assertTrue(
+          drain(h).get(0).endsWith(":rebuilds:2"), "one rebuild per touched key after restore");
     }
   }
 }

@@ -45,15 +45,17 @@ import org.slf4j.LoggerFactory;
  *   key = "__idx__:user:{userId}"    -&gt; JSON array of that user's conversationIds
  * </pre>
  *
- * Index keys use a printable "__idx__:" prefix that can never collide with a real conversationId. Each
- * mutation is a lookup → {@link FlussConversationCodec read-modify-write} → upsert; per-conversation
- * turns are sequential in the routed graph, so contention on a single envelope is not a concern.
+ * Index keys use a printable "__idx__:" prefix that can never collide with a real conversationId.
+ * Each mutation is a lookup → {@link FlussConversationCodec read-modify-write} → upsert;
+ * per-conversation turns are sequential in the routed graph, so contention on a single envelope is
+ * not a concern.
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; the no-arg constructor self-gates on {@link
  * ConfigKeys#CONVERSATION_STORE}{@code =fluss} (throws otherwise so discovery falls back to the
  * in-JVM store). {@link java.io.Serializable} config fields ship in the job graph; the Fluss
- * connection/table/writer/lookuper + mapper are {@code transient} and built lazily on the task side.
- * Per the SPI contract these methods degrade gracefully (log + empty/no-op) rather than fail a turn.
+ * connection/table/writer/lookuper + mapper are {@code transient} and built lazily on the task
+ * side. Per the SPI contract these methods degrade gracefully (log + empty/no-op) rather than fail
+ * a turn.
  */
 public final class FlussConversationStore implements ConversationStore {
   private static final long serialVersionUID = 1L;
@@ -77,7 +79,9 @@ public final class FlussConversationStore implements ConversationStore {
   private transient volatile Lookuper lookuper;
   private transient volatile ObjectMapper mapper;
 
-  /** ServiceLoader constructor — configures from the environment; throws if Fluss is not selected. */
+  /**
+   * ServiceLoader constructor — configures from the environment; throws if Fluss is not selected.
+   */
   public FlussConversationStore() {
     this(AgenticFlinkConfig.fromEnvironment(), true);
   }
@@ -97,7 +101,11 @@ public final class FlussConversationStore implements ConversationStore {
           config.get(ConfigKeys.CONVERSATION_STORE, ConfigKeys.DEFAULT_CONVERSATION_STORE);
       if (!"fluss".equalsIgnoreCase(selected)) {
         throw new IllegalStateException(
-            "FlussConversationStore not selected (" + ConfigKeys.CONVERSATION_STORE + "=" + selected + ")");
+            "FlussConversationStore not selected ("
+                + ConfigKeys.CONVERSATION_STORE
+                + "="
+                + selected
+                + ")");
       }
     }
     this.bootstrapServers =
@@ -120,7 +128,11 @@ public final class FlussConversationStore implements ConversationStore {
             Integer.parseInt(ConfigKeys.DEFAULT_CONVERSATION_STORE_MAX_MESSAGES));
     LOG.info(
         "FlussConversationStore enabled: bootstrap={} db={} table={} buckets={} cap={}",
-        bootstrapServers, database, table, buckets, maxMessages);
+        bootstrapServers,
+        database,
+        table,
+        buckets,
+        maxMessages);
   }
 
   // ==================== transcript ====================
@@ -132,7 +144,9 @@ public final class FlussConversationStore implements ConversationStore {
     }
     try {
       String env = readRow(conversationId).orElse(FlussConversationCodec.EMPTY_ENVELOPE);
-      writeRow(conversationId, FlussConversationCodec.appendMessage(mapper(), env, message, maxMessages));
+      writeRow(
+          conversationId,
+          FlussConversationCodec.appendMessage(mapper(), env, message, maxMessages));
       addToIndex(ALL_KEY, conversationId);
     } catch (Exception e) {
       LOG.warn("fluss append failed for {}: {}", conversationId, e.toString());
@@ -270,7 +284,8 @@ public final class FlussConversationStore implements ConversationStore {
           FlussConversationCodec.owner(
               mapper(), readRow(conversationId).orElse(FlussConversationCodec.EMPTY_ENVELOPE));
       // Tombstone with an empty envelope rather than a PK delete: a deleted PK row is not reliably
-      // absent from a subsequent lookup, whereas an empty envelope makes history/attributes/owner all
+      // absent from a subsequent lookup, whereas an empty envelope makes history/attributes/owner
+      // all
       // read empty — contract-equivalent to "forgotten" — and the conversation is dropped from the
       // ALL/user indexes below so it no longer lists.
       writeRow(conversationId, FlussConversationCodec.EMPTY_ENVELOPE);
@@ -325,7 +340,8 @@ public final class FlussConversationStore implements ConversationStore {
     UpsertWriter w = writer();
     w.upsert(row).get();
     w.flush();
-    // Fluss PK lookups are not strictly read-your-writes the instant an upsert is acked (the kv apply
+    // Fluss PK lookups are not strictly read-your-writes the instant an upsert is acked (the kv
+    // apply
     // lags the log ack slightly). Our read-modify-write chains (transcript append, index updates)
     // depend on the next lookup seeing this write, so confirm visibility with a short bounded poll.
     awaitVisible(key, payload);
@@ -339,7 +355,8 @@ public final class FlussConversationStore implements ConversationStore {
       }
       Thread.sleep(50);
     }
-    LOG.warn("fluss write to {} not visible within timeout; proceeding (eventual consistency)", key);
+    LOG.warn(
+        "fluss write to {} not visible within timeout; proceeding (eventual consistency)", key);
   }
 
   private void ensureReady() {

@@ -31,19 +31,19 @@ import org.jagentic.core.Event;
 import org.jagentic.core.TurnResult;
 
 /**
- * One long-running workflow job on an in-process local Flink environment, driven turn by turn
- * from the embedding process (the Python {@code flink-jvm} runtime, or a test).
+ * One long-running workflow job on an in-process local Flink environment, driven turn by turn from
+ * the embedding process (the Python {@code flink-jvm} runtime, or a test).
  *
  * <p>Turns enter through an unbounded source that polls a per-session in-JVM queue (a filtered
  * heartbeat is emitted while the queue is empty, so checkpoints and stop-with-savepoint keep
- * flowing) and the normalized {@link TurnResult}s leave through an in-JVM sink. Both registries
- * are static because the local cluster's tasks share the caller's JVM.
+ * flowing) and the normalized {@link TurnResult}s leave through an in-JVM sink. Both registries are
+ * static because the local cluster's tasks share the caller's JVM.
  *
  * <p>{@link #restart()} models a runtime restart the way the Flink conformance binding does: the
  * running job is stopped with a savepoint, the local cluster it ran on shuts down, and a new job is
- * started that restores the savepoint. Only checkpointed keyed state survives; the
- * {@link WorkflowTurnFunction} rebuilds each conversation from its {@link KeyedConversationLog} on
- * the next turn, without running brains or tools for the turns already recorded.
+ * started that restores the savepoint. Only checkpointed keyed state survives; the {@link
+ * WorkflowTurnFunction} rebuilds each conversation from its {@link KeyedConversationLog} on the
+ * next turn, without running brains or tools for the turns already recorded.
  */
 public final class LocalWorkflowSession implements AutoCloseable {
 
@@ -51,7 +51,8 @@ public final class LocalWorkflowSession implements AutoCloseable {
   private static final long IDLE_POLL_MILLIS = 2;
 
   private static final Map<String, LinkedBlockingQueue<Event>> INPUTS = new ConcurrentHashMap<>();
-  private static final Map<String, LinkedBlockingQueue<TurnResult>> OUTPUTS = new ConcurrentHashMap<>();
+  private static final Map<String, LinkedBlockingQueue<TurnResult>> OUTPUTS =
+      new ConcurrentHashMap<>();
 
   private final Map<String, Object> spec;
   private final FlinkRuntimeOptions options;
@@ -70,14 +71,20 @@ public final class LocalWorkflowSession implements AutoCloseable {
    * @param spec the validated agentic/v1 workflow document
    * @param options Flink runtime options ({@code runtime.flink} of the document)
    * @param parallelism job parallelism (at least 1)
-   * @param checkpointInterval periodic checkpoint interval; {@code null} keeps checkpoints off between
-   *     restarts (stop-with-savepoint does not need them)
+   * @param checkpointInterval periodic checkpoint interval; {@code null} keeps checkpoints off
+   *     between restarts (stop-with-savepoint does not need them)
    * @param savepointDir local directory that receives savepoints and checkpoints
    * @param timeout how long to wait for a result, a savepoint, or the job to start
    * @param jobName the Flink job name
    */
-  public LocalWorkflowSession(Map<String, Object> spec, FlinkRuntimeOptions options, int parallelism,
-                              Duration checkpointInterval, Path savepointDir, Duration timeout, String jobName) {
+  public LocalWorkflowSession(
+      Map<String, Object> spec,
+      FlinkRuntimeOptions options,
+      int parallelism,
+      Duration checkpointInterval,
+      Path savepointDir,
+      Duration timeout,
+      String jobName) {
     this.spec = Objects.requireNonNull(spec, "spec");
     this.options = Objects.requireNonNull(options, "options");
     if (parallelism < 1) {
@@ -119,8 +126,9 @@ public final class LocalWorkflowSession implements AutoCloseable {
   public void restart() throws Exception {
     requireOpen();
     requireRunning();
-    String savepoint = job.stopWithSavepoint(false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
-        .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    String savepoint =
+        job.stopWithSavepoint(false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
+            .get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     job = null;
     startFrom(savepoint);
     restarts++;
@@ -132,8 +140,8 @@ public final class LocalWorkflowSession implements AutoCloseable {
   }
 
   /**
-   * Submits events back to back and returns one result per event, in submission order. Results
-   * for other turns that arrive meanwhile are kept for later calls.
+   * Submits events back to back and returns one result per event, in submission order. Results for
+   * other turns that arrive meanwhile are kept for later calls.
    */
   public List<TurnResult> submitAll(List<Event> events) throws Exception {
     requireOpen();
@@ -166,15 +174,31 @@ public final class LocalWorkflowSession implements AutoCloseable {
     while (true) {
       long remaining = deadline - System.nanoTime();
       if (remaining <= 0) {
-        throw new TimeoutException("no result for " + conversationId + "/" + turnId + " within " + timeout
-            + "; job status " + status() + ", unclaimed results " + unclaimed);
+        throw new TimeoutException(
+            "no result for "
+                + conversationId
+                + "/"
+                + turnId
+                + " within "
+                + timeout
+                + "; job status "
+                + status()
+                + ", unclaimed results "
+                + unclaimed);
       }
-      TurnResult r = outputs.poll(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(50)), TimeUnit.NANOSECONDS);
+      TurnResult r =
+          outputs.poll(
+              Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(50)), TimeUnit.NANOSECONDS);
       if (r == null) {
         JobStatus s = status();
         if (s.isGloballyTerminalState()) {
-          throw new IllegalStateException("job ended with " + s + " before emitting a result for "
-              + conversationId + "/" + turnId);
+          throw new IllegalStateException(
+              "job ended with "
+                  + s
+                  + " before emitting a result for "
+                  + conversationId
+                  + "/"
+                  + turnId);
         }
         continue;
       }
@@ -191,21 +215,29 @@ public final class LocalWorkflowSession implements AutoCloseable {
     conf.set(RestartStrategyOptions.RESTART_STRATEGY, "fixed-delay");
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 10);
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(100));
-    conf.set(CheckpointingOptions.CHECKPOINTS_DIRECTORY, savepointDir.resolve("checkpoints").toUri().toString());
+    conf.set(
+        CheckpointingOptions.CHECKPOINTS_DIRECTORY,
+        savepointDir.resolve("checkpoints").toUri().toString());
     if (checkpointInterval != null) {
       conf.set(CheckpointingOptions.CHECKPOINTING_INTERVAL, checkpointInterval);
     }
     if (savepoint != null) {
       conf.set(StateRecoveryOptions.SAVEPOINT_PATH, savepoint);
     }
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(parallelism, conf);
+    StreamExecutionEnvironment env =
+        StreamExecutionEnvironment.createLocalEnvironment(parallelism, conf);
     env.setParallelism(parallelism);
 
     // One poller: with several, turns of one conversation submitted back to back could be taken
     // by different subtasks and reach the keyed operator out of submission order.
-    DataStream<Event> source = env.fromSequence(0, Long.MAX_VALUE / 2).setParallelism(1)
-        .map(new QueuePoller(sessionId)).returns(WorkflowTurnFunction.EVENT_TYPE).setParallelism(1)
-        .filter(e -> !HEARTBEAT.equals(e.conversationId())).setParallelism(1);
+    DataStream<Event> source =
+        env.fromSequence(0, Long.MAX_VALUE / 2)
+            .setParallelism(1)
+            .map(new QueuePoller(sessionId))
+            .returns(WorkflowTurnFunction.EVENT_TYPE)
+            .setParallelism(1)
+            .filter(e -> !HEARTBEAT.equals(e.conversationId()))
+            .setParallelism(1);
 
     FlinkPipelineRunner.assembleResults(env, spec, source, options)
         .sinkTo(new CollectingSink(sessionId));
@@ -222,7 +254,8 @@ public final class LocalWorkflowSession implements AutoCloseable {
         throw new IllegalStateException("job ended with " + s + " before reaching RUNNING");
       }
       if (System.nanoTime() > deadline) {
-        throw new TimeoutException("job did not reach RUNNING within " + timeout + "; last status " + s);
+        throw new TimeoutException(
+            "job did not reach RUNNING within " + timeout + "; last status " + s);
       }
       Thread.sleep(10);
     }
@@ -236,7 +269,8 @@ public final class LocalWorkflowSession implements AutoCloseable {
 
   private void requireRunning() {
     if (job == null) {
-      throw new IllegalStateException("session " + sessionId + " has no running job; call start() first");
+      throw new IllegalStateException(
+          "session " + sessionId + " has no running job; call start() first");
     }
   }
 

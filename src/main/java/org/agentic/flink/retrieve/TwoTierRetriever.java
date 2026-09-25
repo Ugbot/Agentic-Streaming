@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Merges a live RAG stack's two tiers into one ranked result: the {@link HotVectorIndex hot} tier
  * (recent, just-ingested documents — low latency, possibly not yet in the durable store) and a
- * {@link ColdSearch cold} tier (the durable {@link org.agentic.flink.corpus.Corpus} /
- * {@link org.agentic.flink.storage.vector.VectorStore} corpus). Both are queried, the union is
+ * {@link ColdSearch cold} tier (the durable {@link org.agentic.flink.corpus.Corpus} / {@link
+ * org.agentic.flink.storage.vector.VectorStore} corpus). Both are queried, the union is
  * de-duplicated by id (keeping the higher score; a hot hit therefore supersedes a stale cold copy),
  * and the global top-{@code k} by score is returned.
  *

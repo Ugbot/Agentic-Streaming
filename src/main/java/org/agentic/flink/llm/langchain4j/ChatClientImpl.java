@@ -1,23 +1,23 @@
 package org.agentic.flink.llm.langchain4j;
 
-import org.agentic.flink.llm.ChatMessage;
-import org.agentic.flink.llm.ChatResponse;
-import org.agentic.flink.llm.ChatSetup;
 import dev.langchain4j.model.chat.ChatModel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatSetup;
 
 /**
  * Default {@link org.agentic.flink.llm.ChatClient} backed by LangChain4J.
  *
- * <p>Caches LangChain4J {@link ChatModel} instances per {@code (modelName, temperature,
- * maxTokens)} signature so repeated calls reuse the same client. The cache lives for the
- * lifetime of the Flink task; cleanup happens automatically when the task closes.
+ * <p>Caches LangChain4J {@link ChatModel} instances per {@code (modelName, temperature, maxTokens)}
+ * signature so repeated calls reuse the same client. The cache lives for the lifetime of the Flink
+ * task; cleanup happens automatically when the task closes.
  *
- * <p>Implements {@link LangChain4jChatClient} so power users can downcast and reach the
- * underlying model — see {@link #getUnderlyingModel()} for the contract.
+ * <p>Implements {@link LangChain4jChatClient} so power users can downcast and reach the underlying
+ * model — see {@link #getUnderlyingModel()} for the contract.
  */
 final class ChatClientImpl implements LangChain4jChatClient {
 

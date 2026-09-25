@@ -50,9 +50,9 @@ public final class A2AResponse implements Serializable {
   }
 
   /** A terminal success response carrying the produced artifacts. */
-  public static A2AResponse completed(String taskId, String contextId, List<A2AArtifact> artifacts) {
-    return new A2AResponse(
-        taskId, contextId, A2ATaskState.COMPLETED, null, artifacts, true, null);
+  public static A2AResponse completed(
+      String taskId, String contextId, List<A2AArtifact> artifacts) {
+    return new A2AResponse(taskId, contextId, A2ATaskState.COMPLETED, null, artifacts, true, null);
   }
 
   /** A terminal failure response. */
@@ -119,7 +119,14 @@ public final class A2AResponse implements Serializable {
 
   @Override
   public String toString() {
-    return "A2AResponse{taskId=" + taskId + ", state=" + state + ", artifacts=" + artifacts.size()
-        + ", final=" + isFinal + '}';
+    return "A2AResponse{taskId="
+        + taskId
+        + ", state="
+        + state
+        + ", artifacts="
+        + artifacts.size()
+        + ", final="
+        + isFinal
+        + '}';
   }
 }

@@ -14,10 +14,10 @@ import org.apache.flink.api.connector.sink2.Sink;
  * {@code taskId}.
  *
  * <p>Implementations are selected by {@code a2a.bridge.transport} via {@link A2ABridgeFactory}:
- * {@code inproc} (embedded / tests), {@code zeromq} (localhost / single host — the default),
- * {@code redis} (distributed-light). The Flink-facing factory ({@link #requestChannel()} /
- * {@link #responseSink()}) is {@link Serializable} so it ships in the job graph; the live transport
- * is built on the task side, per the {@link Channel} convention.
+ * {@code inproc} (embedded / tests), {@code zeromq} (localhost / single host — the default), {@code
+ * redis} (distributed-light). The Flink-facing factory ({@link #requestChannel()} / {@link
+ * #responseSink()}) is {@link Serializable} so it ships in the job graph; the live transport is
+ * built on the task side, per the {@link Channel} convention.
  */
 public interface A2ABridge extends Serializable {
 

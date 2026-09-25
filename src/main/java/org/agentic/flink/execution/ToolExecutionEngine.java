@@ -1,9 +1,9 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.tool.ToolRegistry;
-import org.agentic.flink.tools.ToolExecutor;
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tool.ToolRegistry;
+import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,15 +11,15 @@ import org.slf4j.LoggerFactory;
  * Async engine for executing tool calls.
  *
  * <p>Handles:
+ *
  * <ul>
- *   <li>Async tool execution with CompletableFuture</li>
- *   <li>Tool validation and error handling</li>
- *   <li>Execution time tracking</li>
- *   <li>Integration with ToolRegistry</li>
+ *   <li>Async tool execution with CompletableFuture
+ *   <li>Tool validation and error handling
+ *   <li>Execution time tracking
+ *   <li>Integration with ToolRegistry
  * </ul>
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -44,13 +44,15 @@ public class ToolExecutionEngine implements Serializable {
    * @param context Execution context
    * @return Future with tool result
    */
-  public CompletableFuture<ToolCallResult> executeTool(ToolCall toolCall, ExecutionContext context) {
+  public CompletableFuture<ToolCallResult> executeTool(
+      ToolCall toolCall, ExecutionContext context) {
     LOG.info("Executing tool: {} for flow: {}", toolCall.getToolName(), context.getFlowId());
 
     long startTime = System.currentTimeMillis();
 
     if (context.getAgent() == null || !context.getAgent().canUseTool(toolCall.getToolName())) {
-      LOG.warn("Tool {} is not on the allowlist of agent {}",
+      LOG.warn(
+          "Tool {} is not on the allowlist of agent {}",
           toolCall.getToolName(),
           context.getAgent() == null ? null : context.getAgent().getAgentId());
       return CompletableFuture.completedFuture(
@@ -65,9 +67,7 @@ public class ToolExecutionEngine implements Serializable {
       LOG.error("Tool not found: {}", toolCall.getToolName());
       return CompletableFuture.completedFuture(
           ToolCallResult.failure(
-              toolCall.getToolCallId(),
-              toolCall.getToolName(),
-              "Tool not found in registry"));
+              toolCall.getToolCallId(), toolCall.getToolName(), "Tool not found in registry"));
     }
 
     // Get executor
@@ -86,33 +86,29 @@ public class ToolExecutionEngine implements Serializable {
       LOG.error("Invalid parameters for tool: {}", toolCall.getToolName());
       return CompletableFuture.completedFuture(
           ToolCallResult.failure(
-              toolCall.getToolCallId(),
-              toolCall.getToolName(),
-              "Invalid tool parameters"));
+              toolCall.getToolCallId(), toolCall.getToolName(), "Invalid tool parameters"));
     }
 
     // Execute tool
-    return executor.execute(toolCall.getParameters())
-        .handle((result, error) -> {
-          long executionTime = System.currentTimeMillis() - startTime;
+    return executor
+        .execute(toolCall.getParameters())
+        .handle(
+            (result, error) -> {
+              long executionTime = System.currentTimeMillis() - startTime;
 
-          if (error != null) {
-            LOG.error("Tool execution failed: {}", toolCall.getToolName(), error);
-            return ToolCallResult.failure(
-                toolCall.getToolCallId(),
-                toolCall.getToolName(),
-                error.getMessage());
-          }
+              if (error != null) {
+                LOG.error("Tool execution failed: {}", toolCall.getToolName(), error);
+                return ToolCallResult.failure(
+                    toolCall.getToolCallId(), toolCall.getToolName(), error.getMessage());
+              }
 
-          LOG.info("Tool {} completed in {}ms", toolCall.getToolName(), executionTime);
+              LOG.info("Tool {} completed in {}ms", toolCall.getToolName(), executionTime);
 
-          ToolCallResult toolResult = ToolCallResult.success(
-              toolCall.getToolCallId(),
-              toolCall.getToolName(),
-              result);
-          toolResult.setExecutionTimeMs(executionTime);
+              ToolCallResult toolResult =
+                  ToolCallResult.success(toolCall.getToolCallId(), toolCall.getToolName(), result);
+              toolResult.setExecutionTimeMs(executionTime);
 
-          return toolResult;
-        });
+              return toolResult;
+            });
   }
 }

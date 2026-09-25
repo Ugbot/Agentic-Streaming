@@ -1,7 +1,7 @@
 package org.agentic.flink.typeinfo;
 
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.core.AgentEvent;
@@ -14,8 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the {@code @TypeInfo} wiring: Flink's {@code TypeExtractor} (which backs both
- * {@code TypeInformation.of(Class)} stream typing AND {@code new ValueStateDescriptor<>(name, Class)}
+ * Proves the {@code @TypeInfo} wiring: Flink's {@code TypeExtractor} (which backs both {@code
+ * TypeInformation.of(Class)} stream typing AND {@code new ValueStateDescriptor<>(name, Class)}
  * keyed state) resolves each annotated type to a {@link JsonTypeInfo} — NOT the Kryo {@link
  * GenericTypeInfo} fallback. This is the direct guard that these types never silently Kryo.
  */

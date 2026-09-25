@@ -41,8 +41,10 @@ public final class InMemoryHnswVectorMemory implements VectorMemory {
   public void put(VectorEntry entry) {
     if (entry.getEmbedding().length != dimension) {
       throw new IllegalArgumentException(
-          "Embedding dimension " + entry.getEmbedding().length
-              + " does not match configured dimension " + dimension);
+          "Embedding dimension "
+              + entry.getEmbedding().length
+              + " does not match configured dimension "
+              + dimension);
     }
     entries.put(entry.getId(), entry);
     graph.insert(entry.getId(), entry.getEmbedding());

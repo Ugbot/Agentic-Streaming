@@ -4,15 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.util.List;
+import org.agentic.flink.inference.InferenceSetup;
+import org.agentic.flink.inference.LexiconInferenceConnection;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
-import org.agentic.flink.inference.LexiconInferenceConnection;
-import org.agentic.flink.inference.InferenceSetup;
-import java.time.Duration;
-import java.util.List;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +29,8 @@ class ScreeningPipelineTest {
         return new ChatClient() {
           @Override
           public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
-            return new ChatResponse(reply, "scripted", List.of(), 0L, ChatResponse.FinishReason.STOP);
+            return new ChatResponse(
+                reply, "scripted", List.of(), 0L, ChatResponse.FinishReason.STOP);
           }
 
           @Override
@@ -52,9 +53,7 @@ class ScreeningPipelineTest {
   @Test
   void inBandItemAllowedAtRules() {
     ScreeningPipeline p =
-        ScreeningPipeline.builder()
-            .addDetector(new BandPassDetector(0, 1000, 0.6))
-            .build();
+        ScreeningPipeline.builder().addDetector(new BandPassDetector(0, 1000, 0.6)).build();
     ScreeningResult r = p.screen(item("a1", 50, "coffee", 0));
     assertEquals(ScreeningResult.Tier.RULES, r.decidedBy);
     assertEquals("ALLOW", r.verdict);
@@ -76,9 +75,7 @@ class ScreeningPipelineTest {
   @Test
   void threeIdenticalInARowFiresRepeat() {
     ScreeningPipeline p =
-        ScreeningPipeline.builder()
-            .addDetector(new RepeatDetector(3, 0.8))
-            .build();
+        ScreeningPipeline.builder().addDetector(new RepeatDetector(3, 0.8)).build();
     // In-band-equivalent (no band-pass detector), spaced 10s apart so velocity is irrelevant.
     assertFalse(firedPhase(p.screen(item("pay", 50, "x", 0)), Phase.REPEAT));
     assertFalse(firedPhase(p.screen(item("pay", 50, "x", 10_000)), Phase.REPEAT));
@@ -110,8 +107,12 @@ class ScreeningPipelineTest {
     ScreeningPipeline p =
         ScreeningPipeline.builder()
             .addDetector(new BandPassDetector(0, 1000, 0.2)) // weak
-            .withClassifier(new LexiconInferenceConnection(),
-                InferenceSetup.builder().withModelName("lexicon").withModelUri("lexicon://x").build())
+            .withClassifier(
+                new LexiconInferenceConnection(),
+                InferenceSetup.builder()
+                    .withModelName("lexicon")
+                    .withModelUri("lexicon://x")
+                    .build())
             .build();
     ScreeningResult r = p.screen(item("a", 5000, "coffee with friends", 0)); // benign text
     assertEquals(ScreeningResult.Tier.ML, r.decidedBy);
@@ -124,8 +125,12 @@ class ScreeningPipelineTest {
     ScreeningPipeline p =
         ScreeningPipeline.builder()
             .addDetector(new BandPassDetector(0, 1000, 0.6))
-            .withClassifier(new LexiconInferenceConnection(),
-                InferenceSetup.builder().withModelName("lexicon").withModelUri("lexicon://x").build())
+            .withClassifier(
+                new LexiconInferenceConnection(),
+                InferenceSetup.builder()
+                    .withModelName("lexicon")
+                    .withModelUri("lexicon://x")
+                    .build())
             .build(); // no chat
     ScreeningResult r =
         p.screen(item("a", 5000, "urgent wire transfer gift card verify your account", 0));
@@ -139,8 +144,12 @@ class ScreeningPipelineTest {
     ScreeningPipeline p =
         ScreeningPipeline.builder()
             .addDetector(new BandPassDetector(0, 1000, 0.6))
-            .withClassifier(new LexiconInferenceConnection(),
-                InferenceSetup.builder().withModelName("lexicon").withModelUri("lexicon://x").build())
+            .withClassifier(
+                new LexiconInferenceConnection(),
+                InferenceSetup.builder()
+                    .withModelName("lexicon")
+                    .withModelUri("lexicon://x")
+                    .build())
             .withChatConnection(scripted("BLOCK - layered fraud signals."), null)
             .build();
     ScreeningResult r = p.screen(item("a", 5000, "wire transfer gift card", 0));

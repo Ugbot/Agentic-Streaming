@@ -94,8 +94,13 @@ class ResilientA2AClientTest {
     }
   }
 
-  private static RemoteAgentSpec spec(int maxRetries, long baseMs, long maxMs, long timeoutMs,
-      int breakerThreshold, long breakerOpenMs) {
+  private static RemoteAgentSpec spec(
+      int maxRetries,
+      long baseMs,
+      long maxMs,
+      long timeoutMs,
+      int breakerThreshold,
+      long breakerOpenMs) {
     return RemoteAgentSpec.builder()
         .withName("peer")
         .withEndpointUrl("http://localhost:9")
@@ -154,16 +159,20 @@ class ResilientA2AClientTest {
     assertThrows(A2AClientException.class, () -> client.send(msg()));
 
     // The 1500ms deadline must halt retries far below maxRetries=100 (each backoff advances virtual
-    // time toward the deadline; full-jitter makes the exact count vary, but it can never approach 100).
+    // time toward the deadline; full-jitter makes the exact count vary, but it can never approach
+    // 100).
     int attempts = flaky.sendCalls.get();
-    assertTrue(attempts >= 2 && attempts < 100,
+    assertTrue(
+        attempts >= 2 && attempts < 100,
         "deadline must bound attempts well below maxRetries=100, was " + attempts);
-    assertTrue(vt.now() <= 1500 + 1000,
+    assertTrue(
+        vt.now() <= 1500 + 1000,
         "virtual clock must not advance far past the deadline, was " + vt.now());
   }
 
   @Test
-  @DisplayName("breaker opens after threshold failures, fast-fails, then half-opens and closes on success")
+  @DisplayName(
+      "breaker opens after threshold failures, fast-fails, then half-opens and closes on success")
   void breakerOpensThenRecovers() {
     VirtualTime vt = new VirtualTime();
     // No retries so each call is exactly one delegate attempt; breaker trips after 2 failures.

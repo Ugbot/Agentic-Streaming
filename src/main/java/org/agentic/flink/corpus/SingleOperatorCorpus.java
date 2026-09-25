@@ -1,12 +1,12 @@
 package org.agentic.flink.corpus;
 
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.memory.vector.ScoredItem;
 import org.agentic.flink.memory.vector.VectorMemory;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -14,10 +14,9 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  *
  * <p>Wraps any {@link VectorMemory} (typically {@link
  * org.agentic.flink.memory.vector.FlinkStateVectorMemory} or {@link
- * org.agentic.flink.memory.vector.FlinkStateHnswVectorMemory}). The operator should be a
- * {@code KeyedProcessFunction} or {@code KeyedCoProcessFunction} that binds the corpus in
- * {@code open()} and uses it from {@code processElement}/{@code processElement1}/
- * {@code processElement2}.
+ * org.agentic.flink.memory.vector.FlinkStateHnswVectorMemory}). The operator should be a {@code
+ * KeyedProcessFunction} or {@code KeyedCoProcessFunction} that binds the corpus in {@code open()}
+ * and uses it from {@code processElement}/{@code processElement1}/ {@code processElement2}.
  */
 public final class SingleOperatorCorpus implements Corpus {
 
@@ -86,7 +85,8 @@ public final class SingleOperatorCorpus implements Corpus {
     @Override
     public Corpus bind(RuntimeContext rc) throws Exception {
       VectorMemory memory = vectorSpec.bind(rc);
-      return new SingleOperatorCorpus(name, memory, vectorSpec.dimension(), vectorSpec.providerName());
+      return new SingleOperatorCorpus(
+          name, memory, vectorSpec.dimension(), vectorSpec.providerName());
     }
 
     @Override

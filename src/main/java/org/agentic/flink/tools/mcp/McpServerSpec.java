@@ -13,13 +13,13 @@ import java.util.Objects;
  * <p>Two transports are supported:
  *
  * <ul>
- *   <li>{@link Transport#STDIO} — spawn a subprocess and exchange newline-delimited JSON-RPC
- *       over its stdin/stdout. The dominant local transport.
+ *   <li>{@link Transport#STDIO} — spawn a subprocess and exchange newline-delimited JSON-RPC over
+ *       its stdin/stdout. The dominant local transport.
  *   <li>{@link Transport#HTTP} — POST JSON-RPC payloads to a URL. Used by hosted MCP servers.
  * </ul>
  *
- * <p>Specs are immutable and Java-serializable so they can ship in the Flink job graph; the
- * actual {@link McpClient} is constructed on the task side from this spec.
+ * <p>Specs are immutable and Java-serializable so they can ship in the Flink job graph; the actual
+ * {@link McpClient} is constructed on the task side from this spec.
  */
 public final class McpServerSpec implements Serializable {
   private static final long serialVersionUID = 2L;
@@ -104,12 +104,22 @@ public final class McpServerSpec implements Serializable {
     return value;
   }
 
-  /** Connect to a STDIO MCP server. Example: {@code stdio("calculator", "npx", "-y", "mcp-calculator")}. */
+  /**
+   * Connect to a STDIO MCP server. Example: {@code stdio("calculator", "npx", "-y",
+   * "mcp-calculator")}.
+   */
   public static McpServerSpec stdio(String name, String... command) {
-    return builder().withName(name).withTransport(Transport.STDIO).withCommand(List.of(command)).build();
+    return builder()
+        .withName(name)
+        .withTransport(Transport.STDIO)
+        .withCommand(List.of(command))
+        .build();
   }
 
-  /** Connect to an HTTP MCP server. Example: {@code http("everything", "http://localhost:3000/mcp")}. */
+  /**
+   * Connect to an HTTP MCP server. Example: {@code http("everything",
+   * "http://localhost:3000/mcp")}.
+   */
   public static McpServerSpec http(String name, String url) {
     return builder().withName(name).withTransport(Transport.HTTP).withUrl(url).build();
   }

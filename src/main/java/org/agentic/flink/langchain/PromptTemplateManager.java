@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
  * Centralized manager for prompt templates using LangChain4j PromptTemplate.
  *
  * <p>This manager provides:
+ *
  * <ul>
  *   <li>Pre-defined prompt templates for common agent tasks
  *   <li>Template registration and retrieval
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * </ul>
  *
  * <p>Example usage:
+ *
  * <pre>
  * PromptTemplateManager manager = PromptTemplateManager.getInstance();
  * Map&lt;String, Object&gt; vars = new HashMap&lt;&gt;();
@@ -37,9 +39,7 @@ public class PromptTemplateManager {
 
   private final Map<String, PromptTemplate> templates = new ConcurrentHashMap<>();
 
-  /**
-   * Private constructor - use getInstance() instead.
-   */
+  /** Private constructor - use getInstance() instead. */
   private PromptTemplateManager() {
     registerDefaultTemplates();
   }
@@ -53,9 +53,7 @@ public class PromptTemplateManager {
     return INSTANCE;
   }
 
-  /**
-   * Registers the default prompt templates.
-   */
+  /** Registers the default prompt templates. */
   private void registerDefaultTemplates() {
     // Validation template
     registerTemplate(

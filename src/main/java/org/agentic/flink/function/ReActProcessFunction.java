@@ -1,5 +1,14 @@
 package org.agentic.flink.function;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.concurrent.TimeUnit;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatClient;
@@ -10,15 +19,6 @@ import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.OutputSchema;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ServiceLoader;
-import java.util.concurrent.TimeUnit;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -58,10 +58,14 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
   public static class ReActStep {
     /** "thought" | "action" | "final" — what the model is asking the runtime to do. */
     private String type;
+
     private String thought;
+
     /** Tool name when type=action; null otherwise. */
     private String tool;
+
     private Map<String, Object> arguments;
+
     /** Final answer when type=final. */
     private String answer;
   }
@@ -185,7 +189,8 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
             answer, !toolRegistry.getToolNames().isEmpty(), toolCalls, stallNudges)) {
           stallNudges++;
           messages.add(
-              ChatMessage.user(org.agentic.flink.llm.ReActGuard.stallNudge(toolRegistry.getToolNames())));
+              ChatMessage.user(
+                  org.agentic.flink.llm.ReActGuard.stallNudge(toolRegistry.getToolNames())));
           continue;
         }
         markFinished(iteration, messages);
@@ -195,12 +200,14 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
       if ("action".equals(type) && step.getTool() != null) {
         String toolCallId = "react-" + iteration;
         String toolName = step.getTool();
-        Map<String, Object> args = step.getArguments() == null ? new HashMap<>() : step.getArguments();
+        Map<String, Object> args =
+            step.getArguments() == null ? new HashMap<>() : step.getArguments();
 
         java.util.Optional<ToolExecutor> executorOpt = toolRegistry.getExecutor(toolName);
         if (executorOpt.isEmpty()) {
           messages.add(
-              ChatMessage.tool(toolCallId, toolName, "ERROR: tool '" + toolName + "' not registered"));
+              ChatMessage.tool(
+                  toolCallId, toolName, "ERROR: tool '" + toolName + "' not registered"));
           continue;
         }
         ToolExecutor executor = executorOpt.get();
@@ -210,9 +217,7 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
         boolean success = false;
         try {
           result =
-              executor
-                  .execute(args)
-                  .get(agent.getToolTimeout().toMillis(), TimeUnit.MILLISECONDS);
+              executor.execute(args).get(agent.getToolTimeout().toMillis(), TimeUnit.MILLISECONDS);
           success = true;
         } catch (Exception e) {
           result = "ERROR: " + e.getMessage();
@@ -234,7 +239,8 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
     // pass-through event so the surrounding job can decide what to do.
     LOG.info(
         "ReAct agent {} hit iteration budget {} without final answer",
-        agent.getAgentId(), maxIterations);
+        agent.getAgentId(),
+        maxIterations);
     markFinished(iteration, messages);
     out.collect(event);
   }

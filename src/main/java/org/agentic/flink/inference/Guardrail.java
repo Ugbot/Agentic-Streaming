@@ -1,21 +1,21 @@
 package org.agentic.flink.inference;
 
-import org.agentic.flink.llm.ChatMessage;
-import org.agentic.flink.llm.ChatResponse;
 import java.io.Serializable;
 import java.util.List;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
 
 /**
  * Pre/post-LLM interceptor that can block or rewrite a chat interaction.
  *
- * <p>Guardrails fire from inside {@link org.agentic.flink.execution.LLMClient#chat}:
- * {@link #beforeChat} runs against the outgoing messages, and {@link #afterChat} runs against
- * the response. Both can return {@link GuardrailDecision#allow()},
- * {@link GuardrailDecision#block(String, String)}, or
- * {@link GuardrailDecision#rewrite(String, String, String)}.
+ * <p>Guardrails fire from inside {@link org.agentic.flink.execution.LLMClient#chat}: {@link
+ * #beforeChat} runs against the outgoing messages, and {@link #afterChat} runs against the
+ * response. Both can return {@link GuardrailDecision#allow()}, {@link
+ * GuardrailDecision#block(String, String)}, or {@link GuardrailDecision#rewrite(String, String,
+ * String)}.
  *
- * <p>The canonical implementation, {@link ClassifierGuardrail}, runs a {@link Classifier} over
- * the messages and blocks based on the predicted label.
+ * <p>The canonical implementation, {@link ClassifierGuardrail}, runs a {@link Classifier} over the
+ * messages and blocks based on the predicted label.
  */
 public interface Guardrail extends Serializable {
 

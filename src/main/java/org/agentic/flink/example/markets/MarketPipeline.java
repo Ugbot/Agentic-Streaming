@@ -1,5 +1,6 @@
 package org.agentic.flink.example.markets;
 
+import java.time.Duration;
 import org.agentic.flink.channel.KafkaChannel;
 import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
@@ -12,7 +13,6 @@ import org.agentic.flink.example.markets.stage.EnrichmentFn;
 import org.agentic.flink.example.markets.stage.FeatureAggregatorFn;
 import org.agentic.flink.example.markets.stage.MarketAgentFn;
 import org.agentic.flink.example.markets.stage.TopNRankerFn;
-import java.time.Duration;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.connector.kafka.source.KafkaSource;
@@ -24,12 +24,12 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 /**
  * Composes the full market-data Flink graph: classic-Flink upstream (enrich → top-N → best-quote →
  * features) feeding an inline agentic operator (band-pass + z-score + LLM) downstream. Two domain
- * examples — {@link BondMarketAgentExample} and {@link CryptoMarketAgentExample} — both call
- * {@link #wire} with their own Kafka topic configuration.
+ * examples — {@link BondMarketAgentExample} and {@link CryptoMarketAgentExample} — both call {@link
+ * #wire} with their own Kafka topic configuration.
  *
- * <p>Use {@link #wire} when you have three already-constructed streams (e.g. from
- * {@code env.fromElements} in a test) and {@link #wireFromKafka} when you want stock
- * {@link KafkaSource}s reading newline-delimited JSON.
+ * <p>Use {@link #wire} when you have three already-constructed streams (e.g. from {@code
+ * env.fromElements} in a test) and {@link #wireFromKafka} when you want stock {@link KafkaSource}s
+ * reading newline-delimited JSON.
  */
 public final class MarketPipeline {
 

@@ -3,9 +3,6 @@ package org.agentic.flink.example.markets.producer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
-import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
-import org.agentic.flink.example.markets.model.MarketRecords.Security;
-import org.agentic.flink.example.markets.model.MarketRecords.Trade;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -18,17 +15,20 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
+import org.agentic.flink.example.markets.model.MarketRecords.Security;
+import org.agentic.flink.example.markets.model.MarketRecords.Trade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Java twin of {@code examples-bin/markets/coinbase_producer.py}. Subscribes to the public
- * Coinbase Exchange WebSocket and translates each event into the same Inventory/Trade JSON shape
- * the Flink job already consumes, so the operator graph is identical for crypto and bonds.
+ * Java twin of {@code examples-bin/markets/coinbase_producer.py}. Subscribes to the public Coinbase
+ * Exchange WebSocket and translates each event into the same Inventory/Trade JSON shape the Flink
+ * job already consumes, so the operator graph is identical for crypto and bonds.
  *
- * <p>Uses the built-in JDK 17 {@link WebSocket} client — no extra dependency. Channels:
- * {@code level2_batch} (mapped to inventory rows) and {@code matches} (mapped to trades). A small
- * static seed of {@link Security} rows is also published so the broadcast enrichment has data.
+ * <p>Uses the built-in JDK 17 {@link WebSocket} client — no extra dependency. Channels: {@code
+ * level2_batch} (mapped to inventory rows) and {@code matches} (mapped to trades). A small static
+ * seed of {@link Security} rows is also published so the broadcast enrichment has data.
  *
  * <pre>
  *   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
@@ -44,7 +44,9 @@ public final class CoinbaseProducer {
   public static void main(String[] args) throws Exception {
     List<String> products =
         Arrays.stream(parseString(args, "--products", "BTC-USD,ETH-USD,SOL-USD").split(","))
-            .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList();
 
     try (MarketProducerSupport mp =
         new MarketProducerSupport(MarketProducerSupport.defaultBootstrap(), "coinbase-producer")) {
@@ -57,13 +59,16 @@ public final class CoinbaseProducer {
       HttpClient http = HttpClient.newHttpClient();
       Listener listener = new Listener(mp, done);
       WebSocket ws =
-          http.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(10))
-              .buildAsync(WS_URI, listener).join();
+          http.newWebSocketBuilder()
+              .connectTimeout(Duration.ofSeconds(10))
+              .buildAsync(WS_URI, listener)
+              .join();
 
       String sub = subscribeMessage(products);
       LOG.info("subscribing: {}", sub);
       ws.sendText(sub, true).join();
-      System.out.printf(Locale.ROOT, "Coinbase bridge: streaming %s to coinbase-* topics%n", products);
+      System.out.printf(
+          Locale.ROOT, "Coinbase bridge: streaming %s to coinbase-* topics%n", products);
       done.await();
     }
   }
@@ -71,9 +76,18 @@ public final class CoinbaseProducer {
   static Security securityFor(String product) {
     return new Security(
         Math.abs(product.hashCode()) % 1_000_000_000,
-        product, product.replace("-", ""), product, "Coinbase",
-        "Crypto", product.split("-")[0], 0.0, "2099-12-31",
-        "NR", "NR", "NR", "N");
+        product,
+        product.replace("-", ""),
+        product,
+        "Coinbase",
+        "Crypto",
+        product.split("-")[0],
+        0.0,
+        "2099-12-31",
+        "NR",
+        "NR",
+        "NR",
+        "N");
   }
 
   private static String subscribeMessage(List<String> products) {
@@ -100,14 +114,25 @@ public final class CoinbaseProducer {
     return Math.abs(product.hashCode()) % 1_000_000_000L;
   }
 
-  /** Translate one {@code level2} change ({@code ["buy"|"sell", price, size]}) to an Inventory row. */
-  static Inventory l2ChangeToInventory(String product, String sideRaw, double price, double size, long ts) {
+  /**
+   * Translate one {@code level2} change ({@code ["buy"|"sell", price, size]}) to an Inventory row.
+   */
+  static Inventory l2ChangeToInventory(
+      String product, String sideRaw, double price, double size, long ts) {
     return new Inventory(
-        "COINBASE", productInstrumentId(product),
+        "COINBASE",
+        productInstrumentId(product),
         "buy".equals(sideRaw) ? "BID" : "OFFER",
-        price, (long) Math.max(0, size * 10_000),  // scale fractional crypto sizes to ints
-        0.0, 1, 1, "CRYPTO", product, "F",
-        size > 0 ? "UPDATE" : "DELETE", ts);
+        price,
+        (long) Math.max(0, size * 10_000), // scale fractional crypto sizes to ints
+        0.0,
+        1,
+        1,
+        "CRYPTO",
+        product,
+        "F",
+        size > 0 ? "UPDATE" : "DELETE",
+        ts);
   }
 
   static Trade matchToTrade(JsonNode m) {
@@ -116,10 +141,19 @@ public final class CoinbaseProducer {
     String product = m.path("product_id").asText("");
     return new Trade(
         m.path("trade_id").asLong(0),
-        product, parseCoinbaseTs(m.path("time").asText("")),
+        product,
+        parseCoinbaseTs(m.path("time").asText("")),
         "buy".equals(m.path("side").asText("")) ? "BUY" : "SELL",
-        price, size, 0.0, 0.0, 0.0, 0.0,
-        "CRYPTO", "CBMAKER", "CBTAKER", "COINBASE");
+        price,
+        size,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        "CRYPTO",
+        "CBMAKER",
+        "CBTAKER",
+        "COINBASE");
   }
 
   private static String parseString(String[] args, String flag, String def) {
@@ -186,10 +220,14 @@ public final class CoinbaseProducer {
           long ts = parseCoinbaseTs(msg.path("time").asText(""));
           for (JsonNode change : msg.path("changes")) {
             if (change.size() < 3) continue;
-            mp.send("coinbase-inventory",
+            mp.send(
+                "coinbase-inventory",
                 l2ChangeToInventory(
-                    product, change.get(0).asText(),
-                    change.get(1).asDouble(), change.get(2).asDouble(), ts));
+                    product,
+                    change.get(0).asText(),
+                    change.get(1).asDouble(),
+                    change.get(2).asDouble(),
+                    ts));
           }
         }
         case "match", "last_match" -> mp.send("coinbase-trades", matchToTrade(msg));
@@ -207,8 +245,7 @@ public final class CoinbaseProducer {
         JsonNode lvl = levels.get(i);
         if (lvl.size() >= 2) {
           rows.add(
-              l2ChangeToInventory(
-                  product, side, lvl.get(0).asDouble(), lvl.get(1).asDouble(), ts));
+              l2ChangeToInventory(product, side, lvl.get(0).asDouble(), lvl.get(1).asDouble(), ts));
         }
       }
       for (Inventory r : rows) mp.send("coinbase-inventory", r);

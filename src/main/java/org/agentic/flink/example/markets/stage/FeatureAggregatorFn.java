@@ -10,14 +10,15 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
 /**
- * Stage 4 — windowed feature aggregation per instrumentId. Mirrors {@code 4_feature_aggregation.sql}
- * (per-rank prices/sizes, top-3/5 averages, spreads, volumes, counts) but implemented manually
- * with a {@code KeyedProcessFunction} + processing-time timer (no Table API in the repo).
+ * Stage 4 — windowed feature aggregation per instrumentId. Mirrors {@code
+ * 4_feature_aggregation.sql} (per-rank prices/sizes, top-3/5 averages, spreads, volumes, counts)
+ * but implemented manually with a {@code KeyedProcessFunction} + processing-time timer (no Table
+ * API in the repo).
  *
- * <p>Key: instrumentId (as String for state-backend consistency with the rest of the pipeline).
- * On each {@link RankedQuote}: overwrite the (rank, side) slot in a small accumulator and register
- * a window-end timer if not already pending. On timer: compute and emit {@link MarketFeatures},
- * then clear state.
+ * <p>Key: instrumentId (as String for state-backend consistency with the rest of the pipeline). On
+ * each {@link RankedQuote}: overwrite the (rank, side) slot in a small accumulator and register a
+ * window-end timer if not already pending. On timer: compute and emit {@link MarketFeatures}, then
+ * clear state.
  */
 public final class FeatureAggregatorFn
     extends KeyedProcessFunction<String, RankedQuote, MarketFeatures> {

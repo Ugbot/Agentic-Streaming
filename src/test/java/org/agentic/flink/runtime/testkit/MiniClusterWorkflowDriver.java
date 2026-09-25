@@ -29,11 +29,11 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.configuration.RestartStrategyOptions;
+import org.apache.flink.configuration.StateRecoveryOptions;
 import org.apache.flink.connector.datagen.source.DataGeneratorSource;
 import org.apache.flink.connector.datagen.source.GeneratorFunction;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.execution.SavepointFormatType;
-import org.apache.flink.configuration.StateRecoveryOptions;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -61,11 +61,13 @@ import org.jagentic.core.TurnResult;
 public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   static final String HEARTBEAT = "__heartbeat__";
+
   /** Metadata key whose presence makes {@link FailOnce} throw exactly once per job incarnation. */
   public static final String POISON = "x-fail-once";
 
   private static final Map<String, ConcurrentLinkedQueue<Event>> INPUTS = new ConcurrentHashMap<>();
-  private static final Map<String, CopyOnWriteArrayList<TurnResult>> OUTPUTS = new ConcurrentHashMap<>();
+  private static final Map<String, CopyOnWriteArrayList<TurnResult>> OUTPUTS =
+      new ConcurrentHashMap<>();
   private static final Map<String, AtomicBoolean> POISONED = new ConcurrentHashMap<>();
 
   private final MiniCluster cluster;
@@ -80,25 +82,47 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
   private JobClient job;
   private int consumed = 0;
 
-  public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
-                                   Path savepointDir) {
+  public MiniClusterWorkflowDriver(
+      MiniCluster cluster,
+      Map<String, Object> spec,
+      FlinkRuntimeOptions options,
+      Path savepointDir) {
     this(cluster, spec, options, savepointDir, Duration.ofSeconds(60), false, true);
   }
 
-  public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
-                                   Path savepointDir, Duration timeout, boolean strictTypes, boolean checkpointing) {
+  public MiniClusterWorkflowDriver(
+      MiniCluster cluster,
+      Map<String, Object> spec,
+      FlinkRuntimeOptions options,
+      Path savepointDir,
+      Duration timeout,
+      boolean strictTypes,
+      boolean checkpointing) {
     this(cluster, spec, options, savepointDir, timeout, strictTypes, checkpointing, 1);
   }
 
-  /** A driver at the given operator parallelism (the workflow runs the same job at 1 or more subtasks). */
-  public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
-                                   Path savepointDir, int parallelism) {
+  /**
+   * A driver at the given operator parallelism (the workflow runs the same job at 1 or more
+   * subtasks).
+   */
+  public MiniClusterWorkflowDriver(
+      MiniCluster cluster,
+      Map<String, Object> spec,
+      FlinkRuntimeOptions options,
+      Path savepointDir,
+      int parallelism) {
     this(cluster, spec, options, savepointDir, Duration.ofSeconds(60), false, true, parallelism);
   }
 
-  public MiniClusterWorkflowDriver(MiniCluster cluster, Map<String, Object> spec, FlinkRuntimeOptions options,
-                                   Path savepointDir, Duration timeout, boolean strictTypes, boolean checkpointing,
-                                   int parallelism) {
+  public MiniClusterWorkflowDriver(
+      MiniCluster cluster,
+      Map<String, Object> spec,
+      FlinkRuntimeOptions options,
+      Path savepointDir,
+      Duration timeout,
+      boolean strictTypes,
+      boolean checkpointing,
+      int parallelism) {
     if (parallelism < 1) {
       throw new IllegalArgumentException("parallelism must be at least 1, got " + parallelism);
     }
@@ -130,8 +154,9 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   /** Stops the running job with a savepoint and starts a new incarnation from it. */
   public void restart() throws Exception {
-    String savepoint = job.stopWithSavepoint(false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
-        .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+    String savepoint =
+        job.stopWithSavepoint(false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
+            .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
     job = null;
     POISONED.get(driverId).set(false);
     startFrom(savepoint);
@@ -139,12 +164,19 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   /** Triggers a checkpoint on the running job and waits for it to complete. */
   public String checkpoint() throws Exception {
-    return cluster.triggerCheckpoint(job.getJobID()).get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+    return cluster
+        .triggerCheckpoint(job.getJobID())
+        .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
   }
 
-  /** Injects a failure into the running job: the next element throws once, the job recovers from its last checkpoint. */
+  /**
+   * Injects a failure into the running job: the next element throws once, the job recovers from its
+   * last checkpoint.
+   */
   public void failJobOnce() throws Exception {
-    submitEvent(new Event(HEARTBEAT, "poison-" + UUID.randomUUID(), "driver", "", Map.of(POISON, "true"), null));
+    submitEvent(
+        new Event(
+            HEARTBEAT, "poison-" + UUID.randomUUID(), "driver", "", Map.of(POISON, "true"), null));
     long deadline = System.nanoTime() + timeout.toNanos();
     while (!POISONED.get(driverId).get()) {
       sleepOrFail(deadline, "poison was never observed by the job");
@@ -185,7 +217,8 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
         }
       }
       if (at < 0) {
-        throw new IllegalStateException("no result for " + e.conversationId() + "/" + e.turnId() + " in " + emitted);
+        throw new IllegalStateException(
+            "no result for " + e.conversationId() + "/" + e.turnId() + " in " + emitted);
       }
       out.add(emitted.remove(at));
     }
@@ -230,8 +263,14 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
   private List<TurnResult> awaitResults(int want) throws Exception {
     long deadline = System.nanoTime() + timeout.toNanos();
     while (OUTPUTS.get(driverId).size() < want) {
-      sleepOrFail(deadline, "job produced " + OUTPUTS.get(driverId).size() + " results, wanted " + want
-          + "; status=" + status());
+      sleepOrFail(
+          deadline,
+          "job produced "
+              + OUTPUTS.get(driverId).size()
+              + " results, wanted "
+              + want
+              + "; status="
+              + status());
     }
     List<TurnResult> all = OUTPUTS.get(driverId);
     return new ArrayList<>(all.subList(consumed, want));
@@ -245,7 +284,9 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(100));
     if (checkpointing) {
       conf.set(CheckpointingOptions.CHECKPOINTING_INTERVAL, Duration.ofSeconds(30));
-      conf.set(CheckpointingOptions.CHECKPOINTS_DIRECTORY, savepointDir.resolve("checkpoints").toUri().toString());
+      conf.set(
+          CheckpointingOptions.CHECKPOINTS_DIRECTORY,
+          savepointDir.resolve("checkpoints").toUri().toString());
     }
     if (strictTypes) {
       conf.set(PipelineOptions.GENERIC_TYPES, false);
@@ -253,14 +294,24 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
     if (savepoint != null) {
       conf.set(StateRecoveryOptions.SAVEPOINT_PATH, savepoint);
     }
-    StreamExecutionEnvironment env = new TestStreamEnvironment(cluster, conf, parallelism, List.of(), List.of());
+    StreamExecutionEnvironment env =
+        new TestStreamEnvironment(cluster, conf, parallelism, List.of(), List.of());
     env.setParallelism(parallelism);
 
-    DataGeneratorSource<Event> gen = new DataGeneratorSource<>(new QueueGenerator(driverId), Long.MAX_VALUE,
-        RateLimiterStrategy.perSecond(400), WorkflowTurnFunction.EVENT_TYPE);
-    DataStream<Event> source = env.fromSource(gen, WatermarkStrategy.noWatermarks(), "turns").setParallelism(1)
-        .map(new FailOnce(driverId)).setParallelism(1).returns(WorkflowTurnFunction.EVENT_TYPE)
-        .filter(e -> !HEARTBEAT.equals(e.conversationId())).setParallelism(1);
+    DataGeneratorSource<Event> gen =
+        new DataGeneratorSource<>(
+            new QueueGenerator(driverId),
+            Long.MAX_VALUE,
+            RateLimiterStrategy.perSecond(400),
+            WorkflowTurnFunction.EVENT_TYPE);
+    DataStream<Event> source =
+        env.fromSource(gen, WatermarkStrategy.noWatermarks(), "turns")
+            .setParallelism(1)
+            .map(new FailOnce(driverId))
+            .setParallelism(1)
+            .returns(WorkflowTurnFunction.EVENT_TYPE)
+            .filter(e -> !HEARTBEAT.equals(e.conversationId()))
+            .setParallelism(1);
 
     FlinkPipelineRunner.assembleResults(env, spec, source, options)
         .sinkTo(new CollectingSink(driverId));
@@ -282,7 +333,8 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
     }
   }
 
-  private static void sleepOrFail(long deadline, String message) throws TimeoutException, InterruptedException {
+  private static void sleepOrFail(long deadline, String message)
+      throws TimeoutException, InterruptedException {
     if (System.nanoTime() > deadline) {
       throw new TimeoutException(message);
     }
@@ -370,5 +422,4 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
       };
     }
   }
-
 }

@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Every in-process storage provider must survive the serialization Flink applies when it ships an
  * operator to a task: transient resources are rebuilt on first use after deserialization and the
- * copy is fully usable. The external providers get the same treatment against real backends in
- * the integration group (PostgresConversationStoreTest, PostgresA2ATaskStoreTest).
+ * copy is fully usable. The external providers get the same treatment against real backends in the
+ * integration group (PostgresConversationStoreTest, PostgresA2ATaskStoreTest).
  */
 class StorageProviderFlinkSerializationTest {
 
@@ -149,14 +149,18 @@ class StorageProviderFlinkSerializationTest {
         s -> {
           s.saveTask(task);
           A2ATask loaded = s.loadTask(task.getId()).orElseThrow();
-          s.saveTask(loaded.withState(A2ATaskState.COMPLETED, "done", loaded.getUpdatedAtEpochMs() + 1));
-          return s.listTasksByContext(ctx).size() + "/" + s.listTasksByState(A2ATaskState.COMPLETED).size();
+          s.saveTask(
+              loaded.withState(A2ATaskState.COMPLETED, "done", loaded.getUpdatedAtEpochMs() + 1));
+          return s.listTasksByContext(ctx).size()
+              + "/"
+              + s.listTasksByState(A2ATaskState.COMPLETED).size();
         },
         "1/1");
   }
 
   @Test
-  @DisplayName("a provider that was never initialized fails loudly instead of NPE-ing after deserialization")
+  @DisplayName(
+      "a provider that was never initialized fails loudly instead of NPE-ing after deserialization")
   void uninitializedProviderFailsLoudly() throws Exception {
     InMemoryShortTermStore copy =
         FlinkSerializationHarness.viaInstantiationUtil(new InMemoryShortTermStore());

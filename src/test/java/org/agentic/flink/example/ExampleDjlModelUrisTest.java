@@ -16,11 +16,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The showcase examples refer to Hugging Face models through DJL's {@code djl://} scheme.
- * DJL resolves such a URI against the model index of the named zoo, so a model that exists
- * on Hugging Face but is absent from the zoo index fails only at job start with "Invalid djl
- * URL". This test resolves every example reranker URI against the index bundled in the DJL
- * tokenizers jar, in DJL offline mode so no network is involved.
+ * The showcase examples refer to Hugging Face models through DJL's {@code djl://} scheme. DJL
+ * resolves such a URI against the model index of the named zoo, so a model that exists on Hugging
+ * Face but is absent from the zoo index fails only at job start with "Invalid djl URL". This test
+ * resolves every example reranker URI against the index bundled in the DJL tokenizers jar, in DJL
+ * offline mode so no network is involved.
  */
 class ExampleDjlModelUrisTest {
 

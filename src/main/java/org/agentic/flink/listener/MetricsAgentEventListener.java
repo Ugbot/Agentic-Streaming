@@ -13,9 +13,9 @@ import org.apache.flink.metrics.MetricGroup;
  *
  * <p>The counters work outside Flink (unit tests, plain JVM hosts). Inside a Flink operator call
  * {@link #open(RuntimeContext)} from the function's {@code open()}: the listener then also
- * registers Flink {@link Counter}s and gauges under {@link #METRIC_GROUP} on the operator's
- * metric group and updates them alongside the local counters. Counters are process-local; after
- * Java deserialization (Flink shipping the function to a task) they restart from zero and must be
+ * registers Flink {@link Counter}s and gauges under {@link #METRIC_GROUP} on the operator's metric
+ * group and updates them alongside the local counters. Counters are process-local; after Java
+ * deserialization (Flink shipping the function to a task) they restart from zero and must be
  * registered again through {@code open()}, which every {@code RichFunction} restart does.
  */
 public final class MetricsAgentEventListener implements AgentEventListener {
@@ -120,8 +120,7 @@ public final class MetricsAgentEventListener implements AgentEventListener {
   }
 
   @Override
-  public void onChatResponse(
-      String agentId, String modelName, int responseLength, Long tokens) {
+  public void onChatResponse(String agentId, String modelName, int responseLength, Long tokens) {
     chatResponses.increment();
     inc(flinkChatResponses);
     if (tokens != null) {

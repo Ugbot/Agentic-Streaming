@@ -31,10 +31,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Entry class submitted to the Flink session cluster. Dispatches on {@code --level} to build one
- * of the agentic levels (producer, 1-5) using arg-driven source/sink endpoints. Designed to be
- * driven by the notebook's Python session client: one jar uploaded once, many jobs submitted
- * with different program args.
+ * Entry class submitted to the Flink session cluster. Dispatches on {@code --level} to build one of
+ * the agentic levels (producer, 1-5) using arg-driven source/sink endpoints. Designed to be driven
+ * by the notebook's Python session client: one jar uploaded once, many jobs submitted with
+ * different program args.
  *
  * <p>Endpoints encode source/sink type in their scheme:
  *
@@ -42,8 +42,8 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code coinbase://} — Coinbase WebSocket source (producer only).
  *   <li>{@code tcp://host:port} — ZeroMQ. Source is {@code PULL} binding to the endpoint by
  *       default; sink is {@code PUSH} connecting. Pairs cleanly with the framework default.
- *   <li>{@code fluss://database.table} — Fluss source/sink; bootstrap defaults to
- *       {@code localhost:9123}, overridable via {@code --fluss-bootstrap}.
+ *   <li>{@code fluss://database.table} — Fluss source/sink; bootstrap defaults to {@code
+ *       localhost:9123}, overridable via {@code --fluss-bootstrap}.
  * </ul>
  *
  * <p>Examples (run inside the session cluster via {@code POST /jars/{id}/run}):
@@ -83,8 +83,7 @@ public final class SessionJobLauncher {
 
   /** Coinbase WS → JSON Inventory rows on the configured sink. */
   static void buildProducer(StreamExecutionEnvironment env, Args a) {
-    List<String> products =
-        List.of(a.opt("products").orElse("BTC-USD,ETH-USD,SOL-USD").split(","));
+    List<String> products = List.of(a.opt("products").orElse("BTC-USD,ETH-USD,SOL-USD").split(","));
     DataStream<Inventory> src =
         env.fromSource(
                 CoinbaseTickerSource.source(products),
@@ -99,8 +98,7 @@ public final class SessionJobLauncher {
 
   /** Identity passthrough — proves the chain is alive. */
   static void buildLevel1(StreamExecutionEnvironment env, Args a) throws Exception {
-    DataStream<Inventory> in =
-        sourceFor(a.require("in"), a, Inventory.class).open(env);
+    DataStream<Inventory> in = sourceFor(a.require("in"), a, Inventory.class).open(env);
     in.sinkTo(sinkFor(a.require("out"), a, Inventory.class))
         .name("L1.passthrough.sink")
         .setParallelism(1);
@@ -152,8 +150,7 @@ public final class SessionJobLauncher {
 
   /** Agentic screening: band-pass + z-score + Claude. Wires the control-plane broadcast. */
   static void buildLevel5(StreamExecutionEnvironment env, Args a) throws Exception {
-    DataStream<MarketFeatures> in =
-        sourceFor(a.require("in"), a, MarketFeatures.class).open(env);
+    DataStream<MarketFeatures> in = sourceFor(a.require("in"), a, MarketFeatures.class).open(env);
 
     BroadcastStream<ControlMessage> control;
     if (a.opt("control").isPresent()) {
@@ -163,8 +160,7 @@ public final class SessionJobLauncher {
     } else {
       // Empty control source — operator still works, just never sees a flip.
       control =
-          env.fromCollection(
-                  List.<ControlMessage>of(), TypeInformation.of(ControlMessage.class))
+          env.fromCollection(List.<ControlMessage>of(), TypeInformation.of(ControlMessage.class))
               .broadcast(ControlState.DIRECTIVES);
     }
 
@@ -178,13 +174,9 @@ public final class SessionJobLauncher {
             Integer.parseInt(a.opt("warmup").orElse("5")));
 
     SingleOutputStreamOperator<String> alerts =
-        AgenticPipeline.wire(
-            in.keyBy(f -> Long.toString(f.instrumentId())), control, fn);
+        AgenticPipeline.wire(in.keyBy(f -> Long.toString(f.instrumentId())), control, fn);
 
-    alerts
-        .sinkTo(sinkFor(a.require("out"), a, String.class))
-        .name("L5.sink")
-        .setParallelism(1);
+    alerts.sinkTo(sinkFor(a.require("out"), a, String.class)).name("L5.sink").setParallelism(1);
 
     // Optional live-observation tee: PUB out the same alert JSON so a notebook (or any
     // ZeroMQ SUB) can tail adjudicated alerts independently of the durable Fluss sink. Off
@@ -231,7 +223,8 @@ public final class SessionJobLauncher {
     throw new IllegalArgumentException("unknown source endpoint scheme: " + endpoint);
   }
 
-  static <T> org.apache.flink.api.connector.sink2.Sink<T> sinkFor(String endpoint, Args a, Class<T> type) {
+  static <T> org.apache.flink.api.connector.sink2.Sink<T> sinkFor(
+      String endpoint, Args a, Class<T> type) {
     if (endpoint.startsWith("tcp://")) {
       return ZeroMqSink.push(endpoint);
     }

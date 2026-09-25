@@ -1,20 +1,19 @@
 package org.agentic.flink.inference;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
  * Wraps a {@link Classifier} or {@link Scorer} surface of an {@link InferenceConnection} as a
- * {@link ToolExecutor} so the LLM can invoke an inference model through the regular tool-call
- * path.
+ * {@link ToolExecutor} so the LLM can invoke an inference model through the regular tool-call path.
  *
  * <p>The adapter expects the LLM's argument map to contain a {@code "text"} field for the model
- * input. For classifiers, the returned object is a map of {@code label}, {@code score}, and
- * {@code probabilities}. For scorers, it's a map containing {@code score}.
+ * input. For classifiers, the returned object is a map of {@code label}, {@code score}, and {@code
+ * probabilities}. For scorers, it's a map containing {@code score}.
  *
  * <p>The {@link InferenceConnection} ships in the job graph; the live {@link InferenceClient} is
  * built lazily on the task side via {@link InferenceConnection#bind(RuntimeContext)}.

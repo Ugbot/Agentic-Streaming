@@ -7,14 +7,14 @@ import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.api.connector.sink2.WriterInitContext;
 
 /**
- * A generic, native Flink 2.x ({@link org.apache.flink.api.connector.sink2 FLIP-143}) sink that runs
- * a serializable {@link WriteFn} per element — the modern replacement for the framework's deprecated
- * {@code RichSinkFunction}/{@code addSink} usages.
+ * A generic, native Flink 2.x ({@link org.apache.flink.api.connector.sink2 FLIP-143}) sink that
+ * runs a serializable {@link WriteFn} per element — the modern replacement for the framework's
+ * deprecated {@code RichSinkFunction}/{@code addSink} usages.
  *
- * <p>One {@code WriteFn} is built per subtask: {@link WriteFn#open(int)} initializes the per-subtask
- * resource (a socket, a client), {@link WriteFn#write(Object)} handles each element, {@link
- * WriteFn#flush()} is called on checkpoint/end-of-input, and {@link WriteFn#close()} releases it.
- * Use it via {@code stream.sinkTo(new ForEachSink<>(fn))}.
+ * <p>One {@code WriteFn} is built per subtask: {@link WriteFn#open(int)} initializes the
+ * per-subtask resource (a socket, a client), {@link WriteFn#write(Object)} handles each element,
+ * {@link WriteFn#flush()} is called on checkpoint/end-of-input, and {@link WriteFn#close()}
+ * releases it. Use it via {@code stream.sinkTo(new ForEachSink<>(fn))}.
  *
  * @param <T> the element type
  */

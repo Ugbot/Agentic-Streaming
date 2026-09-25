@@ -24,7 +24,8 @@ class EnvApiToolExecutorTest {
 
   private HttpServer server;
   private String baseUrl;
-  private final ConcurrentLinkedQueue<String[]> requests = new ConcurrentLinkedQueue<>(); // {method, path, auth, body}
+  private final ConcurrentLinkedQueue<String[]> requests =
+      new ConcurrentLinkedQueue<>(); // {method, path, auth, body}
 
   @BeforeEach
   void startStub() throws Exception {
@@ -50,14 +51,17 @@ class EnvApiToolExecutorTest {
                         "tools",
                         List.of(
                             Map.of(
-                                "type", "function",
+                                "type",
                                 "function",
-                                Map.of("name", "submit_referral", "description", "Submit a referral")))));
+                                "function",
+                                Map.of(
+                                    "name",
+                                    "submit_referral",
+                                    "description",
+                                    "Submit a referral")))));
           } else {
             // tool call: echo the path + body so the test can assert routing.
-            resp =
-                MAPPER.writeValueAsBytes(
-                    Map.of("error", false, "content", "ok:" + path));
+            resp = MAPPER.writeValueAsBytes(Map.of("error", false, "content", "ok:" + path));
           }
           exchange.getResponseHeaders().add("Content-Type", "application/json");
           exchange.sendResponseHeaders(200, resp.length);
@@ -94,11 +98,13 @@ class EnvApiToolExecutorTest {
   @DisplayName("per-tool executor calls /sessions/{cid}/tools/{name} with the bound contextId")
   void perToolExecutorRoutesByContext() throws Exception {
     EnvApiClient client = new EnvApiClient(baseUrl, "dev-token", 5000);
-    EnvApiToolExecutor exec = new EnvApiToolExecutor(client, "submit_referral", "Submit a referral");
+    EnvApiToolExecutor exec =
+        new EnvApiToolExecutor(client, "submit_referral", "Submit a referral");
     String cid = "ctx-" + UUID.randomUUID();
 
     Object result =
-        EnvSession.withContext(cid, () -> exec.execute(Map.of("account_type", "Blue Account")).join());
+        EnvSession.withContext(
+            cid, () -> exec.execute(Map.of("account_type", "Blue Account")).join());
 
     assertEquals(Boolean.FALSE, ((Map<?, ?>) result).get("error"));
     String[] req = requests.poll();

@@ -32,16 +32,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.ReopenableStore;
+import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * {@link VectorStore} implementation backed by <a href="https://milvus.io">Milvus</a> via the
- * official Java SDK ({@code io.milvus:milvus-sdk-java:2.4.8}, v2 high-level client
- * {@link MilvusClientV2}).
+ * official Java SDK ({@code io.milvus:milvus-sdk-java:2.4.8}, v2 high-level client {@link
+ * MilvusClientV2}).
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "milvus"}. Requires a
  * running Milvus instance (standalone or cluster) reachable at the configured host/port.
@@ -54,8 +54,8 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code metadata} — {@link DataType#JSON} field holding the serialized metadata map
  * </ul>
  *
- * <p>An index is created on the vector field with the configured metric ({@code COSINE},
- * {@code L2}, or {@code IP}) and the collection is loaded into memory on {@link #initialize(Map)}.
+ * <p>An index is created on the vector field with the configured metric ({@code COSINE}, {@code
+ * L2}, or {@code IP}) and the collection is loaded into memory on {@link #initialize(Map)}.
  *
  * <p>Configuration keys:
  *
@@ -66,7 +66,8 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code milvus.database} (optional database name)
  *   <li>{@code milvus.collection} (default {@code agentic_flink})
  *   <li>{@code vector.dimension} (required, integer)
- *   <li>{@code vector.similarity} (default {@code cosine}; one of cosine, euclidean/l2, dot_product)
+ *   <li>{@code vector.similarity} (default {@code cosine}; one of cosine, euclidean/l2,
+ *       dot_product)
  * </ul>
  *
  * <p>The Milvus client is {@code transient} and reconnected in {@link #initialize(Map)} so the
@@ -120,7 +121,8 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
     }
     this.dimension = Integer.parseInt(dim.trim());
     if (this.dimension <= 0) {
-      throw new IllegalArgumentException("vector.dimension must be positive, got " + this.dimension);
+      throw new IllegalArgumentException(
+          "vector.dimension must be positive, got " + this.dimension);
     }
     this.similarity = config.getOrDefault("vector.similarity", "cosine").trim().toLowerCase();
 
@@ -211,8 +213,7 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
           "embedding dimension " + embedding.length + " != configured " + dimension);
     }
     JsonObject row = toRow(id, embedding, metadata);
-    client().upsert(
-        UpsertReq.builder().collectionName(collection).data(List.of(row)).build());
+    client().upsert(UpsertReq.builder().collectionName(collection).data(List.of(row)).build());
   }
 
   @Override
@@ -229,14 +230,17 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
       }
       if (vec.length != dimension) {
         throw new IllegalArgumentException(
-            "embedding dimension " + vec.length + " != configured " + dimension + " for id "
+            "embedding dimension "
+                + vec.length
+                + " != configured "
+                + dimension
+                + " for id "
                 + e.getKey());
       }
       Map<String, Object> md = metadata == null ? null : metadata.get(e.getKey());
       rows.add(toRow(e.getKey(), vec, md));
     }
-    client().upsert(
-        UpsertReq.builder().collectionName(collection).data(rows).build());
+    client().upsert(UpsertReq.builder().collectionName(collection).data(rows).build());
   }
 
   @Override
@@ -300,12 +304,13 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
   @Override
   public float[] getEmbedding(String id) throws Exception {
     GetResp resp =
-        client().get(
-            GetReq.builder()
-                .collectionName(collection)
-                .ids(List.of(id))
-                .outputFields(List.of(ID_FIELD, VECTOR_FIELD))
-                .build());
+        client()
+            .get(
+                GetReq.builder()
+                    .collectionName(collection)
+                    .ids(List.of(id))
+                    .outputFields(List.of(ID_FIELD, VECTOR_FIELD))
+                    .build());
     List<QueryResp.QueryResult> results = resp.getGetResults();
     if (results == null || results.isEmpty()) {
       return null;
@@ -316,12 +321,13 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
   @Override
   public Map<String, Object> getMetadata(String id) throws Exception {
     GetResp resp =
-        client().get(
-            GetReq.builder()
-                .collectionName(collection)
-                .ids(List.of(id))
-                .outputFields(List.of(ID_FIELD, METADATA_FIELD))
-                .build());
+        client()
+            .get(
+                GetReq.builder()
+                    .collectionName(collection)
+                    .ids(List.of(id))
+                    .outputFields(List.of(ID_FIELD, METADATA_FIELD))
+                    .build());
     List<QueryResp.QueryResult> results = resp.getGetResults();
     if (results == null || results.isEmpty()) {
       return null;
@@ -331,17 +337,17 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
 
   @Override
   public void deleteEmbedding(String id) throws Exception {
-    client().delete(
-        DeleteReq.builder().collectionName(collection).ids(List.of(id)).build());
+    client().delete(DeleteReq.builder().collectionName(collection).ids(List.of(id)).build());
   }
 
   @Override
   public void deleteByFlowId(String flowId) throws Exception {
-    client().delete(
-        DeleteReq.builder()
-            .collectionName(collection)
-            .filter(METADATA_FIELD + "[\"flowId\"] == \"" + escape(flowId) + "\"")
-            .build());
+    client()
+        .delete(
+            DeleteReq.builder()
+                .collectionName(collection)
+                .filter(METADATA_FIELD + "[\"flowId\"] == \"" + escape(flowId) + "\"")
+                .build());
   }
 
   @Override
@@ -359,8 +365,9 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
     Map<String, Object> out = new LinkedHashMap<>();
     try {
       GetCollectionStatsResp stats =
-          client().getCollectionStats(
-              GetCollectionStatsReq.builder().collectionName(collection).build());
+          client()
+              .getCollectionStats(
+                  GetCollectionStatsReq.builder().collectionName(collection).build());
       out.put("total_vectors", stats.getNumOfEntities());
     } catch (RuntimeException e) {
       LOG.warn("Failed to read Milvus collection stats for {}: {}", collection, e.getMessage());
@@ -376,8 +383,8 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
   public void createCollection(String collectionName, int dimension, Map<String, Object> config) {
     boolean exists =
         Boolean.TRUE.equals(
-            client().hasCollection(
-                HasCollectionReq.builder().collectionName(collectionName).build()));
+            client()
+                .hasCollection(HasCollectionReq.builder().collectionName(collectionName).build()));
     if (!exists) {
       createCollectionInternal(collectionName, dimension);
     }
@@ -409,13 +416,14 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
   @Override
   public boolean exists(String key) throws Exception {
     QueryResp resp =
-        client().query(
-            QueryReq.builder()
-                .collectionName(collection)
-                .filter(ID_FIELD + " == \"" + escape(key) + "\"")
-                .outputFields(List.of(ID_FIELD))
-                .limit(1L)
-                .build());
+        client()
+            .query(
+                QueryReq.builder()
+                    .collectionName(collection)
+                    .filter(ID_FIELD + " == \"" + escape(key) + "\"")
+                    .outputFields(List.of(ID_FIELD))
+                    .limit(1L)
+                    .build());
     List<QueryResp.QueryResult> results = resp.getQueryResults();
     return results != null && !results.isEmpty();
   }
@@ -428,6 +436,7 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
     }
     markClosed();
   }
+
   private MilvusClientV2 client() {
     ensureOpen();
     return client;
@@ -442,7 +451,6 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
     ensureOpen();
     return gson;
   }
-
 
   @Override
   public StorageTier getTier() {
@@ -503,7 +511,11 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
         sb.append(" && ");
       }
       first = false;
-      sb.append(METADATA_FIELD).append("[\"").append(escape(e.getKey())).append("\"]").append(" == ");
+      sb.append(METADATA_FIELD)
+          .append("[\"")
+          .append(escape(e.getKey()))
+          .append("\"]")
+          .append(" == ");
       Object v = e.getValue();
       if (v instanceof Number || v instanceof Boolean) {
         sb.append(v);

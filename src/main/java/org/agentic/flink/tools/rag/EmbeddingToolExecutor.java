@@ -1,18 +1,16 @@
 package org.agentic.flink.tools.rag;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
 import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.embedding.OllamaEmbeddingConnection;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
-/**
- * Embedding Tool Executor Converts text to vector embeddings for similarity search
- */
+/** Embedding Tool Executor Converts text to vector embeddings for similarity search */
 public class EmbeddingToolExecutor extends AbstractToolExecutor {
 
   private final EmbeddingConnection embeddingConnection;

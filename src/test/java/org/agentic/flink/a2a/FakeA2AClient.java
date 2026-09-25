@@ -88,7 +88,8 @@ public final class FakeA2AClient implements A2AClient {
     if (task == null) {
       throw new A2AClientException("unknown task " + taskId);
     }
-    A2ATask canceled = task.withState(A2ATaskState.CANCELED, "canceled", System.currentTimeMillis());
+    A2ATask canceled =
+        task.withState(A2ATaskState.CANCELED, "canceled", System.currentTimeMillis());
     tasks.put(taskId, canceled);
     return canceled;
   }

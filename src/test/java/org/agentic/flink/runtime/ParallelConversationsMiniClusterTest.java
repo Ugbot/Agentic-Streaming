@@ -10,7 +10,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,8 +55,7 @@ class ParallelConversationsMiniClusterTest {
 
   static MiniCluster cluster;
 
-  @TempDir
-  static Path savepoints;
+  @TempDir static Path savepoints;
 
   private HttpServer server;
   private ExecutorService serverThreads;
@@ -81,25 +79,27 @@ class ParallelConversationsMiniClusterTest {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     serverThreads = Executors.newCachedThreadPool();
     server.setExecutor(serverThreads);
-    server.createContext("/" + MEET, ex -> {
-      String user = user(ex);
-      synchronized (gate) {
-        inFlight++;
-        maxInFlight = Math.max(maxInFlight, inFlight);
-        gate.notifyAll();
-        long deadline = System.nanoTime() + 1_000_000_000L;
-        try {
-          while (inFlight < 2 && System.nanoTime() < deadline) {
-            gate.wait(50);
+    server.createContext(
+        "/" + MEET,
+        ex -> {
+          String user = user(ex);
+          synchronized (gate) {
+            inFlight++;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            gate.notifyAll();
+            long deadline = System.nanoTime() + 1_000_000_000L;
+            try {
+              while (inFlight < 2 && System.nanoTime() < deadline) {
+                gate.wait(50);
+              }
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            } finally {
+              inFlight--;
+            }
           }
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        } finally {
-          inFlight--;
-        }
-      }
-      respond(ex, user, MEET);
-    });
+          respond(ex, user, MEET);
+        });
     server.createContext("/" + PROBE, ex -> respond(ex, user(ex), PROBE));
     server.start();
   }
@@ -116,7 +116,8 @@ class ParallelConversationsMiniClusterTest {
   }
 
   private void respond(HttpExchange ex, String user, String tool) throws IOException {
-    int n = callsByUser.computeIfAbsent(user + "/" + tool, k -> new AtomicInteger()).incrementAndGet();
+    int n =
+        callsByUser.computeIfAbsent(user + "/" + tool, k -> new AtomicInteger()).incrementAndGet();
     byte[] out = JSON.writeValueAsBytes(Map.of("user", user, "tool", tool, "n", n));
     ex.getResponseHeaders().add("Content-Type", "application/json");
     ex.sendResponseHeaders(200, out.length);
@@ -132,16 +133,36 @@ class ParallelConversationsMiniClusterTest {
     main.put("tool_triggers", Map.of("rendezvous", MEET, "charge", PROBE));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "parallel-" + UUID.randomUUID());
-    agent.put("router", Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("charge"))));
+    agent.put(
+        "router",
+        Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("charge"))));
     agent.put("paths", Map.of("main", main));
     agent.put("verifier", Map.of("kind", "none"));
     Map<String, Object> wf = new HashMap<>();
     wf.put("spec_version", "agentic/v1");
     wf.put("backend", "local");
     wf.put("agent", agent);
-    wf.put("tools", List.of(
-        Map.of("id", MEET, "kind", "http", "description", "Waits for another conversation", "url", base + MEET),
-        Map.of("id", PROBE, "kind", "http", "description", "Counts per user", "url", base + PROBE)));
+    wf.put(
+        "tools",
+        List.of(
+            Map.of(
+                "id",
+                MEET,
+                "kind",
+                "http",
+                "description",
+                "Waits for another conversation",
+                "url",
+                base + MEET),
+            Map.of(
+                "id",
+                PROBE,
+                "kind",
+                "http",
+                "description",
+                "Counts per user",
+                "url",
+                base + PROBE)));
     return wf;
   }
 
@@ -156,7 +177,8 @@ class ParallelConversationsMiniClusterTest {
       for (int i = 0; i < n; i++) {
         String cid = "c" + i + "-" + UUID.randomUUID().toString().substring(0, 8);
         ids.add(cid);
-        subtasks.add(KeyGroupRangeAssignment.assignKeyToParallelOperator(cid, maxParallelism, parallelism));
+        subtasks.add(
+            KeyGroupRangeAssignment.assignKeyToParallelOperator(cid, maxParallelism, parallelism));
       }
       if (subtasks.size() >= 2) {
         return ids;
@@ -164,7 +186,10 @@ class ParallelConversationsMiniClusterTest {
     }
   }
 
-  /** M turns per conversation, then one random interleaving that keeps each conversation's own order. */
+  /**
+   * M turns per conversation, then one random interleaving that keeps each conversation's own
+   * order.
+   */
   private static List<Planned> shuffledPlan(List<String> conversations, int turnsEach) {
     ThreadLocalRandom rng = ThreadLocalRandom.current();
     Map<String, List<Planned>> perConversation = new LinkedHashMap<>();
@@ -173,8 +198,12 @@ class ParallelConversationsMiniClusterTest {
       turns.add(new Planned(cid, cid + "-t0", "rendezvous from " + cid, MEET));
       for (int i = 1; i < turnsEach; i++) {
         boolean probes = rng.nextBoolean();
-        turns.add(new Planned(cid, cid + "-t" + i, (probes ? "charge " : "hello ") + i + " from " + cid,
-            probes ? PROBE : null));
+        turns.add(
+            new Planned(
+                cid,
+                cid + "-t" + i,
+                (probes ? "charge " : "hello ") + i + " from " + cid,
+                probes ? PROBE : null));
       }
       perConversation.put(cid, turns);
     }
@@ -204,20 +233,30 @@ class ParallelConversationsMiniClusterTest {
     Map<String, Object> wf = workflow();
 
     List<TurnResult> results;
-    try (MiniClusterWorkflowDriver d = new MiniClusterWorkflowDriver(cluster, wf, FlinkRuntimeOptions.fromSpec(wf),
-        savepoints.resolve("sp-" + UUID.randomUUID()), parallelism)) {
+    try (MiniClusterWorkflowDriver d =
+        new MiniClusterWorkflowDriver(
+            cluster,
+            wf,
+            FlinkRuntimeOptions.fromSpec(wf),
+            savepoints.resolve("sp-" + UUID.randomUUID()),
+            parallelism)) {
       d.start();
       List<Event> events = new ArrayList<>();
       for (Planned p : plan) {
-        // The user id doubles as the conversation id so tool arguments reveal which conversation called.
+        // The user id doubles as the conversation id so tool arguments reveal which conversation
+        // called.
         events.add(Event.turn(p.conversationId(), p.turnId(), p.conversationId(), p.text()));
       }
       results = d.submitAll(events);
     }
     assertEquals(plan.size(), results.size());
     synchronized (gate) {
-      assertTrue(maxInFlight >= 2, "two conversations never held the tool at the same time; max in flight "
-          + maxInFlight + " at parallelism " + parallelism);
+      assertTrue(
+          maxInFlight >= 2,
+          "two conversations never held the tool at the same time; max in flight "
+              + maxInFlight
+              + " at parallelism "
+              + parallelism);
     }
 
     Map<String, List<TurnResult>> byConversation = new LinkedHashMap<>();
@@ -230,8 +269,14 @@ class ParallelConversationsMiniClusterTest {
       assertEquals(p.tool() == null ? 0 : 1, r.calls.size(), p.turnId());
       for (ToolCall call : r.calls) {
         assertEquals(p.tool(), call.tool());
-        assertEquals(p.conversationId(), call.args().get("user"), "tool args belong to the calling conversation");
-        assertEquals(p.conversationId(), ((Map<?, ?>) call.result()).get("user"), "tool result answers the caller");
+        assertEquals(
+            p.conversationId(),
+            call.args().get("user"),
+            "tool args belong to the calling conversation");
+        assertEquals(
+            p.conversationId(),
+            ((Map<?, ?>) call.result()).get("user"),
+            "tool result answers the caller");
       }
       for (LogEvent ev : r.events) {
         assertEquals(p.conversationId(), ev.conversationId());
@@ -248,9 +293,11 @@ class ParallelConversationsMiniClusterTest {
       String open = null;
       for (int i = 0; i < own.size(); i++) {
         TurnResult r = own.get(i);
-        assertEquals(planned.get(i).turnId(), r.turnId, "turns of " + cid + " complete in submission order");
+        assertEquals(
+            planned.get(i).turnId(), r.turnId, "turns of " + cid + " complete in submission order");
         for (LogEvent ev : r.events) {
-          assertEquals(sequence++, ev.sequence(), cid + " has one gapless sequence across its turns");
+          assertEquals(
+              sequence++, ev.sequence(), cid + " has one gapless sequence across its turns");
           if ("turn_received".equals(ev.type())) {
             assertNull(open, "a turn of " + cid + " started while " + open + " was open");
             open = ev.turnId();
@@ -261,17 +308,30 @@ class ParallelConversationsMiniClusterTest {
             }
           }
         }
-        assertEquals((long) (i + 1), ((Number) r.state.get("turn_count")).longValue(), "turn_count counts only " + cid);
-        assertEquals(2L * (i + 1), ((Number) r.state.get("transcript_length")).longValue(),
+        assertEquals(
+            (long) (i + 1),
+            ((Number) r.state.get("turn_count")).longValue(),
+            "turn_count counts only " + cid);
+        assertEquals(
+            2L * (i + 1),
+            ((Number) r.state.get("transcript_length")).longValue(),
             "transcript holds only " + cid + "'s messages");
       }
       assertNull(open, "every turn of " + cid + " reached a terminal event");
       long expectedProbes = planned.stream().filter(p -> PROBE.equals(p.tool())).count();
-      assertEquals(1, callsByUser.getOrDefault(cid + "/" + MEET, new AtomicInteger()).get(), cid + " met once");
-      assertEquals(expectedProbes, callsByUser.getOrDefault(cid + "/" + PROBE, new AtomicInteger()).get(),
+      assertEquals(
+          1,
+          callsByUser.getOrDefault(cid + "/" + MEET, new AtomicInteger()).get(),
+          cid + " met once");
+      assertEquals(
+          expectedProbes,
+          callsByUser.getOrDefault(cid + "/" + PROBE, new AtomicInteger()).get(),
           "probe calls attributed to " + cid);
     }
     int totalCalls = callsByUser.values().stream().mapToInt(AtomicInteger::get).sum();
-    assertEquals(plan.stream().filter(p -> p.tool() != null).count(), totalCalls, "no call ran twice or went missing");
+    assertEquals(
+        plan.stream().filter(p -> p.tool() != null).count(),
+        totalCalls,
+        "no call ran twice or went missing");
   }
 }

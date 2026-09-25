@@ -13,7 +13,8 @@ class BankingClassifierTest {
   void personalNewDelegates() {
     assertEquals(
         BankingPath.DELEGATE,
-        BankingClassifier.classifyPersonal(BankingPhase.NEW, "Which credit card gives the most cash back?"));
+        BankingClassifier.classifyPersonal(
+            BankingPhase.NEW, "Which credit card gives the most cash back?"));
   }
 
   @Test
@@ -28,7 +29,8 @@ class BankingClassifierTest {
   void personalReadyActs() {
     assertEquals(
         BankingPath.ACTION,
-        BankingClassifier.classifyPersonal(BankingPhase.READY_TO_ACT, "yes, the Gold Rewards Card"));
+        BankingClassifier.classifyPersonal(
+            BankingPhase.READY_TO_ACT, "yes, the Gold Rewards Card"));
   }
 
   @Test
@@ -47,7 +49,8 @@ class BankingClassifierTest {
         BankingClassifier.classifyPersonal(BankingPhase.NEW, "I want to speak to a human agent"));
     assertEquals(
         BankingPath.ESCALATE,
-        BankingClassifier.classifyCs(BankingPhase.NEW, "let me talk to a person, file a complaint"));
+        BankingClassifier.classifyCs(
+            BankingPhase.NEW, "let me talk to a person, file a complaint"));
   }
 
   @Test
@@ -63,7 +66,8 @@ class BankingClassifierTest {
   void csKnowledge() {
     assertEquals(
         BankingPath.KNOWLEDGE,
-        BankingClassifier.classifyCs(BankingPhase.NEW, "What are the fees on the Blue checking account?"));
+        BankingClassifier.classifyCs(
+            BankingPhase.NEW, "What are the fees on the Blue checking account?"));
   }
 
   @Test

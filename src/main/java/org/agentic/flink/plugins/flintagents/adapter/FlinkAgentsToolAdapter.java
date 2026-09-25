@@ -1,11 +1,11 @@
 package org.agentic.flink.plugins.flintagents.adapter;
 
-import org.agentic.flink.core.ToolDefinition;
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.core.ToolDefinition;
+import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.agents.api.Agent;
 import org.apache.flink.agents.api.annotation.Action;
 import org.apache.flink.agents.api.context.RunnerContext;
@@ -141,7 +141,8 @@ public class FlinkAgentsToolAdapter {
           if (!executor.validateParameters(parameters)) {
             errorMap.put(toolCallId, "Invalid parameters for tool: " + toolName);
             successMap.put(toolCallId, false);
-            responses.put(toolCallId, ToolResponse.error("Invalid parameters for tool: " + toolName));
+            responses.put(
+                toolCallId, ToolResponse.error("Invalid parameters for tool: " + toolName));
             continue;
           }
 

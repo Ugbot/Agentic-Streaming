@@ -8,13 +8,13 @@ import java.util.Objects;
 /**
  * Per-call configuration for a model loaded by an {@link InferenceConnection}.
  *
- * <p>Mirrors {@link org.agentic.flink.llm.ChatSetup}: one {@link InferenceConnection}
- * can load many models, and each call selects which one to invoke via {@link #getModelName()}
- * and (when first used) where its weights live via {@link #getModelUri()}. All other fields tune
- * the inference run itself.
+ * <p>Mirrors {@link org.agentic.flink.llm.ChatSetup}: one {@link InferenceConnection} can load many
+ * models, and each call selects which one to invoke via {@link #getModelName()} and (when first
+ * used) where its weights live via {@link #getModelUri()}. All other fields tune the inference run
+ * itself.
  *
- * <p>This class carries no live state. Backends serialize it into the Flink job graph; the
- * actual model handle is built lazily inside the corresponding {@link InferenceClient}.
+ * <p>This class carries no live state. Backends serialize it into the Flink job graph; the actual
+ * model handle is built lazily inside the corresponding {@link InferenceClient}.
  */
 public final class InferenceSetup implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -43,8 +43,7 @@ public final class InferenceSetup implements Serializable {
     }
     this.threads = b.threads;
     if (b.maxBatchSize <= 0) {
-      throw new IllegalArgumentException(
-          "maxBatchSize must be positive, got " + b.maxBatchSize);
+      throw new IllegalArgumentException("maxBatchSize must be positive, got " + b.maxBatchSize);
     }
     this.maxBatchSize = b.maxBatchSize;
     this.warmupInputs =

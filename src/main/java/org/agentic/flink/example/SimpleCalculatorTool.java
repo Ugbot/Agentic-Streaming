@@ -1,8 +1,8 @@
 package org.agentic.flink.example;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,42 +26,43 @@ public class SimpleCalculatorTool implements ToolExecutor {
 
   @Override
   public CompletableFuture<Object> execute(Map<String, Object> parameters) {
-    return CompletableFuture.supplyAsync(() -> {
-      try {
-        double a = getDoubleParameter(parameters, "a");
-        double b = getDoubleParameter(parameters, "b");
+    return CompletableFuture.supplyAsync(
+        () -> {
+          try {
+            double a = getDoubleParameter(parameters, "a");
+            double b = getDoubleParameter(parameters, "b");
 
-        LOG.info("Executing {} operation: {} {} {}", operation, a, operation, b);
+            LOG.info("Executing {} operation: {} {} {}", operation, a, operation, b);
 
-        double result;
-        switch (operation) {
-          case "add":
-            result = a + b;
-            break;
-          case "subtract":
-            result = a - b;
-            break;
-          case "multiply":
-            result = a * b;
-            break;
-          case "divide":
-            if (b == 0) {
-              throw new IllegalArgumentException("Cannot divide by zero");
+            double result;
+            switch (operation) {
+              case "add":
+                result = a + b;
+                break;
+              case "subtract":
+                result = a - b;
+                break;
+              case "multiply":
+                result = a * b;
+                break;
+              case "divide":
+                if (b == 0) {
+                  throw new IllegalArgumentException("Cannot divide by zero");
+                }
+                result = a / b;
+                break;
+              default:
+                throw new IllegalArgumentException("Unknown operation: " + operation);
             }
-            result = a / b;
-            break;
-          default:
-            throw new IllegalArgumentException("Unknown operation: " + operation);
-        }
 
-        LOG.info("Result: {}", result);
-        return result;
+            LOG.info("Result: {}", result);
+            return result;
 
-      } catch (Exception e) {
-        LOG.error("Calculator tool execution failed", e);
-        throw new RuntimeException("Calculator error: " + e.getMessage(), e);
-      }
-    });
+          } catch (Exception e) {
+            LOG.error("Calculator tool execution failed", e);
+            throw new RuntimeException("Calculator error: " + e.getMessage(), e);
+          }
+        });
   }
 
   private double getDoubleParameter(Map<String, Object> parameters, String name) {
@@ -91,8 +92,6 @@ public class SimpleCalculatorTool implements ToolExecutor {
 
   @Override
   public boolean validateParameters(Map<String, Object> parameters) {
-    return parameters != null
-        && parameters.containsKey("a")
-        && parameters.containsKey("b");
+    return parameters != null && parameters.containsKey("a") && parameters.containsKey("b");
   }
 }

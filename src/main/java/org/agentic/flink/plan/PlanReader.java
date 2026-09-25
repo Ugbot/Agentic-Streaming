@@ -14,12 +14,12 @@ import org.slf4j.LoggerFactory;
  * <ol>
  *   <li>Single-arg constructor accepting a {@code Map<String, String>} (or {@code Map}).
  *   <li>No-arg constructor, then call {@code initialize(Map<String, String>)} if such a method
- *       exists. Mirrors the
- *       {@link org.agentic.flink.storage.StorageFactory#createLongTermStore} pattern.
+ *       exists. Mirrors the {@link org.agentic.flink.storage.StorageFactory#createLongTermStore}
+ *       pattern.
  * </ol>
  *
- * <p>Reflection is used (rather than ServiceLoader) because the plan itself names a fully
- * qualified class — the user has already chosen which implementation they want.
+ * <p>Reflection is used (rather than ServiceLoader) because the plan itself names a fully qualified
+ * class — the user has already chosen which implementation they want.
  */
 public final class PlanReader {
 
@@ -68,11 +68,12 @@ public final class PlanReader {
       instance = ctor.newInstance();
     } catch (NoSuchMethodException e) {
       throw new IllegalArgumentException(
-          "Class " + cls.getName()
-              + " has no no-arg or Map-arg constructor; cannot instantiate from plan", e);
+          "Class "
+              + cls.getName()
+              + " has no no-arg or Map-arg constructor; cannot instantiate from plan",
+          e);
     } catch (ReflectiveOperationException e) {
-      throw new IllegalStateException(
-          "Failed to invoke no-arg constructor of " + cls.getName(), e);
+      throw new IllegalStateException("Failed to invoke no-arg constructor of " + cls.getName(), e);
     }
     Method init = findInitialize(cls);
     if (init != null) {
@@ -80,8 +81,7 @@ public final class PlanReader {
         init.setAccessible(true);
         init.invoke(instance, config);
       } catch (ReflectiveOperationException e) {
-        throw new IllegalStateException(
-            "Failed to call initialize(Map) on " + cls.getName(), e);
+        throw new IllegalStateException("Failed to call initialize(Map) on " + cls.getName(), e);
       }
     } else {
       LOG.debug(

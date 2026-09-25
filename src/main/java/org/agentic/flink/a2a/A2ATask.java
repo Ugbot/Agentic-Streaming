@@ -12,10 +12,10 @@ import java.util.Objects;
  * An A2A task — the unit of work a remote agent performs in response to a {@link A2AMessage}.
  *
  * <p>A task is identified by {@code id} and grouped into a conversation by {@code contextId}. It
- * carries the current {@link A2ATaskState}, the message {@code history}, and any {@link A2AArtifact}
- * outputs. This type is both the outbound client return value and the persisted record in {@code
- * A2ATaskStore}, so it is immutable + {@link Serializable} and exposes copy-style {@code with*}
- * mutators for lifecycle progression.
+ * carries the current {@link A2ATaskState}, the message {@code history}, and any {@link
+ * A2AArtifact} outputs. This type is both the outbound client return value and the persisted record
+ * in {@code A2ATaskStore}, so it is immutable + {@link Serializable} and exposes copy-style {@code
+ * with*} mutators for lifecycle progression.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class A2ATask implements Serializable {
@@ -58,9 +58,10 @@ public final class A2ATask implements Serializable {
     this.updatedAtEpochMs = updatedAtEpochMs;
   }
 
-  /** A freshly-submitted task with the supplied id/context and the originating message in history. */
-  public static A2ATask submitted(
-      String id, String contextId, A2AMessage first, long nowEpochMs) {
+  /**
+   * A freshly-submitted task with the supplied id/context and the originating message in history.
+   */
+  public static A2ATask submitted(String id, String contextId, A2AMessage first, long nowEpochMs) {
     return new A2ATask(
         id,
         contextId,
@@ -112,10 +113,20 @@ public final class A2ATask implements Serializable {
   /** Copy with a new state + status message, stamping {@code updatedAtEpochMs}. */
   public A2ATask withState(A2ATaskState newState, String newStatusMessage, long nowEpochMs) {
     return new A2ATask(
-        id, contextId, newState, newStatusMessage, history, artifacts, metadata, createdAtEpochMs, nowEpochMs);
+        id,
+        contextId,
+        newState,
+        newStatusMessage,
+        history,
+        artifacts,
+        metadata,
+        createdAtEpochMs,
+        nowEpochMs);
   }
 
-  /** Copy with an artifact appended (or replaced by artifactId), stamping {@code updatedAtEpochMs}. */
+  /**
+   * Copy with an artifact appended (or replaced by artifactId), stamping {@code updatedAtEpochMs}.
+   */
   public A2ATask withArtifact(A2AArtifact artifact, long nowEpochMs) {
     List<A2AArtifact> next = new ArrayList<>(artifacts);
     next.removeIf(
@@ -130,7 +141,15 @@ public final class A2ATask implements Serializable {
     List<A2AMessage> next = new ArrayList<>(history);
     next.add(message);
     return new A2ATask(
-        id, contextId, state, statusMessage, next, artifacts, metadata, createdAtEpochMs, nowEpochMs);
+        id,
+        contextId,
+        state,
+        statusMessage,
+        next,
+        artifacts,
+        metadata,
+        createdAtEpochMs,
+        nowEpochMs);
   }
 
   @Override
@@ -156,12 +175,27 @@ public final class A2ATask implements Serializable {
   @Override
   public int hashCode() {
     return Objects.hash(
-        id, contextId, state, statusMessage, history, artifacts, metadata, createdAtEpochMs, updatedAtEpochMs);
+        id,
+        contextId,
+        state,
+        statusMessage,
+        history,
+        artifacts,
+        metadata,
+        createdAtEpochMs,
+        updatedAtEpochMs);
   }
 
   @Override
   public String toString() {
-    return "A2ATask{id=" + id + ", contextId=" + contextId + ", state=" + state + ", artifacts="
-        + artifacts.size() + '}';
+    return "A2ATask{id="
+        + id
+        + ", contextId="
+        + contextId
+        + ", state="
+        + state
+        + ", artifacts="
+        + artifacts.size()
+        + '}';
   }
 }

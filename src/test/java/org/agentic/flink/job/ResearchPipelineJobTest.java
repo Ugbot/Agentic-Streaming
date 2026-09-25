@@ -2,6 +2,10 @@ package org.agentic.flink.job;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicReference;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
@@ -18,38 +22,34 @@ import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tool.ToolRegistry;
-import org.apache.flink.api.common.functions.RuntimeContext;
 import org.agentic.flink.tools.rag.DocumentIngestionToolExecutor;
 import org.agentic.flink.tools.rag.RagToolExecutor;
 import org.agentic.flink.tools.rag.SemanticSearchToolExecutor;
-import java.io.*;
-import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.flink.api.common.functions.OpenContext;
+import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.junit.jupiter.api.*;
 
 /**
- * Unit tests for the research pipeline: {@link DocumentIngestionFunction},
- * {@link SemanticSearchFunction}, {@link ResearchPipelineJob}, and the injectable
- * RAG tool executors.
+ * Unit tests for the research pipeline: {@link DocumentIngestionFunction}, {@link
+ * SemanticSearchFunction}, {@link ResearchPipelineJob}, and the injectable RAG tool executors.
  *
  * <p>Tests verify:
+ *
  * <ul>
- *   <li>Construction with default and custom providers</li>
- *   <li>Serialization (required for Flink distribution across task managers)</li>
- *   <li>Type hierarchy (RichAsyncFunction)</li>
- *   <li>Pipeline job configuration, agent building, and tool config</li>
- *   <li>End-to-end ingestion and search using in-memory defaults</li>
+ *   <li>Construction with default and custom providers
+ *   <li>Serialization (required for Flink distribution across task managers)
+ *   <li>Type hierarchy (RichAsyncFunction)
+ *   <li>Pipeline job configuration, agent building, and tool config
+ *   <li>End-to-end ingestion and search using in-memory defaults
  * </ul>
  *
- * <p>All test data uses randomized identifiers via {@link UUID#randomUUID()} and
- * {@link ThreadLocalRandom}. The injectable tool executors are wired with a deterministic
- * {@link HashEmbeddingConnection} and a per-test {@link InMemoryVectorStore} so the suite runs
- * with no external embedding/vector server. The RAG generation step uses an in-test offline
- * {@link ChatConnection} (see {@code EchoChatConnection}) so it never reaches a live LLM.
+ * <p>All test data uses randomized identifiers via {@link UUID#randomUUID()} and {@link
+ * ThreadLocalRandom}. The injectable tool executors are wired with a deterministic {@link
+ * HashEmbeddingConnection} and a per-test {@link InMemoryVectorStore} so the suite runs with no
+ * external embedding/vector server. The RAG generation step uses an in-test offline {@link
+ * ChatConnection} (see {@code EchoChatConnection}) so it never reaches a live LLM.
  *
  * @author Agentic Flink Team
  * @see DocumentIngestionFunction
@@ -61,30 +61,25 @@ class ResearchPipelineJobTest {
 
   // ==================== Helpers ====================
 
-  /**
-   * Creates an AgentEvent with randomized identifiers and the given event type.
-   */
+  /** Creates an AgentEvent with randomized identifiers and the given event type. */
   private static AgentEvent randomEvent(AgentEventType type) {
-    AgentEvent event = new AgentEvent(
-        UUID.randomUUID().toString(),
-        UUID.randomUUID().toString(),
-        "agent-" + UUID.randomUUID().toString().substring(0, 8),
-        type);
+    AgentEvent event =
+        new AgentEvent(
+            UUID.randomUUID().toString(),
+            UUID.randomUUID().toString(),
+            "agent-" + UUID.randomUUID().toString().substring(0, 8),
+            type);
     event.setCurrentStage("test-stage-" + ThreadLocalRandom.current().nextInt(100));
     event.setIterationNumber(ThreadLocalRandom.current().nextInt(0, 10));
     return event;
   }
 
-  /**
-   * Creates a randomized collection name for isolation between test runs.
-   */
+  /** Creates a randomized collection name for isolation between test runs. */
   private static String randomCollectionName() {
     return "test-collection-" + UUID.randomUUID().toString().substring(0, 8);
   }
 
-  /**
-   * Creates a randomized config map with unique identifiers.
-   */
+  /** Creates a randomized config map with unique identifiers. */
   private static Map<String, String> randomConfigMap() {
     Map<String, String> props = new HashMap<>();
     props.put("baseUrl", "http://localhost:11434");
@@ -95,9 +90,7 @@ class ResearchPipelineJobTest {
     return props;
   }
 
-  /**
-   * Simple ResultFuture implementation that captures the collected results.
-   */
+  /** Simple ResultFuture implementation that captures the collected results. */
   private static class CapturingResultFuture implements ResultFuture<AgentEvent> {
     private final AtomicReference<Collection<AgentEvent>> results = new AtomicReference<>();
     private final AtomicReference<Throwable> error = new AtomicReference<>();
@@ -131,9 +124,7 @@ class ResearchPipelineJobTest {
     }
   }
 
-  /**
-   * Serializes and deserializes an object, returning the deserialized version.
-   */
+  /** Serializes and deserializes an object, returning the deserialized version. */
   private static <T extends Serializable> T roundTrip(T object) throws Exception {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
@@ -504,14 +495,16 @@ class ResearchPipelineJobTest {
       assertEquals("research-agent", agent.getAgentId());
       assertEquals("Research Specialist", agent.getAgentName());
       assertEquals(AgentType.RESEARCHER, agent.getAgentType());
-      assertTrue(agent.getAllowedTools().contains("semantic_search"),
+      assertTrue(
+          agent.getAllowedTools().contains("semantic_search"),
           "Agent should have semantic_search tool");
-      assertTrue(agent.getAllowedTools().contains("rag"),
-          "Agent should have rag tool");
-      assertTrue(agent.getRequiredTools().contains("semantic_search"),
+      assertTrue(agent.getAllowedTools().contains("rag"), "Agent should have rag tool");
+      assertTrue(
+          agent.getRequiredTools().contains("semantic_search"),
           "semantic_search should be a required tool");
       assertEquals(10, agent.getMaxIterations());
-      assertTrue(agent.getSystemPrompt().contains("research specialist"),
+      assertTrue(
+          agent.getSystemPrompt().contains("research specialist"),
           "System prompt should mention research specialist");
     }
 
@@ -525,17 +518,18 @@ class ResearchPipelineJobTest {
       assertNotNull(registry);
 
       // Verify the registry has the expected tools
-      assertTrue(registry.hasTool("semantic_search"),
-          "Registry should contain semantic_search tool");
-      assertTrue(registry.hasTool("rag"),
-          "Registry should contain rag tool");
+      assertTrue(
+          registry.hasTool("semantic_search"), "Registry should contain semantic_search tool");
+      assertTrue(registry.hasTool("rag"), "Registry should contain rag tool");
     }
 
     @RepeatedTest(3)
     @DisplayName("should construct with randomized collection name and serialize")
     void randomizedConstructionAndSerialization() throws Exception {
       Map<String, String> props = new HashMap<>();
-      props.put(ConfigKeys.OLLAMA_BASE_URL, "http://host-" + UUID.randomUUID().toString().substring(0, 6) + ":11434");
+      props.put(
+          ConfigKeys.OLLAMA_BASE_URL,
+          "http://host-" + UUID.randomUUID().toString().substring(0, 6) + ":11434");
       props.put(ConfigKeys.QDRANT_HOST, "qdrant-" + UUID.randomUUID().toString().substring(0, 6));
       AgenticFlinkConfig config = AgenticFlinkConfig.fromMap(props);
       String collection = randomCollectionName();
@@ -559,8 +553,9 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("DocumentIngestionToolExecutor should accept custom providers")
     void documentIngestionAcceptsCustomProviders() {
-      DocumentIngestionToolExecutor executor = new DocumentIngestionToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
+      DocumentIngestionToolExecutor executor =
+          new DocumentIngestionToolExecutor(
+              new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
       assertNotNull(executor);
       assertEquals("document_ingestion", executor.getToolId());
     }
@@ -568,8 +563,9 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("SemanticSearchToolExecutor should accept custom providers")
     void semanticSearchAcceptsCustomProviders() {
-      SemanticSearchToolExecutor executor = new SemanticSearchToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
+      SemanticSearchToolExecutor executor =
+          new SemanticSearchToolExecutor(
+              new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
       assertNotNull(executor);
       assertEquals("semantic_search", executor.getToolId());
     }
@@ -577,8 +573,12 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("RagToolExecutor should accept custom providers")
     void ragAcceptsCustomProviders() {
-      RagToolExecutor executor = new RagToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore(), new EchoChatConnection());
+      RagToolExecutor executor =
+          new RagToolExecutor(
+              new HashMap<>(),
+              new HashEmbeddingConnection(),
+              newVectorStore(),
+              new EchoChatConnection());
       assertNotNull(executor);
       assertEquals("rag", executor.getToolId());
     }
@@ -586,8 +586,9 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("DocumentIngestionToolExecutor with defaults should ingest a document")
     void documentIngestionWithDefaultsCanIngest() throws Exception {
-      DocumentIngestionToolExecutor executor = new DocumentIngestionToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
+      DocumentIngestionToolExecutor executor =
+          new DocumentIngestionToolExecutor(
+              new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
 
       Map<String, Object> params = new HashMap<>();
       params.put("content", "Apache Flink is a stream processing framework. " + UUID.randomUUID());
@@ -599,12 +600,12 @@ class ResearchPipelineJobTest {
       assertInstanceOf(Map.class, result);
       @SuppressWarnings("unchecked")
       Map<String, Object> resultMap = (Map<String, Object>) result;
-      assertTrue((int) resultMap.get("segments_created") > 0,
-          "Should have created at least one segment");
-      assertTrue((int) resultMap.get("embeddings_created") > 0,
+      assertTrue(
+          (int) resultMap.get("segments_created") > 0, "Should have created at least one segment");
+      assertTrue(
+          (int) resultMap.get("embeddings_created") > 0,
           "Should have created at least one embedding");
-      assertNotNull(resultMap.get("stored_ids"),
-          "Should have stored embedding IDs");
+      assertNotNull(resultMap.get("stored_ids"), "Should have stored embedding IDs");
     }
 
     @Test
@@ -615,8 +616,8 @@ class ResearchPipelineJobTest {
 
       // Ingest a document first. Keep it short so the chunker produces a single chunk whose text
       // matches the query exactly, which the deterministic hash embedder ranks first.
-      DocumentIngestionToolExecutor ingester = new DocumentIngestionToolExecutor(
-          new HashMap<>(), embedding, store);
+      DocumentIngestionToolExecutor ingester =
+          new DocumentIngestionToolExecutor(new HashMap<>(), embedding, store);
       String uniqueContent = "streaming data pipelines " + UUID.randomUUID();
       Map<String, Object> ingestParams = new HashMap<>();
       ingestParams.put("content", uniqueContent);
@@ -627,8 +628,8 @@ class ResearchPipelineJobTest {
 
       // Search for it. The exact ingested text round-trips to the same hash vector, so it is the
       // top hit with score ~1.0.
-      SemanticSearchToolExecutor searcher = new SemanticSearchToolExecutor(
-          new HashMap<>(), embedding, store);
+      SemanticSearchToolExecutor searcher =
+          new SemanticSearchToolExecutor(new HashMap<>(), embedding, store);
       Map<String, Object> searchParams = new HashMap<>();
       searchParams.put("query", uniqueContent);
       searchParams.put("max_results", 5);
@@ -644,7 +645,9 @@ class ResearchPipelineJobTest {
       @SuppressWarnings("unchecked")
       List<Map<String, Object>> results = (List<Map<String, Object>>) resultMap.get("results");
       assertFalse(results.isEmpty(), "Round-trip search should return the ingested chunk");
-      assertEquals(uniqueContent, results.get(0).get("text"),
+      assertEquals(
+          uniqueContent,
+          results.get(0).get("text"),
           "Exact-text match should rank first under the deterministic hash embedder");
     }
 
@@ -656,8 +659,8 @@ class ResearchPipelineJobTest {
       EchoChatConnection chat = new EchoChatConnection();
 
       // Ingest a document first.
-      DocumentIngestionToolExecutor ingester = new DocumentIngestionToolExecutor(
-          new HashMap<>(), embedding, store);
+      DocumentIngestionToolExecutor ingester =
+          new DocumentIngestionToolExecutor(new HashMap<>(), embedding, store);
       String uniqueContent = "exactly-once processing semantics " + UUID.randomUUID();
       Map<String, Object> ingestParams = new HashMap<>();
       ingestParams.put("content", uniqueContent);
@@ -667,8 +670,7 @@ class ResearchPipelineJobTest {
 
       // Run RAG query. The exact ingested text retrieves its own chunk, and the offline echo chat
       // connection produces a deterministic answer with no live LLM.
-      RagToolExecutor rag = new RagToolExecutor(
-          new HashMap<>(), embedding, store, chat);
+      RagToolExecutor rag = new RagToolExecutor(new HashMap<>(), embedding, store, chat);
       Map<String, Object> ragParams = new HashMap<>();
       ragParams.put("query", uniqueContent);
       ragParams.put("max_results", 5);
@@ -687,8 +689,9 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("DocumentIngestionToolExecutor should validate parameters correctly")
     void documentIngestionValidatesParameters() {
-      DocumentIngestionToolExecutor executor = new DocumentIngestionToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
+      DocumentIngestionToolExecutor executor =
+          new DocumentIngestionToolExecutor(
+              new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
 
       // Valid parameters
       Map<String, Object> validParams = new HashMap<>();
@@ -707,8 +710,9 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("SemanticSearchToolExecutor should validate parameters correctly")
     void semanticSearchValidatesParameters() {
-      SemanticSearchToolExecutor executor = new SemanticSearchToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
+      SemanticSearchToolExecutor executor =
+          new SemanticSearchToolExecutor(
+              new HashMap<>(), new HashEmbeddingConnection(), newVectorStore());
 
       // Valid parameters
       Map<String, Object> validParams = new HashMap<>();
@@ -729,9 +733,12 @@ class ResearchPipelineJobTest {
     @Test
     @DisplayName("RagToolExecutor should validate parameters correctly")
     void ragValidatesParameters() {
-      RagToolExecutor executor = new RagToolExecutor(
-          new HashMap<>(), new HashEmbeddingConnection(), newVectorStore(),
-          new EchoChatConnection());
+      RagToolExecutor executor =
+          new RagToolExecutor(
+              new HashMap<>(),
+              new HashEmbeddingConnection(),
+              newVectorStore(),
+              new EchoChatConnection());
 
       // Valid parameters
       Map<String, Object> validParams = new HashMap<>();
@@ -750,15 +757,18 @@ class ResearchPipelineJobTest {
   class EndToEndTests {
 
     @Test
-    @DisplayName("should ingest via DocumentIngestionFunction then search via SemanticSearchFunction")
+    @DisplayName(
+        "should ingest via DocumentIngestionFunction then search via SemanticSearchFunction")
     void ingestThenSearch() throws Exception {
       // Step 1: Ingest a document via DocumentIngestionFunction
       DocumentIngestionFunction ingestionFn = new DocumentIngestionFunction(new HashMap<>(), true);
       ingestionFn.open((OpenContext) null);
 
       AgentEvent ingestEvent = randomEvent(AgentEventType.TOOL_CALL_REQUESTED);
-      String uniqueContent = "Stateful stream processing enables complex event processing "
-          + "and windowed aggregations with fault tolerance. " + UUID.randomUUID();
+      String uniqueContent =
+          "Stateful stream processing enables complex event processing "
+              + "and windowed aggregations with fault tolerance. "
+              + UUID.randomUUID();
       ingestEvent.putData("document_content", uniqueContent);
       ingestEvent.putData("chunk_size", 200);
       ingestEvent.putData("chunk_overlap", 20);
@@ -773,7 +783,9 @@ class ResearchPipelineJobTest {
       }
       assertNotNull(ingestResult.getResults(), "Ingestion should complete");
       AgentEvent ingestResultEvent = ingestResult.getResults().iterator().next();
-      assertEquals(AgentEventType.TOOL_CALL_COMPLETED, ingestResultEvent.getEventType(),
+      assertEquals(
+          AgentEventType.TOOL_CALL_COMPLETED,
+          ingestResultEvent.getEventType(),
           "Ingestion should succeed");
       ingestionFn.close();
 
@@ -795,7 +807,9 @@ class ResearchPipelineJobTest {
       }
       assertNotNull(searchResult.getResults(), "Search should complete");
       AgentEvent searchResultEvent = searchResult.getResults().iterator().next();
-      assertEquals(AgentEventType.TOOL_CALL_COMPLETED, searchResultEvent.getEventType(),
+      assertEquals(
+          AgentEventType.TOOL_CALL_COMPLETED,
+          searchResultEvent.getEventType(),
           "Search should succeed");
       assertEquals("semantic_search", searchResultEvent.getCurrentStage());
       searchFn.close();
@@ -833,10 +847,10 @@ class ResearchPipelineJobTest {
         assertEquals(expectedFlowId, result.getFlowId(), "flowId should be preserved");
         assertEquals(expectedUserId, result.getUserId(), "userId should be preserved");
         assertEquals(expectedAgentId, result.getAgentId(), "agentId should be preserved");
-        assertEquals(expectedCorrelationId, result.getCorrelationId(),
-            "correlationId should be preserved");
-        assertEquals(expectedParentFlowId, result.getParentFlowId(),
-            "parentFlowId should be preserved");
+        assertEquals(
+            expectedCorrelationId, result.getCorrelationId(), "correlationId should be preserved");
+        assertEquals(
+            expectedParentFlowId, result.getParentFlowId(), "parentFlowId should be preserved");
       } finally {
         function.close();
       }
@@ -875,10 +889,10 @@ class ResearchPipelineJobTest {
         assertEquals(expectedFlowId, result.getFlowId(), "flowId should be preserved");
         assertEquals(expectedUserId, result.getUserId(), "userId should be preserved");
         assertEquals(expectedAgentId, result.getAgentId(), "agentId should be preserved");
-        assertEquals(expectedCorrelationId, result.getCorrelationId(),
-            "correlationId should be preserved");
-        assertEquals(expectedParentFlowId, result.getParentFlowId(),
-            "parentFlowId should be preserved");
+        assertEquals(
+            expectedCorrelationId, result.getCorrelationId(), "correlationId should be preserved");
+        assertEquals(
+            expectedParentFlowId, result.getParentFlowId(), "parentFlowId should be preserved");
       } finally {
         function.close();
       }

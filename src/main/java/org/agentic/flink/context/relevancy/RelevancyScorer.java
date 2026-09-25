@@ -1,19 +1,17 @@
 package org.agentic.flink.context.relevancy;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.inference.InferenceSetup;
-import org.agentic.flink.inference.Scorer;
-import org.agentic.flink.tools.rag.EmbeddingToolExecutor;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.inference.InferenceSetup;
+import org.agentic.flink.inference.Scorer;
+import org.agentic.flink.tools.rag.EmbeddingToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Scores context items for relevancy to current intent Uses semantic similarity via embeddings
- */
+/** Scores context items for relevancy to current intent Uses semantic similarity via embeddings */
 public class RelevancyScorer implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(RelevancyScorer.class);
@@ -52,12 +50,10 @@ public class RelevancyScorer implements Serializable {
       return CompletableFuture.supplyAsync(
           () -> {
             try {
-              double pairScore =
-                  injectedScorer.scorePair(item.getContent(), intent, injectedSetup);
+              double pairScore = injectedScorer.scorePair(item.getContent(), intent, injectedSetup);
               return Math.max(0.0, Math.min(1.0, pairScore));
             } catch (Exception e) {
-              LOG.warn(
-                  "Injected Scorer failed for item {}: {}", item.getItemId(), e.getMessage());
+              LOG.warn("Injected Scorer failed for item {}: {}", item.getItemId(), e.getMessage());
               return item.getPriority().getRetentionScore();
             }
           });

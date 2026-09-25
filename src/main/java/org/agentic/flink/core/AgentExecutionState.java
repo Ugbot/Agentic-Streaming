@@ -15,7 +15,10 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
 @TypeInfo(AgentExecutionState.Factory.class)
 public class AgentExecutionState implements Serializable {
 
-  /** JSON (FlinkJson) serialization in keyed state instead of Kryo (contextData is Map&lt;String,Object&gt;). */
+  /**
+   * JSON (FlinkJson) serialization in keyed state instead of Kryo (contextData is
+   * Map&lt;String,Object&gt;).
+   */
   public static final class Factory extends JsonTypeInfoFactory<AgentExecutionState> {
     public Factory() {
       super(AgentExecutionState.class, true);

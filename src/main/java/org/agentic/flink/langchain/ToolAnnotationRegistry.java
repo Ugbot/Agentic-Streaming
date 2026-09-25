@@ -1,6 +1,5 @@
 package org.agentic.flink.langchain;
 
-import org.agentic.flink.core.ToolDefinition;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import java.lang.reflect.Method;
@@ -8,6 +7,7 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.agentic.flink.core.ToolDefinition;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
 import org.slf4j.Logger;
@@ -54,9 +54,7 @@ public class ToolAnnotationRegistry {
     scanForTools();
   }
 
-  /**
-   * Scans classpath for @Tool annotated methods and registers them.
-   */
+  /** Scans classpath for @Tool annotated methods and registers them. */
   private void scanForTools() {
     LOG.info("Scanning package '{}' for @Tool annotations...", basePackage);
 
@@ -109,7 +107,10 @@ public class ToolAnnotationRegistry {
     }
 
     LOG.debug(
-        "Registering tool: {} from {}.{}", toolId, declaringClass.getSimpleName(), method.getName());
+        "Registering tool: {} from {}.{}",
+        toolId,
+        declaringClass.getSimpleName(),
+        method.getName());
 
     // Create ToolDefinition
     ToolDefinition toolDef = new ToolDefinition(toolId, toolName, description);
@@ -156,8 +157,7 @@ public class ToolAnnotationRegistry {
     toolDef.getExecutorConfig().put("methodName", method.getName());
     toolDef.getExecutorConfig().put("className", declaringClass.getName());
 
-    LOG.info(
-        "Registered @Tool: {} - {} ({})", toolId, toolName, declaringClass.getSimpleName());
+    LOG.info("Registered @Tool: {} - {} ({})", toolId, toolName, declaringClass.getSimpleName());
   }
 
   /**

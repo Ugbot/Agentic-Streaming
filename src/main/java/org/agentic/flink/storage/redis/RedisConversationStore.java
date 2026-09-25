@@ -1,7 +1,7 @@
 package org.agentic.flink.storage.redis;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.*;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -9,7 +9,6 @@ import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
-import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -87,7 +86,8 @@ public class RedisConversationStore extends ReopenableStore implements LongTermM
   @Override
   protected void open(Map<String, String> config) throws Exception {
     this.host = config.getOrDefault(ConfigKeys.REDIS_HOST, ConfigKeys.DEFAULT_REDIS_HOST);
-    this.port = Integer.parseInt(config.getOrDefault(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
+    this.port =
+        Integer.parseInt(config.getOrDefault(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
     this.password = config.get(ConfigKeys.REDIS_PASSWORD);
     this.database = Integer.parseInt(config.getOrDefault("redis.database", "0"));
     this.defaultTTLSeconds =
@@ -121,7 +121,10 @@ public class RedisConversationStore extends ReopenableStore implements LongTermM
 
     LOG.info(
         "RedisConversationStore initialized: host={}, port={}, database={}, ttl={}s",
-        host, port, database, defaultTTLSeconds);
+        host,
+        port,
+        database,
+        defaultTTLSeconds);
   }
 
   @Override

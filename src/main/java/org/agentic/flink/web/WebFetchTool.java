@@ -1,18 +1,18 @@
 package org.agentic.flink.web;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tools.ToolExecutor;
 
 /**
- * {@link ToolExecutor} the agent can call to GET a URL and receive parsed text + discovered
- * links + content type. Routes through {@link Fetcher} so robots.txt + user-agent +
- * max-page-size are all honoured.
+ * {@link ToolExecutor} the agent can call to GET a URL and receive parsed text + discovered links +
+ * content type. Routes through {@link Fetcher} so robots.txt + user-agent + max-page-size are all
+ * honoured.
  *
- * <p>Suitable as a general-purpose "look at this URL" tool exposed to the LLM. Pair with
- * {@link org.agentic.flink.channel.ToolInvocationChannel} if you also want the
- * invocation to feed a downstream crawler operator.
+ * <p>Suitable as a general-purpose "look at this URL" tool exposed to the LLM. Pair with {@link
+ * org.agentic.flink.channel.ToolInvocationChannel} if you also want the invocation to feed a
+ * downstream crawler operator.
  */
 public final class WebFetchTool implements ToolExecutor {
   private static final long serialVersionUID = 1L;
@@ -48,7 +48,8 @@ public final class WebFetchTool implements ToolExecutor {
               return result;
             }
             DocumentExtractor.ExtractedDocument doc =
-                extractor.extract(fetched.getFinalUrl(), fetched.getBody(), fetched.getContentType());
+                extractor.extract(
+                    fetched.getFinalUrl(), fetched.getBody(), fetched.getContentType());
             result.put("ok", true);
             result.put("status", fetched.getStatus());
             result.put("finalUrl", fetched.getFinalUrl());

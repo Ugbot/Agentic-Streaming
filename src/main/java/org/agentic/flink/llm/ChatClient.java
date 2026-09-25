@@ -6,8 +6,8 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Runtime handle for a chat-style LLM, returned by {@link ChatConnection#bind}.
  *
- * <p>A {@code ChatClient} represents a live connection to a provider (HTTP client + credentials
- * + retry policy) and accepts a {@link ChatSetup} per call to vary model name, temperature, and
+ * <p>A {@code ChatClient} represents a live connection to a provider (HTTP client + credentials +
+ * retry policy) and accepts a {@link ChatSetup} per call to vary model name, temperature, and
  * response shape. The same client serves many agents.
  *
  * <p>Lives inside a Flink {@code RichFunction}: {@link ChatConnection} ships in the job graph,
@@ -24,8 +24,8 @@ public interface ChatClient extends AutoCloseable {
   }
 
   /**
-   * The connection's reported provider name (e.g. "ollama", "openai", "langchain4j:ollama").
-   * Used for logging and metrics.
+   * The connection's reported provider name (e.g. "ollama", "openai", "langchain4j:ollama"). Used
+   * for logging and metrics.
    */
   String providerName();
 

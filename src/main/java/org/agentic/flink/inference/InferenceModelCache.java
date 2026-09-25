@@ -13,9 +13,9 @@ import java.util.function.Supplier;
  * Entries are wrapped in {@link SoftReference}s so the JVM can reclaim under memory pressure
  * without our intervention.
  *
- * <p>The cache deliberately stores opaque {@link Object}s — backends decide what they want to
- * cache (a DJL {@code Model}, an ONNX {@code OrtSession}, a TF saved-model handle, etc.).
- * Type-safe access is the caller's responsibility.
+ * <p>The cache deliberately stores opaque {@link Object}s — backends decide what they want to cache
+ * (a DJL {@code Model}, an ONNX {@code OrtSession}, a TF saved-model handle, etc.). Type-safe
+ * access is the caller's responsibility.
  */
 public final class InferenceModelCache {
 

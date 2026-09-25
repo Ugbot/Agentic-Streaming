@@ -28,7 +28,8 @@ public final class ValidationGuardrail implements Guardrail {
     }
     String model = response == null ? null : response.getModelName();
     return GuardrailDecision.block(
-        "validation verdict " + verdict.getOutcome() + " (score=" + verdict.getScore() + ")", model);
+        "validation verdict " + verdict.getOutcome() + " (score=" + verdict.getScore() + ")",
+        model);
   }
 
   @Override

@@ -19,8 +19,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.ReopenableStore;
+import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,10 +122,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
       client
           .createCollectionAsync(
               name,
-              Collections.VectorParams.newBuilder()
-                  .setSize(dim)
-                  .setDistance(distance)
-                  .build())
+              Collections.VectorParams.newBuilder().setSize(dim).setDistance(distance).build())
           .get();
       LOG.info("Created Qdrant collection '{}' (dim={}, distance={})", name, dim, distance);
     }
@@ -145,8 +142,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
 
   @Override
   public void storeEmbeddingsBatch(
-      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata)
-      throws Exception {
+      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata) throws Exception {
     if (embeddings == null || embeddings.isEmpty()) return;
     List<Points.PointStruct> points = new ArrayList<>(embeddings.size());
     for (Map.Entry<String, float[]> e : embeddings.entrySet()) {
@@ -154,7 +150,11 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
       if (vec == null) continue;
       if (vec.length != dimension) {
         throw new IllegalArgumentException(
-            "embedding dimension " + vec.length + " != configured " + dimension + " for id "
+            "embedding dimension "
+                + vec.length
+                + " != configured "
+                + dimension
+                + " for id "
                 + e.getKey());
       }
       Map<String, Object> md = metadata == null ? null : metadata.get(e.getKey());
@@ -178,7 +178,8 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
 
   private List<VectorSearchResult> runQuery(float[] queryEmbedding, int topK, Points.Filter filter)
       throws Exception {
-    if (queryEmbedding == null) throw new IllegalArgumentException("queryEmbedding must not be null");
+    if (queryEmbedding == null)
+      throw new IllegalArgumentException("queryEmbedding must not be null");
     if (topK <= 0) return new ArrayList<>();
 
     Points.QueryPoints.Builder qb =
@@ -254,9 +255,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
   @Override
   public void deleteByFlowId(String flowId) throws Exception {
     Points.Filter filter =
-        Points.Filter.newBuilder()
-            .addMust(ConditionFactory.matchKeyword("flowId", flowId))
-            .build();
+        Points.Filter.newBuilder().addMust(ConditionFactory.matchKeyword("flowId", flowId)).build();
     client().deleteAsync(collection, filter).get();
   }
 
@@ -330,11 +329,11 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     }
     markClosed();
   }
+
   private QdrantClient client() {
     ensureOpen();
     return client;
   }
-
 
   // ---------- helpers ----------
 
@@ -366,7 +365,9 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     if (value instanceof Boolean) {
       return ConditionFactory.match(key, (Boolean) value);
     }
-    if (value instanceof Integer || value instanceof Long || value instanceof Short
+    if (value instanceof Integer
+        || value instanceof Long
+        || value instanceof Short
         || value instanceof Byte) {
       return ConditionFactory.match(key, ((Number) value).longValue());
     }
@@ -419,7 +420,8 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
         return list;
       case STRUCT_VALUE:
         Map<String, Object> struct = new LinkedHashMap<>();
-        for (Map.Entry<String, JsonWithInt.Value> e : v.getStructValue().getFieldsMap().entrySet()) {
+        for (Map.Entry<String, JsonWithInt.Value> e :
+            v.getStructValue().getFieldsMap().entrySet()) {
           struct.put(e.getKey(), fromValue(e.getValue()));
         }
         return struct;

@@ -75,7 +75,12 @@ class CompositeListenerTest {
     composite.onChatRequest(agentId, "qwen2.5", 3);
     composite.onToolCallEnd(agentId, "calc", "c1", true, 12);
 
-    assertEquals(List.of("start:" + agentId, "chatReq:" + agentId + "/qwen2.5/3", "toolEnd:" + agentId + "/calc/true"), a.calls);
+    assertEquals(
+        List.of(
+            "start:" + agentId,
+            "chatReq:" + agentId + "/qwen2.5/3",
+            "toolEnd:" + agentId + "/calc/true"),
+        a.calls);
     assertEquals(a.calls, b.calls);
   }
 

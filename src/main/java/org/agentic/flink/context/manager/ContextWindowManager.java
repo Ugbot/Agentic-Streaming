@@ -1,10 +1,10 @@
 package org.agentic.flink.context.manager;
 
+import java.io.Serializable;
+import lombok.Data;
 import org.agentic.flink.context.compaction.CompactionRequest;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
-import java.io.Serializable;
-import lombok.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,15 +66,13 @@ public class ContextWindowManager implements Serializable {
   public boolean tryAddItem(AgentContext context, ContextItem item) {
     if (!canFit(context, item)) {
       LOG.warn(
-          "Cannot fit item in context for agent {}, compaction required",
-          context.getAgentId());
+          "Cannot fit item in context for agent {}, compaction required", context.getAgentId());
       return false;
     }
 
     context.addContext(item);
     LOG.debug(
-        "Added item to context for agent {}: {}",
-        context.getAgentId(), context.getContextWindow());
+        "Added item to context for agent {}: {}", context.getAgentId(), context.getContextWindow());
     return true;
   }
 
@@ -85,8 +83,7 @@ public class ContextWindowManager implements Serializable {
    * @param originalIntent Current agent intent/goal
    * @return Compaction request
    */
-  public CompactionRequest createCompactionRequest(
-      AgentContext context, String originalIntent) {
+  public CompactionRequest createCompactionRequest(AgentContext context, String originalIntent) {
     CompactionRequest.CompactionReason reason;
 
     if (context.getContextWindow().getCurrentTokens() >= config.getMaxTokens()) {
@@ -97,9 +94,7 @@ public class ContextWindowManager implements Serializable {
       reason = CompactionRequest.CompactionReason.SCHEDULED_COMPACTION;
     }
 
-    LOG.info(
-        "Creating compaction request for agent {} due to {}",
-        context.getAgentId(), reason);
+    LOG.info("Creating compaction request for agent {} due to {}", context.getAgentId(), reason);
 
     return new CompactionRequest(context, originalIntent, reason);
   }

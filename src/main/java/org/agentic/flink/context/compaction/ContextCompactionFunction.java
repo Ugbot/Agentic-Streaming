@@ -1,13 +1,12 @@
 package org.agentic.flink.context.compaction;
 
+import java.util.*;
+import java.util.stream.Collectors;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
-import org.agentic.flink.context.core.ContextWindow;
 import org.agentic.flink.context.relevancy.RelevancyScorer;
-import java.util.*;
-import java.util.stream.Collectors;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
@@ -31,8 +30,7 @@ public class ContextCompactionFunction
   private final double longTermPromotionThreshold;
   private transient RelevancyScorer relevancyScorer;
 
-  public ContextCompactionFunction(
-      double relevancyThreshold, double longTermPromotionThreshold) {
+  public ContextCompactionFunction(double relevancyThreshold, double longTermPromotionThreshold) {
     this.relevancyThreshold = relevancyThreshold;
     this.longTermPromotionThreshold = longTermPromotionThreshold;
   }
@@ -58,7 +56,8 @@ public class ContextCompactionFunction
 
     LOG.info(
         "Starting compaction for agent {}, current context: {}",
-        context.getAgentId(), context.getContextWindow());
+        context.getAgentId(),
+        context.getContextWindow());
 
     CompactionResult result = new CompactionResult(request.getRequestId(), request.getFlowId());
     result.setOriginalTokenCount(context.getContextWindow().getCurrentTokens());
@@ -122,7 +121,8 @@ public class ContextCompactionFunction
       }
     }
     LOG.debug(
-        "Phase 5: Identified {} items for long-term promotion", result.getPromotedToLongTerm().size());
+        "Phase 5: Identified {} items for long-term promotion",
+        result.getPromotedToLongTerm().size());
 
     // Finalize result
     result.setCompactedContext(context);
@@ -130,9 +130,7 @@ public class ContextCompactionFunction
     result.setTokensSaved(result.getOriginalTokenCount() - result.getCompactedTokenCount());
     result.setCompactionTimeMs(System.currentTimeMillis() - startTime);
 
-    LOG.info(
-        "Compaction complete for agent {}: {}",
-        context.getAgentId(), result);
+    LOG.info("Compaction complete for agent {}: {}", context.getAgentId(), result);
 
     out.collect(result);
   }

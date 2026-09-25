@@ -35,7 +35,8 @@ public class CalculatorTools {
    * @return The difference a - b
    */
   @Tool("Performs subtraction of two numbers")
-  public double subtract(@P("First number (minuend)") double a, @P("Second number (subtrahend)") double b) {
+  public double subtract(
+      @P("First number (minuend)") double a, @P("Second number (subtrahend)") double b) {
     return a - b;
   }
 

@@ -47,7 +47,8 @@ public class SupervisorReviewFunction extends ProcessFunction<AgentEvent, AgentE
     }
   }
 
-  private AgentEvent createApprovalEvent(AgentEvent originalEvent, boolean approved, String reason) {
+  private AgentEvent createApprovalEvent(
+      AgentEvent originalEvent, boolean approved, String reason) {
     AgentEvent event = new AgentEvent();
     event.setFlowId(originalEvent.getFlowId());
     event.setUserId(originalEvent.getUserId());

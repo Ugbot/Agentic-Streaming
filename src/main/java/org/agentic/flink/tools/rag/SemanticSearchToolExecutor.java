@@ -1,5 +1,10 @@
 package org.agentic.flink.tools.rag;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -9,11 +14,6 @@ import org.agentic.flink.storage.StorageFactory;
 import org.agentic.flink.storage.VectorStore;
 import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Semantic Search Tool Executor. Searches the vector store for semantically similar documents.
@@ -79,8 +79,7 @@ public class SemanticSearchToolExecutor extends AbstractToolExecutor {
         () -> {
           try {
             String query = getRequiredParameter(parameters, "query", String.class);
-            Integer maxResults =
-                getOptionalParameter(parameters, "max_results", Integer.class, 10);
+            Integer maxResults = getOptionalParameter(parameters, "max_results", Integer.class, 10);
             Double minScore = getOptionalParameter(parameters, "min_score", Double.class, 0.7);
 
             // Create query embedding.
@@ -93,8 +92,7 @@ public class SemanticSearchToolExecutor extends AbstractToolExecutor {
 
             List<Map<String, Object>> formatted = formatResults(matches, minScore);
 
-            LOG.info(
-                "Semantic search found {} results for query: {}", formatted.size(), query);
+            LOG.info("Semantic search found {} results for query: {}", formatted.size(), query);
 
             Map<String, Object> result = new HashMap<>();
             result.put("query", query);

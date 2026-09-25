@@ -1,23 +1,23 @@
 package org.agentic.flink.plugins.flintagents.examples;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsEventAdapter;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsToolAdapter;
 import org.agentic.flink.tools.ToolExecutor;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.agents.api.Agent;
 import org.apache.flink.agents.api.Event;
 
 /**
  * ⚠️ SIMULATION DEMO - VISUALIZATION ONLY ⚠️
  *
- * <p><b>IMPORTANT:</b> This is a SIMULATED demonstration using hardcoded responses.
- * It does NOT represent actual agent execution or LLM calls.
+ * <p><b>IMPORTANT:</b> This is a SIMULATED demonstration using hardcoded responses. It does NOT
+ * represent actual agent execution or LLM calls.
  *
  * <p>This demo VISUALIZES what the agent system architecture looks like by:
  *
@@ -29,11 +29,12 @@ import org.apache.flink.agents.api.Event;
  * </ul>
  *
  * <p><b>What this is NOT:</b>
+ *
  * <ul>
- *   <li>❌ NOT real agent execution</li>
- *   <li>❌ NOT calling actual LLMs</li>
- *   <li>❌ NOT executing real tools</li>
- *   <li>❌ NOT using real Flink Agents framework</li>
+ *   <li>❌ NOT real agent execution
+ *   <li>❌ NOT calling actual LLMs
+ *   <li>❌ NOT executing real tools
+ *   <li>❌ NOT using real Flink Agents framework
  * </ul>
  *
  * <p><b>For real examples:</b> See TieredAgentExample.java (coming in v1.0)
@@ -53,8 +54,7 @@ public class SimulatedAgentDemo {
   private static final String ANSI_WHITE = "\u001B[37m";
   private static final String ANSI_BOLD = "\u001B[1m";
 
-  private static final DateTimeFormatter TIME_FORMATTER =
-      DateTimeFormatter.ofPattern("HH:mm:ss");
+  private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
   private static int eventCounter = 0;
   private static Map<String, Object> sessionContext = new HashMap<>();
@@ -116,29 +116,40 @@ public class SimulatedAgentDemo {
 
   private static void printBanner() {
     System.out.println("\n" + ANSI_CYAN + ANSI_BOLD);
-    System.out.println("╔════════════════════════════════════════════════════════════════════════════╗");
-    System.out.println("║                                                                            ║");
-    System.out.println("║        🚀 HYBRID FLINK AGENTS INTEGRATION - INTERACTIVE DEMO 🚀           ║");
-    System.out.println("║                                                                            ║");
-    System.out.println("║          Apache Flink Agents + Agentic Flink Framework                    ║");
-    System.out.println("║                   Working Together Seamlessly                             ║");
-    System.out.println("║                                                                            ║");
-    System.out.println("╚════════════════════════════════════════════════════════════════════════════╝");
+    System.out.println(
+        "╔════════════════════════════════════════════════════════════════════════════╗");
+    System.out.println(
+        "║                                                                            ║");
+    System.out.println(
+        "║        🚀 HYBRID FLINK AGENTS INTEGRATION - INTERACTIVE DEMO 🚀           ║");
+    System.out.println(
+        "║                                                                            ║");
+    System.out.println(
+        "║          Apache Flink Agents + Agentic Flink Framework                    ║");
+    System.out.println(
+        "║                   Working Together Seamlessly                             ║");
+    System.out.println(
+        "║                                                                            ║");
+    System.out.println(
+        "╚════════════════════════════════════════════════════════════════════════════╝");
     System.out.println(ANSI_RESET);
   }
 
   private static void printIntro() {
     System.out.println(ANSI_WHITE + "This demo showcases:" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Event conversion between our framework and Flink Agents" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Event conversion between our framework and Flink Agents" + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Tool execution using Flink Agents actions" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Validation and error handling from our framework" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Validation and error handling from our framework" + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Context management and memory" + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Real-time event processing and monitoring" + ANSI_RESET);
     System.out.println();
   }
 
   private static void printMenu() {
-    System.out.println("\n" + ANSI_BOLD + "═══════════════════ DEMO MENU ═══════════════════" + ANSI_RESET);
+    System.out.println(
+        "\n" + ANSI_BOLD + "═══════════════════ DEMO MENU ═══════════════════" + ANSI_RESET);
     System.out.println(ANSI_YELLOW + "1." + ANSI_RESET + " Order Lookup Tool Demo");
     System.out.println(ANSI_YELLOW + "2." + ANSI_RESET + " Refund Processing Demo");
     System.out.println(ANSI_YELLOW + "3." + ANSI_RESET + " Knowledge Base Search Demo");
@@ -147,7 +158,8 @@ public class SimulatedAgentDemo {
     System.out.println(ANSI_YELLOW + "6." + ANSI_RESET + " Performance Test (100 events)");
     System.out.println(ANSI_YELLOW + "7." + ANSI_RESET + " Show Architecture Diagram");
     System.out.println(ANSI_RED + "0." + ANSI_RESET + " Exit");
-    System.out.println(ANSI_BOLD + "═════════════════════════════════════════════════" + ANSI_RESET);
+    System.out.println(
+        ANSI_BOLD + "═════════════════════════════════════════════════" + ANSI_RESET);
   }
 
   private static void demoOrderLookup(HybridAgentSystem system) {
@@ -227,8 +239,10 @@ public class SimulatedAgentDemo {
     }
 
     if (!validated) {
-      System.out.println(ANSI_RED + "  ✗ Validation failed after " + maxAttempts + " attempts" + ANSI_RESET);
-      System.out.println(ANSI_YELLOW + "  → Escalating to supervisor (our framework feature)" + ANSI_RESET);
+      System.out.println(
+          ANSI_RED + "  ✗ Validation failed after " + maxAttempts + " attempts" + ANSI_RESET);
+      System.out.println(
+          ANSI_YELLOW + "  → Escalating to supervisor (our framework feature)" + ANSI_RESET);
     }
 
     printStep(4, "Recording in session context");
@@ -269,12 +283,14 @@ public class SimulatedAgentDemo {
 
   private static void demoFullWorkflow(HybridAgentSystem system) {
     printSectionHeader("Full Customer Support Workflow");
-    System.out.println(ANSI_WHITE + "Simulating: Customer inquiry → Lookup → Issue found → Refund" + ANSI_RESET);
+    System.out.println(
+        ANSI_WHITE + "Simulating: Customer inquiry → Lookup → Issue found → Refund" + ANSI_RESET);
     System.out.println();
 
     // Stage 1: Initial inquiry
     printWorkflowStage(1, "Customer Inquiry");
-    System.out.println(ANSI_CYAN + "  Customer: 'I received a damaged product, order ORD-2024-5678'" + ANSI_RESET);
+    System.out.println(
+        ANSI_CYAN + "  Customer: 'I received a damaged product, order ORD-2024-5678'" + ANSI_RESET);
 
     // Stage 2: Order lookup
     printWorkflowStage(2, "Order Lookup");
@@ -283,7 +299,8 @@ public class SimulatedAgentDemo {
     lookupEvent.setData(lookupData);
     Event flinkEvent1 = FlinkAgentsEventAdapter.toFlinkAgentEvent(lookupEvent);
     Map<String, Object> orderInfo = system.executeTool("order_lookup", lookupData);
-    System.out.println(ANSI_GREEN + "  ✓ Order found: " + orderInfo.get("productName") + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Order found: " + orderInfo.get("productName") + ANSI_RESET);
 
     // Stage 3: Validate issue
     printWorkflowStage(3, "Issue Validation");
@@ -296,19 +313,21 @@ public class SimulatedAgentDemo {
     // Stage 4: Process refund
     printWorkflowStage(4, "Refund Processing");
     AgentEvent refundEvent = createEvent("REFUND_REQUEST", "user-12345", "workflow-agent");
-    Map<String, Object> refundData = Map.of(
-        "orderId", "ORD-2024-5678",
-        "amount", orderInfo.get("amount"),
-        "reason", "Product damaged"
-    );
+    Map<String, Object> refundData =
+        Map.of(
+            "orderId", "ORD-2024-5678",
+            "amount", orderInfo.get("amount"),
+            "reason", "Product damaged");
     refundEvent.setData(refundData);
     Event flinkEvent2 = FlinkAgentsEventAdapter.toFlinkAgentEvent(refundEvent);
     Map<String, Object> refundResult = system.executeTool("refund_processor", refundData);
-    System.out.println(ANSI_GREEN + "  ✓ Refund processed: " + refundResult.get("refundId") + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Refund processed: " + refundResult.get("refundId") + ANSI_RESET);
 
     // Stage 5: Knowledge base update
     printWorkflowStage(5, "Context Update & Documentation");
-    System.out.println(ANSI_WHITE + "  → Updating session context with full workflow history" + ANSI_RESET);
+    System.out.println(
+        ANSI_WHITE + "  → Updating session context with full workflow history" + ANSI_RESET);
     System.out.println(ANSI_WHITE + "  → Recording for future reference" + ANSI_RESET);
     sessionContext.put("workflow_complete", true);
     sessionContext.put("order_info", orderInfo);
@@ -322,7 +341,12 @@ public class SimulatedAgentDemo {
     System.out.println(ANSI_GREEN + "  ✓ Context updated" + ANSI_RESET);
     System.out.println();
     System.out.println(ANSI_BOLD + ANSI_CYAN + "  Response to customer:" + ANSI_RESET);
-    System.out.println(ANSI_WHITE + "  \"We've processed your refund of $" + orderInfo.get("amount") + "." + ANSI_RESET);
+    System.out.println(
+        ANSI_WHITE
+            + "  \"We've processed your refund of $"
+            + orderInfo.get("amount")
+            + "."
+            + ANSI_RESET);
     System.out.println(ANSI_WHITE + "   You'll receive it in 3-5 business days.\"" + ANSI_RESET);
 
     printSuccess("Full workflow completed successfully!");
@@ -335,7 +359,12 @@ public class SimulatedAgentDemo {
     System.out.println(ANSI_GREEN + "  ✓ FlinkAgentsEventAdapter:  Active" + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ FlinkAgentsToolAdapter:   Active" + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Tool Registry:            3 tools loaded" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Event Counter:            " + eventCounter + " events processed" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN
+            + "  ✓ Event Counter:            "
+            + eventCounter
+            + " events processed"
+            + ANSI_RESET);
     System.out.println();
 
     System.out.println(ANSI_BOLD + "Available Tools (via Flink Agents):" + ANSI_RESET);
@@ -355,11 +384,16 @@ public class SimulatedAgentDemo {
     System.out.println();
 
     System.out.println(ANSI_BOLD + "Framework Features:" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Event Conversion:         Bidirectional, lossless" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Tool Execution:           Via Flink Agents actions" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Validation:               Multi-attempt with retry" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Context Management:       MoSCoW prioritization" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Error Handling:           Graceful degradation" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Event Conversion:         Bidirectional, lossless" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Tool Execution:           Via Flink Agents actions" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Validation:               Multi-attempt with retry" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Context Management:       MoSCoW prioritization" + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN + "  ✓ Error Handling:           Graceful degradation" + ANSI_RESET);
   }
 
   private static void runPerformanceTest(HybridAgentSystem system) {
@@ -394,8 +428,17 @@ public class SimulatedAgentDemo {
     System.out.println(ANSI_BOLD + "Performance Results:" + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Events processed:     " + eventCount + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Total time:           " + duration + " ms" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Avg time per event:   " + String.format("%.2f", duration / (double) eventCount) + " ms" + ANSI_RESET);
-    System.out.println(ANSI_GREEN + "  ✓ Events per second:    " + String.format("%.0f", eventsPerSecond) + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN
+            + "  ✓ Avg time per event:   "
+            + String.format("%.2f", duration / (double) eventCount)
+            + " ms"
+            + ANSI_RESET);
+    System.out.println(
+        ANSI_GREEN
+            + "  ✓ Events per second:    "
+            + String.format("%.0f", eventsPerSecond)
+            + ANSI_RESET);
     System.out.println(ANSI_GREEN + "  ✓ Conversion overhead:  Minimal (<1ms)" + ANSI_RESET);
 
     printSuccess("Performance test completed!");
@@ -454,13 +497,20 @@ public class SimulatedAgentDemo {
 
   private static void printGoodbye() {
     System.out.println("\n" + ANSI_CYAN + ANSI_BOLD);
-    System.out.println("╔════════════════════════════════════════════════════════════════════════════╗");
-    System.out.println("║                                                                            ║");
-    System.out.println("║                    Thank you for trying the demo!                         ║");
-    System.out.println("║                                                                            ║");
-    System.out.println("║         🚀 Hybrid Flink Agents Integration - Ready for Production 🚀     ║");
-    System.out.println("║                                                                            ║");
-    System.out.println("╚════════════════════════════════════════════════════════════════════════════╝");
+    System.out.println(
+        "╔════════════════════════════════════════════════════════════════════════════╗");
+    System.out.println(
+        "║                                                                            ║");
+    System.out.println(
+        "║                    Thank you for trying the demo!                         ║");
+    System.out.println(
+        "║                                                                            ║");
+    System.out.println(
+        "║         🚀 Hybrid Flink Agents Integration - Ready for Production 🚀     ║");
+    System.out.println(
+        "║                                                                            ║");
+    System.out.println(
+        "╚════════════════════════════════════════════════════════════════════════════╝");
     System.out.println(ANSI_RESET);
   }
 
@@ -477,8 +527,7 @@ public class SimulatedAgentDemo {
   }
 
   private static void printWorkflowStage(int stage, String name) {
-    System.out.println(
-        ANSI_BOLD + ANSI_PURPLE + "\n▶ Stage " + stage + ": " + name + ANSI_RESET);
+    System.out.println(ANSI_BOLD + ANSI_PURPLE + "\n▶ Stage " + stage + ": " + name + ANSI_RESET);
   }
 
   private static AgentEvent createEvent(String flowId, String userId, String agentId) {
@@ -515,7 +564,8 @@ public class SimulatedAgentDemo {
   private static void printToolResult(Map<String, Object> result) {
     System.out.println(ANSI_GREEN + "  ✓ Tool execution completed" + ANSI_RESET);
     for (Map.Entry<String, Object> entry : result.entrySet()) {
-      System.out.println(ANSI_WHITE + "  • " + entry.getKey() + ": " + ANSI_RESET + entry.getValue());
+      System.out.println(
+          ANSI_WHITE + "  • " + entry.getKey() + ": " + ANSI_RESET + entry.getValue());
     }
   }
 
@@ -545,9 +595,7 @@ public class SimulatedAgentDemo {
     System.out.println("\n" + ANSI_BOLD + ANSI_GREEN + "✓ " + message + ANSI_RESET);
   }
 
-  /**
-   * Mock hybrid agent system that simulates the integration.
-   */
+  /** Mock hybrid agent system that simulates the integration. */
   static class HybridAgentSystem {
     private Map<String, ToolExecutor> tools = new HashMap<>();
     private Map<String, ToolDefinition> definitions = new HashMap<>();
@@ -619,7 +667,8 @@ public class SimulatedAgentDemo {
       for (String toolId : tools.keySet()) {
         agents.put(
             toolId,
-            FlinkAgentsToolAdapter.wrapSingleTool(toolId, tools.get(toolId), definitions.get(toolId)));
+            FlinkAgentsToolAdapter.wrapSingleTool(
+                toolId, tools.get(toolId), definitions.get(toolId)));
       }
     }
 
@@ -646,9 +695,7 @@ public class SimulatedAgentDemo {
     }
   }
 
-  /**
-   * Mock tool executor for demo purposes.
-   */
+  /** Mock tool executor for demo purposes. */
   static class MockToolExecutor implements ToolExecutor {
     private final String toolId;
     private final String description;

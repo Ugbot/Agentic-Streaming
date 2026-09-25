@@ -1,5 +1,9 @@
 package org.agentic.flink.function;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
@@ -7,10 +11,6 @@ import org.agentic.flink.serde.ToolCallRequest;
 import org.agentic.flink.serde.ToolCallResponse;
 import org.agentic.flink.tools.ToolExecutor;
 import org.agentic.flink.tools.ToolExecutorRegistry;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
@@ -42,16 +42,15 @@ public class ToolCallAsyncFunctionV2 extends RichAsyncFunction<ToolCallRequest, 
   }
 
   @Override
-  public void asyncInvoke(
-      ToolCallRequest request, ResultFuture<ToolCallResponse> resultFuture) {
+  public void asyncInvoke(ToolCallRequest request, ResultFuture<ToolCallResponse> resultFuture) {
 
-    LOG.info(
-        "Executing tool call for flow {}, tool: {}", request.getFlowId(), request.getToolId());
+    LOG.info("Executing tool call for flow {}, tool: {}", request.getFlowId(), request.getToolId());
 
     // Get tool definition
     ToolDefinition toolDef = toolRegistry.get(request.getToolId());
     if (toolDef == null) {
-      ToolCallResponse response = createErrorResponse(request, "Tool not found in registry", "TOOL_NOT_FOUND");
+      ToolCallResponse response =
+          createErrorResponse(request, "Tool not found in registry", "TOOL_NOT_FOUND");
       resultFuture.complete(Collections.singleton(response));
       return;
     }
@@ -59,7 +58,9 @@ public class ToolCallAsyncFunctionV2 extends RichAsyncFunction<ToolCallRequest, 
     // Get executor for this tool
     Optional<ToolExecutor> executorOpt = executorRegistry.getExecutor(request.getToolId());
     if (!executorOpt.isPresent()) {
-      ToolCallResponse response = createErrorResponse(request, "No executor found for tool: " + request.getToolId(), "EXECUTOR_NOT_FOUND");
+      ToolCallResponse response =
+          createErrorResponse(
+              request, "No executor found for tool: " + request.getToolId(), "EXECUTOR_NOT_FOUND");
       resultFuture.complete(Collections.singleton(response));
       return;
     }
@@ -68,7 +69,8 @@ public class ToolCallAsyncFunctionV2 extends RichAsyncFunction<ToolCallRequest, 
 
     // Validate parameters
     if (!executor.validateParameters(request.getParameters())) {
-      ToolCallResponse response = createErrorResponse(request, "Invalid parameters for tool", "INVALID_PARAMETERS");
+      ToolCallResponse response =
+          createErrorResponse(request, "Invalid parameters for tool", "INVALID_PARAMETERS");
       resultFuture.complete(Collections.singleton(response));
       return;
     }
@@ -119,10 +121,7 @@ public class ToolCallAsyncFunctionV2 extends RichAsyncFunction<ToolCallRequest, 
       ToolCallRequest request, String errorMessage, String errorCode) {
     ToolCallResponse response =
         new ToolCallResponse(
-            request.getRequestId(),
-            request.getFlowId(),
-            request.getUserId(),
-            request.getAgentId());
+            request.getRequestId(), request.getFlowId(), request.getUserId(), request.getAgentId());
     response.setToolId(request.getToolId());
     response.setToolName(request.getToolName());
     response.fail(errorMessage, errorCode);

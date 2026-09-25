@@ -1,20 +1,20 @@
 package org.agentic.flink.storage;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Typed cohort of {@link ContextItem}s sharing a semantic role — borrowed in spirit from Apache
  * Flink Agents' {@code BaseLongTermMemory.MemorySet} / {@code MemorySetItem}.
  *
  * <p>Common sets: {@code "facts"}, {@code "decisions"}, {@code "summaries"}. Sets are persisted
- * through {@link MemorySetAccessor}, which namespaces keys in the underlying
- * {@link LongTermMemoryStore#saveFacts}/{@link LongTermMemoryStore#loadFacts} buckets so a single
- * store can host any number of sets without schema changes.
+ * through {@link MemorySetAccessor}, which namespaces keys in the underlying {@link
+ * LongTermMemoryStore#saveFacts}/{@link LongTermMemoryStore#loadFacts} buckets so a single store
+ * can host any number of sets without schema changes.
  */
 public final class MemorySet implements Serializable {
   private static final long serialVersionUID = 1L;

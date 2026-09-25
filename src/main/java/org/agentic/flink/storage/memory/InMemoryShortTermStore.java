@@ -1,12 +1,11 @@
 package org.agentic.flink.storage.memory;
 
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.ShortTermMemoryStore;
 import org.agentic.flink.storage.StorageTier;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,8 +13,8 @@ import org.slf4j.LoggerFactory;
  * In-memory implementation of ShortTermMemoryStore using Caffeine cache.
  *
  * <p>This implementation provides sub-millisecond access times by storing all data in local memory
- * with Caffeine's high-performance caching. Suitable for single-JVM deployments or as a local
- * cache layer in front of distributed storage.
+ * with Caffeine's high-performance caching. Suitable for single-JVM deployments or as a local cache
+ * layer in front of distributed storage.
  *
  * <p>Characteristics:
  *
@@ -77,8 +76,7 @@ public class InMemoryShortTermStore extends ReopenableStore implements ShortTerm
 
     // Parse configuration
     if (config != null) {
-      this.defaultTTLSeconds =
-          Long.parseLong(config.getOrDefault("cache.ttl.seconds", "3600"));
+      this.defaultTTLSeconds = Long.parseLong(config.getOrDefault("cache.ttl.seconds", "3600"));
       this.maxSize = Integer.parseInt(config.getOrDefault("cache.max.size", "10000"));
       this.expireAfterAccess =
           Boolean.parseBoolean(config.getOrDefault("cache.expire.after.access", "true"));
@@ -246,12 +244,9 @@ public class InMemoryShortTermStore extends ReopenableStore implements ShortTerm
 
     int totalItems = storage.values().stream().mapToInt(List::size).sum();
     int activeConversations = storage.size();
-    double hitRate = (hitCount + missCount) > 0
-        ? (double) hitCount / (hitCount + missCount)
-        : 0.0;
-    double avgItemsPerConversation = activeConversations > 0
-        ? (double) totalItems / activeConversations
-        : 0.0;
+    double hitRate = (hitCount + missCount) > 0 ? (double) hitCount / (hitCount + missCount) : 0.0;
+    double avgItemsPerConversation =
+        activeConversations > 0 ? (double) totalItems / activeConversations : 0.0;
 
     stats.put("total_items", totalItems);
     stats.put("active_conversations", activeConversations);
@@ -335,17 +330,19 @@ public class InMemoryShortTermStore extends ReopenableStore implements ShortTerm
   }
 
   private void startCleanupThread() {
-    Thread cleanupThread = new Thread(() -> {
-      while (true) {
-        try {
-          Thread.sleep(60000); // Check every minute
-          cleanupExpired();
-        } catch (InterruptedException e) {
-          LOG.info("Cleanup thread interrupted");
-          break;
-        }
-      }
-    });
+    Thread cleanupThread =
+        new Thread(
+            () -> {
+              while (true) {
+                try {
+                  Thread.sleep(60000); // Check every minute
+                  cleanupExpired();
+                } catch (InterruptedException e) {
+                  LOG.info("Cleanup thread interrupted");
+                  break;
+                }
+              }
+            });
     cleanupThread.setDaemon(true);
     cleanupThread.setName("InMemoryShortTermStore-Cleanup");
     cleanupThread.start();

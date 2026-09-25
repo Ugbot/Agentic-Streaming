@@ -8,8 +8,8 @@ import java.util.List;
  * Per-agent chat configuration, decoupled from any vendor transport.
  *
  * <p>Carries the bits that change <i>between agents</i> against a single shared {@link
- * ChatConnection}: model name, temperature, response shape. One {@link ChatConnection} (one
- * Ollama service) can feed many agents with different {@link ChatSetup}s.
+ * ChatConnection}: model name, temperature, response shape. One {@link ChatConnection} (one Ollama
+ * service) can feed many agents with different {@link ChatSetup}s.
  */
 public final class ChatSetup implements Serializable {
   private static final long serialVersionUID = 1L;

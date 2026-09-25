@@ -8,10 +8,10 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 /**
  * {@link EmbeddingConnection} that routes through DJL.
  *
- * <p>Thin adapter — the actual model loading and inference live in {@link
- * DjlInferenceConnection}. This class exists so embedder-only users can wire a DL embedder
- * (e.g. {@code sentence-transformers/all-MiniLM-L6-v2}) directly into
- * {@code AgentBuilder.withEmbeddingConnection(...)} without thinking about the inference SPI.
+ * <p>Thin adapter — the actual model loading and inference live in {@link DjlInferenceConnection}.
+ * This class exists so embedder-only users can wire a DL embedder (e.g. {@code
+ * sentence-transformers/all-MiniLM-L6-v2}) directly into {@code
+ * AgentBuilder.withEmbeddingConnection(...)} without thinking about the inference SPI.
  */
 public final class DjlEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;

@@ -1,9 +1,9 @@
 package org.agentic.flink.corpus;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.memory.vector.ScoredItem;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.memory.vector.ScoredItem;
 
 /**
  * Named, possibly-shared knowledge base — vectors plus metadata, addressed by name.

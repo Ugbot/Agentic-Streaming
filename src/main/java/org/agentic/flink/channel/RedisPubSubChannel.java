@@ -21,9 +21,9 @@ import redis.clients.jedis.JedisPubSub;
  * Channel that subscribes to a Redis pub/sub channel and emits each JSON-encoded {@link
  * KeyedContextItem}.
  *
- * <p>Wire format mirrors {@link KafkaContextChannel}: a JSON object with {@code flowId} and
- * {@code item}. Requires Jedis on the runtime classpath — the dependency is marked optional in
- * the project's pom, so users who don't need Redis don't pull it transitively.
+ * <p>Wire format mirrors {@link KafkaContextChannel}: a JSON object with {@code flowId} and {@code
+ * item}. Requires Jedis on the runtime classpath — the dependency is marked optional in the
+ * project's pom, so users who don't need Redis don't pull it transitively.
  *
  * <p>This source is single-parallelism by design. A subscriber per task would receive duplicate
  * messages from Redis.
@@ -115,14 +115,18 @@ public final class RedisPubSubChannel implements Channel<KeyedContextItem> {
                             try {
                               queue.add(mapper.readValue(message, KeyedContextItem.class));
                             } catch (Exception e) {
-                              LOG.warn("Failed to deserialize Redis pub/sub message: {}", e.getMessage());
+                              LOG.warn(
+                                  "Failed to deserialize Redis pub/sub message: {}",
+                                  e.getMessage());
                             }
                           }
                         };
                     jedis.subscribe(subscription, channelName);
                   } catch (Exception e) {
                     if (running) {
-                      LOG.warn("RedisPubSubChannel subscription dropped, reconnecting in 1s: {}", e.getMessage());
+                      LOG.warn(
+                          "RedisPubSubChannel subscription dropped, reconnecting in 1s: {}",
+                          e.getMessage());
                       try {
                         Thread.sleep(1000);
                       } catch (InterruptedException ie) {

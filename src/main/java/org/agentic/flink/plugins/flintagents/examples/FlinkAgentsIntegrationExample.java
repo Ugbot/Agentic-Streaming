@@ -1,14 +1,14 @@
 package org.agentic.flink.plugins.flintagents.examples;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsEventAdapter;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsToolAdapter;
 import org.agentic.flink.tools.ToolExecutor;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.agents.api.Agent;
 import org.apache.flink.agents.api.Event;
 
@@ -177,8 +177,7 @@ public class FlinkAgentsIntegrationExample {
     System.out.println("\nWrapped as Flink Agents Agent:");
     System.out.println("  - Agent Class: " + toolAgent.getClass().getSimpleName());
     System.out.println(
-        "  - Agent ID: "
-            + ((FlinkAgentsToolAdapter.ToolWrapperAgent) toolAgent).getAgentId());
+        "  - Agent ID: " + ((FlinkAgentsToolAdapter.ToolWrapperAgent) toolAgent).getAgentId());
 
     // Test MCP schema conversion
     Map<String, Object> mcpSchema = FlinkAgentsToolAdapter.toMCPToolSchema(calculatorDef);
@@ -221,12 +220,19 @@ public class FlinkAgentsIntegrationExample {
     boolean isLossless = FlinkAgentsEventAdapter.validateConversion(original, converted);
 
     System.out.println("\nConversion Validation:");
-    System.out.println("  - Flow ID preserved: " + original.getFlowId().equals(converted.getFlowId()));
-    System.out.println("  - User ID preserved: " + original.getUserId().equals(converted.getUserId()));
-    System.out.println("  - Agent ID preserved: " + original.getAgentId().equals(converted.getAgentId()));
-    System.out.println("  - Event Type preserved: " + original.getEventType().equals(converted.getEventType()));
-    System.out.println("  - Stage preserved: " + original.getCurrentStage().equals(converted.getCurrentStage()));
-    System.out.println("  - Iteration preserved: " + original.getIterationNumber().equals(converted.getIterationNumber()));
+    System.out.println(
+        "  - Flow ID preserved: " + original.getFlowId().equals(converted.getFlowId()));
+    System.out.println(
+        "  - User ID preserved: " + original.getUserId().equals(converted.getUserId()));
+    System.out.println(
+        "  - Agent ID preserved: " + original.getAgentId().equals(converted.getAgentId()));
+    System.out.println(
+        "  - Event Type preserved: " + original.getEventType().equals(converted.getEventType()));
+    System.out.println(
+        "  - Stage preserved: " + original.getCurrentStage().equals(converted.getCurrentStage()));
+    System.out.println(
+        "  - Iteration preserved: "
+            + original.getIterationNumber().equals(converted.getIterationNumber()));
     System.out.println("  - Overall lossless: " + isLossless);
 
     if (isLossless) {

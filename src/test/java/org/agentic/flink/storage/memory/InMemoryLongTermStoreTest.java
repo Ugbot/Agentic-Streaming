@@ -2,12 +2,12 @@ package org.agentic.flink.storage.memory;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.*;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.storage.StorageTier;
-import java.util.*;
 import org.junit.jupiter.api.*;
 
 /**
@@ -370,8 +370,7 @@ class InMemoryLongTermStoreTest {
   @Test
   @DisplayName("getConversationMetadata should return empty map for unknown flow")
   void testGetMetadataUnknownFlow() throws Exception {
-    Map<String, Object> meta =
-        store.getConversationMetadata("nonexistent-" + UUID.randomUUID());
+    Map<String, Object> meta = store.getConversationMetadata("nonexistent-" + UUID.randomUUID());
     assertNotNull(meta);
     assertTrue(meta.isEmpty());
   }
@@ -431,8 +430,7 @@ class InMemoryLongTermStoreTest {
   @Test
   @DisplayName("addFact should reject null arguments")
   void testAddFactNullArgs() {
-    assertThrows(
-        IllegalArgumentException.class, () -> store.addFact(null, "id", createFact("v")));
+    assertThrows(IllegalArgumentException.class, () -> store.addFact(null, "id", createFact("v")));
     assertThrows(
         IllegalArgumentException.class, () -> store.addFact("flow", null, createFact("v")));
     assertThrows(IllegalArgumentException.class, () -> store.addFact("flow", "id", null));

@@ -1,5 +1,7 @@
 package org.agentic.flink.example.rag;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
@@ -20,8 +22,6 @@ import org.agentic.flink.memory.vector.FlinkStateVectorMemory;
 import org.agentic.flink.memory.vector.ScoredItem;
 import org.agentic.flink.memory.vector.VectorMemory;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
@@ -35,31 +35,32 @@ import org.apache.flink.util.Collector;
  * <p>What the pipeline does, per query:
  *
  * <ol>
- *   <li>Embed the query with a sentence-transformers model
- *       ({@code DjlEmbeddingConnection}).
- *   <li>Top-k recall over {@link FlinkStateVectorMemory} (brute-force KNN backed by Flink
- *       {@code MapState}).
+ *   <li>Embed the query with a sentence-transformers model ({@code DjlEmbeddingConnection}).
+ *   <li>Top-k recall over {@link FlinkStateVectorMemory} (brute-force KNN backed by Flink {@code
+ *       MapState}).
  *   <li>Rerank the top-k passages with a cross-encoder {@link Scorer}.
- *   <li>Iterate a small ReAct-style loop in the LLM: think, decide whether to retrieve more,
- *       answer when ready.
+ *   <li>Iterate a small ReAct-style loop in the LLM: think, decide whether to retrieve more, answer
+ *       when ready.
  * </ol>
  *
- * <p>The knowledge base is seeded once per key on the first event (see
- * {@link RagProcessFunction#open}). In production you'd hydrate from a long-term store or
- * stream new documents in via a {@code Channel<KeyedContextItem>}; the example keeps a tiny in-process corpus
+ * <p>The knowledge base is seeded once per key on the first event (see {@link
+ * RagProcessFunction#open}). In production you'd hydrate from a long-term store or stream new
+ * documents in via a {@code Channel<KeyedContextItem>}; the example keeps a tiny in-process corpus
  * so the demo is reproducible.
  *
- * <p>MCP tools are <i>not</i> wired in this demo to keep the runtime self-contained. To add
- * one — for example the official "everything" reference server — see the snippet in
- * {@code docs/examples/rag.md}.
+ * <p>MCP tools are <i>not</i> wired in this demo to keep the runtime self-contained. To add one —
+ * for example the official "everything" reference server — see the snippet in {@code
+ * docs/examples/rag.md}.
  *
  * <p><b>Prerequisites:</b>
+ *
  * <pre>
  *   docker compose up -d ollama
  *   docker compose exec ollama ollama pull qwen2.5:3b
  * </pre>
  *
  * <p><b>To run:</b>
+ *
  * <pre>
  *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.rag.RagResearchExample"
  * </pre>
@@ -68,7 +69,6 @@ public class RagResearchExample {
   /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
   public static final String RERANKER_MODEL_URI =
       "djl://ai.djl.huggingface.pytorch/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1";
-
 
   /** A user query into the RAG assistant. Keyed by topic so each topic owns its own KB. */
   public record Query(String topic, String question) {}
@@ -98,9 +98,7 @@ public class RagResearchExample {
     DjlEmbeddingConnection embeddings =
         DjlEmbeddingConnection.of(
             "djl://ai.djl.huggingface.pytorch/sentence-transformers/all-MiniLM-L6-v2");
-    DjlInferenceConnection reranker =
-        DjlInferenceConnection.classification(
-            RERANKER_MODEL_URI);
+    DjlInferenceConnection reranker = DjlInferenceConnection.classification(RERANKER_MODEL_URI);
     LangChain4jChatConnection chat = LangChain4jChatConnection.ollama(ollamaUrl);
     VectorMemorySpec memorySpec = FlinkStateVectorMemory.spec(384); // MiniLM dimension
 
@@ -192,7 +190,8 @@ public class RagResearchExample {
       int take = Math.min(3, reranked.size());
       for (int i = 0; i < take; i++) {
         ScoredItem si = reranked.get(i);
-        ctxBlock.append("[")
+        ctxBlock
+            .append("[")
             .append(i + 1)
             .append("] ")
             .append(si.getItem().getContent())
@@ -222,8 +221,7 @@ public class RagResearchExample {
       List<String> docs = SEED_CORPUS.getOrDefault(topic, List.of());
       for (int i = 0; i < docs.size(); i++) {
         String doc = docs.get(i);
-        ContextItem item =
-            new ContextItem(doc, ContextPriority.MUST, MemoryType.LONG_TERM);
+        ContextItem item = new ContextItem(doc, ContextPriority.MUST, MemoryType.LONG_TERM);
         float[] vec = embedder.embed(doc, embedderSetup);
         vector.put(topic + "-" + i, vec, item);
       }

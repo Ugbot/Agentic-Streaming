@@ -4,7 +4,6 @@ import org.agentic.flink.context.compaction.*;
 import org.agentic.flink.context.core.*;
 import org.agentic.flink.context.inverse.InverseRagFunction;
 import org.agentic.flink.context.inverse.InverseRagResult;
-import org.agentic.flink.context.manager.ContextWindowManager;
 import org.agentic.flink.context.memory.*;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.PipelineOptions;
@@ -65,9 +64,7 @@ public class ContextManagementExample {
     return env.fromElements(request1, request2).name("compaction-requests");
   }
 
-  /**
-   * Create a context that has exceeded token limits Demonstrates compaction due to size
-   */
+  /** Create a context that has exceeded token limits Demonstrates compaction due to size */
   private static CompactionRequest createOverflowedContext(
       String agentId, String userId, String flowId) {
 
@@ -130,9 +127,7 @@ public class ContextManagementExample {
 
     context.addContext(
         createItem(
-            "Docker containers provide application isolation.",
-            ContextPriority.WONT,
-            "unrelated"));
+            "Docker containers provide application isolation.", ContextPriority.WONT, "unrelated"));
 
     return new CompactionRequest(
         context,
@@ -140,9 +135,7 @@ public class ContextManagementExample {
         CompactionRequest.CompactionReason.TOKEN_LIMIT_EXCEEDED);
   }
 
-  /**
-   * Create context with diverse priorities Demonstrates MoSCoW-based compaction
-   */
+  /** Create context with diverse priorities Demonstrates MoSCoW-based compaction */
   private static CompactionRequest createDiversePriorityContext(
       String agentId, String userId, String flowId) {
 
@@ -190,10 +183,7 @@ public class ContextManagementExample {
 
     // WONT: Irrelevant
     context.addContext(
-        createItem(
-            "Python is a popular programming language.",
-            ContextPriority.WONT,
-            "unrelated"));
+        createItem("Python is a popular programming language.", ContextPriority.WONT, "unrelated"));
 
     return new CompactionRequest(
         context,
@@ -201,7 +191,8 @@ public class ContextManagementExample {
         CompactionRequest.CompactionReason.ITEM_COUNT_EXCEEDED);
   }
 
-  private static ContextItem createItem(String content, ContextPriority priority, String intentTag) {
+  private static ContextItem createItem(
+      String content, ContextPriority priority, String intentTag) {
     ContextItem item = new ContextItem(content, priority, MemoryType.SHORT_TERM);
     item.setIntentTag(intentTag);
     item.setRelevancyScore(0.8); // High relevancy
@@ -209,8 +200,8 @@ public class ContextManagementExample {
   }
 
   /**
-   * Demonstrates memory hierarchy (short-term, long-term, steering) This is shown conceptually -
-   * in real app would be integrated with Flink state
+   * Demonstrates memory hierarchy (short-term, long-term, steering) This is shown conceptually - in
+   * real app would be integrated with Flink state
    */
   private static void demonstrateMemoryHierarchy() {
     System.out.println("\n=== Memory Hierarchy Demonstration ===\n");
@@ -223,7 +214,10 @@ public class ContextManagementExample {
             ContextPriority.SHOULD,
             "current-query"));
     shortTerm.add(
-        createItem("Tool execution result: State is managed per key", ContextPriority.SHOULD, "tool-result"));
+        createItem(
+            "Tool execution result: State is managed per key",
+            ContextPriority.SHOULD,
+            "tool-result"));
     System.out.println("Short-term: " + shortTerm);
 
     // Long-term memory: persistent facts
@@ -243,8 +237,7 @@ public class ContextManagementExample {
     // Steering state: MoSCoW rules
     SteeringState steering = new SteeringState();
     steering.addMust("must-001", "Always accurate", "must be factually correct");
-    steering.addShould(
-        "should-001", "Prefer conciseness", "should be concise when possible");
+    steering.addShould("should-001", "Prefer conciseness", "should be concise when possible");
     steering.addCould("could-001", "Include examples", "could include code examples");
     steering.addWont("wont-001", "No speculation", "don't speculate or guess");
     System.out.println("Steering: " + steering);

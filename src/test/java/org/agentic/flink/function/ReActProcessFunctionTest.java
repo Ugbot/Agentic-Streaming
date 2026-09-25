@@ -4,6 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.llm.ChatClient;
@@ -16,12 +22,6 @@ import org.agentic.flink.statemachine.AgentStateMachine;
 import org.agentic.flink.statemachine.AgentTransition;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ValueState;
@@ -30,8 +30,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Drives the ReAct loop against a scripted {@link ChatClient}: turn 1 returns an action, turn 2
- * returns a final answer. Verifies that the tool dispatches and the loop terminates within
- * budget.
+ * returns a final answer. Verifies that the tool dispatches and the loop terminates within budget.
  */
 class ReActProcessFunctionTest {
 
@@ -120,11 +119,7 @@ class ReActProcessFunctionTest {
     assertNotNull(first.getArguments());
 
     Object result =
-        registry
-            .getExecutor(first.getTool())
-            .orElseThrow()
-            .execute(first.getArguments())
-            .get();
+        registry.getExecutor(first.getTool()).orElseThrow().execute(first.getArguments()).get();
     assertEquals(5, result);
     assertEquals(1, adder.calls.get());
 
@@ -142,7 +137,9 @@ class ReActProcessFunctionTest {
   /** Counts tool calls across operator (de)serialization in the MiniCluster. */
   static final AtomicInteger STALL_ADDER_CALLS = new AtomicInteger();
 
-  /** Turn 1 = a stall final ("I need to inspect the tools first"), turn 2 = action, turn 3 = final. */
+  /**
+   * Turn 1 = a stall final ("I need to inspect the tools first"), turn 2 = action, turn 3 = final.
+   */
   static final class StallThenActConnection implements ChatConnection {
     private static final long serialVersionUID = 1L;
 
@@ -164,7 +161,8 @@ class ReActProcessFunctionTest {
                 "{\"type\":\"action\",\"thought\":\"add\",\"tool\":\"adder\","
                     + "\"arguments\":{\"a\":2,\"b\":3},\"answer\":null}";
           } else {
-            text = "{\"type\":\"final\",\"thought\":\"done\",\"tool\":null,\"arguments\":{},\"answer\":\"5\"}";
+            text =
+                "{\"type\":\"final\",\"thought\":\"done\",\"tool\":null,\"arguments\":{},\"answer\":\"5\"}";
           }
           return new ChatResponse(
               text, setup.getModelName(), List.of(), 0L, ChatResponse.FinishReason.STOP);
@@ -201,10 +199,12 @@ class ReActProcessFunctionTest {
   }
 
   @Test
-  @DisplayName("core operator: a tool-stall final is rejected and the loop is forced to call the tool")
+  @DisplayName(
+      "core operator: a tool-stall final is rejected and the loop is forced to call the tool")
   void stallFinalForcesActionInOperator() throws Exception {
     STALL_ADDER_CALLS.set(0);
-    ToolRegistry registry = ToolRegistry.builder().registerTool("adder", new CountingAdder()).build();
+    ToolRegistry registry =
+        ToolRegistry.builder().registerTool("adder", new CountingAdder()).build();
     Agent agent =
         Agent.builder()
             .withId("a-" + UUID.randomUUID())
@@ -216,8 +216,8 @@ class ReActProcessFunctionTest {
             .build();
 
     org.apache.flink.streaming.api.environment.StreamExecutionEnvironment env =
-        org.apache.flink.streaming.api.environment.StreamExecutionEnvironment.createLocalEnvironment(
-            1, new org.apache.flink.configuration.Configuration());
+        org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
+            .createLocalEnvironment(1, new org.apache.flink.configuration.Configuration());
     env.fromElements("what is 2+3?")
         .keyBy((org.apache.flink.api.java.functions.KeySelector<String, String>) s -> "k")
         .process(new ReActProcessFunction<>(agent, registry))
@@ -251,12 +251,16 @@ class ReActProcessFunctionTest {
             .withInitialState(AgentState.INITIALIZED);
     b.addTransition(t(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED));
     b.addTransition(t(AgentState.EXECUTING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED));
-    b.addTransition(t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
-    b.addTransition(t(AgentState.CORRECTING, AgentState.COMPLETED, AgentEventType.CORRECTION_COMPLETED));
-    b.addTransition(t(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
+    b.addTransition(
+        t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
+    b.addTransition(
+        t(AgentState.CORRECTING, AgentState.COMPLETED, AgentEventType.CORRECTION_COMPLETED));
+    b.addTransition(
+        t(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
     b.addTransition(t(AgentState.PAUSED, AgentState.COMPLETED, AgentEventType.FLOW_RESUMED));
     b.addTransition(t(AgentState.OFFLOADING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED));
-    b.addTransition(t(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED));
+    b.addTransition(
+        t(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED));
     return b.build();
   }
 
@@ -264,8 +268,10 @@ class ReActProcessFunctionTest {
     return AgentTransition.builder().from(from).to(to).on(on).build();
   }
 
-  /** Minimal in-memory ValueState/ListState used by stubs above. Unused in this test path but
-   * kept here as scaffolding for a future Flink-test-harness based driver. */
+  /**
+   * Minimal in-memory ValueState/ListState used by stubs above. Unused in this test path but kept
+   * here as scaffolding for a future Flink-test-harness based driver.
+   */
   static final class InMemoryValueState<T> implements ValueState<T> {
     private T value;
 

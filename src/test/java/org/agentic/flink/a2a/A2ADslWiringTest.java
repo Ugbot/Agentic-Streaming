@@ -78,7 +78,13 @@ class A2ADslWiringTest {
             .description("geospatial routing")
             .addSkill(
                 new A2AAgentSkill(
-                    "route", "Router", "optimizes routes", null, java.util.List.of("MTV->SFO"), null, null))
+                    "route",
+                    "Router",
+                    "optimizes routes",
+                    null,
+                    java.util.List.of("MTV->SFO"),
+                    null,
+                    null))
             .build();
     Skill fromCard = A2ASkillMapper.fromCard(spec, card);
     Skill fromSpec = A2ASkillMapper.fromSpec(spec);

@@ -1,16 +1,15 @@
 package org.agentic.flink.plan;
-import org.apache.flink.api.common.functions.OpenContext;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.agentic.flink.python.PythonAction;
 import org.agentic.flink.python.PythonExecutor;
 import org.agentic.flink.python.PythonToolExecutor;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -19,15 +18,15 @@ import org.slf4j.LoggerFactory;
 /**
  * Operator that runs an {@link AgentPlan}.
  *
- * <p>{@code open()} resolves Java SPIs (chat connection, embedder, corpus, …) via reflection,
- * binds every Python tool/action/listener to a per-slot {@link PythonExecutor}, and registers
- * Java + Python tools in a {@link ToolRegistry}. {@code processElement()} dispatches the
- * incoming event to every matching {@link PythonAction} and emits whatever the Python callable
- * returns; events with no matching action are passed through unchanged so the operator behaves
- * sanely for plans that only declare tools.
+ * <p>{@code open()} resolves Java SPIs (chat connection, embedder, corpus, …) via reflection, binds
+ * every Python tool/action/listener to a per-slot {@link PythonExecutor}, and registers Java +
+ * Python tools in a {@link ToolRegistry}. {@code processElement()} dispatches the incoming event to
+ * every matching {@link PythonAction} and emits whatever the Python callable returns; events with
+ * no matching action are passed through unchanged so the operator behaves sanely for plans that
+ * only declare tools.
  *
- * <p>The chat connection itself is bound lazily on first reference — declaring a chat connection
- * in the plan should not force a network handshake at job start-up. Phase 3 leaves the chat path
+ * <p>The chat connection itself is bound lazily on first reference — declaring a chat connection in
+ * the plan should not force a network handshake at job start-up. Phase 3 leaves the chat path
  * accessible to Python actions via the {@code ctx} dict; Phase 4+ will expand this into a richer
  * runner-context with corpus/embedder access.
  */

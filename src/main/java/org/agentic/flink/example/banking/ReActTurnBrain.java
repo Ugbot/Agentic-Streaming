@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
@@ -20,13 +19,13 @@ import org.slf4j.LoggerFactory;
 /**
  * A {@link TurnBrain} that runs the framework's ReAct loop (the same Thought/Action/Observation +
  * structured-output pattern as {@link ReActProcessFunction}) but bounded by the turn's {@link
- * org.agentic.flink.example.banking.safety.RoutingBudget}: every loop iteration consumes
- * {@code allowIteration()}, so the agent cannot out-loop the harness timeout.
+ * org.agentic.flink.example.banking.safety.RoutingBudget}: every loop iteration consumes {@code
+ * allowIteration()}, so the agent cannot out-loop the harness timeout.
  *
  * <p>Tools come from a name→{@link ToolExecutor} map (env tools, KB search, …). The pseudo-tool
  * {@code ask_customer_service} is special-cased to the budget-gated {@link
- * BankingTurnContext#askCustomerService} so the personal↔CS round-trip is counted and capped.
- * The chat model is provided via a {@link ChatConnection} (OpenAI in dev, Gemini for marked runs),
+ * BankingTurnContext#askCustomerService} so the personal↔CS round-trip is counted and capped. The
+ * chat model is provided via a {@link ChatConnection} (OpenAI in dev, Gemini for marked runs),
  * bound lazily on the task side.
  */
 public final class ReActTurnBrain implements TurnBrain {
@@ -118,10 +117,12 @@ public final class ReActTurnBrain implements TurnBrain {
         // emitting the action step — so the action never happens and the task fails. If the model
         // can call tools, hasn't called any yet, and its "final" reads like that stall, push back
         // and make it act (bounded, so a genuine final still gets through).
-        if (org.agentic.flink.llm.ReActGuard.shouldNudge(answer, hasTools(), toolCalls, stallNudges)) {
+        if (org.agentic.flink.llm.ReActGuard.shouldNudge(
+            answer, hasTools(), toolCalls, stallNudges)) {
           stallNudges++;
           messages.add(ChatMessage.assistant(lastText));
-          messages.add(ChatMessage.user(org.agentic.flink.llm.ReActGuard.stallNudge(toolNameSet())));
+          messages.add(
+              ChatMessage.user(org.agentic.flink.llm.ReActGuard.stallNudge(toolNameSet())));
           continue;
         }
         return answer;
@@ -131,7 +132,8 @@ public final class ReActTurnBrain implements TurnBrain {
       // user message before the next call (Anthropic rejects assistant-terminated conversations).
       messages.add(ChatMessage.assistant(lastText));
       if ("action".equals(type) && step.getTool() != null) {
-        Map<String, Object> args = step.getArguments() == null ? new HashMap<>() : step.getArguments();
+        Map<String, Object> args =
+            step.getArguments() == null ? new HashMap<>() : step.getArguments();
         String observation = runTool(step.getTool(), args, ctx);
         toolCalls++;
         messages.add(ChatMessage.user("Observation from " + step.getTool() + ": " + observation));
@@ -141,7 +143,8 @@ public final class ReActTurnBrain implements TurnBrain {
     }
 
     // Budget exhausted — answer with what we have, never spin into the timeout.
-    LOG.info("ReAct brain stopped early for ctx {}: {}", ctx.contextId(), ctx.budget().lastDenial());
+    LOG.info(
+        "ReAct brain stopped early for ctx {}: {}", ctx.contextId(), ctx.budget().lastDenial());
     return lastText.isBlank()
         ? "I'm sorry — I wasn't able to complete that within the available time. Please try again."
         : lastText;

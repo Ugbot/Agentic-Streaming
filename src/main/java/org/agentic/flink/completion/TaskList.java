@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
  * are complete, it triggers a completion event.
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * TaskList tasks = TaskList.builder()
  *     .addTask("fetch-user-data", true)      // Required task
@@ -114,9 +115,8 @@ public class TaskList implements Serializable {
     if (requiredTasks == 0) {
       return 1.0;
     }
-    long completedRequired = completedTasks.stream()
-        .filter(taskId -> tasks.get(taskId).isRequired())
-        .count();
+    long completedRequired =
+        completedTasks.stream().filter(taskId -> tasks.get(taskId).isRequired()).count();
     return (double) completedRequired / requiredTasks;
   }
 
@@ -126,9 +126,7 @@ public class TaskList implements Serializable {
    * @return count of completed required tasks
    */
   public int getCompletedRequiredCount() {
-    return (int) completedTasks.stream()
-        .filter(taskId -> tasks.get(taskId).isRequired())
-        .count();
+    return (int) completedTasks.stream().filter(taskId -> tasks.get(taskId).isRequired()).count();
   }
 
   /**
@@ -165,9 +163,8 @@ public class TaskList implements Serializable {
 
   /** Private method to check if all required tasks are complete. */
   private void checkCompletion() {
-    long completedRequired = completedTasks.stream()
-        .filter(taskId -> tasks.get(taskId).isRequired())
-        .count();
+    long completedRequired =
+        completedTasks.stream().filter(taskId -> tasks.get(taskId).isRequired()).count();
     this.isComplete = (completedRequired == requiredTasks);
   }
 

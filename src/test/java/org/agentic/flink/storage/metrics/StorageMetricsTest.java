@@ -2,8 +2,8 @@ package org.agentic.flink.storage.metrics;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.agentic.flink.storage.StorageTier;
 import java.util.Map;
+import org.agentic.flink.storage.StorageTier;
 import org.junit.jupiter.api.*;
 
 /**

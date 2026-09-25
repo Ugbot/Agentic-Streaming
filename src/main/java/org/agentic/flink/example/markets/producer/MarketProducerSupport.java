@@ -13,9 +13,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Tiny support layer for the Java market-producers: a {@link KafkaProducer} with sensible defaults
  * for local development, and a Jackson {@link ObjectMapper} configured for Java 17 records (via
- * {@link ParameterNamesModule}) so {@code mapper.writeValueAsString(record)} emits JSON whose
- * keys are exactly the record component names. The Flink job's
- * {@code KafkaChannel.JsonSchema} reads the same shape on the other end.
+ * {@link ParameterNamesModule}) so {@code mapper.writeValueAsString(record)} emits JSON whose keys
+ * are exactly the record component names. The Flink job's {@code KafkaChannel.JsonSchema} reads the
+ * same shape on the other end.
  */
 public final class MarketProducerSupport implements AutoCloseable {
 

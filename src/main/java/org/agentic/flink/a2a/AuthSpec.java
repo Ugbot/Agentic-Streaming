@@ -78,7 +78,9 @@ public final class AuthSpec implements Serializable {
     return credential;
   }
 
-  /** Render this spec into the HTTP header(s) a client should attach. Empty for {@link Scheme#NONE}. */
+  /**
+   * Render this spec into the HTTP header(s) a client should attach. Empty for {@link Scheme#NONE}.
+   */
   public Map<String, String> toHeaders() {
     switch (scheme) {
       case API_KEY:

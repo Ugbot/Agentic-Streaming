@@ -7,9 +7,9 @@ import java.util.Map;
 import org.agentic.flink.screening.ScreeningResult;
 
 /**
- * Record schemas for the market data pipeline. Field shapes mirror
- * {@code /Users/bengamble/mrkaxis copy/invenory_rows_synthesiser} (anonymised firm/platform names
- * in the producers) so the Java DataStream stages map 1:1 onto the original SQL pipeline.
+ * Record schemas for the market data pipeline. Field shapes mirror {@code /Users/bengamble/mrkaxis
+ * copy/invenory_rows_synthesiser} (anonymised firm/platform names in the producers) so the Java
+ * DataStream stages map 1:1 onto the original SQL pipeline.
  */
 public final class MarketRecords {
 

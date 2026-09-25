@@ -1,11 +1,9 @@
 package org.agentic.flink.a2a.bridge;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import java.util.List;
 import org.agentic.flink.a2a.A2AJson;
 import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
@@ -14,8 +12,8 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
 /**
- * Redis {@link A2ABridge} — distributed-light transport (requires the optional Jedis dep), backed by
- * Redis <b>lists</b> with blocking pops ({@code RPUSH} + {@code BLPOP}), not pub/sub.
+ * Redis {@link A2ABridge} — distributed-light transport (requires the optional Jedis dep), backed
+ * by Redis <b>lists</b> with blocking pops ({@code RPUSH} + {@code BLPOP}), not pub/sub.
  *
  * <p>Requests are {@code RPUSH}ed onto the {@code requestChannel} list and {@code BLPOP}ped by the
  * Flink source; responses are {@code RPUSH}ed onto the {@code responseChannel} list and {@code
@@ -23,8 +21,8 @@ import redis.clients.jedis.JedisPool;
  * AbstractA2AGatewayConnector}). JSON via {@link A2AJson}.
  *
  * <p>Lists (not pub/sub) make the bridge <b>non-lossy</b>: a request published before the Flink
- * source is ready simply waits in the list until it pops it — no startup race — and queued
- * messages survive a consumer restart. Assumes a single gateway connector per response list (the
+ * source is ready simply waits in the list until it pops it — no startup race — and queued messages
+ * survive a consumer restart. Assumes a single gateway connector per response list (the
  * one-agent-process deployment); BLPOP would otherwise load-balance responses across connectors.
  */
 public final class RedisA2ABridge implements A2ABridge {
@@ -203,8 +201,7 @@ public final class RedisA2ABridge implements A2ABridge {
       this.pool = new JedisPool(host, port);
       this.requestChannel = requestChannel;
       this.responseChannel = responseChannel;
-      this.pollThread =
-          new Thread(this::pollResponses, "a2a-redis-gateway-poll");
+      this.pollThread = new Thread(this::pollResponses, "a2a-redis-gateway-poll");
       this.pollThread.setDaemon(true);
       this.pollThread.start();
     }

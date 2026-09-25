@@ -32,9 +32,9 @@ import org.slf4j.LoggerFactory;
  * keyword {@link KbSearchTool} (same tool id {@code kb_search}), fixing the recall misses that
  * keyword search produced.
  *
- * <p>Embeddings are produced once at construction (the {@link EmbeddingConnection} chosen by
- * {@link BankingEmbeddings} — local DJL by default, {@code gemini-embedding-001} for marked runs)
- * and cached to disk keyed by {@code (model, dim, doc-set hash)} so restarts are instant: on a cache
+ * <p>Embeddings are produced once at construction (the {@link EmbeddingConnection} chosen by {@link
+ * BankingEmbeddings} — local DJL by default, {@code gemini-embedding-001} for marked runs) and
+ * cached to disk keyed by {@code (model, dim, doc-set hash)} so restarts are instant: on a cache
  * hit only the HNSW graph is rebuilt (~ms), not the embeddings.
  */
 public final class VectorKbSearchTool implements ToolExecutor {
@@ -113,7 +113,8 @@ public final class VectorKbSearchTool implements ToolExecutor {
           float[] vec = vectors.get(en.getKey());
           if (vec != null) {
             ContextItem item =
-                new ContextItem(en.getValue().content, ContextPriority.SHOULD, MemoryType.LONG_TERM);
+                new ContextItem(
+                    en.getValue().content, ContextPriority.SHOULD, MemoryType.LONG_TERM);
             idx.put(new VectorEntry(en.getKey(), vec, item));
           }
         }
@@ -237,7 +238,8 @@ public final class VectorKbSearchTool implements ToolExecutor {
 
   private static Map<String, float[]> readCache(File f, int dim) throws IOException {
     Map<String, float[]> out = new LinkedHashMap<>();
-    try (DataInputStream in = new DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(f.toPath())))) {
+    try (DataInputStream in =
+        new DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(f.toPath())))) {
       int storedDim = in.readInt();
       if (storedDim != dim) {
         throw new IOException("cache dim " + storedDim + " != " + dim);
@@ -256,7 +258,8 @@ public final class VectorKbSearchTool implements ToolExecutor {
   }
 
   private static void writeCache(File f, Map<String, float[]> vectors) throws IOException {
-    try (DataOutputStream out = new DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(f.toPath())))) {
+    try (DataOutputStream out =
+        new DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(f.toPath())))) {
       int dim = vectors.values().iterator().next().length;
       out.writeInt(dim);
       out.writeInt(vectors.size());

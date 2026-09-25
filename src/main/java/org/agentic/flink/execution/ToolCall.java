@@ -8,7 +8,6 @@ import java.util.Map;
  * Represents a tool call request from the LLM.
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -31,18 +30,32 @@ public class ToolCall implements Serializable {
     this.parameters = parameters != null ? parameters : new HashMap<>();
   }
 
-  public String getToolCallId() { return toolCallId; }
-  public void setToolCallId(String toolCallId) { this.toolCallId = toolCallId; }
+  public String getToolCallId() {
+    return toolCallId;
+  }
 
-  public String getToolName() { return toolName; }
-  public void setToolName(String toolName) { this.toolName = toolName; }
+  public void setToolCallId(String toolCallId) {
+    this.toolCallId = toolCallId;
+  }
 
-  public Map<String, Object> getParameters() { return parameters; }
-  public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
+  public String getToolName() {
+    return toolName;
+  }
+
+  public void setToolName(String toolName) {
+    this.toolName = toolName;
+  }
+
+  public Map<String, Object> getParameters() {
+    return parameters;
+  }
+
+  public void setParameters(Map<String, Object> parameters) {
+    this.parameters = parameters;
+  }
 
   @Override
   public String toString() {
-    return String.format("ToolCall[id=%s, tool=%s, params=%s]",
-        toolCallId, toolName, parameters);
+    return String.format("ToolCall[id=%s, tool=%s, params=%s]", toolCallId, toolName, parameters);
   }
 }

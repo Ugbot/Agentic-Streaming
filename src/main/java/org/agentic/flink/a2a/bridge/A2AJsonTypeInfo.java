@@ -17,9 +17,9 @@ import org.apache.flink.core.memory.DataOutputView;
  *
  * <p>{@link A2ARequest}/{@link A2AResponse} are immutable value types (no no-arg constructor,
  * {@code unmodifiable} collections), which Flink can neither treat as POJOs nor reliably Kryo-copy
- * between operators. Routing them through the same JSON codec used on the wire makes them first-class
- * stream element types — used by the bridge {@link org.agentic.flink.channel.Channel} sources and
- * any operator that emits them.
+ * between operators. Routing them through the same JSON codec used on the wire makes them
+ * first-class stream element types — used by the bridge {@link org.agentic.flink.channel.Channel}
+ * sources and any operator that emits them.
  */
 public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
   private static final long serialVersionUID = 1L;
@@ -174,8 +174,7 @@ public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
   }
 
   /** State-compatibility snapshot; carries the element class so the serializer can be restored. */
-  public static final class A2AJsonSerializerSnapshot<T>
-      extends SimpleTypeSerializerSnapshot<T> {
+  public static final class A2AJsonSerializerSnapshot<T> extends SimpleTypeSerializerSnapshot<T> {
     public A2AJsonSerializerSnapshot() {
       // Required public no-arg constructor for restore; type is read from the snapshot.
       super(() -> new A2AJsonSerializer<>(null));

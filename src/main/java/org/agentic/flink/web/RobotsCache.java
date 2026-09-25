@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 /**
  * Per-host cache of robots.txt rules. Lazily fetches on first request, caches for 24h.
  *
- * <p>Falls open (allows the fetch) if the robots.txt request fails — matches the behaviour of
- * most well-behaved crawlers including StormCrawler.
+ * <p>Falls open (allows the fetch) if the robots.txt request fails — matches the behaviour of most
+ * well-behaved crawlers including StormCrawler.
  */
 public final class RobotsCache implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -42,7 +42,8 @@ public final class RobotsCache implements Serializable {
   public boolean isAllowed(String url) {
     try {
       URL u = URI.create(url).toURL();
-      String host = u.getProtocol() + "://" + u.getHost() + (u.getPort() == -1 ? "" : ":" + u.getPort());
+      String host =
+          u.getProtocol() + "://" + u.getHost() + (u.getPort() == -1 ? "" : ":" + u.getPort());
       Entry e = cache.get(host);
       Instant now = Instant.now();
       if (e == null || e.fetchedAt.plus(TTL).isBefore(now)) {
@@ -75,17 +76,16 @@ public final class RobotsCache implements Serializable {
               .build();
       HttpResponse<byte[]> resp = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
       if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
-        rules = parser.parseContent(robotsUrl, resp.body(), "text/plain", java.util.List.of(userAgent));
+        rules =
+            parser.parseContent(robotsUrl, resp.body(), "text/plain", java.util.List.of(userAgent));
       } else {
         // 4xx → fall-open per RFC 9309. 5xx → treat as deny-all (safer) until next refresh.
-        rules =
-            (resp.statusCode() >= 500)
-                ? parser.failedFetch(503)
-                : parser.failedFetch(404);
+        rules = (resp.statusCode() >= 500) ? parser.failedFetch(503) : parser.failedFetch(404);
       }
     } catch (Exception e) {
       LOG.debug("robots.txt fetch failed for {}; falling open: {}", hostBase, e.getMessage());
-      rules = parser == null ? new SimpleRobotRulesParser().failedFetch(404) : parser.failedFetch(404);
+      rules =
+          parser == null ? new SimpleRobotRulesParser().failedFetch(404) : parser.failedFetch(404);
     }
     return new Entry(rules, Instant.now());
   }

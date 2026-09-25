@@ -64,7 +64,10 @@ public final class RemoteAgentSpec implements Serializable {
     }
   }
 
-  /** Discover a peer from its Agent Card. Example: {@code card("planner", "https://x/.well-known/agent-card.json")}. */
+  /**
+   * Discover a peer from its Agent Card. Example: {@code card("planner",
+   * "https://x/.well-known/agent-card.json")}.
+   */
   public static RemoteAgentSpec card(String name, String agentCardUrl) {
     return builder().withName(name).withAgentCardUrl(agentCardUrl).build();
   }
@@ -114,7 +117,9 @@ public final class RemoteAgentSpec implements Serializable {
     return description;
   }
 
-  /** Max retry attempts for a transient remote failure (in addition to the initial try). Default 2. */
+  /**
+   * Max retry attempts for a transient remote failure (in addition to the initial try). Default 2.
+   */
   public int maxRetries() {
     return maxRetries;
   }
@@ -272,13 +277,23 @@ public final class RemoteAgentSpec implements Serializable {
   @Override
   public int hashCode() {
     return Objects.hash(
-        name, agentCardUrl, endpointUrl, transport, skillId, streaming, requestTimeoutMs, pollIntervalMs);
+        name,
+        agentCardUrl,
+        endpointUrl,
+        transport,
+        skillId,
+        streaming,
+        requestTimeoutMs,
+        pollIntervalMs);
   }
 
   @Override
   public String toString() {
-    return "RemoteAgentSpec{name=" + name + ", target="
+    return "RemoteAgentSpec{name="
+        + name
+        + ", target="
         + (endpointUrl != null ? endpointUrl + " (" + transport + ")" : agentCardUrl + " (card)")
-        + (skillId != null ? ", skill=" + skillId : "") + '}';
+        + (skillId != null ? ", skill=" + skillId : "")
+        + '}';
   }
 }

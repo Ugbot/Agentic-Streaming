@@ -15,17 +15,18 @@ import org.junit.jupiter.api.Test;
  */
 class ToolCallParsingTest {
 
-  private static final Pattern JSON_TOOL_CALL_PATTERN = Pattern.compile(
-      "TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\{([^}]+)\\}");
+  private static final Pattern JSON_TOOL_CALL_PATTERN =
+      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\{([^}]+)\\}");
 
-  private static final Pattern FUNCTION_TOOL_CALL_PATTERN = Pattern.compile(
-      "TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]+)\\)");
+  private static final Pattern FUNCTION_TOOL_CALL_PATTERN =
+      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]+)\\)");
 
   @Test
   void shouldParseJsonFormatToolCall() {
-    String llmText = "I need to add two numbers.\n\n"
-        + "TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}\n\n"
-        + "Let me call the calculator tool.";
+    String llmText =
+        "I need to add two numbers.\n\n"
+            + "TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}\n\n"
+            + "Let me call the calculator tool.";
 
     Matcher matcher = JSON_TOOL_CALL_PATTERN.matcher(llmText);
     assertTrue(matcher.find(), "Should detect JSON-format tool call");
@@ -36,9 +37,10 @@ class ToolCallParsingTest {
 
   @Test
   void shouldParseFunctionCallFormat() {
-    String llmText = "To multiply these numbers:\n\n"
-        + "TOOL_CALL: calculator-multiply(a=10, b=5)\n\n"
-        + "This will give us the result.";
+    String llmText =
+        "To multiply these numbers:\n\n"
+            + "TOOL_CALL: calculator-multiply(a=10, b=5)\n\n"
+            + "This will give us the result.";
 
     Matcher matcher = FUNCTION_TOOL_CALL_PATTERN.matcher(llmText);
     assertTrue(matcher.find(), "Should detect function-call format");
@@ -49,12 +51,13 @@ class ToolCallParsingTest {
 
   @Test
   void shouldParseMultipleToolCallsInOneResponse() {
-    String llmText = "I'll solve this step by step:\n\n"
-        + "First, let me add 5 and 3:\n"
-        + "TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}\n\n"
-        + "Then, multiply the result by 2:\n"
-        + "TOOL_CALL: calculator-multiply {\"a\": 8, \"b\": 2}\n\n"
-        + "That's how we solve (5 + 3) * 2.";
+    String llmText =
+        "I'll solve this step by step:\n\n"
+            + "First, let me add 5 and 3:\n"
+            + "TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}\n\n"
+            + "Then, multiply the result by 2:\n"
+            + "TOOL_CALL: calculator-multiply {\"a\": 8, \"b\": 2}\n\n"
+            + "That's how we solve (5 + 3) * 2.";
 
     Matcher matcher = JSON_TOOL_CALL_PATTERN.matcher(llmText);
     List<String> toolNames = new ArrayList<>();

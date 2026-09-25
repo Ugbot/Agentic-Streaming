@@ -14,9 +14,9 @@ import org.agentic.flink.a2a.A2AMessage;
  *
  * <p>The gateway creates the A2A task, then publishes one of these to the bridge request channel;
  * the agent operator consumes it (its input stream is {@code union}-ed with the bridge channel),
- * runs the agent keyed by {@link #getContextId()}, and emits an {@link A2AResponse} back. Correlated
- * end-to-end by {@link #getTaskId()}. A plain Jackson POJO so it round-trips over JSON (Redis,
- * Kafka) and Java serialization (ZeroMQ, in-JVM) alike.
+ * runs the agent keyed by {@link #getContextId()}, and emits an {@link A2AResponse} back.
+ * Correlated end-to-end by {@link #getTaskId()}. A plain Jackson POJO so it round-trips over JSON
+ * (Redis, Kafka) and Java serialization (ZeroMQ, in-JVM) alike.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class A2ARequest implements Serializable {
@@ -107,7 +107,14 @@ public final class A2ARequest implements Serializable {
 
   @Override
   public String toString() {
-    return "A2ARequest{taskId=" + taskId + ", contextId=" + contextId + ", target=" + targetAgentId
-        + ", streaming=" + streaming + '}';
+    return "A2ARequest{taskId="
+        + taskId
+        + ", contextId="
+        + contextId
+        + ", target="
+        + targetAgentId
+        + ", streaming="
+        + streaming
+        + '}';
   }
 }

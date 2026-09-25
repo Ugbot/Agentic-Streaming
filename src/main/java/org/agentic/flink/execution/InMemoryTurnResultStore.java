@@ -12,14 +12,14 @@ import java.util.function.LongSupplier;
 /**
  * Bounded, TTL-expiring in-memory {@link TurnResultStore}.
  *
- * <p>Entries are evicted in insertion order once {@code maxEntries} is exceeded and are dropped
- * on read once older than {@code ttl}. The store lives in the operator JVM: it dedups turns that
- * are redelivered while the operator is running (CEP re-firing a match, a retried async request)
- * but does not survive a job restart. Restart-safe dedup of dispatched turns is done by the
- * keyed state in {@code org.agentic.flink.job.AgentExecutionFunction}.
+ * <p>Entries are evicted in insertion order once {@code maxEntries} is exceeded and are dropped on
+ * read once older than {@code ttl}. The store lives in the operator JVM: it dedups turns that are
+ * redelivered while the operator is running (CEP re-firing a match, a retried async request) but
+ * does not survive a job restart. Restart-safe dedup of dispatched turns is done by the keyed state
+ * in {@code org.agentic.flink.job.AgentExecutionFunction}.
  *
- * @deprecated Part of the legacy Flink DSL execution path. See
- *     {@code org.agentic.flink.runtime.WorkflowTurnFunction} for the event-sourced runtime.
+ * @deprecated Part of the legacy Flink DSL execution path. See {@code
+ *     org.agentic.flink.runtime.WorkflowTurnFunction} for the event-sourced runtime.
  */
 @Deprecated
 public final class InMemoryTurnResultStore implements TurnResultStore {

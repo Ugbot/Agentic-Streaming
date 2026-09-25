@@ -54,29 +54,34 @@ public final class BankingModel implements Serializable {
     int maxTokens = 1024;
 
     switch (provider) {
-      case "gemini": {
-        ChatConnection c =
-            LangChain4jChatConnection.gemini(require("GOOGLE_API_KEY"));
-        return new BankingModel(
-            c, setup(model == null ? "gemini-3.5-flash" : model, temperature, maxTokens));
-      }
+      case "gemini":
+        {
+          ChatConnection c = LangChain4jChatConnection.gemini(require("GOOGLE_API_KEY"));
+          return new BankingModel(
+              c, setup(model == null ? "gemini-3.5-flash" : model, temperature, maxTokens));
+        }
       case "anthropic":
-      case "claude": {
-        ChatConnection c = LangChain4jChatConnection.anthropic(require("ANTHROPIC_API_KEY"));
-        return new BankingModel(
-            c, setup(model == null ? "claude-sonnet-4-6" : model, temperature, maxTokens));
-      }
-      case "ollama": {
-        ChatConnection c =
-            LangChain4jChatConnection.ollama(env("OLLAMA_BASE_URL", "http://localhost:11434"));
-        return new BankingModel(c, setup(model == null ? "qwen2.5:3b" : model, temperature, maxTokens));
-      }
+      case "claude":
+        {
+          ChatConnection c = LangChain4jChatConnection.anthropic(require("ANTHROPIC_API_KEY"));
+          return new BankingModel(
+              c, setup(model == null ? "claude-sonnet-4-6" : model, temperature, maxTokens));
+        }
+      case "ollama":
+        {
+          ChatConnection c =
+              LangChain4jChatConnection.ollama(env("OLLAMA_BASE_URL", "http://localhost:11434"));
+          return new BankingModel(
+              c, setup(model == null ? "qwen2.5:3b" : model, temperature, maxTokens));
+        }
       case "openai":
-      default: {
-        ChatConnection c = LangChain4jChatConnection.openai(require("OPENAI_API_KEY"));
-        // Local testing default: GPT-5.4 nano (cheap + fast). Never default to gpt-4.1.
-        return new BankingModel(c, setup(model == null ? "gpt-5.4-nano" : model, temperature, maxTokens));
-      }
+      default:
+        {
+          ChatConnection c = LangChain4jChatConnection.openai(require("OPENAI_API_KEY"));
+          // Local testing default: GPT-5.4 nano (cheap + fast). Never default to gpt-4.1.
+          return new BankingModel(
+              c, setup(model == null ? "gpt-5.4-nano" : model, temperature, maxTokens));
+        }
     }
   }
 

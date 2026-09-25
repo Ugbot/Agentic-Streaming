@@ -1,10 +1,10 @@
 package org.agentic.flink.inference;
 
-import org.agentic.flink.embedding.EmbeddingClient;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.agentic.flink.embedding.EmbeddingClient;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -13,9 +13,9 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  *
  * <p>It is NOT a neural model: it scores "suspiciousness" by summing the weights of configured
  * terms found in the input and squashing to {@code [0,1]}. It exists so a cascade (cheap filter →
- * ML classifier → LLM) can run end-to-end with no model server. Swap in
- * {@code DjlInferenceConnection} for a real ONNX/PyTorch classifier — the {@link Classifier} SPI
- * is identical.
+ * ML classifier → LLM) can run end-to-end with no model server. Swap in {@code
+ * DjlInferenceConnection} for a real ONNX/PyTorch classifier — the {@link Classifier} SPI is
+ * identical.
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "lexicon"}. The default
  * lexicon targets phishing/fraud signals.

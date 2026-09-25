@@ -5,12 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.UUID;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.statemachine.AgentStateMachine;
 import org.agentic.flink.statemachine.AgentTransition;
-import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -50,8 +50,8 @@ class SkillTest {
 
   /**
    * State machine satisfying the framework's validator: every non-terminal {@link AgentState}
-   * (everything except COMPLETED / FAILED / COMPENSATED) has at least one outgoing transition,
-   * and every state is reachable from the initial state.
+   * (everything except COMPLETED / FAILED / COMPENSATED) has at least one outgoing transition, and
+   * every state is reachable from the initial state.
    */
   private static AgentStateMachine minimalStateMachine() {
     AgentStateMachine.Builder b =
@@ -59,16 +59,37 @@ class SkillTest {
             .withId("sm-" + UUID.randomUUID())
             .withInitialState(AgentState.INITIALIZED);
 
-    b.addTransition(transition(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED));
-    b.addTransition(transition(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED));
-    b.addTransition(transition(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED));
-    b.addTransition(transition(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
-    b.addTransition(transition(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED));
-    b.addTransition(transition(AgentState.EXECUTING, AgentState.SUPERVISOR_REVIEW, AgentEventType.SUPERVISOR_REVIEW_REQUESTED));
-    b.addTransition(transition(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
-    b.addTransition(transition(AgentState.PAUSED, AgentState.EXECUTING, AgentEventType.FLOW_RESUMED));
-    b.addTransition(transition(AgentState.OFFLOADING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED));
-    b.addTransition(transition(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED));
+    b.addTransition(
+        transition(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED));
+    b.addTransition(
+        transition(
+            AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED));
+    b.addTransition(
+        transition(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED));
+    b.addTransition(
+        transition(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
+    b.addTransition(
+        transition(
+            AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED));
+    b.addTransition(
+        transition(
+            AgentState.EXECUTING,
+            AgentState.SUPERVISOR_REVIEW,
+            AgentEventType.SUPERVISOR_REVIEW_REQUESTED));
+    b.addTransition(
+        transition(
+            AgentState.SUPERVISOR_REVIEW,
+            AgentState.COMPLETED,
+            AgentEventType.SUPERVISOR_APPROVED));
+    b.addTransition(
+        transition(AgentState.PAUSED, AgentState.EXECUTING, AgentEventType.FLOW_RESUMED));
+    b.addTransition(
+        transition(AgentState.OFFLOADING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED));
+    b.addTransition(
+        transition(
+            AgentState.COMPENSATING,
+            AgentState.COMPENSATED,
+            AgentEventType.COMPENSATION_COMPLETED));
     return b.build();
   }
 
@@ -87,7 +108,6 @@ class SkillTest {
     assertNotNull(r.get("a").orElseThrow());
     assertNotNull(r.get("b").orElseThrow());
     assertEquals(java.util.Optional.empty(), r.get("missing"));
-    assertEquals(java.util.List.of("a", "b"),
-        r.all().stream().map(Skill::getName).toList());
+    assertEquals(java.util.List.of("a", "b"), r.all().stream().map(Skill::getName).toList());
   }
 }

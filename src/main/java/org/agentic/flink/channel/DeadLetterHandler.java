@@ -22,12 +22,13 @@ public interface DeadLetterHandler extends Serializable {
 
   /** Header carrying the deserialization error message on dead-lettered records. */
   String ERROR_HEADER = "agentic.deserialization.error";
+
   /** Header carrying the source topic on dead-lettered records. */
   String SOURCE_TOPIC_HEADER = "agentic.source.topic";
 
   /**
-   * Handles one malformed record. Implementations must not throw for ordinary delivery
-   * problems; a throwing handler fails the source.
+   * Handles one malformed record. Implementations must not throw for ordinary delivery problems; a
+   * throwing handler fails the source.
    */
   void handle(String sourceTopic, byte[] payload, Exception error);
 
@@ -50,8 +51,11 @@ public interface DeadLetterHandler extends Serializable {
 
     @Override
     public void handle(String sourceTopic, byte[] payload, Exception error) {
-      LOG.warn("Dropping malformed record from {} ({} bytes): {}", sourceTopic,
-          payload == null ? 0 : payload.length, error.getMessage());
+      LOG.warn(
+          "Dropping malformed record from {} ({} bytes): {}",
+          sourceTopic,
+          payload == null ? 0 : payload.length,
+          error.getMessage());
     }
   }
 
@@ -85,17 +89,25 @@ public interface DeadLetterHandler extends Serializable {
     @Override
     public void handle(String sourceTopic, byte[] payload, Exception error) {
       ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(deadLetterTopic, payload);
-      record.headers().add(new RecordHeader(SOURCE_TOPIC_HEADER,
-          sourceTopic.getBytes(StandardCharsets.UTF_8)));
-      record.headers().add(new RecordHeader(ERROR_HEADER,
-          String.valueOf(error.getMessage()).getBytes(StandardCharsets.UTF_8)));
+      record
+          .headers()
+          .add(new RecordHeader(SOURCE_TOPIC_HEADER, sourceTopic.getBytes(StandardCharsets.UTF_8)));
+      record
+          .headers()
+          .add(
+              new RecordHeader(
+                  ERROR_HEADER,
+                  String.valueOf(error.getMessage()).getBytes(StandardCharsets.UTF_8)));
       try {
         producer().send(record).get();
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         LOG.warn("Interrupted while dead-lettering record from {}", sourceTopic);
       } catch (ExecutionException e) {
-        LOG.error("Failed to dead-letter record from {} to {}: {}", sourceTopic, deadLetterTopic,
+        LOG.error(
+            "Failed to dead-letter record from {} to {}: {}",
+            sourceTopic,
+            deadLetterTopic,
             e.getCause() == null ? e.getMessage() : e.getCause().getMessage());
       }
     }
@@ -122,8 +134,9 @@ public interface DeadLetterHandler extends Serializable {
 
     @Override
     public void handle(String sourceTopic, byte[] payload, Exception error) {
-      records.add(Map.entry(new String(payload, StandardCharsets.UTF_8),
-          String.valueOf(error.getMessage())));
+      records.add(
+          Map.entry(
+              new String(payload, StandardCharsets.UTF_8), String.valueOf(error.getMessage())));
     }
 
     /** Pairs of (raw payload, error message) in arrival order. */

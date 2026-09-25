@@ -1,19 +1,18 @@
 package org.agentic.flink.storage.config;
 
-import org.agentic.flink.channel.Channel;
-import org.agentic.flink.channel.KeyedContextItem;
-import org.agentic.flink.memory.ShortTermMemorySpec;
-import org.agentic.flink.storage.*;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.channel.Channel;
+import org.agentic.flink.channel.KeyedContextItem;
+import org.agentic.flink.memory.ShortTermMemorySpec;
+import org.agentic.flink.storage.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 // import com.fasterxml.jackson.databind.ObjectMapper;
 // import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
@@ -331,8 +330,8 @@ public class StorageConfiguration implements Serializable {
 
     /**
      * Configure HOT tier with a {@link ShortTermMemorySpec} (Flink-state-backed). This is the
-     * preferred path; the string-based {@link #withHotTier(String, Map)} is retained for
-     * backward compatibility with the in-memory legacy store.
+     * preferred path; the string-based {@link #withHotTier(String, Map)} is retained for backward
+     * compatibility with the in-memory legacy store.
      */
     public Builder withHotTier(ShortTermMemorySpec spec) {
       config.shortTermMemorySpec = spec;

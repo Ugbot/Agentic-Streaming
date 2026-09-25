@@ -22,9 +22,9 @@ import redis.clients.jedis.JedisPoolConfig;
  * Redis-backed {@link A2ATaskStore} — lighter-weight durable gateway task state. Optional: requires
  * the {@code jedis} dependency on the classpath (marked optional in the build).
  *
- * <p>Key layout: {@code a2a:task:{id}} (task JSON), {@code a2a:ctx:{contextId}} +
- * {@code a2a:state:{state}} (sets of task ids for context/state queries), {@code a2a:push:{taskId}}
- * (hash of configId → config JSON). Mirrors {@link
+ * <p>Key layout: {@code a2a:task:{id}} (task JSON), {@code a2a:ctx:{contextId}} + {@code
+ * a2a:state:{state}} (sets of task ids for context/state queries), {@code a2a:push:{taskId}} (hash
+ * of configId → config JSON). Mirrors {@link
  * org.agentic.flink.storage.redis.RedisConversationStore}.
  */
 public final class RedisA2ATaskStore extends ReopenableStore implements A2ATaskStore {
@@ -42,7 +42,8 @@ public final class RedisA2ATaskStore extends ReopenableStore implements A2ATaskS
   @Override
   protected void open(Map<String, String> config) {
     String host = config.getOrDefault(ConfigKeys.REDIS_HOST, ConfigKeys.DEFAULT_REDIS_HOST);
-    int port = Integer.parseInt(config.getOrDefault(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
+    int port =
+        Integer.parseInt(config.getOrDefault(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
     String password = config.get(ConfigKeys.REDIS_PASSWORD);
     int timeout = Integer.parseInt(config.getOrDefault("redis.timeout.ms", "2000"));
     int database = Integer.parseInt(config.getOrDefault("redis.database", "0"));

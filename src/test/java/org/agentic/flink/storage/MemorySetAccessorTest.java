@@ -5,13 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.storage.memory.InMemoryLongTermStore;
-import java.util.HashMap;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,8 +37,7 @@ class MemorySetAccessorTest {
     int n = ThreadLocalRandom.current().nextInt(3, 12);
     for (int i = 0; i < n; i++) {
       ContextItem item =
-          new ContextItem(
-              "fact-" + UUID.randomUUID(), ContextPriority.MUST, MemoryType.LONG_TERM);
+          new ContextItem("fact-" + UUID.randomUUID(), ContextPriority.MUST, MemoryType.LONG_TERM);
       facts.add(item);
     }
 
@@ -70,18 +69,15 @@ class MemorySetAccessorTest {
 
     assertEquals(1, loadedFacts.size());
     assertEquals(1, loadedDecisions.size());
-    assertTrue(
-        loadedFacts.entries().iterator().next().getContent().contains("SI units"));
-    assertTrue(
-        loadedDecisions.entries().iterator().next().getContent().contains("order 42"));
+    assertTrue(loadedFacts.entries().iterator().next().getContent().contains("SI units"));
+    assertTrue(loadedDecisions.entries().iterator().next().getContent().contains("order 42"));
   }
 
   @Test
   @DisplayName("addItem() and removeItem() work without rewriting the whole slice")
   void incrementalUpdates() throws Exception {
     ContextItem item =
-        new ContextItem(
-            "fact-" + UUID.randomUUID(), ContextPriority.SHOULD, MemoryType.LONG_TERM);
+        new ContextItem("fact-" + UUID.randomUUID(), ContextPriority.SHOULD, MemoryType.LONG_TERM);
 
     accessor.addItem(flowId, "facts", item);
     MemorySet loaded = accessor.load(flowId, "facts");

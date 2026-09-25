@@ -1,10 +1,10 @@
 package org.agentic.flink.feedback;
 
+import java.util.Locale;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.InferenceConnection;
 import org.agentic.flink.inference.InferenceSetup;
-import java.util.Locale;
 
 /**
  * {@link QualityCheck} backed by an ML {@link Classifier}. Classifies the output and passes/fails
@@ -52,9 +52,13 @@ public final class ClassifierQualityCheck implements QualityCheck {
     double quality = passIfBelow ? 1.0 - raw : raw; // higher is better
     if (passed) return CheckResult.pass(quality);
     String critique =
-        String.format(Locale.ROOT,
+        String.format(
+            Locale.ROOT,
             "classifier label '%s' score %.2f fails %s %.2f",
-            cr.getLabel(), raw, passIfBelow ? "ceiling" : "floor", threshold);
+            cr.getLabel(),
+            raw,
+            passIfBelow ? "ceiling" : "floor",
+            threshold);
     return CheckResult.fail(quality, critique);
   }
 }

@@ -43,8 +43,8 @@ import org.slf4j.LoggerFactory;
  * send}/{@code getTask}/{@code cancel}/{@code stream} our SPI exposes.
  *
  * <p>Built lazily on the task side (the SDK {@link Client} is not {@link java.io.Serializable}),
- * via {@link SdkA2AClientFactory}. Only the JSON-RPC binding is wired here — gRPC/REST require their
- * own SDK transport modules and are reported as unsupported rather than silently downgraded.
+ * via {@link SdkA2AClientFactory}. Only the JSON-RPC binding is wired here — gRPC/REST require
+ * their own SDK transport modules and are reported as unsupported rather than silently downgraded.
  */
 public final class SdkA2AClient implements A2AClient {
   private static final Logger LOG = LoggerFactory.getLogger(SdkA2AClient.class);
@@ -265,14 +265,21 @@ public final class SdkA2AClient implements A2AClient {
       }
     }
     return new A2ATask(
-        task.id(), task.contextId(), state, statusMessage, history, artifacts, task.metadata(), now, now);
+        task.id(),
+        task.contextId(),
+        state,
+        statusMessage,
+        history,
+        artifacts,
+        task.metadata(),
+        now,
+        now);
   }
 
   private A2ATask messageAsCompletedTask(Message message) {
     long now = System.currentTimeMillis();
     A2AArtifact artifact =
-        new A2AArtifact(
-            message.messageId(), "message", null, toModelParts(message.parts()), null);
+        new A2AArtifact(message.messageId(), "message", null, toModelParts(message.parts()), null);
     String taskId = message.taskId() != null ? message.taskId() : message.messageId();
     return new A2ATask(
         taskId,
@@ -312,7 +319,9 @@ public final class SdkA2AClient implements A2AClient {
         }
       } else {
         // FilePart or unknown — represent structurally so nothing is silently dropped.
-        out.add(A2APart.data(Map.of("kind", part.getClass().getSimpleName(), "value", String.valueOf(part))));
+        out.add(
+            A2APart.data(
+                Map.of("kind", part.getClass().getSimpleName(), "value", String.valueOf(part))));
       }
     }
     return out;
@@ -362,7 +371,13 @@ public final class SdkA2AClient implements A2AClient {
       for (io.a2a.spec.AgentSkill s : card.skills()) {
         b.addSkill(
             new A2AAgentSkill(
-                s.id(), s.name(), s.description(), s.tags(), s.examples(), s.inputModes(), s.outputModes()));
+                s.id(),
+                s.name(),
+                s.description(),
+                s.tags(),
+                s.examples(),
+                s.inputModes(),
+                s.outputModes()));
       }
     }
     return b.build();

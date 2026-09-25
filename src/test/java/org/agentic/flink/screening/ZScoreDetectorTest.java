@@ -48,7 +48,8 @@ class ZScoreDetectorTest {
     double[] baseline = {10.0, 10.5, 9.8, 10.2, 10.1, 9.9, 10.3};
     for (int i = 0; i < baseline.length; i++) {
       ScreeningResult r = p.screen(ScreenItem.of("k", baseline[i], "x", i * 1000));
-      assertFalse(fired(r, Phase.CLASSIFIER), "in-baseline value " + baseline[i] + " should not fire");
+      assertFalse(
+          fired(r, Phase.CLASSIFIER), "in-baseline value " + baseline[i] + " should not fire");
     }
     // Now a huge spike: should be many σ above mean ~10.
     ScreeningResult spike = p.screen(ScreenItem.of("k", 100.0, "x", 8_000));
@@ -65,7 +66,8 @@ class ZScoreDetectorTest {
             .build();
     double[] depths = {5000, 5100, 4800, 5050, 4950, 5200, 5150};
     for (int i = 0; i < depths.length; i++) {
-      p.screen(new ScreenItem("k", 1.0, "x", i * 1000, Map.of("depth", Double.toString(depths[i]))));
+      p.screen(
+          new ScreenItem("k", 1.0, "x", i * 1000, Map.of("depth", Double.toString(depths[i]))));
     }
     ScreeningResult collapse =
         p.screen(new ScreenItem("k", 1.0, "x", 8_000, Map.of("depth", "100")));
@@ -80,8 +82,7 @@ class ZScoreDetectorTest {
             .build();
     // No "imbalance" key in attrs.
     for (int i = 0; i < 6; i++) {
-      ScreeningResult r =
-          p.screen(new ScreenItem("k", 1.0, "x", i * 1000, Map.of("other", "1.0")));
+      ScreeningResult r = p.screen(new ScreenItem("k", 1.0, "x", i * 1000, Map.of("other", "1.0")));
       assertEquals(ScreeningResult.Tier.RULES, r.decidedBy);
       assertEquals("ALLOW", r.verdict);
     }

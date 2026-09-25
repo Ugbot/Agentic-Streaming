@@ -10,8 +10,8 @@ import java.util.Objects;
  *
  * <ul>
  *   <li>{@link Action#ALLOW} — pass through unchanged.
- *   <li>{@link Action#BLOCK} — short-circuit; the LLM is not called (or the response is
- *       suppressed) and a blocked response with {@link #getReason()} is returned to callers.
+ *   <li>{@link Action#BLOCK} — short-circuit; the LLM is not called (or the response is suppressed)
+ *       and a blocked response with {@link #getReason()} is returned to callers.
  *   <li>{@link Action#REWRITE} — replace the payload with {@link #getRewrittenPayload()} and
  *       continue.
  * </ul>

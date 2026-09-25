@@ -23,7 +23,9 @@ import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.util.Collector;
 import org.junit.jupiter.api.Test;
 
-/** F8: transient counters survive serialization and metrics register through the Flink metric group. */
+/**
+ * F8: transient counters survive serialization and metrics register through the Flink metric group.
+ */
 class MetricsAgentEventListenerTest {
 
   /** Records registered counters and gauges by "group/name". */
@@ -55,12 +57,14 @@ class MetricsAgentEventListenerTest {
     }
   }
 
-  private static MetricsAgentEventListener roundTrip(MetricsAgentEventListener in) throws Exception {
+  private static MetricsAgentEventListener roundTrip(MetricsAgentEventListener in)
+      throws Exception {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(in);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return (MetricsAgentEventListener) ois.readObject();
     }
   }
@@ -125,8 +129,12 @@ class MetricsAgentEventListenerTest {
     try (OneInputStreamOperatorTestHarness<String, String> harness =
         new OneInputStreamOperatorTestHarness<>(new ProcessOperator<>(fn))) {
       harness.open();
-      CountingFunction opened = (CountingFunction) ((ProcessOperator<String, String>) harness.getOperator()).getUserFunction();
-      assertTrue(opened.metrics.isRegistered(), "open() registered on getRuntimeContext().getMetricGroup()");
+      CountingFunction opened =
+          (CountingFunction)
+              ((ProcessOperator<String, String>) harness.getOperator()).getUserFunction();
+      assertTrue(
+          opened.metrics.isRegistered(),
+          "open() registered on getRuntimeContext().getMetricGroup()");
       int n = ThreadLocalRandom.current().nextInt(1, 10);
       for (int i = 0; i < n; i++) {
         harness.processElement("e" + i, i);

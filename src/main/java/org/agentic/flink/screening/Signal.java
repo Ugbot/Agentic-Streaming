@@ -6,12 +6,13 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * A detector firing: which detector, which {@link Phase}, how much it adds to combined risk, and why.
+ * A detector firing: which detector, which {@link Phase}, how much it adds to combined risk, and
+ * why.
  *
- * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters)
- * so the type rides through Flink's {@code PojoSerializer} without falling back to Kryo (which
- * can't construct records with their final-field canonical ctor). Record-style accessors are
- * preserved for source-compat with existing callers.
+ * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters) so
+ * the type rides through Flink's {@code PojoSerializer} without falling back to Kryo (which can't
+ * construct records with their final-field canonical ctor). Record-style accessors are preserved
+ * for source-compat with existing callers.
  */
 public final class Signal implements Serializable {
   private static final long serialVersionUID = 1L;

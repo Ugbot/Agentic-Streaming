@@ -1,5 +1,13 @@
 package org.agentic.flink.screening;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.InferenceConnection;
@@ -9,14 +17,6 @@ import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,20 +28,21 @@ import org.slf4j.LoggerFactory;
  * stateful detectors ("the same payment three times in a row") and signal layering.
  *
  * <p>Tiers and exits:
+ *
  * <ul>
  *   <li><b>RULES</b> — no rule fired → {@code ALLOW}. Combined risk ≥ {@code blockThreshold} →
- *       {@code BLOCK} outright.</li>
+ *       {@code BLOCK} outright.
  *   <li><b>ML</b> — a {@link org.agentic.flink.inference.Classifier} adds a score; if the combined
  *       risk is still below {@code reviewThreshold} → {@code ALLOW} (the rules were a false
- *       positive).</li>
- *   <li><b>LLM</b> — risk in the review band escalates to the chat model for an
- *       {@code ALLOW}/{@code REVIEW}/{@code BLOCK} verdict. With no chat configured, it routes to
- *       human {@code REVIEW}.</li>
+ *       positive).
+ *   <li><b>LLM</b> — risk in the review band escalates to the chat model for an {@code
+ *       ALLOW}/{@code REVIEW}/{@code BLOCK} verdict. With no chat configured, it routes to human
+ *       {@code REVIEW}.
  * </ul>
  *
  * <p>Holds bounded per-key history so the stateful detectors work in-process (notebook-friendly).
- * It is <b>not thread-safe</b>; in a Flink job keep history in keyed state instead (see
- * {@code PaymentScreeningExample}).
+ * It is <b>not thread-safe</b>; in a Flink job keep history in keyed state instead (see {@code
+ * PaymentScreeningExample}).
  */
 public final class ScreeningPipeline {
 
@@ -89,8 +90,8 @@ public final class ScreeningPipeline {
       }
     }
     if (fired.isEmpty()) {
-      return new ScreeningResult(item, fired, 0.0, ScreeningResult.Tier.RULES, "ALLOW",
-          null, 0.0, null, "No rule fired");
+      return new ScreeningResult(
+          item, fired, 0.0, ScreeningResult.Tier.RULES, "ALLOW", null, 0.0, null, "No rule fired");
     }
 
     // Tier 2 — ML classifier (only for items the rules flagged).
@@ -100,8 +101,12 @@ public final class ScreeningPipeline {
       ClassificationResult cr = classifierDetector.classify(item);
       mlLabel = cr.getLabel();
       mlScore = cr.getScore();
-      fired.add(new Signal("classifier", Phase.CLASSIFIER, mlScore,
-          String.format(Locale.ROOT, "classified '%s' (%.2f)", mlLabel, mlScore)));
+      fired.add(
+          new Signal(
+              "classifier",
+              Phase.CLASSIFIER,
+              mlScore,
+              String.format(Locale.ROOT, "classified '%s' (%.2f)", mlLabel, mlScore)));
       risk += mlScore;
     }
     ScreeningResult.Tier escalatedTier =
@@ -109,21 +114,45 @@ public final class ScreeningPipeline {
 
     // Hard auto-block on overwhelming risk — no LLM needed.
     if (risk >= blockThreshold) {
-      return new ScreeningResult(item, fired, risk, escalatedTier, "BLOCK",
-          mlLabel, mlScore, null,
-          String.format(Locale.ROOT, "Combined risk %.2f >= block threshold %.2f", risk, blockThreshold));
+      return new ScreeningResult(
+          item,
+          fired,
+          risk,
+          escalatedTier,
+          "BLOCK",
+          mlLabel,
+          mlScore,
+          null,
+          String.format(
+              Locale.ROOT, "Combined risk %.2f >= block threshold %.2f", risk, blockThreshold));
     }
     // Below review threshold — rules were a false positive.
     if (risk < reviewThreshold) {
-      return new ScreeningResult(item, fired, risk, escalatedTier, "ALLOW",
-          mlLabel, mlScore, null,
-          String.format(Locale.ROOT, "Combined risk %.2f < review threshold %.2f", risk, reviewThreshold));
+      return new ScreeningResult(
+          item,
+          fired,
+          risk,
+          escalatedTier,
+          "ALLOW",
+          mlLabel,
+          mlScore,
+          null,
+          String.format(
+              Locale.ROOT, "Combined risk %.2f < review threshold %.2f", risk, reviewThreshold));
     }
 
     // Tier 3 — LLM adjudication for the review band.
     if (chat == null) {
-      return new ScreeningResult(item, fired, risk, escalatedTier, "REVIEW",
-          mlLabel, mlScore, null, "Risk in review band; no LLM configured — human review");
+      return new ScreeningResult(
+          item,
+          fired,
+          risk,
+          escalatedTier,
+          "REVIEW",
+          mlLabel,
+          mlScore,
+          null,
+          "Risk in review band; no LLM configured — human review");
     }
     String system =
         "You are a risk analyst. Layered detectors flagged the item below. Decide the action. "
@@ -133,16 +162,30 @@ public final class ScreeningPipeline {
       signalText.append("- ").append(s.phase()).append(": ").append(s.reason()).append('\n');
     }
     String user =
-        String.format(Locale.ROOT,
+        String.format(
+            Locale.ROOT,
             "Combined risk: %.2f\nSignals:\n%sItem: key=%s value=%.2f label=%s attrs=%s",
-            risk, signalText, item.key(), item.value(), item.label(), item.attrs());
+            risk,
+            signalText,
+            item.key(),
+            item.value(),
+            item.label(),
+            item.attrs());
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(ChatMessage.system(system));
     messages.add(ChatMessage.user(user));
     ChatResponse resp = chat.chat(messages, chatSetup);
     String text = resp.getText() == null ? "" : resp.getText().trim();
-    return new ScreeningResult(item, fired, risk, ScreeningResult.Tier.LLM, parseVerdict(text),
-        mlLabel, mlScore, text, "LLM adjudicated the flagged item");
+    return new ScreeningResult(
+        item,
+        fired,
+        risk,
+        ScreeningResult.Tier.LLM,
+        parseVerdict(text),
+        mlLabel,
+        mlScore,
+        text,
+        "LLM adjudicated the flagged item");
   }
 
   static String parseVerdict(String text) {
@@ -152,9 +195,18 @@ public final class ScreeningPipeline {
     int allow = upper.indexOf("ALLOW");
     String best = "REVIEW";
     int bestPos = Integer.MAX_VALUE;
-    if (block >= 0 && block < bestPos) { bestPos = block; best = "BLOCK"; }
-    if (review >= 0 && review < bestPos) { bestPos = review; best = "REVIEW"; }
-    if (allow >= 0 && allow < bestPos) { bestPos = allow; best = "ALLOW"; }
+    if (block >= 0 && block < bestPos) {
+      bestPos = block;
+      best = "BLOCK";
+    }
+    if (review >= 0 && review < bestPos) {
+      bestPos = review;
+      best = "REVIEW";
+    }
+    if (allow >= 0 && allow < bestPos) {
+      bestPos = allow;
+      best = "ALLOW";
+    }
     return best;
   }
 
@@ -223,7 +275,9 @@ public final class ScreeningPipeline {
     }
   }
 
-  /** Bounded per-key recent-item history. Access-ordered map caps distinct keys; deques cap depth. */
+  /**
+   * Bounded per-key recent-item history. Access-ordered map caps distinct keys; deques cap depth.
+   */
   private static final class History {
     private final int perKeyDepth;
     private final LinkedHashMap<String, Deque<ScreenItem>> byKey;

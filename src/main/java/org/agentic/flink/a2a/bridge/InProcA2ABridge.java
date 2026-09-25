@@ -20,8 +20,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * <p>Requests published by the gateway land in a {@link BlockingQueue} drained by the Flink request
  * source; responses written to the sink are fanned out to the gateway's registered listeners. State
- * is global to the JVM (see {@link Hub}); use distinct endpoint names to isolate concurrent bridges,
- * or {@link Hub#reset()} between tests.
+ * is global to the JVM (see {@link Hub}); use distinct endpoint names to isolate concurrent
+ * bridges, or {@link Hub#reset()} between tests.
  */
 public final class InProcA2ABridge implements A2ABridge {
   private static final long serialVersionUID = 1L;
@@ -46,7 +46,8 @@ public final class InProcA2ABridge implements A2ABridge {
 
   @Override
   public org.apache.flink.api.connector.sink2.Sink<A2AResponse> responseSink() {
-    return new org.agentic.flink.channel.sink.ForEachSink<>(new InProcResponseWriteFn(responseEndpoint));
+    return new org.agentic.flink.channel.sink.ForEachSink<>(
+        new InProcResponseWriteFn(responseEndpoint));
   }
 
   @Override
@@ -58,7 +59,8 @@ public final class InProcA2ABridge implements A2ABridge {
 
   /** Shared in-JVM transport state. Package-visible for tests ({@link #reset()}). */
   public static final class Hub {
-    private static final Map<String, BlockingQueue<A2ARequest>> REQUESTS = new ConcurrentHashMap<>();
+    private static final Map<String, BlockingQueue<A2ARequest>> REQUESTS =
+        new ConcurrentHashMap<>();
     private static final Map<String, List<Consumer<A2AResponse>>> SUBS = new ConcurrentHashMap<>();
 
     private Hub() {}
@@ -104,7 +106,8 @@ public final class InProcA2ABridge implements A2ABridge {
     @Override
     public DataStream<A2ARequest> open(StreamExecutionEnvironment env) {
       return env.fromSource(
-              new org.agentic.flink.channel.source.PollingSource<>(new InProcRequestPollFn(endpoint)),
+              new org.agentic.flink.channel.source.PollingSource<>(
+                  new InProcRequestPollFn(endpoint)),
               org.apache.flink.api.common.eventtime.WatermarkStrategy.noWatermarks(),
               "a2a-bridge-inproc-requests",
               elementType())

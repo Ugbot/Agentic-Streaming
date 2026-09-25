@@ -1,16 +1,17 @@
 package org.agentic.flink.example;
 
-import org.agentic.flink.core.ToolDefinition;
-import org.agentic.flink.langchain.LangChainToolAdapter;
-import org.agentic.flink.langchain.ToolAnnotationRegistry;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.core.ToolDefinition;
+import org.agentic.flink.langchain.LangChainToolAdapter;
+import org.agentic.flink.langchain.ToolAnnotationRegistry;
 
 /**
  * Example demonstrating LangChain4j @Tool annotation integration.
  *
  * <p>This example shows how to:
+ *
  * <ul>
  *   <li>Scan for @Tool annotated methods using ToolAnnotationRegistry
  *   <li>Invoke tools using LangChainToolAdapter
@@ -28,8 +29,7 @@ public class ToolAnnotationExample {
 
     // Step 1: Create ToolAnnotationRegistry to scan for @Tool methods
     System.out.println("Step 1: Scanning for @Tool annotated methods...");
-    ToolAnnotationRegistry registry =
-        new ToolAnnotationRegistry("org.agentic.flink.tools.builtin");
+    ToolAnnotationRegistry registry = new ToolAnnotationRegistry("org.agentic.flink.tools.builtin");
 
     System.out.println("Found " + registry.getToolCount() + " tools\n");
 
@@ -39,12 +39,7 @@ public class ToolAnnotationExample {
     for (Map.Entry<String, ToolDefinition> entry : tools.entrySet()) {
       ToolDefinition def = entry.getValue();
       System.out.println(
-          "  - "
-              + entry.getKey()
-              + ": "
-              + def.getName()
-              + " - "
-              + def.getDescription());
+          "  - " + entry.getKey() + ": " + def.getName() + " - " + def.getDescription());
     }
     System.out.println();
 

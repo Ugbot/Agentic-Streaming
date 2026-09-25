@@ -2,10 +2,10 @@ package org.agentic.flink.storage.vector;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.storage.VectorStore;
 import java.util.HashSet;
 import java.util.ServiceLoader;
 import java.util.Set;
+import org.agentic.flink.storage.VectorStore;
 import org.junit.jupiter.api.Test;
 
 /**

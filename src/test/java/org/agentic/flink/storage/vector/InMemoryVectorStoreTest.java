@@ -5,12 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.storage.VectorStore;
-import org.agentic.flink.storage.VectorStore.VectorSearchResult;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.storage.VectorStore;
+import org.agentic.flink.storage.VectorStore.VectorSearchResult;
 import org.junit.jupiter.api.Test;
 
 /** Randomized unit tests for {@link InMemoryVectorStore}. */
@@ -42,7 +42,8 @@ class InMemoryVectorStoreTest {
     // Plant a near-duplicate of a query.
     float[] query = randomUnit(dim);
     float[] planted = query.clone();
-    for (int i = 0; i < dim; i++) planted[i] += 0.01f * (float) ThreadLocalRandom.current().nextGaussian();
+    for (int i = 0; i < dim; i++)
+      planted[i] += 0.01f * (float) ThreadLocalRandom.current().nextGaussian();
     store.storeEmbedding("planted", planted, Map.of("flowId", "planted"));
 
     List<VectorSearchResult> top = store.searchSimilar(query, 5);
@@ -116,8 +117,7 @@ class InMemoryVectorStoreTest {
     InMemoryVectorStore store = new InMemoryVectorStore();
     store.initialize(Map.of("vector.dimension", "16"));
     assertThrows(
-        IllegalArgumentException.class,
-        () -> store.storeEmbedding("x", randomUnit(32), Map.of()));
+        IllegalArgumentException.class, () -> store.storeEmbedding("x", randomUnit(32), Map.of()));
   }
 
   @Test

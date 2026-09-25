@@ -19,7 +19,8 @@ class ReActGuardTest {
   void detectsStalls() {
     assertTrue(ReActGuard.looksLikeToolStall("I need to inspect the available tools first."));
     assertTrue(ReActGuard.looksLikeToolStall("I don't have access to the required tools."));
-    assertTrue(ReActGuard.looksLikeToolStall("I'll submit it as soon as tool access is available."));
+    assertTrue(
+        ReActGuard.looksLikeToolStall("I'll submit it as soon as tool access is available."));
     assertTrue(ReActGuard.looksLikeToolStall("I'm unable to call the tool right now."));
   }
 

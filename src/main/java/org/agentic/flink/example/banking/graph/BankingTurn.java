@@ -4,9 +4,9 @@ import java.io.Serializable;
 
 /**
  * The envelope that flows between the banking graph operators (router → path → verifier), carrying
- * the A2A turn identity plus the routing decision and the path's result. A plain Flink POJO
- * (public no-arg constructor + getters/setters, POJO-typed fields) so it rides the stream on the
- * POJO serializer without Kryo.
+ * the A2A turn identity plus the routing decision and the path's result. A plain Flink POJO (public
+ * no-arg constructor + getters/setters, POJO-typed fields) so it rides the stream on the POJO
+ * serializer without Kryo.
  */
 public final class BankingTurn implements Serializable {
   private static final long serialVersionUID = 1L;

@@ -11,10 +11,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * toxic-bert is a multi-label classifier: every post gets a top label, so a benign post still
- * comes back as {@code toxic} with a score near zero. The showcase must gate on the score as
- * well as the label, otherwise every post lands on the blocked side output and the summarize
- * path never runs.
+ * toxic-bert is a multi-label classifier: every post gets a top label, so a benign post still comes
+ * back as {@code toxic} with a score near zero. The showcase must gate on the score as well as the
+ * label, otherwise every post lands on the blocked side output and the summarize path never runs.
  */
 class ContentModerationExampleTest {
 
@@ -23,7 +22,8 @@ class ContentModerationExampleTest {
   @Test
   @DisplayName("A blocked label with a low score is not blocked")
   void lowScoreBlockedLabelPasses() {
-    double score = ThreadLocalRandom.current().nextDouble(0.0, ContentModerationExample.BLOCK_THRESHOLD);
+    double score =
+        ThreadLocalRandom.current().nextDouble(0.0, ContentModerationExample.BLOCK_THRESHOLD);
     ClassificationResult cls = new ClassificationResult("toxic", score, Map.of("toxic", score));
     assertFalse(ContentModerationExample.shouldBlock(cls, BLOCKED));
   }

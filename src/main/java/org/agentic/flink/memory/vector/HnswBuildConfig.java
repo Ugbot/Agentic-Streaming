@@ -27,11 +27,7 @@ public final class HnswBuildConfig implements Serializable {
   private final VectorMemorySpec.Similarity similarity;
 
   public HnswBuildConfig(
-      int m,
-      int beamWidth,
-      int searchBeam,
-      float alpha,
-      VectorMemorySpec.Similarity similarity) {
+      int m, int beamWidth, int searchBeam, float alpha, VectorMemorySpec.Similarity similarity) {
     if (m <= 0) throw new IllegalArgumentException("m must be positive");
     if (beamWidth <= 0) throw new IllegalArgumentException("beamWidth must be positive");
     if (searchBeam <= 0) throw new IllegalArgumentException("searchBeam must be positive");
@@ -39,8 +35,7 @@ public final class HnswBuildConfig implements Serializable {
     this.beamWidth = beamWidth;
     this.searchBeam = searchBeam;
     this.alpha = alpha;
-    this.similarity =
-        similarity == null ? VectorMemorySpec.Similarity.COSINE : similarity;
+    this.similarity = similarity == null ? VectorMemorySpec.Similarity.COSINE : similarity;
   }
 
   public static HnswBuildConfig defaults() {

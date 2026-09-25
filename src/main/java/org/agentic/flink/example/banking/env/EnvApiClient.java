@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * for a session, keyed by the A2A {@code contextId}.
  *
  * <ul>
- *   <li>{@code GET  {baseUrl}/sessions/{contextId}/tools} → OpenAI-style tool schemas for the
+ *   <li>{@code GET {baseUrl}/sessions/{contextId}/tools} → OpenAI-style tool schemas for the
  *       caller's scope.
  *   <li>{@code POST {baseUrl}/sessions/{contextId}/tools/{name}} body {@code {"arguments": {...}}}
  *       → the tool result.
@@ -75,7 +75,8 @@ public final class EnvApiClient implements Serializable {
   }
 
   /** Execute an env tool, returning its result map (typically {@code {content, error}}). */
-  public Map<String, Object> callTool(String contextId, String name, Map<String, Object> arguments) {
+  public Map<String, Object> callTool(
+      String contextId, String name, Map<String, Object> arguments) {
     String url = baseUrl + "/sessions/" + enc(contextId) + "/tools/" + enc(name);
     byte[] payload = writeJson(Map.of("arguments", arguments == null ? Map.of() : arguments));
     HttpRequest req =

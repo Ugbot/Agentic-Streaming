@@ -1,17 +1,17 @@
 package org.agentic.flink.storage;
 
-import org.agentic.flink.context.core.AgentContext;
-import org.agentic.flink.context.core.ContextItem;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.context.core.AgentContext;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Storage interface for long-term memory and conversation persistence (warm tier).
  *
  * <p>Long-term memory stores conversation context and facts that need to persist beyond the active
- * processing window. This enables conversation resumption after job restarts and provides access
- * to historical context.
+ * processing window. This enables conversation resumption after job restarts and provides access to
+ * historical context.
  *
  * <p>Characteristics:
  *

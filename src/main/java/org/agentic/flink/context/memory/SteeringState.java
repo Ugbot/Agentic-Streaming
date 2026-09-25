@@ -1,6 +1,5 @@
 package org.agentic.flink.context.memory;
 
-import org.agentic.flink.context.core.ContextPriority;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -10,6 +9,7 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.context.core.ContextPriority;
 
 /**
  * Steering state for agent behavior MoSCoW rules and constraints that guide agent decisions

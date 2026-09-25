@@ -60,8 +60,7 @@ class RemoteAgentSpecTest {
   @Test
   @DisplayName("AuthSpec renders correct headers and never leaks credential in toString")
   void authHeaders() {
-    assertEquals(
-        Map.of("Authorization", "Bearer secret"), AuthSpec.bearer("secret").toHeaders());
+    assertEquals(Map.of("Authorization", "Bearer secret"), AuthSpec.bearer("secret").toHeaders());
     assertEquals(Map.of("X-API-Key", "k"), AuthSpec.apiKey("X-API-Key", "k").toHeaders());
     assertTrue(AuthSpec.none().toHeaders().isEmpty());
     assertTrue(!AuthSpec.bearer("topsecret").toString().contains("topsecret"));
@@ -74,7 +73,8 @@ class RemoteAgentSpecTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(obj);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return ois.readObject();
     }
   }

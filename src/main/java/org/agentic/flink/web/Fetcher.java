@@ -13,12 +13,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * HTTP fetcher that honours {@link RobotsCache} and the framework's
- * {@link WebToolkitOptions} (user-agent, timeouts, max-page-size, egress policy).
+ * HTTP fetcher that honours {@link RobotsCache} and the framework's {@link WebToolkitOptions}
+ * (user-agent, timeouts, max-page-size, egress policy).
  *
- * <p>Every URL, including each redirect target, is checked against the options'
- * {@link OutboundUrlPolicy} before a connection is opened; redirects are followed manually so
- * the check runs per hop and the hop count is capped by the policy.
+ * <p>Every URL, including each redirect target, is checked against the options' {@link
+ * OutboundUrlPolicy} before a connection is opened; redirects are followed manually so the check
+ * runs per hop and the hop count is capped by the policy.
  */
 public final class Fetcher implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -68,7 +68,8 @@ public final class Fetcher implements Serializable {
           break;
         }
         if (++hops > policy.getMaxRedirects()) {
-          throw new IOException("too many redirects (>" + policy.getMaxRedirects() + ") from " + url);
+          throw new IOException(
+              "too many redirects (>" + policy.getMaxRedirects() + ") from " + url);
         }
         URI next = target.resolve(location.get().trim());
         target = policy.validate(next);

@@ -76,7 +76,8 @@ public final class AuthorizationToolGuard implements ToolExecutor {
     }
 
     if (requiresVerification && !authState.isVerified(contextId)) {
-      LOG.debug("Blocked high-risk tool {} — identity not verified (ctx {})", getToolId(), contextId);
+      LOG.debug(
+          "Blocked high-risk tool {} — identity not verified (ctx {})", getToolId(), contextId);
       return CompletableFuture.completedFuture(
           error(
               "Refusing "

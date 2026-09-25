@@ -24,8 +24,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises the non-blocking {@link A2AAsyncFunction} / {@link A2AStep#applyToAsync} /
- * {@link A2AStep#applyToStateful} paths on a Flink minicluster: a slow peer must time out instead of
+ * Exercises the non-blocking {@link A2AAsyncFunction} / {@link A2AStep#applyToAsync} / {@link
+ * A2AStep#applyToStateful} paths on a Flink minicluster: a slow peer must time out instead of
  * hanging, a failing peer must surface a failure, and the keyed → async → keyed split must keep the
  * remote contextId correct across turns via the shared {@link ConversationStore}.
  */
@@ -128,7 +128,8 @@ final class A2AAsyncFunctionTest {
   }
 
   @Test
-  @DisplayName("applyToStateful keeps the remote contextId correct across turns via the shared store")
+  @DisplayName(
+      "applyToStateful keeps the remote contextId correct across turns via the shared store")
   void statefulContinuityAcrossTurns() throws Exception {
     // Use the process-wide shared store: a plain instance would serialize into the job graph and
     // deserialize to a separate copy on the task side, so the test could never observe the write.
@@ -156,16 +157,19 @@ final class A2AAsyncFunctionTest {
     String turn1Context = runOneTurn(step, conv, "first turn");
     assertNotNull(turn1Context, "turn 1 must obtain a contextId from the peer");
     // The post-step must have persisted it under the conversation key.
-    assertEquals(
-        turn1Context, store.getAttribute(conv, "a2a.cont.contextId").orElseThrow());
+    assertEquals(turn1Context, store.getAttribute(conv, "a2a.cont.contextId").orElseThrow());
 
     String turn2Context = runOneTurn(step, conv, "second turn");
     // Continuity: turn 2's pre-step read the stored contextId, the peer reused it → same id.
-    assertEquals(turn1Context, turn2Context,
+    assertEquals(
+        turn1Context,
+        turn2Context,
         "the remote contextId must be reused across turns (continuity via shared store)");
   }
 
-  /** Runs a single event through applyToStateful and returns the contextId stamped on the output. */
+  /**
+   * Runs a single event through applyToStateful and returns the contextId stamped on the output.
+   */
   private static String runOneTurn(A2AStep step, String conversationId, String prompt)
       throws Exception {
     OUT.clear();
@@ -224,7 +228,9 @@ final class A2AAsyncFunctionTest {
     }
   }
 
-  /** A peer client whose call blocks for {@code delayMs} — used to trip the async operator timeout. */
+  /**
+   * A peer client whose call blocks for {@code delayMs} — used to trip the async operator timeout.
+   */
   static final class SlowClient implements A2AClient {
     private final RemoteAgentSpec spec;
     private final long delayMs;
@@ -253,8 +259,15 @@ final class A2AAsyncFunctionTest {
         throw new A2AClientException("interrupted", e);
       }
       return new A2ATask(
-          UUID.randomUUID().toString(), "ctx", A2ATaskState.COMPLETED, "ok",
-          List.of(), List.of(), null, 0L, 0L);
+          UUID.randomUUID().toString(),
+          "ctx",
+          A2ATaskState.COMPLETED,
+          "ok",
+          List.of(),
+          List.of(),
+          null,
+          0L,
+          0L);
     }
 
     @Override

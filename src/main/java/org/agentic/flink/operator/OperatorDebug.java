@@ -7,8 +7,8 @@ import org.apache.flink.util.OutputTag;
 
 /**
  * Constants shared across the agentic-flink debug pipeline. {@link #SIDE_OUT} is the single side
- * output every framework operator publishes to; the wiring helper unions all such side outputs
- * into one stream and sinks it to the configured debug channel.
+ * output every framework operator publishes to; the wiring helper unions all such side outputs into
+ * one stream and sinks it to the configured debug channel.
  */
 public final class OperatorDebug {
   private OperatorDebug() {}

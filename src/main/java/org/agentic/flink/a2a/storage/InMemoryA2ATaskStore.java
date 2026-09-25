@@ -26,7 +26,9 @@ public final class InMemoryA2ATaskStore extends ReopenableStore implements A2ATa
   // taskId -> (configId -> config), insertion-ordered.
   private transient ConcurrentHashMap<String, Map<String, A2APushConfig>> pushConfigs;
 
-  /** Usable immediately; {@code initialize} is accepted for factory symmetry but needs no config. */
+  /**
+   * Usable immediately; {@code initialize} is accepted for factory symmetry but needs no config.
+   */
   public InMemoryA2ATaskStore() {
     try {
       initialize(Map.of());

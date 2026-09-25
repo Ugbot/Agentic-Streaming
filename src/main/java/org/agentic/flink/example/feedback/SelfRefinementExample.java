@@ -22,13 +22,14 @@ import org.apache.flink.util.Collector;
  * with the critique fed back, up to an attempt budget. Per record it prints whether the answer was
  * accepted, how many attempts it took, and the best score.
  *
- * <p>Wired on the new framework instrumentation: the inner operator extends
- * {@link AgenticProcessFunction} so its per-task refinement details (attempts, scores, accepted
- * flag) flow through the debug side-output when the broadcast control plane enables it. Pass
- * {@code --debug} or set {@code AGENTIC_DEBUG=1} to see the trace.
+ * <p>Wired on the new framework instrumentation: the inner operator extends {@link
+ * AgenticProcessFunction} so its per-task refinement details (attempts, scores, accepted flag) flow
+ * through the debug side-output when the broadcast control plane enables it. Pass {@code --debug}
+ * or set {@code AGENTIC_DEBUG=1} to see the trace.
  *
- * <p>Refinement inherently needs a generator LLM, so this example requires {@code ANTHROPIC_API_KEY}
- * (the loop's offline behaviour is covered by {@code RefinementLoopTest} with a scripted generator).
+ * <p>Refinement inherently needs a generator LLM, so this example requires {@code
+ * ANTHROPIC_API_KEY} (the loop's offline behaviour is covered by {@code RefinementLoopTest} with a
+ * scripted generator).
  */
 public final class SelfRefinementExample {
 
@@ -56,8 +57,9 @@ public final class SelfRefinementExample {
 
     DataStream<Task> tasks = env.fromElements(SAMPLE);
     BroadcastStream<ControlMessage> control =
-        debug ? AgenticPipeline.seededControl(env, DebugControl.everywhere())
-              : AgenticPipeline.emptyControl(env);
+        debug
+            ? AgenticPipeline.seededControl(env, DebugControl.everywhere())
+            : AgenticPipeline.emptyControl(env);
 
     SingleOutputStreamOperator<String> verdicts =
         AgenticPipeline.wire(tasks, control, new RefineFunction(apiKey));
@@ -116,7 +118,10 @@ public final class SelfRefinementExample {
       out.collect(
           String.format(
               "%-9s attempts=%d score=%.2f | %s",
-              r.accepted ? "ACCEPTED" : "BEST-SO-FAR", r.attemptsUsed, r.finalScore(), task.prompt()));
+              r.accepted ? "ACCEPTED" : "BEST-SO-FAR",
+              r.attemptsUsed,
+              r.finalScore(),
+              task.prompt()));
     }
   }
 

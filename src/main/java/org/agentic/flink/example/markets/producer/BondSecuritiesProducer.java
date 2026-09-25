@@ -1,15 +1,15 @@
 package org.agentic.flink.example.markets.producer;
 
-import org.agentic.flink.example.markets.model.MarketRecords.Security;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.example.markets.model.MarketRecords.Security;
 
 /**
  * Java twin of {@code examples-bin/markets/bond_securities_producer.py}. Publishes a slow stream of
- * security-master rows to the {@code fnd-securities} topic. The Flink job broadcasts these into
- * the inventory enrichment stage.
+ * security-master rows to the {@code fnd-securities} topic. The Flink job broadcasts these into the
+ * inventory enrichment stage.
  *
  * <pre>
  *   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
@@ -43,8 +43,8 @@ public final class BondSecuritiesProducer {
 
     try (MarketProducerSupport mp =
         new MarketProducerSupport(MarketProducerSupport.defaultBootstrap(), "bond-securities")) {
-      System.out.printf(Locale.ROOT,
-          "producing %d securities to fnd-securities at ~%d/s%n", count, rate);
+      System.out.printf(
+          Locale.ROOT, "producing %d securities to fnd-securities at ~%d/s%n", count, rate);
       for (int i = 1; i <= count && !Thread.currentThread().isInterrupted(); i++) {
         mp.send("fnd-securities", randomSecurity(i));
         java.util.concurrent.locks.LockSupport.parkNanos(sleepNanos);
@@ -59,15 +59,23 @@ public final class BondSecuritiesProducer {
     String isin = String.format(Locale.ROOT, "FN%010d", id);
     String maturity =
         String.format(
-            Locale.ROOT, "203%d-%02d-%02d",
-            rng.nextInt(0, 6), 1 + rng.nextInt(9), 10 + rng.nextInt(18));
+            Locale.ROOT,
+            "203%d-%02d-%02d",
+            rng.nextInt(0, 6),
+            1 + rng.nextInt(9),
+            10 + rng.nextInt(18));
     return new Security(
-        id, isin, String.format(Locale.ROOT, "%09d", id),
+        id,
+        isin,
+        String.format(Locale.ROOT, "%09d", id),
         String.format(Locale.ROOT, "FNDP_%05d", id),
         String.format(Locale.ROOT, "FNDP_%05d", id),
-        sector, INDUSTRIES.get(sector).get(rng.nextInt(INDUSTRIES.get(sector).size())),
+        sector,
+        INDUSTRIES.get(sector).get(rng.nextInt(INDUSTRIES.get(sector).size())),
         Math.round(rng.nextDouble(0.005, 0.085) * 10_000.0) / 10_000.0,
-        maturity, fitch, FITCH.get(rng.nextInt(FITCH.size())),
+        maturity,
+        fitch,
+        FITCH.get(rng.nextInt(FITCH.size())),
         MOODY.get(rng.nextInt(MOODY.size())),
         IG.contains(fitch) ? "Y" : "N");
   }

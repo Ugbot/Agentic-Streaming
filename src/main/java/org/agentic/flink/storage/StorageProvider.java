@@ -96,8 +96,8 @@ public interface StorageProvider<K, V> extends Serializable {
   /**
    * Check if a key exists in storage.
    *
-   * <p>This should be more efficient than retrieving the full value when only existence needs to
-   * be checked.
+   * <p>This should be more efficient than retrieving the full value when only existence needs to be
+   * checked.
    *
    * @param key Key to check
    * @return true if key exists and has not expired, false otherwise

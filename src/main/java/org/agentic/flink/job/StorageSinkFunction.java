@@ -1,5 +1,8 @@
 package org.agentic.flink.job;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.ContextItem;
@@ -10,9 +13,6 @@ import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.ShortTermMemoryStore;
 import org.agentic.flink.storage.StorageFactory;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
@@ -20,37 +20,37 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Async sink function that persists {@link AgentEvent}s to tiered storage as a side-effect,
- * passing every event through unchanged.
+ * Async sink function that persists {@link AgentEvent}s to tiered storage as a side-effect, passing
+ * every event through unchanged.
  *
  * <p>Storage strategy:
+ *
  * <ul>
- *   <li><b>All events</b> are stored in the short-term (HOT) store keyed by flowId.
- *       This supports active conversation context and recent event lookups.</li>
+ *   <li><b>All events</b> are stored in the short-term (HOT) store keyed by flowId. This supports
+ *       active conversation context and recent event lookups.
  *   <li><b>Terminal events</b> ({@code FLOW_COMPLETED}, {@code FLOW_FAILED}) are additionally
- *       stored in the long-term (WARM) store for post-mortem analysis and conversation
- *       resumption.</li>
+ *       stored in the long-term (WARM) store for post-mortem analysis and conversation resumption.
  * </ul>
  *
  * <p>Backend selection is driven by the presence of configuration keys:
+ *
  * <ul>
  *   <li>If {@code redis.host} is explicitly configured, Redis is used for the short-term store;
- *       otherwise an in-memory store is created.</li>
+ *       otherwise an in-memory store is created.
  *   <li>If {@code postgres.url} is explicitly configured, PostgreSQL is used for the long-term
- *       store; otherwise an in-memory store is created.</li>
+ *       store; otherwise an in-memory store is created.
  * </ul>
  *
  * <p>If no {@link AgenticFlinkConfig} is provided (null), both stores default to in-memory
  * implementations suitable for testing and development.
  *
- * <p>On timeout the event is passed through without loss -- storage persistence is best-effort
- * and must never block or discard pipeline data.
+ * <p>On timeout the event is passed through without loss -- storage persistence is best-effort and
+ * must never block or discard pipeline data.
  *
  * @author Agentic Flink Team
  * @see StorageFactory
  * @see ShortTermMemoryStore
  * @see LongTermMemoryStore
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -116,10 +116,7 @@ public class StorageSinkFunction extends RichAsyncFunction<AgentEvent, AgentEven
     AgentEventType eventType = event.getEventType();
 
     LOG.debug(
-        "Persisting event: flowId={}, type={}, agent={}",
-        flowId,
-        eventType,
-        event.getAgentId());
+        "Persisting event: flowId={}, type={}, agent={}", flowId, eventType, event.getAgentId());
 
     try {
       // Store every event in the short-term (HOT) store keyed by flowId
@@ -128,7 +125,10 @@ public class StorageSinkFunction extends RichAsyncFunction<AgentEvent, AgentEven
 
       // Terminal events also go to the long-term (WARM) store
       if (eventType == AgentEventType.FLOW_COMPLETED || eventType == AgentEventType.FLOW_FAILED) {
-        LOG.debug("Terminal event -- persisting to long-term store: flowId={}, type={}", flowId, eventType);
+        LOG.debug(
+            "Terminal event -- persisting to long-term store: flowId={}, type={}",
+            flowId,
+            eventType);
         longTermStore.addFact(
             flowId,
             "terminal_" + eventType.name().toLowerCase() + "_" + event.getTimestamp(),
@@ -219,9 +219,7 @@ public class StorageSinkFunction extends RichAsyncFunction<AgentEvent, AgentEven
     return item;
   }
 
-  /**
-   * Builds a human-readable summary string for an event, used as the ContextItem content.
-   */
+  /** Builds a human-readable summary string for an event, used as the ContextItem content. */
   private String buildEventSummary(AgentEvent event) {
     StringBuilder sb = new StringBuilder();
     sb.append("[").append(event.getEventType().name()).append("] ");

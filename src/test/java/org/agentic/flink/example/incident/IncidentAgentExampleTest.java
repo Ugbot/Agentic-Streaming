@@ -14,10 +14,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The incident showcase only produces output when its synthetic stream yields three
- * consecutive anomalies on one host, because the CEP pattern needs {@code times(3)}
- * within one window. These checks pin the synthetic data to the detector the example
- * wires up, so the example cannot silently degrade into a job that prints nothing.
+ * The incident showcase only produces output when its synthetic stream yields three consecutive
+ * anomalies on one host, because the CEP pattern needs {@code times(3)} within one window. These
+ * checks pin the synthetic data to the detector the example wires up, so the example cannot
+ * silently degrade into a job that prints nothing.
  */
 class IncidentAgentExampleTest {
 

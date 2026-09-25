@@ -44,9 +44,16 @@ public final class TurnSignals {
       return false;
     }
     String n = toolName.toLowerCase(Locale.ROOT);
-    if (n.startsWith("list") || n.startsWith("get") || n.startsWith("lookup") || n.startsWith("search")
-        || n.startsWith("find") || n.startsWith("view") || n.startsWith("check")
-        || n.contains("_search") || n.equals("call_env_tool") || n.equals("list_env_tools")) {
+    if (n.startsWith("list")
+        || n.startsWith("get")
+        || n.startsWith("lookup")
+        || n.startsWith("search")
+        || n.startsWith("find")
+        || n.startsWith("view")
+        || n.startsWith("check")
+        || n.contains("_search")
+        || n.equals("call_env_tool")
+        || n.equals("list_env_tools")) {
       return false;
     }
     return true;

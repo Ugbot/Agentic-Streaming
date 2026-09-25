@@ -7,20 +7,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.embedding.djl.DjlEmbeddingConnection;
-import org.agentic.flink.inference.InferenceClient;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.UUID;
+import org.agentic.flink.embedding.djl.DjlEmbeddingConnection;
+import org.agentic.flink.inference.InferenceClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies the DJL connection's serializable surface without loading a real model. Actual
- * model loading is exercised by {@code DjlInferenceConnectionIT} under the integration
- * profile, which requires a network connection to fetch model weights.
+ * Verifies the DJL connection's serializable surface without loading a real model. Actual model
+ * loading is exercised by {@code DjlInferenceConnectionIT} under the integration profile, which
+ * requires a network connection to fetch model weights.
  */
 class DjlInferenceConnectionTest {
 
@@ -53,8 +53,7 @@ class DjlInferenceConnectionTest {
   @Test
   @DisplayName("supports() reports the right task surfaces without touching weights")
   void supportsContract() {
-    InferenceClient classifyClient =
-        DjlInferenceConnection.classification("any-uri").bind(null);
+    InferenceClient classifyClient = DjlInferenceConnection.classification("any-uri").bind(null);
     assertTrue(classifyClient.supports(InferenceClient.TaskKind.CLASSIFIER));
     assertTrue(classifyClient.supports(InferenceClient.TaskKind.SCORER));
     assertFalse(classifyClient.supports(InferenceClient.TaskKind.EMBEDDER));

@@ -1,14 +1,14 @@
 package org.agentic.flink.web;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tools.ToolExecutor;
 
 /**
- * Cheaper companion to {@link WebFetchTool}: GETs a URL and returns only the discovered links
- * (no body text). Useful when the LLM is exploring a site's structure before deciding which
- * pages are worth a full fetch.
+ * Cheaper companion to {@link WebFetchTool}: GETs a URL and returns only the discovered links (no
+ * body text). Useful when the LLM is exploring a site's structure before deciding which pages are
+ * worth a full fetch.
  */
 public final class ExtractLinksTool implements ToolExecutor {
   private static final long serialVersionUID = 1L;
@@ -43,7 +43,8 @@ public final class ExtractLinksTool implements ToolExecutor {
               return out;
             }
             DocumentExtractor.ExtractedDocument doc =
-                extractor.extract(fetched.getFinalUrl(), fetched.getBody(), fetched.getContentType());
+                extractor.extract(
+                    fetched.getFinalUrl(), fetched.getBody(), fetched.getContentType());
             out.put("ok", true);
             out.put("title", doc.getTitle());
             out.put("links", doc.getLinks());

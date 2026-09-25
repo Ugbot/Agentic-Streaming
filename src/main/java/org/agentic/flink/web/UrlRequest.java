@@ -4,13 +4,14 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * A request to fetch a URL, addressable across the crawler's many input channels (seeds,
- * sitemap discovery, LLM-driven requests, external producers).
+ * A request to fetch a URL, addressable across the crawler's many input channels (seeds, sitemap
+ * discovery, LLM-driven requests, external producers).
  */
 public final class UrlRequest implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private final String url;
+
   /** Free-form origin tag — "seed" / "discovered" / "agent" / "external:kafka" — for tracing. */
   private final String source;
 

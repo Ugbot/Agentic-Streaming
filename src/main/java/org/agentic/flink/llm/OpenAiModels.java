@@ -16,7 +16,9 @@ public final class OpenAiModels {
 
   private OpenAiModels() {}
 
-  /** True for OpenAI reasoning models that reject {@code max_tokens} / a custom {@code temperature}. */
+  /**
+   * True for OpenAI reasoning models that reject {@code max_tokens} / a custom {@code temperature}.
+   */
   public static boolean isReasoning(String modelName) {
     if (modelName == null) {
       return false;

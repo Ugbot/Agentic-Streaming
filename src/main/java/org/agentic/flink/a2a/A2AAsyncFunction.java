@@ -18,13 +18,13 @@ import org.slf4j.LoggerFactory;
  * Non-blocking, <b>stateless</b> A2A delegation operator: calls a remote peer off the operator
  * thread via Flink Async I/O ({@link RichAsyncFunction}), so a slow peer never stalls the pipeline.
  *
- * <p>Flink's Async-I/O operator cannot access keyed state (on 1.x or 2.x — 2.x's async story is async
- * <em>state access</em> via the disaggregated backend, not async external I/O), so this function
- * holds no state. The remote {@code contextId} for conversation continuity rides on the event under
- * {@link A2AStepSupport#contextIdKey(A2AStep)}: a keyed pre-step stamps it on, this operator forwards
- * it and writes the peer's returned contextId back, and a keyed post-step persists it (see {@link
- * A2AStep#applyToStateful}). For fire-and-enrich steps with no cross-turn continuity, {@link
- * A2AStep#applyToAsync} uses this operator alone.
+ * <p>Flink's Async-I/O operator cannot access keyed state (on 1.x or 2.x — 2.x's async story is
+ * async <em>state access</em> via the disaggregated backend, not async external I/O), so this
+ * function holds no state. The remote {@code contextId} for conversation continuity rides on the
+ * event under {@link A2AStepSupport#contextIdKey(A2AStep)}: a keyed pre-step stamps it on, this
+ * operator forwards it and writes the peer's returned contextId back, and a keyed post-step
+ * persists it (see {@link A2AStep#applyToStateful}). For fire-and-enrich steps with no cross-turn
+ * continuity, {@link A2AStep#applyToAsync} uses this operator alone.
  *
  * <p>The blocking {@code sendAndAwait}/{@code stream} call runs on a bounded daemon pool built in
  * {@link #open(OpenContext)} — never on the async callback thread. The client is the resilient
@@ -38,6 +38,7 @@ public final class A2AAsyncFunction extends RichAsyncFunction<AgentEvent, AgentE
 
   /** Concurrent in-flight remote calls per subtask; matches the operator's async capacity. */
   private final int poolSize;
+
   private final A2AStep step;
 
   private transient A2AClient client;
@@ -74,7 +75,9 @@ public final class A2AAsyncFunction extends RichAsyncFunction<AgentEvent, AgentE
     final AgentEvent event = input.withEventType(input.getEventType());
     final String text = A2AStepSupport.resolveInput(step, event);
     final String contextId =
-        event.getData() == null ? null : asString(event.getData().get(A2AStepSupport.contextIdKey(step)));
+        event.getData() == null
+            ? null
+            : asString(event.getData().get(A2AStepSupport.contextIdKey(step)));
 
     CompletableFuture.supplyAsync(
             () -> {
@@ -83,7 +86,8 @@ public final class A2AAsyncFunction extends RichAsyncFunction<AgentEvent, AgentE
               boolean failed = task.getState() != A2ATaskState.COMPLETED && step.failOnError();
               if (failed) {
                 return emitFailureEvent(
-                    event, "A2A step '" + step.name() + "' ended in state " + task.getState().wire());
+                    event,
+                    "A2A step '" + step.name() + "' ended in state " + task.getState().wire());
               }
               return event;
             },
@@ -91,7 +95,8 @@ public final class A2AAsyncFunction extends RichAsyncFunction<AgentEvent, AgentE
         .whenComplete(
             (result, err) -> {
               if (err != null) {
-                Throwable cause = err instanceof java.util.concurrent.CompletionException ? err.getCause() : err;
+                Throwable cause =
+                    err instanceof java.util.concurrent.CompletionException ? err.getCause() : err;
                 LOG.warn("A2A async step '{}' failed: {}", step.name(), cause.getMessage());
                 if (step.failOnError()) {
                   resultFuture.complete(

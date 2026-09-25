@@ -1,10 +1,10 @@
 package org.agentic.flink.web;
 
-import org.agentic.flink.channel.Channel;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -16,12 +16,12 @@ import org.apache.flink.util.Collector;
 /**
  * Multi-source crawler: consumes {@link UrlRequest}s from any number of {@link Channel}s (seed
  * lists, Kafka, Redis pub/sub, LLM tool invocations, sitemap discovery, …) and emits {@link
- * CrawledPage}s. <b>Doesn't own its inputs</b> — the caller wires whichever channels are
- * relevant. That's what makes the crawler targetable by both AI and external means.
+ * CrawledPage}s. <b>Doesn't own its inputs</b> — the caller wires whichever channels are relevant.
+ * That's what makes the crawler targetable by both AI and external means.
  *
- * <p>The fetch + extract loop runs inside a {@link ProcessFunction}; each subtask holds a
- * {@link Fetcher} and a {@link DocumentExtractor} bound from the serializable
- * {@link WebToolkitOptions} spec.
+ * <p>The fetch + extract loop runs inside a {@link ProcessFunction}; each subtask holds a {@link
+ * Fetcher} and a {@link DocumentExtractor} bound from the serializable {@link WebToolkitOptions}
+ * spec.
  */
 public final class CrawlerCore {
 

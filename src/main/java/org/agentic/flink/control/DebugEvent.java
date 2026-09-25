@@ -9,11 +9,11 @@ import java.util.Objects;
 
 /**
  * One emission from an operator's debug side-output. Operators only push these when their debug
- * flag is currently on; the framework's predefined debug sink consumes the union of all
- * operators' side outputs.
+ * flag is currently on; the framework's predefined debug sink consumes the union of all operators'
+ * side outputs.
  *
- * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters)
- * so the framework's debug stream avoids the Kryo fallback path.
+ * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters) so
+ * the framework's debug stream avoids the Kryo fallback path.
  */
 public final class DebugEvent implements Serializable {
   private static final long serialVersionUID = 1L;

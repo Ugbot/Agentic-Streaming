@@ -1,13 +1,13 @@
 package org.agentic.flink.storage.memory;
 
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,13 +60,11 @@ public class InMemoryLongTermStore extends ReopenableStore implements LongTermMe
     this.userConversations = new ConcurrentHashMap<>();
 
     if (config != null) {
-      this.defaultTTLSeconds =
-          Long.parseLong(config.getOrDefault("cache.ttl.seconds", "86400"));
+      this.defaultTTLSeconds = Long.parseLong(config.getOrDefault("cache.ttl.seconds", "86400"));
       this.maxSize = Integer.parseInt(config.getOrDefault("cache.max.size", "5000"));
     }
 
-    LOG.info(
-        "InMemoryLongTermStore initialized: maxSize={}, ttl={}s", maxSize, defaultTTLSeconds);
+    LOG.info("InMemoryLongTermStore initialized: maxSize={}, ttl={}s", maxSize, defaultTTLSeconds);
   }
 
   @Override
@@ -227,8 +225,8 @@ public class InMemoryLongTermStore extends ReopenableStore implements LongTermMe
   }
 
   @Override
-  public void archiveConversation(
-      String flowId, StorageProvider<String, AgentContext> coldStore) throws Exception {
+  public void archiveConversation(String flowId, StorageProvider<String, AgentContext> coldStore)
+      throws Exception {
     ensureOpen();
     if (flowId == null || coldStore == null) {
       throw new IllegalArgumentException("flowId and coldStore cannot be null");

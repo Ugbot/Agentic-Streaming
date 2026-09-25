@@ -33,10 +33,10 @@ import org.slf4j.LoggerFactory;
 /**
  * Fluss-backed {@link Channel} that emits each row of a Fluss table as a typed {@code T}.
  *
- * <p>Table schema is the conventional two-column "envelope" layout used by every framework
- * channel: {@code key STRING PRIMARY KEY}, {@code payload STRING} (JSON-encoded {@code T}).
- * Pairs with {@link FlussSink}; durable, replayable, and serves as the boundary between
- * job hops when ZeroMQ's at-most-once semantics aren't acceptable.
+ * <p>Table schema is the conventional two-column "envelope" layout used by every framework channel:
+ * {@code key STRING PRIMARY KEY}, {@code payload STRING} (JSON-encoded {@code T}). Pairs with
+ * {@link FlussSink}; durable, replayable, and serves as the boundary between job hops when ZeroMQ's
+ * at-most-once semantics aren't acceptable.
  *
  * <p>Single-parallelism by design — a single {@link LogScanner} drains every bucket and emits in
  * upsert order. For higher throughput, scale up Fluss buckets and shard the consuming operator
@@ -80,7 +80,10 @@ public final class FlussChannel<T> implements Channel<T> {
         new PollingSource<>(
             new FlussLogPollFn<>(bootstrapServers, database, table, buckets, type, fromBeginning));
     return env.fromSource(
-            source, WatermarkStrategy.noWatermarks(), "fluss[" + database + "." + table + "]", typeInfo)
+            source,
+            WatermarkStrategy.noWatermarks(),
+            "fluss[" + database + "." + table + "]",
+            typeInfo)
         .setParallelism(1);
   }
 
@@ -145,8 +148,8 @@ public final class FlussChannel<T> implements Channel<T> {
 
   /**
    * Native FLIP-27 {@link PollingSource.PollFn} that tails a Fluss table's log as a stage-to-stage
-   * stream: opens a {@link LogScanner} subscribed from the beginning of every bucket, and returns one
-   * decoded {@code T} per {@link #poll} (buffering each {@link ScanRecords} batch). This is the
+   * stream: opens a {@link LogScanner} subscribed from the beginning of every bucket, and returns
+   * one decoded {@code T} per {@link #poll} (buffering each {@link ScanRecords} batch). This is the
    * "Fluss logs between stages" boundary — durable, replayable, ordered per bucket.
    */
   static final class FlussLogPollFn<T> implements PollingSource.PollFn<T> {
@@ -203,7 +206,10 @@ public final class FlussChannel<T> implements Channel<T> {
       }
       LOG.info(
           "fluss source open db={} table={} buckets={} fromBeginning={}",
-          database, table, buckets, fromBeginning);
+          database,
+          table,
+          buckets,
+          fromBeginning);
     }
 
     @Override
@@ -215,7 +221,8 @@ public final class FlussChannel<T> implements Channel<T> {
         }
         for (ScanRecord rec : records) {
           InternalRow row = rec.getRow();
-          String payload = row.getString(FlussSink.COL_PAYLOAD).toString(); // col 0 = key, col 1 = payload
+          String payload =
+              row.getString(FlussSink.COL_PAYLOAD).toString(); // col 0 = key, col 1 = payload
           try {
             buffer.add(mapper.readValue(payload, type));
           } catch (Exception e) {

@@ -75,7 +75,10 @@ public final class HnswGraph {
   public void insert(String id, float[] vec) {
     if (vec.length != dimension) {
       throw new IllegalArgumentException(
-          "Embedding dimension " + vec.length + " does not match configured dimension " + dimension);
+          "Embedding dimension "
+              + vec.length
+              + " does not match configured dimension "
+              + dimension);
     }
     vectors.put(id, vec);
     idOrder.add(id);

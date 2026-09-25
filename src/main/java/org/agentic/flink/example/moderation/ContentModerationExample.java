@@ -1,5 +1,16 @@
 package org.agentic.flink.example.moderation;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.Classifier;
@@ -13,17 +24,6 @@ import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -35,29 +35,31 @@ import org.apache.flink.util.OutputTag;
 /**
  * Real-time content-moderation pipeline on Flink.
  *
- * <p>Each incoming post is run through a toxicity classifier. Safe posts are summarized by the
- * LLM and emitted on the main output. Toxic posts are emitted on a side output tagged with the
+ * <p>Each incoming post is run through a toxicity classifier. Safe posts are summarized by the LLM
+ * and emitted on the main output. Toxic posts are emitted on a side output tagged with the
  * predicted label and the score, ready to be written to an audit store (Postgres in production,
  * stdout here).
  *
- * <p>The {@link org.agentic.flink.inference.InferenceConnection} ships in the Flink job
- * graph; the heavy DJL model and the {@link ChatClient} are both bound lazily in
- * {@link ModerationProcessFunction#open}. The listener fires on every classification, every
- * chat response, and every block — wire it up to your metrics pipeline for SLO dashboards.
+ * <p>The {@link org.agentic.flink.inference.InferenceConnection} ships in the Flink job graph; the
+ * heavy DJL model and the {@link ChatClient} are both bound lazily in {@link
+ * ModerationProcessFunction#open}. The listener fires on every classification, every chat response,
+ * and every block — wire it up to your metrics pipeline for SLO dashboards.
  *
  * <p><b>Prerequisites:</b>
+ *
  * <pre>
  *   docker compose up -d ollama postgres
  *   docker compose exec ollama ollama pull qwen2.5:3b
  * </pre>
  *
  * <p><b>To run:</b>
+ *
  * <pre>
  *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.moderation.ContentModerationExample"
  * </pre>
  *
- * <p>For a real Kafka source, swap {@code env.fromElements(...)} for a {@code KafkaSource} —
- * see {@code docs/examples/moderation.md} for the snippet and the compose addition.
+ * <p>For a real Kafka source, swap {@code env.fromElements(...)} for a {@code KafkaSource} — see
+ * {@code docs/examples/moderation.md} for the snippet and the compose addition.
  */
 public class ContentModerationExample {
 
@@ -78,8 +80,7 @@ public class ContentModerationExample {
     return blockedLabels.contains(cls.getLabel()) && cls.getScore() >= BLOCK_THRESHOLD;
   }
 
-  static final OutputTag<BlockedPost> BLOCKED =
-      new OutputTag<>("blocked") {};
+  static final OutputTag<BlockedPost> BLOCKED = new OutputTag<>("blocked") {};
 
   public static void main(String[] args) throws Exception {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -105,19 +106,32 @@ public class ContentModerationExample {
 
     LangChain4jChatConnection chat =
         LangChain4jChatConnection.ollama(ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
-    ChatSetup chatSetup =
-        ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.3).build();
+    ChatSetup chatSetup = ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.3).build();
 
     SingleOutputStreamOperator<String> safeSummaries =
-        posts.process(
+        posts
+            .process(
                 new ModerationProcessFunction(
-                    toxicity, toxicitySetup, chat, chatSetup, Set.of("toxic", "severe_toxic", "obscene", "threat")))
+                    toxicity,
+                    toxicitySetup,
+                    chat,
+                    chatSetup,
+                    Set.of("toxic", "severe_toxic", "obscene", "threat")))
             .name("moderate");
 
     safeSummaries.print().name("safe-output");
     safeSummaries
         .getSideOutput(BLOCKED)
-        .map(b -> "BLOCKED " + b.id() + " by " + b.user() + " label=" + b.label() + " score=" + b.score())
+        .map(
+            b ->
+                "BLOCKED "
+                    + b.id()
+                    + " by "
+                    + b.user()
+                    + " label="
+                    + b.label()
+                    + " score="
+                    + b.score())
         .name("audit-sink")
         .print();
 
@@ -126,8 +140,8 @@ public class ContentModerationExample {
 
   /**
    * Per-post moderation logic. Built as a {@code ProcessFunction} so each subtask owns its own
-   * model handle — the {@code DjlInferenceConnection} spec is the only thing shipping in the
-   * job graph.
+   * model handle — the {@code DjlInferenceConnection} spec is the only thing shipping in the job
+   * graph.
    */
   static final class ModerationProcessFunction extends ProcessFunction<Post, String> {
     private static final long serialVersionUID = 1L;
@@ -153,7 +167,8 @@ public class ContentModerationExample {
       this.toxicitySetup = toxicitySetup;
       this.chatConnection = chatConnection;
       this.chatSetup = chatSetup;
-      this.blockedLabels = blockedLabels == null ? Collections.emptySet() : Set.copyOf(blockedLabels);
+      this.blockedLabels =
+          blockedLabels == null ? Collections.emptySet() : Set.copyOf(blockedLabels);
     }
 
     @Override
@@ -179,7 +194,8 @@ public class ContentModerationExample {
         audit.onGuardrailBlock("moderator", "toxic-bert", cls.getLabel());
         ctx.output(
             BLOCKED,
-            new BlockedPost(post.id(), post.user(), cls.getLabel(), cls.getScore(), snippet(post.text())));
+            new BlockedPost(
+                post.id(), post.user(), cls.getLabel(), cls.getScore(), snippet(post.text())));
         return;
       }
 
@@ -191,7 +207,8 @@ public class ContentModerationExample {
                       "Summarize the user post in <=20 words. Stay neutral and factual."),
                   ChatMessage.user(post.text())),
               chatSetup);
-      metrics.onChatResponse("moderator", chatSetup.getModelName(), resp.getText().length(), resp.getTokensUsed());
+      metrics.onChatResponse(
+          "moderator", chatSetup.getModelName(), resp.getText().length(), resp.getTokensUsed());
 
       out.collect(post.id() + " | " + post.user() + " | " + resp.getText().trim());
     }
@@ -204,9 +221,8 @@ public class ContentModerationExample {
   /**
    * Listener that POSTs blocked-post audit records to a JSON-over-HTTP endpoint.
    *
-   * <p>In production this would write to Postgres directly (we have a
-   * {@code LongTermMemoryStore} for it) or push to Kafka. The HTTP target here keeps the demo
-   * dependency-free.
+   * <p>In production this would write to Postgres directly (we have a {@code LongTermMemoryStore}
+   * for it) or push to Kafka. The HTTP target here keeps the demo dependency-free.
    */
   static final class AuditingListener implements AgentEventListener {
     private static final long serialVersionUID = 1L;

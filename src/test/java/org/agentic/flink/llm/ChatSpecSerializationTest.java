@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
@@ -15,6 +14,7 @@ import java.io.ObjectOutputStream;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -56,8 +56,7 @@ class ChatSpecSerializationTest {
   @DisplayName("ChatSetup builder rejects empty modelName")
   void chatSetupBuilderRequiresModel() {
     assertThrows(IllegalStateException.class, () -> ChatSetup.builder().build());
-    assertThrows(
-        IllegalStateException.class, () -> ChatSetup.builder().withModel("").build());
+    assertThrows(IllegalStateException.class, () -> ChatSetup.builder().withModel("").build());
   }
 
   @Test

@@ -1,11 +1,11 @@
 package org.agentic.flink.context.inverse;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.compaction.CompactionResult;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.tools.rag.DocumentIngestionToolExecutor;
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
@@ -18,8 +18,7 @@ import org.slf4j.LoggerFactory;
  * <p>Instead of retrieving (RAG), we store (Inverse RAG) Takes high-relevancy compacted items and
  * pushes to vector store for future retrieval
  */
-public class InverseRagFunction
-    extends ProcessFunction<CompactionResult, InverseRagResult> {
+public class InverseRagFunction extends ProcessFunction<CompactionResult, InverseRagResult> {
 
   private static final Logger LOG = LoggerFactory.getLogger(InverseRagFunction.class);
   public static final String UID = InverseRagFunction.class.getSimpleName();
@@ -43,9 +42,7 @@ public class InverseRagFunction
 
   @Override
   public void processElement(
-      CompactionResult compactionResult,
-      Context ctx,
-      Collector<InverseRagResult> out)
+      CompactionResult compactionResult, Context ctx, Collector<InverseRagResult> out)
       throws Exception {
 
     LOG.info(
@@ -78,8 +75,7 @@ public class InverseRagFunction
         Object ingestionResult = ingestionExecutor.execute(params).get();
 
         result.addStoredItem(item.getItemId(), ingestionResult.toString());
-        LOG.debug(
-            "Stored item {} to long-term memory: {}", item.getItemId(), ingestionResult);
+        LOG.debug("Stored item {} to long-term memory: {}", item.getItemId(), ingestionResult);
 
       } catch (Exception e) {
         LOG.error("Failed to store item {} to long-term memory", item.getItemId(), e);

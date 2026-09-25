@@ -1,14 +1,13 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
 import java.util.List;
+import org.agentic.flink.core.AgentEvent;
 
 /**
  * Result of agent execution containing output and metadata.
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -42,13 +41,33 @@ public class ExecutionResult implements Serializable {
     this.toolCalls = toolCalls;
   }
 
-  public String getFlowId() { return flowId; }
-  public String getAgentId() { return agentId; }
-  public ExecutionStatus getStatus() { return status; }
-  public String getOutput() { return output; }
-  public String getErrorMessage() { return errorMessage; }
-  public List<AgentEvent> getEvents() { return events; }
-  public List<ToolCallResult> getToolCalls() { return toolCalls; }
+  public String getFlowId() {
+    return flowId;
+  }
+
+  public String getAgentId() {
+    return agentId;
+  }
+
+  public ExecutionStatus getStatus() {
+    return status;
+  }
+
+  public String getOutput() {
+    return output;
+  }
+
+  public String getErrorMessage() {
+    return errorMessage;
+  }
+
+  public List<AgentEvent> getEvents() {
+    return events;
+  }
+
+  public List<ToolCallResult> getToolCalls() {
+    return toolCalls;
+  }
 
   public boolean isSuccess() {
     return status == ExecutionStatus.SUCCESS;
@@ -61,18 +80,29 @@ public class ExecutionResult implements Serializable {
   // Factory methods
 
   public static ExecutionResult success(
-      String flowId, String agentId, String output, List<AgentEvent> events, List<ToolCallResult> toolCalls) {
-    return new ExecutionResult(flowId, agentId, ExecutionStatus.SUCCESS, output, null, events, toolCalls);
+      String flowId,
+      String agentId,
+      String output,
+      List<AgentEvent> events,
+      List<ToolCallResult> toolCalls) {
+    return new ExecutionResult(
+        flowId, agentId, ExecutionStatus.SUCCESS, output, null, events, toolCalls);
   }
 
   public static ExecutionResult failure(
       String flowId, String agentId, String errorMessage, List<AgentEvent> events) {
-    return new ExecutionResult(flowId, agentId, ExecutionStatus.FAILURE, null, errorMessage, events, null);
+    return new ExecutionResult(
+        flowId, agentId, ExecutionStatus.FAILURE, null, errorMessage, events, null);
   }
 
   public static ExecutionResult maxIterations(
-      String flowId, String agentId, String message, List<AgentEvent> events, List<ToolCallResult> toolCalls) {
-    return new ExecutionResult(flowId, agentId, ExecutionStatus.MAX_ITERATIONS, null, message, events, toolCalls);
+      String flowId,
+      String agentId,
+      String message,
+      List<AgentEvent> events,
+      List<ToolCallResult> toolCalls) {
+    return new ExecutionResult(
+        flowId, agentId, ExecutionStatus.MAX_ITERATIONS, null, message, events, toolCalls);
   }
 
   public enum ExecutionStatus {

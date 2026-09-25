@@ -15,9 +15,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Cluster-free unit test of {@link FlussConversationCodec} — the read-modify-write JSON logic that is
- * the correctness core of {@link FlussConversationStore}. Uses randomized data; a real round trip
- * against a Fluss cluster is covered by the integration test.
+ * Cluster-free unit test of {@link FlussConversationCodec} — the read-modify-write JSON logic that
+ * is the correctness core of {@link FlussConversationStore}. Uses randomized data; a real round
+ * trip against a Fluss cluster is covered by the integration test.
  */
 class FlussConversationCodecTest {
 
@@ -92,13 +92,16 @@ class FlussConversationCodecTest {
     env = FlussConversationCodec.putAttribute(mapper, env, "banking.phase", phase);
     env = FlussConversationCodec.putAttribute(mapper, env, "a2a.cs.contextId", ctx);
 
-    assertEquals(phase, FlussConversationCodec.getAttribute(mapper, env, "banking.phase").orElseThrow());
-    assertEquals(ctx, FlussConversationCodec.getAttribute(mapper, env, "a2a.cs.contextId").orElseThrow());
+    assertEquals(
+        phase, FlussConversationCodec.getAttribute(mapper, env, "banking.phase").orElseThrow());
+    assertEquals(
+        ctx, FlussConversationCodec.getAttribute(mapper, env, "a2a.cs.contextId").orElseThrow());
     assertTrue(FlussConversationCodec.getAttribute(mapper, env, "missing").isEmpty());
     assertEquals(2, FlussConversationCodec.attributes(mapper, env).size());
     // Overwriting an attribute replaces, not duplicates.
     env = FlussConversationCodec.putAttribute(mapper, env, "banking.phase", "verify");
-    assertEquals("verify", FlussConversationCodec.getAttribute(mapper, env, "banking.phase").orElseThrow());
+    assertEquals(
+        "verify", FlussConversationCodec.getAttribute(mapper, env, "banking.phase").orElseThrow());
     assertEquals(2, FlussConversationCodec.attributes(mapper, env).size());
     // Messages untouched by attribute writes.
     assertEquals(1, FlussConversationCodec.messageCount(mapper, env));

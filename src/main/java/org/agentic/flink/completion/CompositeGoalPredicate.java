@@ -1,11 +1,11 @@
 package org.agentic.flink.completion;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.core.AgentEvent;
 
 /**
  * A composite goal predicate that combines child predicates with AND, OR, or NOT logic.
@@ -85,8 +85,7 @@ public class CompositeGoalPredicate implements GoalPredicate, Serializable {
   }
 
   @Override
-  public double getConfidence(
-      Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
+  public double getConfidence(Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
     switch (mode) {
       case AND:
         double minConfidence = 1.0;

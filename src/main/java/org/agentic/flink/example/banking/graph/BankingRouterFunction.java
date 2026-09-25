@@ -1,10 +1,9 @@
 package org.agentic.flink.example.banking.graph;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.a2a.bridge.A2ARequest;
 import org.agentic.flink.example.banking.safety.BankingScreening;
 import org.agentic.flink.screening.ScreeningResult;
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -12,10 +11,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The triage router: the first operator of a banking agent graph. Keyed by A2A {@code contextId},
- * it screens the inbound message, reads the conversation {@link BankingPhase} from the shared {@link
- * PhaseStore}, and uses the LLM-free {@link BankingClassifier} to label the turn with a {@link
- * BankingPath}. The labelled {@link BankingTurn} is fanned out to the matching path operator by
- * {@link org.agentic.flink.graph.RoutedAgentGraph}.
+ * it screens the inbound message, reads the conversation {@link BankingPhase} from the shared
+ * {@link PhaseStore}, and uses the LLM-free {@link BankingClassifier} to label the turn with a
+ * {@link BankingPath}. The labelled {@link BankingTurn} is fanned out to the matching path operator
+ * by {@link org.agentic.flink.graph.RoutedAgentGraph}.
  *
  * <p>Screening {@code BLOCK} short-circuits to the {@code REFUSE} path with a safe message — the
  * threat never reaches a path brain. The router does not advance the phase (that's the verifier's

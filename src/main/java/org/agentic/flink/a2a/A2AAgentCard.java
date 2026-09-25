@@ -15,8 +15,8 @@ import java.util.Optional;
  *
  * <p>A lean, framework-internal projection of the protocol {@code AgentCard}: enough to discover a
  * peer's endpoint, transports, capabilities, and skills (outbound), and to publish our own agents
- * (the Quarkus gateway). The SDK adapter and gateway translate between this and the SDK
- * {@code AgentCard}; everything else uses this type. Immutable + {@link Serializable}.
+ * (the Quarkus gateway). The SDK adapter and gateway translate between this and the SDK {@code
+ * AgentCard}; everything else uses this type. Immutable + {@link Serializable}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class A2AAgentCard implements Serializable {
@@ -68,7 +68,8 @@ public final class A2AAgentCard implements Serializable {
     private final boolean pushNotifications;
     private final boolean stateTransitionHistory;
 
-    public Capabilities(boolean streaming, boolean pushNotifications, boolean stateTransitionHistory) {
+    public Capabilities(
+        boolean streaming, boolean pushNotifications, boolean stateTransitionHistory) {
       this.streaming = streaming;
       this.pushNotifications = pushNotifications;
       this.stateTransitionHistory = stateTransitionHistory;
@@ -117,7 +118,8 @@ public final class A2AAgentCard implements Serializable {
     this.name = Objects.requireNonNull(name, "name");
     this.description = description == null ? "" : description;
     this.url = url;
-    this.preferredTransport = preferredTransport == null ? A2ATransport.JSONRPC : preferredTransport;
+    this.preferredTransport =
+        preferredTransport == null ? A2ATransport.JSONRPC : preferredTransport;
     this.additionalInterfaces = copy(additionalInterfaces);
     this.version = version == null ? "0.0.0" : version;
     this.capabilities = capabilities == null ? new Capabilities(false, false, false) : capabilities;
@@ -192,8 +194,9 @@ public final class A2AAgentCard implements Serializable {
   }
 
   /**
-   * Resolve the endpoint URL to use for a given transport: the matching {@code additionalInterfaces}
-   * entry, or the primary {@link #getUrl()} when it is the preferred transport.
+   * Resolve the endpoint URL to use for a given transport: the matching {@code
+   * additionalInterfaces} entry, or the primary {@link #getUrl()} when it is the preferred
+   * transport.
    */
   public Optional<String> endpointFor(A2ATransport transport) {
     if (transport == preferredTransport && url != null) {

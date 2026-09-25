@@ -1,25 +1,23 @@
 package org.agentic.flink.pipeline;
 
 import java.util.Map;
-
 import org.agentic.flink.runtime.WorkflowTurnFunction;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
-
 import org.jagentic.core.Event;
 import org.jagentic.core.TurnResult;
 
 /**
- * Pre-spec keyed operator that emitted one summary line per turn from a per-task in-memory
- * runtime. It never held conversation state in Flink: a restart lost every conversation, and a
- * redelivered turn ran the brain again.
+ * Pre-spec keyed operator that emitted one summary line per turn from a per-task in-memory runtime.
+ * It never held conversation state in Flink: a restart lost every conversation, and a redelivered
+ * turn ran the brain again.
  *
  * @deprecated use {@link WorkflowTurnFunction} (emits normalized {@link TurnResult}s and keeps the
- *     conversation event log in checkpointed keyed state) or
- *     {@link FlinkPipelineRunner#assembleResults}. This class now delegates to
- *     {@link WorkflowTurnFunction} so existing jobs gain durable state, and formats the same summary
- *     line; it will be removed with the DSL it served.
+ *     conversation event log in checkpointed keyed state) or {@link
+ *     FlinkPipelineRunner#assembleResults}. This class now delegates to {@link
+ *     WorkflowTurnFunction} so existing jobs gain durable state, and formats the same summary line;
+ *     it will be removed with the DSL it served.
  */
 @Deprecated
 public final class FlinkGraphFunction extends KeyedProcessFunction<String, Event, String> {

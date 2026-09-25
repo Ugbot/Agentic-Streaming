@@ -25,17 +25,17 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.Collector;
 
 /**
- * Multiphase payment screening over a keyed transaction stream: a band-pass amount check, a
- * "same payment three times in a row" repeat screen, and an account velocity screen are layered
- * into a combined risk; flagged payments escalate to an ML classifier and then an LLM that decides
- * ALLOW / REVIEW / BLOCK.
+ * Multiphase payment screening over a keyed transaction stream: a band-pass amount check, a "same
+ * payment three times in a row" repeat screen, and an account velocity screen are layered into a
+ * combined risk; flagged payments escalate to an ML classifier and then an LLM that decides ALLOW /
+ * REVIEW / BLOCK.
  *
- * <p>Wired on the new framework instrumentation: the inner keyed operator extends
- * {@link AgenticKeyedProcessFunction} so per-account decisions emit through the debug side-output
- * when {@code --debug} (or {@code AGENTIC_DEBUG=1}) is set.
+ * <p>Wired on the new framework instrumentation: the inner keyed operator extends {@link
+ * AgenticKeyedProcessFunction} so per-account decisions emit through the debug side-output when
+ * {@code --debug} (or {@code AGENTIC_DEBUG=1}) is set.
  *
- * <p>Keyed by account so the stateful detectors see each account's full history on one subtask.
- * Set {@code ANTHROPIC_API_KEY} to enable the LLM tier; otherwise flagged payments route to REVIEW.
+ * <p>Keyed by account so the stateful detectors see each account's full history on one subtask. Set
+ * {@code ANTHROPIC_API_KEY} to enable the LLM tier; otherwise flagged payments route to REVIEW.
  */
 public final class PaymentScreeningExample {
 
@@ -67,8 +67,9 @@ public final class PaymentScreeningExample {
 
     DataStream<Payment> payments = env.fromElements(SAMPLE);
     BroadcastStream<ControlMessage> control =
-        debug ? AgenticPipeline.seededControl(env, DebugControl.everywhere())
-              : AgenticPipeline.emptyControl(env);
+        debug
+            ? AgenticPipeline.seededControl(env, DebugControl.everywhere())
+            : AgenticPipeline.emptyControl(env);
 
     KeyedStream<Payment, String> keyed = payments.keyBy(Payment::account);
     SingleOutputStreamOperator<String> verdicts =
@@ -134,11 +135,7 @@ public final class PaymentScreeningExample {
         throws Exception {
       ScreenItem item =
           new ScreenItem(
-              p.account(),
-              p.amount(),
-              p.merchant(),
-              p.ts(),
-              Map.of("merchant", p.merchant()));
+              p.account(), p.amount(), p.merchant(), p.ts(), Map.of("merchant", p.merchant()));
       ScreeningResult r = pipeline.screen(item);
 
       if (debugEnabled(ctx)) {

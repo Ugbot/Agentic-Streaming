@@ -34,8 +34,8 @@ public final class McpToolRegistry {
   }
 
   /**
-   * List tools via the supplied (already-initialized) client and wrap each as an executor.
-   * The client is reused by every returned executor.
+   * List tools via the supplied (already-initialized) client and wrap each as an executor. The
+   * client is reused by every returned executor.
    */
   public static List<McpToolExecutor> discover(McpServerSpec spec, McpClient client)
       throws IOException {

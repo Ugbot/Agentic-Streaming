@@ -12,11 +12,13 @@ public final class TestClusters {
   public static MiniCluster start(int slots) throws Exception {
     Configuration conf = new Configuration();
     conf.set(RestOptions.BIND_PORT, "0");
-    MiniCluster cluster = new MiniCluster(new MiniClusterConfiguration.Builder()
-        .setConfiguration(conf)
-        .setNumTaskManagers(1)
-        .setNumSlotsPerTaskManager(slots)
-        .build());
+    MiniCluster cluster =
+        new MiniCluster(
+            new MiniClusterConfiguration.Builder()
+                .setConfiguration(conf)
+                .setNumTaskManagers(1)
+                .setNumSlotsPerTaskManager(slots)
+                .build());
     cluster.start();
     return cluster;
   }

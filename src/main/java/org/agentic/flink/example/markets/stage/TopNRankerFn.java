@@ -1,10 +1,9 @@
 package org.agentic.flink.example.markets.stage;
 
-import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
-import org.agentic.flink.example.markets.model.MarketRecords.RankedQuote;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
+import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
+import org.agentic.flink.example.markets.model.MarketRecords.RankedQuote;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
@@ -19,8 +18,8 @@ import org.apache.flink.util.Collector;
  * delay), which is what downstream best-quote and feature-aggregation operators want.
  *
  * <p>State: latest quote per dealer (deduped by {@code companyShortName}), kept sorted by price —
- * descending for BID (highest is rank 1), ascending for OFFER (lowest is rank 1) — capped at
- * {@link #topN}. Emits one {@link RankedQuote} per current slot on each tick.
+ * descending for BID (highest is rank 1), ascending for OFFER (lowest is rank 1) — capped at {@link
+ * #topN}. Emits one {@link RankedQuote} per current slot on each tick.
  *
  * <p>Key: {@code instrumentId + "|" + side}.
  */
@@ -45,8 +44,8 @@ public final class TopNRankerFn
   }
 
   @Override
-  public void processElement(
-      EnrichedInventory inv, Context ctx, Collector<RankedQuote> out) throws Exception {
+  public void processElement(EnrichedInventory inv, Context ctx, Collector<RankedQuote> out)
+      throws Exception {
     ArrayList<EnrichedInventory> list = ranking.value();
     if (list == null) list = new ArrayList<>(topN + 1);
 

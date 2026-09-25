@@ -17,15 +17,36 @@ public final class Workflows {
     billing.put("tool_triggers", Map.of("balance", "lookup_charge"));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "support");
-    agent.put("router", Map.of("kind", "keyword", "default", "general",
-        "rules", Map.of("billing", List.of("balance", "charge"))));
-    agent.put("paths", Map.of(
-        "billing", billing,
-        "general", Map.of("brain", "rule", "prompt", "You answer general questions.")));
+    agent.put(
+        "router",
+        Map.of(
+            "kind",
+            "keyword",
+            "default",
+            "general",
+            "rules",
+            Map.of("billing", List.of("balance", "charge"))));
+    agent.put(
+        "paths",
+        Map.of(
+            "billing",
+            billing,
+            "general",
+            Map.of("brain", "rule", "prompt", "You answer general questions.")));
     agent.put("verifier", Map.of("kind", "none"));
     Map<String, Object> wf = base(agent);
-    wf.put("tools", List.of(Map.of("id", "lookup_charge", "kind", "constant", "description", "Last charge",
-        "value", 42.5)));
+    wf.put(
+        "tools",
+        List.of(
+            Map.of(
+                "id",
+                "lookup_charge",
+                "kind",
+                "constant",
+                "description",
+                "Last charge",
+                "value",
+                42.5)));
     return wf;
   }
 
@@ -37,12 +58,18 @@ public final class Workflows {
     main.put("tool_triggers", Map.of("charge", "broken_tool"));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "failing");
-    agent.put("router", Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("charge"))));
+    agent.put(
+        "router",
+        Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("charge"))));
     agent.put("paths", Map.of("main", main));
     agent.put("verifier", Map.of("kind", "none"));
     Map<String, Object> wf = base(agent);
-    wf.put("policies", Map.of("on_tool_error", "fail", "retry", Map.of("kind", "none", "max_attempts", 1)));
-    wf.put("tools", List.of(Map.of("id", "broken_tool", "kind", "failing", "description", "Always raises")));
+    wf.put(
+        "policies",
+        Map.of("on_tool_error", "fail", "retry", Map.of("kind", "none", "max_attempts", 1)));
+    wf.put(
+        "tools",
+        List.of(Map.of("id", "broken_tool", "kind", "failing", "description", "Always raises")));
     return wf;
   }
 
@@ -54,7 +81,9 @@ public final class Workflows {
     main.put("x-suspend-until", "approval");
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "approval");
-    agent.put("router", Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("refund"))));
+    agent.put(
+        "router",
+        Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("refund"))));
     agent.put("paths", Map.of("main", main));
     agent.put("verifier", Map.of("kind", "none"));
     return base(agent);

@@ -92,7 +92,9 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
     return resumeAfter != null;
   }
 
-  /** Reads {@code runtime.flink} from a workflow document; absent block yields {@link #DEFAULTS}. */
+  /**
+   * Reads {@code runtime.flink} from a workflow document; absent block yields {@link #DEFAULTS}.
+   */
   public static FlinkRuntimeOptions fromSpec(Map<String, Object> spec) {
     Objects.requireNonNull(spec, "spec");
     Object runtime = spec.get(RUNTIME_KEY);
@@ -112,8 +114,12 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
       switch (d) {
         case "processing_time" -> domain = TimeDomain.PROCESSING_TIME;
         case "event_time" -> domain = TimeDomain.EVENT_TIME;
-        default -> throw new IllegalArgumentException(
-            "runtime.flink." + TIMER_DOMAIN + " must be processing_time|event_time, got " + rawDomain);
+        default ->
+            throw new IllegalArgumentException(
+                "runtime.flink."
+                    + TIMER_DOMAIN
+                    + " must be processing_time|event_time, got "
+                    + rawDomain);
       }
     }
     return new FlinkRuntimeOptions(ttl, resume, domain);
@@ -124,7 +130,8 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
       return null;
     }
     if (!(raw instanceof Number n)) {
-      throw new IllegalArgumentException("runtime.flink." + key + " must be a number of milliseconds, got " + raw);
+      throw new IllegalArgumentException(
+          "runtime.flink." + key + " must be a number of milliseconds, got " + raw);
     }
     return Duration.ofMillis(n.longValue());
   }

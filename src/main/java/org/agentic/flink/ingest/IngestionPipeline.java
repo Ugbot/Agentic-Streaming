@@ -1,5 +1,7 @@
 package org.agentic.flink.ingest;
 
+import java.util.List;
+import java.util.Objects;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
@@ -9,8 +11,6 @@ import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
 import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.web.CrawledPage;
-import java.util.List;
-import java.util.Objects;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -22,8 +22,8 @@ import org.slf4j.LoggerFactory;
  * Thin builder DSL for chunk → embed → index pipelines.
  *
  * <p>Each {@code .stage()} call attaches a Flink operator with the right {@code
- * bind(RuntimeContext)} in its {@code open()}. The result is a {@code DataStream<IngestAck>}
- * that users can sink anywhere they like.
+ * bind(RuntimeContext)} in its {@code open()}. The result is a {@code DataStream<IngestAck>} that
+ * users can sink anywhere they like.
  *
  * <p>Example:
  *
@@ -143,10 +143,7 @@ public final class IngestionPipeline {
     @Override
     public void open(OpenContext openContext) throws Exception {
       client = conn.bind(getRuntimeContext());
-      setup =
-          defaultSetup != null
-              ? defaultSetup
-              : EmbeddingSetup.of(conn.providerName(), 384);
+      setup = defaultSetup != null ? defaultSetup : EmbeddingSetup.of(conn.providerName(), 384);
     }
 
     @Override

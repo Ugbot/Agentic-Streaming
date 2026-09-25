@@ -7,8 +7,8 @@ import org.agentic.flink.inference.InferenceSetup;
 
 /**
  * Classifier-backed detector: runs the ML {@link Classifier} over a text view of the item and emits
- * a {@link Phase#CLASSIFIER} signal weighted by the classification score. Used by
- * {@link ScreeningPipeline}'s ML tier, but also usable as a rule-tier {@link Detector}.
+ * a {@link Phase#CLASSIFIER} signal weighted by the classification score. Used by {@link
+ * ScreeningPipeline}'s ML tier, but also usable as a rule-tier {@link Detector}.
  *
  * <p>The {@link Classifier} is bound lazily and held {@code transient} so the detector stays
  * Serializable for Flink distribution; it rebinds per task.
@@ -45,7 +45,9 @@ public final class ClassifierDetector implements Detector {
   public Signal inspect(ScreenItem item, ScreenContext ctx) {
     ClassificationResult r = classify(item);
     return new Signal(
-        name(), Phase.CLASSIFIER, r.getScore(),
+        name(),
+        Phase.CLASSIFIER,
+        r.getScore(),
         String.format("classified '%s' (%.2f)", r.getLabel(), r.getScore()));
   }
 

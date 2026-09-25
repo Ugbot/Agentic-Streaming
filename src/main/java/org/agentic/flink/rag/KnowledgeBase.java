@@ -1,5 +1,11 @@
 package org.agentic.flink.rag;
 
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -17,12 +23,6 @@ import org.agentic.flink.storage.VectorStore;
 import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.web.WebFetchTool;
 import org.agentic.flink.web.WebToolkitOptions;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,13 +32,13 @@ import org.slf4j.LoggerFactory;
  * retrieval run synchronously in the calling thread so it is trivial to use interactively. For
  * distributed ingestion at scale use {@code IngestionPipeline} / {@code RetrievalPipeline}.
  *
- * <p>Wires together: {@link WebFetchTool} (scrape) → {@link Chunker} (split) →
- * {@link EmbeddingConnection} (embed; Ollama by default) → {@link VectorStore} (index; in-memory by
+ * <p>Wires together: {@link WebFetchTool} (scrape) → {@link Chunker} (split) → {@link
+ * EmbeddingConnection} (embed; Ollama by default) → {@link VectorStore} (index; in-memory by
  * default) → {@link ChatConnection} (answer; Claude when an Anthropic key is supplied).
  *
- * <p>Defaults: Ollama {@code nomic-embed-text} at {@code localhost:11434} (768-dim),
- * {@link InMemoryVectorStore}, recursive 800-char chunks with 100-char overlap, Claude
- * {@code claude-sonnet-4-6} for answers. Override any piece via {@link Builder}.
+ * <p>Defaults: Ollama {@code nomic-embed-text} at {@code localhost:11434} (768-dim), {@link
+ * InMemoryVectorStore}, recursive 800-char chunks with 100-char overlap, Claude {@code
+ * claude-sonnet-4-6} for answers. Override any piece via {@link Builder}.
  */
 public final class KnowledgeBase {
 
@@ -105,7 +105,8 @@ public final class KnowledgeBase {
     if (!ok) {
       String reason = String.valueOf(fetched.getOrDefault("error", fetched.get("status")));
       LOG.warn("Skipping {} — fetch not ok: {}", url, reason);
-      return new IngestResult(url, String.valueOf(fetched.getOrDefault("title", "")), 0, false, reason);
+      return new IngestResult(
+          url, String.valueOf(fetched.getOrDefault("title", "")), 0, false, reason);
     }
     String title = String.valueOf(fetched.getOrDefault("title", ""));
     String text = String.valueOf(fetched.getOrDefault("text", ""));
@@ -179,8 +180,7 @@ public final class KnowledgeBase {
     String system =
         "You answer questions using ONLY the provided sources. Cite sources by their bracket "
             + "number, e.g. [1]. If the sources do not contain the answer, say so plainly.";
-    String user =
-        "Sources:\n" + context + "\nQuestion: " + question + "\n\nAnswer with citations:";
+    String user = "Sources:\n" + context + "\nQuestion: " + question + "\n\nAnswer with citations:";
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(ChatMessage.system(system));
     messages.add(ChatMessage.user(user));

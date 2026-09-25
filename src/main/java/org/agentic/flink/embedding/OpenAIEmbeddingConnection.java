@@ -10,9 +10,9 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * 1536-dim) via LangChain4J's {@code OpenAiEmbeddingModel} with {@code OPENAI_API_KEY} auth.
  *
  * <p>The semantic alternative to the keyword KB search when only an OpenAI key is available (the
- * hackathon mandates {@code gemini-embedding-001} for marked runs; this is a dev-parity option). The
- * {@link EmbeddingSetup} carries the model name and dimensionality — keep it at the model's native
- * size unless you also reduce it via the model's {@code dimensions}.
+ * hackathon mandates {@code gemini-embedding-001} for marked runs; this is a dev-parity option).
+ * The {@link EmbeddingSetup} carries the model name and dimensionality — keep it at the model's
+ * native size unless you also reduce it via the model's {@code dimensions}.
  */
 public final class OpenAIEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;

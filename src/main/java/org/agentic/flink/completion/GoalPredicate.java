@@ -1,10 +1,10 @@
 package org.agentic.flink.completion;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 
 /**
  * Interface for goal-based completion predicates (FUTURE ARCHITECTURE).
@@ -12,16 +12,18 @@ import java.util.Map;
  * <p>This interface defines the contract for goal-based completion checking, which is more flexible
  * than simple task counting. Instead of tracking "N tasks done", goals allow expressing complex
  * completion conditions like:
+ *
  * <ul>
- *   <li>"User data fetched AND preferences loaded AND (history available OR timeout occurred)"</li>
- *   <li>"Total research score >= 0.9"</li>
- *   <li>"All validation checks passed OR manual override received"</li>
- *   <li>"Budget remaining > 0 AND quality threshold met"</li>
+ *   <li>"User data fetched AND preferences loaded AND (history available OR timeout occurred)"
+ *   <li>"Total research score >= 0.9"
+ *   <li>"All validation checks passed OR manual override received"
+ *   <li>"Budget remaining > 0 AND quality threshold met"
  * </ul>
  *
  * <p><b>Architecture Document:</b> See docs/GOAL_BASED_ARCHITECTURE.md for detailed design.
  *
  * <p><b>Future Implementation Plan:</b>
+ *
  * <pre>
  * Phase 1 (Current): Event aggregation with TaskList
  *     - Simple "N things done" counting
@@ -41,6 +43,7 @@ import java.util.Map;
  * </pre>
  *
  * <p><b>Usage Example (Future):</b>
+ *
  * <pre>{@code
  * GoalPredicate researchGoal = GoalPredicate.builder()
  *     .requireAll(
@@ -85,17 +88,19 @@ public interface GoalPredicate extends Serializable {
    * Returns a confidence score (0.0 to 1.0) indicating how close the goal is to being satisfied.
    *
    * <p>This enables early termination strategies and adaptive behavior:
+   *
    * <ul>
-   *   <li>0.0 = Not satisfied at all</li>
-   *   <li>0.5 = Halfway to satisfaction</li>
-   *   <li>1.0 = Fully satisfied</li>
+   *   <li>0.0 = Not satisfied at all
+   *   <li>0.5 = Halfway to satisfaction
+   *   <li>1.0 = Fully satisfied
    * </ul>
    *
    * @param currentState Current agent state
    * @param eventHistory Historical events
    * @return confidence score between 0.0 and 1.0
    */
-  default double getConfidence(Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
+  default double getConfidence(
+      Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
     return isSatisfied(currentState, eventHistory) ? 1.0 : 0.0;
   }
 

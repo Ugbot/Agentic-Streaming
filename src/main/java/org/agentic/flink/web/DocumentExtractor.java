@@ -23,8 +23,8 @@ import org.jsoup.select.Elements;
  * Pulls clean text + links out of arbitrary fetched content via Apache Tika.
  *
  * <p>HTML payloads get a Jsoup-driven extraction (better for link discovery + title); everything
- * else (PDF / DOC / PPT / EPUB / RTF / plain text / …) is routed through Tika's auto-detect
- * parser. Either way the result is the same {@link ExtractedDocument} shape.
+ * else (PDF / DOC / PPT / EPUB / RTF / plain text / …) is routed through Tika's auto-detect parser.
+ * Either way the result is the same {@link ExtractedDocument} shape.
  */
 public final class DocumentExtractor implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -82,7 +82,8 @@ public final class DocumentExtractor implements Serializable {
       for (String name : md.names()) {
         metadata.put(name, md.get(name));
       }
-      return new ExtractedDocument(title == null ? "" : title, text == null ? "" : text, List.of(), metadata);
+      return new ExtractedDocument(
+          title == null ? "" : title, text == null ? "" : text, List.of(), metadata);
     } catch (Exception e) {
       return new ExtractedDocument("", "", List.of(), Map.of("extract_error", e.getMessage()));
     }
@@ -96,7 +97,8 @@ public final class DocumentExtractor implements Serializable {
     private final List<String> links;
     private final Map<String, String> metadata;
 
-    public ExtractedDocument(String title, String text, List<String> links, Map<String, String> metadata) {
+    public ExtractedDocument(
+        String title, String text, List<String> links, Map<String, String> metadata) {
       this.title = title == null ? "" : title;
       this.text = text == null ? "" : text;
       this.links = links == null ? List.of() : List.copyOf(links);

@@ -1,17 +1,12 @@
 package org.agentic.flink.plugins.flintagents.examples;
 
-import org.agentic.flink.context.core.AgentContext;
+import java.util.*;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
-import org.agentic.flink.plugins.flintagents.action.ContextManagementActionWithStorage;
-import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.ShortTermMemoryStore;
 import org.agentic.flink.storage.StorageFactory;
 import org.agentic.flink.storage.config.StorageConfiguration;
-import java.util.*;
-import org.apache.flink.agents.api.Event;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 /**
@@ -57,12 +52,14 @@ public class PluggableStorageExample {
 
     // Store context items
     List<ContextItem> items = new ArrayList<>();
-    items.add(new ContextItem("User asked about order #12345", ContextPriority.MUST,
-        MemoryType.SHORT_TERM));
-    items.add(new ContextItem("User is premium tier", ContextPriority.SHOULD,
-        MemoryType.SHORT_TERM));
-    items.add(new ContextItem("Previous interaction was positive", ContextPriority.COULD,
-        MemoryType.SHORT_TERM));
+    items.add(
+        new ContextItem(
+            "User asked about order #12345", ContextPriority.MUST, MemoryType.SHORT_TERM));
+    items.add(
+        new ContextItem("User is premium tier", ContextPriority.SHOULD, MemoryType.SHORT_TERM));
+    items.add(
+        new ContextItem(
+            "Previous interaction was positive", ContextPriority.COULD, MemoryType.SHORT_TERM));
 
     String flowId = "flow-001";
     hotStore.putItems(flowId, items);
@@ -109,10 +106,12 @@ public class PluggableStorageExample {
             .build();
 
     System.out.println("Storage configuration created");
-    System.out.println("HOT tier configured: " + storageConfig.isTierConfigured(
-        org.agentic.flink.storage.StorageTier.HOT));
-    System.out.println("WARM tier configured: " + storageConfig.isTierConfigured(
-        org.agentic.flink.storage.StorageTier.WARM));
+    System.out.println(
+        "HOT tier configured: "
+            + storageConfig.isTierConfigured(org.agentic.flink.storage.StorageTier.HOT));
+    System.out.println(
+        "WARM tier configured: "
+            + storageConfig.isTierConfigured(org.agentic.flink.storage.StorageTier.WARM));
 
     // Create storage providers from configuration
     ShortTermMemoryStore hotStore = storageConfig.createShortTermStore();
@@ -121,10 +120,10 @@ public class PluggableStorageExample {
 
     // Use the store
     String flowId = "flow-002";
-    List<ContextItem> items = Arrays.asList(
-        new ContextItem("Context from programmatic config", ContextPriority.MUST,
-            MemoryType.SHORT_TERM)
-    );
+    List<ContextItem> items =
+        Arrays.asList(
+            new ContextItem(
+                "Context from programmatic config", ContextPriority.MUST, MemoryType.SHORT_TERM));
 
     hotStore.putItems(flowId, items);
     System.out.println("Stored items using configured storage");
@@ -159,9 +158,7 @@ public class PluggableStorageExample {
     hotConfig.put("cache.ttl.seconds", "3600");
 
     StorageConfiguration storageConfig =
-        StorageConfiguration.builder()
-            .withHotTier("memory", hotConfig)
-            .build();
+        StorageConfiguration.builder().withHotTier("memory", hotConfig).build();
 
     // Create data source (would be Kafka in production)
     // DataStream<Event> events = env.addSource(new KafkaSource(...));
@@ -225,7 +222,6 @@ public class PluggableStorageExample {
     */
 
     System.out.println("WARM tier example requires Redis (code commented out)");
-    System.out.println(
-        "Add Jedis dependency and uncomment code in warmTierExample() to run\n");
+    System.out.println("Add Jedis dependency and uncomment code in warmTierExample() to run\n");
   }
 }

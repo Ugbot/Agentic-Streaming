@@ -37,7 +37,8 @@ import redis.clients.jedis.JedisPoolConfig;
  * META-INF/services/org.agentic.flink.memory.conversation.ConversationStore}). The no-arg
  * constructor self-gates on {@link ConfigKeys#CONVERSATION_STORE}{@code =redis}: when not selected
  * it throws so {@link org.agentic.flink.memory.conversation.ConversationStores#discover()} skips it
- * and falls back to the in-JVM store — so unit tests and dev default to in-JVM with no Redis needed.
+ * and falls back to the in-JVM store — so unit tests and dev default to in-JVM with no Redis
+ * needed.
  *
  * <p>{@link java.io.Serializable} (host/port config fields); the {@link JedisPool} + mapper are
  * transient and rebuilt lazily on the task side, matching the framework's other Redis-backed
@@ -88,12 +89,15 @@ public final class RedisConversationStore implements ConversationStore {
           config.get(ConfigKeys.CONVERSATION_STORE, ConfigKeys.DEFAULT_CONVERSATION_STORE);
       if (!"redis".equalsIgnoreCase(selected)) {
         throw new IllegalStateException(
-            "RedisConversationStore not selected (" + ConfigKeys.CONVERSATION_STORE + "=" + selected + ")");
+            "RedisConversationStore not selected ("
+                + ConfigKeys.CONVERSATION_STORE
+                + "="
+                + selected
+                + ")");
       }
     }
     this.host = config.get(ConfigKeys.REDIS_HOST, ConfigKeys.DEFAULT_REDIS_HOST);
-    this.port =
-        Integer.parseInt(config.get(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
+    this.port = Integer.parseInt(config.get(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT));
     this.password = config.get(ConfigKeys.REDIS_PASSWORD);
     this.maxMessages =
         config.getInt(
@@ -103,7 +107,12 @@ public final class RedisConversationStore implements ConversationStore {
         config.getInt(
             ConfigKeys.CONVERSATION_STORE_TTL_SECONDS,
             Integer.parseInt(ConfigKeys.DEFAULT_CONVERSATION_STORE_TTL_SECONDS));
-    LOG.info("RedisConversationStore enabled: host={} port={} ttl={}s cap={}", host, port, ttlSeconds, maxMessages);
+    LOG.info(
+        "RedisConversationStore enabled: host={} port={} ttl={}s cap={}",
+        host,
+        port,
+        ttlSeconds,
+        maxMessages);
   }
 
   // ==================== transcript ====================

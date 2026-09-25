@@ -1,5 +1,8 @@
 package org.agentic.flink.example;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.*;
 import org.agentic.flink.function.ToolCallAsyncFunctionV2;
@@ -7,9 +10,6 @@ import org.agentic.flink.serde.ToolCallRequest;
 import org.agentic.flink.serde.ToolCallResponse;
 import org.agentic.flink.tools.ToolExecutorRegistry;
 import org.agentic.flink.tools.rag.*;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.PipelineOptions;
 import org.apache.flink.streaming.api.datastream.AsyncDataStream;
@@ -74,7 +74,9 @@ public class RagAgentExample {
     Map<String, ToolDefinition> registry = new HashMap<>();
 
     // Tool 1: Document Ingestion
-    ToolDefinition ingestion = new ToolDefinition("document_ingestion", "Document Ingestion", "Ingest documents into knowledge base");
+    ToolDefinition ingestion =
+        new ToolDefinition(
+            "document_ingestion", "Document Ingestion", "Ingest documents into knowledge base");
     ingestion.addInputParameter("content", "string", "Document content to ingest", true);
     ingestion.addInputParameter("chunk_size", "number", "Chunk size for splitting", false);
     ingestion.addInputParameter("chunk_overlap", "number", "Overlap between chunks", false);
@@ -95,9 +97,7 @@ public class RagAgentExample {
     // Tool 3: RAG Query
     ToolDefinition rag =
         new ToolDefinition(
-            "rag",
-            "RAG Query",
-            "Answer questions using retrieval-augmented generation");
+            "rag", "RAG Query", "Answer questions using retrieval-augmented generation");
     rag.addInputParameter("query", "string", "Question to answer", true);
     rag.addInputParameter("max_results", "number", "Max context documents", false);
     rag.addInputParameter("min_score", "number", "Minimum relevance score", false);
@@ -224,8 +224,7 @@ public class RagAgentExample {
     return request;
   }
 
-  private static ToolCallRequest createEmbeddingRequest(
-      String flowId, String userId, String text) {
+  private static ToolCallRequest createEmbeddingRequest(String flowId, String userId, String text) {
     Map<String, Object> params = new HashMap<>();
     params.put("text", text);
     params.put("return_vector", false);

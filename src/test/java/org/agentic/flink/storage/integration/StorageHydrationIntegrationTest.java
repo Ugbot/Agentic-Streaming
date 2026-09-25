@@ -2,6 +2,7 @@ package org.agentic.flink.storage.integration;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.*;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
@@ -9,7 +10,6 @@ import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.ShortTermMemoryStore;
 import org.agentic.flink.storage.config.StorageConfiguration;
-import java.util.*;
 import org.junit.jupiter.api.*;
 
 /**
@@ -396,8 +396,7 @@ class StorageHydrationIntegrationTest {
     return item;
   }
 
-  private AgentContext createAgentContext(
-      String flowId, String userId, List<ContextItem> items) {
+  private AgentContext createAgentContext(String flowId, String userId, List<ContextItem> items) {
     AgentContext context = new AgentContext("test-agent", flowId, userId, 8000, 50);
 
     for (ContextItem item : items) {

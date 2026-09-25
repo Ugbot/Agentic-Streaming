@@ -18,8 +18,9 @@ import org.slf4j.LoggerFactory;
  * discipline.
  *
  * <p>Use a per-tool instance ({@link #EnvApiToolExecutor(EnvApiClient, String, String)}) for each
- * fetched tool schema, plus one {@link #fallback(EnvApiClient)} for the generic {@code call_env_tool}
- * escape hatch (covers tools granted mid-conversation that aren't in the agent's list yet).
+ * fetched tool schema, plus one {@link #fallback(EnvApiClient)} for the generic {@code
+ * call_env_tool} escape hatch (covers tools granted mid-conversation that aren't in the agent's
+ * list yet).
  */
 public final class EnvApiToolExecutor implements ToolExecutor {
   private static final long serialVersionUID = 1L;

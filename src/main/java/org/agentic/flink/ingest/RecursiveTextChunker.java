@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * LangChain-style recursive text splitter: prefer paragraph boundaries, then sentence
- * boundaries, then word boundaries, then characters. Targets {@code maxChars} per chunk with an
- * optional overlap that helps retrieval recall when a relevant span straddles a chunk boundary.
+ * LangChain-style recursive text splitter: prefer paragraph boundaries, then sentence boundaries,
+ * then word boundaries, then characters. Targets {@code maxChars} per chunk with an optional
+ * overlap that helps retrieval recall when a relevant span straddles a chunk boundary.
  *
  * <p>Token-count estimates use the conservative 4-char-per-token heuristic.
  */

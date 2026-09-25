@@ -10,19 +10,21 @@ import java.util.Locale;
  * org.agentic.flink.function.ReActProcessFunction} operator and the banking {@code ReActTurnBrain}.
  *
  * <p>Small models frequently <b>stall</b>: they end a turn with a {@code final} step that merely
- * <em>narrates</em> a tool need ("I need to inspect the available tools first", "I don't have access
- * to the required tools") instead of emitting the {@code action} step that actually calls the tool —
- * so the tool is never called and the task silently fails. A loop should detect that case and push
- * back (re-prompt) a bounded number of times before accepting such a final.
+ * <em>narrates</em> a tool need ("I need to inspect the available tools first", "I don't have
+ * access to the required tools") instead of emitting the {@code action} step that actually calls
+ * the tool — so the tool is never called and the task silently fails. A loop should detect that
+ * case and push back (re-prompt) a bounded number of times before accepting such a final.
  *
- * <p>Pure and Flink-free so both the Flink operator and the plain-JVM brain can reuse it. Use it as:
- * track tool calls per run; on a {@code final}, if the model has tools, has called none, hasn't been
- * nudged {@link #MAX_STALL_NUDGES} times, and {@link #looksLikeToolStall} matches, append {@link
- * #stallNudge} as a user turn and continue instead of finishing.
+ * <p>Pure and Flink-free so both the Flink operator and the plain-JVM brain can reuse it. Use it
+ * as: track tool calls per run; on a {@code final}, if the model has tools, has called none, hasn't
+ * been nudged {@link #MAX_STALL_NUDGES} times, and {@link #looksLikeToolStall} matches, append
+ * {@link #stallNudge} as a user turn and continue instead of finishing.
  */
 public final class ReActGuard {
 
-  /** Max times a loop pushes back on a "I need to use a tool" non-action final before accepting it. */
+  /**
+   * Max times a loop pushes back on a "I need to use a tool" non-action final before accepting it.
+   */
   public static final int MAX_STALL_NUDGES = 3;
 
   private ReActGuard() {}

@@ -23,9 +23,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * The Jackson-backed {@link JsonTypeInfo} serializer round-trips the framework's would-be-Kryo value
- * types through Flink's {@link TypeSerializer} contract — proving they no longer need Kryo, and that
- * mutable types are deep-copied (not aliased) on {@code copy}.
+ * The Jackson-backed {@link JsonTypeInfo} serializer round-trips the framework's would-be-Kryo
+ * value types through Flink's {@link TypeSerializer} contract — proving they no longer need Kryo,
+ * and that mutable types are deep-copied (not aliased) on {@code copy}.
  */
 class JsonTypeInfoTest {
 
@@ -33,7 +33,8 @@ class JsonTypeInfoTest {
     TypeSerializer<T> ser = info.createSerializer(new SerializerConfigImpl());
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     ser.serialize(value, new DataOutputViewStreamWrapper(bos));
-    return ser.deserialize(new DataInputViewStreamWrapper(new ByteArrayInputStream(bos.toByteArray())));
+    return ser.deserialize(
+        new DataInputViewStreamWrapper(new ByteArrayInputStream(bos.toByteArray())));
   }
 
   @Test
@@ -41,7 +42,8 @@ class JsonTypeInfoTest {
   void chatMessageRoundTrips() throws Exception {
     String callId = UUID.randomUUID().toString();
     ChatMessage restored =
-        roundTrip(JsonTypeInfo.of(ChatMessage.class), ChatMessage.tool(callId, "kb_search", "result"));
+        roundTrip(
+            JsonTypeInfo.of(ChatMessage.class), ChatMessage.tool(callId, "kb_search", "result"));
     assertEquals(ChatRole.TOOL, restored.getRole());
     assertEquals(callId, restored.getToolCallId());
     assertEquals("kb_search", restored.getToolName());
@@ -76,7 +78,8 @@ class JsonTypeInfoTest {
   }
 
   @Test
-  @DisplayName("RoutingBudget round-trips caps + mutable counters + recentHashes (replaces byte[] hack)")
+  @DisplayName(
+      "RoutingBudget round-trips caps + mutable counters + recentHashes (replaces byte[] hack)")
   void routingBudgetRoundTrips() throws Exception {
     RoutingBudget b = new RoutingBudget(3, 5, 1000L, 2);
     b.startTurn(0L);

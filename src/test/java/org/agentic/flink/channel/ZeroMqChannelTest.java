@@ -34,10 +34,15 @@ final class ZeroMqChannelTest {
 
   private static ZeroMqChannel.ZmqPollFn<TestMsg> pollFn(
       ZeroMqChannel.Pattern pattern, String endpoint, boolean bind, String sub, int recvTimeoutMs) {
-    ZeroMqChannel<TestMsg> ch =
-        ZeroMqChannel.builder(pattern, endpoint, TestMsg.class).build();
+    ZeroMqChannel<TestMsg> ch = ZeroMqChannel.builder(pattern, endpoint, TestMsg.class).build();
     return new ZeroMqChannel.ZmqPollFn<>(
-        pattern, endpoint, bind, sub, 1000, 0, recvTimeoutMs,
+        pattern,
+        endpoint,
+        bind,
+        sub,
+        1000,
+        0,
+        recvTimeoutMs,
         new KafkaChannel.JsonSchema<>(TestMsg.class, ch.elementType()));
   }
 
@@ -52,7 +57,8 @@ final class ZeroMqChannelTest {
         new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.PULL, endpoint, true, "", 250))) {
 
       // PUSH sink connects.
-      ZeroMqSink.ZmqWriteFn<TestMsg> sink = ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUSH, endpoint).writeFn();
+      ZeroMqSink.ZmqWriteFn<TestMsg> sink =
+          ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUSH, endpoint).writeFn();
       sink.open(0);
       int n = 25;
       for (int i = 0; i < n; i++) {
@@ -76,7 +82,10 @@ final class ZeroMqChannelTest {
     int port = freePort();
     String endpoint = "tcp://127.0.0.1:" + port;
 
-    ZeroMqSink.ZmqWriteFn<TestMsg> sink = ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, endpoint).topic("").writeFn(); // empty topic = no prefix frame
+    ZeroMqSink.ZmqWriteFn<TestMsg> sink =
+        ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.PUB, endpoint)
+            .topic("")
+            .writeFn(); // empty topic = no prefix frame
     sink.open(0);
     Thread.sleep(100); // let the bind settle
 
@@ -105,7 +114,8 @@ final class ZeroMqChannelTest {
         new ZmqSourceDriver<>(pollFn(ZeroMqChannel.Pattern.ROUTER, endpoint, true, "", 250))) {
       Thread.sleep(100);
 
-      ZeroMqSink.ZmqWriteFn<TestMsg> sink = ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.DEALER, endpoint).writeFn();
+      ZeroMqSink.ZmqWriteFn<TestMsg> sink =
+          ZeroMqSink.<TestMsg>builder(ZeroMqSink.Pattern.DEALER, endpoint).writeFn();
       sink.open(0);
       int n = 10;
       for (int i = 0; i < n; i++) {
@@ -167,8 +177,8 @@ final class ZeroMqChannelTest {
   }
 
   /**
-   * Drives a {@link ZeroMqChannel.ZmqPollFn} on a daemon thread: opens on that thread, loops
-   * {@code poll()} into a thread-safe queue, and closes on the same thread (ZMQ thread-affinity).
+   * Drives a {@link ZeroMqChannel.ZmqPollFn} on a daemon thread: opens on that thread, loops {@code
+   * poll()} into a thread-safe queue, and closes on the same thread (ZMQ thread-affinity).
    */
   static final class ZmqSourceDriver<T> implements AutoCloseable {
     final ConcurrentLinkedQueue<T> collected = new ConcurrentLinkedQueue<>();

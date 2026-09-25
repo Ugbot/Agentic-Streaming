@@ -9,11 +9,11 @@ import org.apache.flink.util.Collector;
 /**
  * Routes legacy pipeline events to the {@link AgentJobGenerator} side output tags.
  *
- * <p>Completed flows go to the main output. Failures are split by the
- * {@code failure_kind} data field written by {@link org.agentic.flink.stream.AgentExecutionFunction}:
- * {@code timeout} goes to {@link AgentJobGenerator#TIMEOUT_TAG}, everything else to
- * {@link AgentJobGenerator#VALIDATION_FAILURES_TAG}. CEP pattern timeouts and compensation
- * requests emitted by {@link AgentExecutionFunction} are forwarded to their tags unchanged.
+ * <p>Completed flows go to the main output. Failures are split by the {@code failure_kind} data
+ * field written by {@link org.agentic.flink.stream.AgentExecutionFunction}: {@code timeout} goes to
+ * {@link AgentJobGenerator#TIMEOUT_TAG}, everything else to {@link
+ * AgentJobGenerator#VALIDATION_FAILURES_TAG}. CEP pattern timeouts and compensation requests
+ * emitted by {@link AgentExecutionFunction} are forwarded to their tags unchanged.
  *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.

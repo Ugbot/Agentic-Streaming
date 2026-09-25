@@ -1,22 +1,22 @@
 package org.agentic.flink.inference;
 
-import org.agentic.flink.llm.ChatMessage;
-import org.agentic.flink.llm.ChatResponse;
-import org.agentic.flink.llm.ChatRole;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatRole;
 
 /**
  * Guardrail backed by a {@link Classifier}.
  *
- * <p>Runs the classifier against the concatenated user-message contents on {@link #beforeChat}
- * and the assistant response text on {@link #afterChat}. If the predicted label is in the
- * configured block-list, returns {@link GuardrailDecision#block}.
+ * <p>Runs the classifier against the concatenated user-message contents on {@link #beforeChat} and
+ * the assistant response text on {@link #afterChat}. If the predicted label is in the configured
+ * block-list, returns {@link GuardrailDecision#block}.
  *
- * <p>The {@link InferenceConnection} ships in the job graph; the live {@link InferenceClient}
- * is bound lazily on first use, like {@link InferenceToolAdapter}.
+ * <p>The {@link InferenceConnection} ships in the job graph; the live {@link InferenceClient} is
+ * bound lazily on first use, like {@link InferenceToolAdapter}.
  */
 public final class ClassifierGuardrail implements Guardrail {
   private static final long serialVersionUID = 1L;
@@ -40,8 +40,7 @@ public final class ClassifierGuardrail implements Guardrail {
     this.name = name == null ? "ClassifierGuardrail" : name;
     this.connection = Objects.requireNonNull(connection, "connection");
     this.setup = Objects.requireNonNull(setup, "setup");
-    this.blockLabels =
-        blockLabels == null ? Collections.emptySet() : Set.copyOf(blockLabels);
+    this.blockLabels = blockLabels == null ? Collections.emptySet() : Set.copyOf(blockLabels);
     this.checkInput = checkInput;
     this.checkOutput = checkOutput;
   }
@@ -91,8 +90,7 @@ public final class ClassifierGuardrail implements Guardrail {
     ClassificationResult result = client().asClassifier().classify(text, setup);
     if (blockLabels.contains(result.getLabel())) {
       return GuardrailDecision.block(
-          "Blocked by " + name + ": label=" + result.getLabel(),
-          setup.getModelName());
+          "Blocked by " + name + ": label=" + result.getLabel(), setup.getModelName());
     }
     return GuardrailDecision.allow();
   }

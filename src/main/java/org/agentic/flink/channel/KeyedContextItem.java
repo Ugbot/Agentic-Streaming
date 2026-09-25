@@ -1,8 +1,8 @@
 package org.agentic.flink.channel;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.context.core.ContextItem;
 
 /** A {@link ContextItem} carrying its target flow-id, as emitted by memory-feed channels. */
 public final class KeyedContextItem implements Serializable {

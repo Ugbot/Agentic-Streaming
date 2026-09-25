@@ -4,15 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.LexiconInferenceConnection;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
-import org.agentic.flink.llm.ChatRole;
 import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatRole;
 import org.agentic.flink.llm.ChatSetup;
-import java.util.List;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.junit.jupiter.api.Test;
 
@@ -33,7 +33,8 @@ class RefinementLoopTest {
           public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
             long userTurns = messages.stream().filter(m -> m.getRole() == ChatRole.USER).count();
             int idx = (int) Math.min(Math.max(userTurns - 1, 0), outputs.length - 1);
-            return new ChatResponse(outputs[idx], "scripted", List.of(), 0L, ChatResponse.FinishReason.STOP);
+            return new ChatResponse(
+                outputs[idx], "scripted", List.of(), 0L, ChatResponse.FinishReason.STOP);
           }
 
           @Override
@@ -50,8 +51,8 @@ class RefinementLoopTest {
     RefinementLoop loop =
         RefinementLoop.builder()
             .withChatConnection(
-                scriptedSequence("a rough draft about streaming",
-                    "final answer mentioning flink and streaming"),
+                scriptedSequence(
+                    "a rough draft about streaming", "final answer mentioning flink and streaming"),
                 null)
             .withCheck(KeywordQualityCheck.requiring("flink", "streaming"))
             .withMaxAttempts(3)
@@ -102,7 +103,10 @@ class RefinementLoopTest {
             .withCheck(
                 new ClassifierQualityCheck(
                     new LexiconInferenceConnection(),
-                    InferenceSetup.builder().withModelName("lexicon").withModelUri("lexicon://x").build(),
+                    InferenceSetup.builder()
+                        .withModelName("lexicon")
+                        .withModelUri("lexicon://x")
+                        .build(),
                     0.3, // ceiling
                     true)) // pass if suspicion below 0.3
             .withMaxAttempts(2)

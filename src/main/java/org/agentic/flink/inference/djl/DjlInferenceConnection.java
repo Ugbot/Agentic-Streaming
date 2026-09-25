@@ -10,6 +10,10 @@ import ai.djl.repository.zoo.Criteria;
 import ai.djl.repository.zoo.ModelNotFoundException;
 import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.inference.ClassificationResult;
@@ -20,10 +24,6 @@ import org.agentic.flink.inference.InferenceConnection;
 import org.agentic.flink.inference.InferenceModelCache;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.Scorer;
-import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,20 +40,20 @@ import org.slf4j.LoggerFactory;
  *
  * <p>{@link InferenceClient.TaskKind#SCORER} reuses the classifier — a binary classifier's
  * positive-class probability is a usable score for ranking and quality estimation. Generic
- * inference is not supported by this backend; callers wanting arbitrary tensors should plug an
- * ONNX or PyTorch backend directly.
+ * inference is not supported by this backend; callers wanting arbitrary tensors should plug an ONNX
+ * or PyTorch backend directly.
  *
- * <p>The connection is serializable and ships in the job graph. The actual {@code ZooModel}
- * loads lazily inside {@link #bind} through {@link InferenceModelCache} so multiple operators in
- * the same task slot share weights.
+ * <p>The connection is serializable and ships in the job graph. The actual {@code ZooModel} loads
+ * lazily inside {@link #bind} through {@link InferenceModelCache} so multiple operators in the same
+ * task slot share weights.
  */
 public final class DjlInferenceConnection implements InferenceConnection {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(DjlInferenceConnection.class);
 
   /**
-   * Which task surface this connection serves. DJL needs to know up front so the right
-   * translator factory wires into the criteria.
+   * Which task surface this connection serves. DJL needs to know up front so the right translator
+   * factory wires into the criteria.
    */
   public enum Task {
     CLASSIFICATION,
@@ -64,7 +64,9 @@ public final class DjlInferenceConnection implements InferenceConnection {
   private final String defaultModelUri;
   private final String engine;
 
-  /** No-arg constructor for {@link java.util.ServiceLoader} — defaults to PyTorch + classification. */
+  /**
+   * No-arg constructor for {@link java.util.ServiceLoader} — defaults to PyTorch + classification.
+   */
   public DjlInferenceConnection() {
     this(Task.CLASSIFICATION, null, "PyTorch");
   }
@@ -150,7 +152,8 @@ public final class DjlInferenceConnection implements InferenceConnection {
         } finally {
           LOG.debug(
               "djl.classify model={} durationMs={}",
-              setup.getModelName(), (System.nanoTime() - started) / 1_000_000);
+              setup.getModelName(),
+              (System.nanoTime() - started) / 1_000_000);
         }
       };
     }
@@ -187,8 +190,7 @@ public final class DjlInferenceConnection implements InferenceConnection {
             InferenceSetup isetup =
                 InferenceSetup.builder()
                     .withModelName(esetup.getModelName())
-                    .withModelUri(
-                        defaultModelUri == null ? esetup.getModelName() : defaultModelUri)
+                    .withModelUri(defaultModelUri == null ? esetup.getModelName() : defaultModelUri)
                     .build();
             ZooModel<String, float[]> model = embeddingModel(isetup);
             try (Predictor<String, float[]> p = model.newPredictor()) {
@@ -203,7 +205,8 @@ public final class DjlInferenceConnection implements InferenceConnection {
           } finally {
             LOG.debug(
                 "djl.embed model={} durationMs={}",
-                esetup.getModelName(), (System.nanoTime() - started) / 1_000_000);
+                esetup.getModelName(),
+                (System.nanoTime() - started) / 1_000_000);
           }
         }
 
@@ -270,8 +273,7 @@ public final class DjlInferenceConnection implements InferenceConnection {
                   return criteria.loadModel();
                 } catch (IOException | ModelNotFoundException | MalformedModelException e) {
                   throw new RuntimeException(
-                      "Failed to load DJL embedding model from " + uri + ": " + e.getMessage(),
-                      e);
+                      "Failed to load DJL embedding model from " + uri + ": " + e.getMessage(), e);
                 }
               });
     }

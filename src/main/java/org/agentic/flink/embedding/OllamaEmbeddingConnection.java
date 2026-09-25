@@ -3,13 +3,13 @@ package org.agentic.flink.embedding;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.agentic.flink.config.ConfigKeys;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import org.agentic.flink.config.ConfigKeys;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +17,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Default {@link EmbeddingConnection} that talks to a local or remote Ollama service.
  *
- * <p>Uses the {@code POST /api/embeddings} endpoint. The connection holds the HTTP client and
- * base URL; the {@link EmbeddingSetup} carries the model name (e.g. {@code
- * nomic-embed-text:latest}, {@code mxbai-embed-large}).
+ * <p>Uses the {@code POST /api/embeddings} endpoint. The connection holds the HTTP client and base
+ * URL; the {@link EmbeddingSetup} carries the model name (e.g. {@code nomic-embed-text:latest},
+ * {@code mxbai-embed-large}).
  */
 public final class OllamaEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;
@@ -106,7 +106,9 @@ public final class OllamaEmbeddingConnection implements EmbeddingConnection {
         if (setup.getDimension() != dim) {
           LOG.warn(
               "Embedding dimension mismatch for model {}: setup says {}, server returned {}",
-              setup.getModelName(), setup.getDimension(), dim);
+              setup.getModelName(),
+              setup.getDimension(),
+              dim);
         }
         float[] out = new float[dim];
         for (int i = 0; i < dim; i++) {

@@ -14,11 +14,14 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
  * <p>Manages short-term, long-term, and steering memory
  */
 @Data
-@NoArgsConstructor  // Required for Jackson deserialization
+@NoArgsConstructor // Required for Jackson deserialization
 @TypeInfo(AgentContext.Factory.class)
 public class AgentContext implements Serializable {
 
-  /** JSON (FlinkJson) serialization in keyed state instead of Kryo (customData is Map&lt;String,Object&gt;). */
+  /**
+   * JSON (FlinkJson) serialization in keyed state instead of Kryo (customData is
+   * Map&lt;String,Object&gt;).
+   */
   public static final class Factory extends JsonTypeInfoFactory<AgentContext> {
     public Factory() {
       super(AgentContext.class, true);
@@ -41,8 +44,7 @@ public class AgentContext implements Serializable {
   // Custom data
   private Map<String, Object> customData;
 
-  public AgentContext(
-      String agentId, String flowId, String userId, int maxTokens, int maxItems) {
+  public AgentContext(String agentId, String flowId, String userId, int maxTokens, int maxItems) {
     this.agentId = agentId;
     this.flowId = flowId;
     this.userId = userId;

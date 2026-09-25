@@ -21,7 +21,10 @@ import org.apache.flink.util.Collector;
 import org.apache.flink.util.UserCodeClassLoader;
 import org.junit.jupiter.api.Test;
 
-/** F7: malformed Kafka records go to the dead-letter handler and a counter, and never crash the source. */
+/**
+ * F7: malformed Kafka records go to the dead-letter handler and a counter, and never crash the
+ * source.
+ */
 class KafkaChannelDeadLetterTest {
 
   public record Order(String id, int qty) {}
@@ -65,27 +68,31 @@ class KafkaChannelDeadLetterTest {
     List<Order> out = new ArrayList<>();
     List<String> badPayloads = new ArrayList<>();
     for (int i = 0; i < bad; i++) {
-      String payload = i % 2 == 0 ? "{not json " + UUID.randomUUID() : "{\"id\": \"x\", \"qty\": \"nope\"}";
+      String payload =
+          i % 2 == 0 ? "{not json " + UUID.randomUUID() : "{\"id\": \"x\", \"qty\": \"nope\"}";
       badPayloads.add(payload);
       schema.deserialize(payload.getBytes(StandardCharsets.UTF_8), into(out));
       String id = "o" + i;
       int qty = ThreadLocalRandom.current().nextInt(1, 100);
       if (i < good) {
         schema.deserialize(
-            ("{\"id\": \"" + id + "\", \"qty\": " + qty + ", \"extra\": 1}").getBytes(StandardCharsets.UTF_8),
+            ("{\"id\": \"" + id + "\", \"qty\": " + qty + ", \"extra\": 1}")
+                .getBytes(StandardCharsets.UTF_8),
             into(out));
         assertEquals(new Order(id, qty), out.get(out.size() - 1));
       }
     }
     for (int i = bad; i < good; i++) {
-      schema.deserialize(("{\"id\": \"o" + i + "\", \"qty\": 1}").getBytes(StandardCharsets.UTF_8), into(out));
+      schema.deserialize(
+          ("{\"id\": \"o" + i + "\", \"qty\": 1}").getBytes(StandardCharsets.UTF_8), into(out));
     }
 
     assertEquals(good, out.size(), "valid records after malformed ones are still emitted");
     assertEquals(bad, schema.failureCount());
     assertEquals(bad, dlq.records().size());
     for (int i = 0; i < bad; i++) {
-      assertEquals(badPayloads.get(i), dlq.records().get(i).getKey(), "raw payload forwarded verbatim");
+      assertEquals(
+          badPayloads.get(i), dlq.records().get(i).getKey(), "raw payload forwarded verbatim");
       assertTrue(!dlq.records().get(i).getValue().isBlank(), "error context forwarded");
     }
   }
@@ -110,7 +117,8 @@ class KafkaChannelDeadLetterTest {
       oos.writeObject(withTopic.getDeadLetterHandler());
     }
     KafkaChannel.JsonSchema<?> restored;
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       restored = (KafkaChannel.JsonSchema<?>) ois.readObject();
       assertInstanceOf(DeadLetterHandler.KafkaTopic.class, ois.readObject());
     }
@@ -118,15 +126,17 @@ class KafkaChannelDeadLetterTest {
     List<Object> out = new ArrayList<>();
     @SuppressWarnings("unchecked")
     KafkaChannel.JsonSchema<Object> typed = (KafkaChannel.JsonSchema<Object>) restored;
-    typed.deserialize("garbage".getBytes(StandardCharsets.UTF_8), new Collector<>() {
-      @Override
-      public void collect(Object record) {
-        out.add(record);
-      }
+    typed.deserialize(
+        "garbage".getBytes(StandardCharsets.UTF_8),
+        new Collector<>() {
+          @Override
+          public void collect(Object record) {
+            out.add(record);
+          }
 
-      @Override
-      public void close() {}
-    });
+          @Override
+          public void close() {}
+        });
     assertEquals(1, restored.failureCount(), "counter re-registered after deserialization");
     assertTrue(out.isEmpty());
   }

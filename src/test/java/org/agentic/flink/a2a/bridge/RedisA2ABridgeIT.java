@@ -65,7 +65,8 @@ class RedisA2ABridgeIT {
   }
 
   @Test
-  @DisplayName("redis bridge is non-lossy: a request published BEFORE the source starts is delivered")
+  @DisplayName(
+      "redis bridge is non-lossy: a request published BEFORE the source starts is delivered")
   void nonLossyPrePublish() throws Exception {
     RedisA2ABridge bridge = bridge();
 

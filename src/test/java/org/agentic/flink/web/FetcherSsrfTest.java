@@ -36,13 +36,13 @@ class FetcherSsrfTest {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext("/robots.txt", ex -> respond(ex, 200, "User-agent: *\nAllow: /\n", null));
     server.createContext(
-        "/secret", ex -> {
+        "/secret",
+        ex -> {
           hits.incrementAndGet();
           respond(ex, 200, "<html><title>internal</title>leaked</html>", null);
         });
     server.createContext(
-        "/bounce-internal",
-        ex -> respond(ex, 302, "", "http://localhost:" + port() + "/secret"));
+        "/bounce-internal", ex -> respond(ex, 302, "", "http://localhost:" + port() + "/secret"));
     server.createContext(
         "/bounce-public", ex -> respond(ex, 301, "", "http://127.0.0.1:" + port() + "/ok"));
     server.createContext(
@@ -97,7 +97,8 @@ class FetcherSsrfTest {
   void loopbackUrlIsBlockedBeforeAnyConnection() {
     Fetcher f = fetcher(OutboundUrlPolicy.defaults());
     assertThrows(BlockedUrlException.class, () -> f.fetch(base + "/secret"));
-    assertThrows(BlockedUrlException.class, () -> f.fetch("http://localhost:" + port() + "/secret"));
+    assertThrows(
+        BlockedUrlException.class, () -> f.fetch("http://localhost:" + port() + "/secret"));
     assertThrows(BlockedUrlException.class, () -> f.fetch("http://[::1]:" + port() + "/secret"));
     assertThrows(BlockedUrlException.class, () -> f.fetch("file:///etc/hostname"));
     assertEquals(0, hits.get(), "no request must reach the internal endpoint");
@@ -139,7 +140,8 @@ class FetcherSsrfTest {
 
   @Test
   void webFetchToolReportsBlockedUrlAsFailure() {
-    WebFetchTool tool = new WebFetchTool(fetcher(OutboundUrlPolicy.defaults()), new DocumentExtractor());
+    WebFetchTool tool =
+        new WebFetchTool(fetcher(OutboundUrlPolicy.defaults()), new DocumentExtractor());
     @SuppressWarnings("unchecked")
     Map<String, Object> r =
         (Map<String, Object>)

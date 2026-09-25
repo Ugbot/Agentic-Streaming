@@ -1,9 +1,9 @@
 package org.agentic.flink.storage.metrics;
 
-import org.agentic.flink.storage.StorageProvider;
-import org.agentic.flink.storage.StorageTier;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.storage.StorageProvider;
+import org.agentic.flink.storage.StorageTier;
 
 /**
  * Wrapper that adds metrics tracking to any StorageProvider.

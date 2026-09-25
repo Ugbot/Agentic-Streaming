@@ -16,14 +16,14 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * <ol>
  *   <li><b>As a tool</b> — {@code AgentBuilder.withRemoteAgent(...)} exposes a peer to the LLM as
  *       the synthetic tool {@code a2a:<name>} (registered via {@code A2AToolRegistry}).
- *   <li><b>As an explicit step</b> — {@link A2AStep#applyTo} splices a deterministic delegation into
- *       the stream graph, keyed by A2A {@code contextId}.
+ *   <li><b>As an explicit step</b> — {@link A2AStep#applyTo} splices a deterministic delegation
+ *       into the stream graph, keyed by A2A {@code contextId}.
  * </ol>
  *
  * <p><b>Prerequisites:</b> a reachable A2A peer. Point {@code A2A_PEER_URL} at one — e.g. this
  * project's own gateway (see {@code a2a-gateway/README.md}) or any A2A-compliant agent. Without a
- * peer the explicit step records a per-event error (it is configured with {@code failOnError=false})
- * and the job still completes.
+ * peer the explicit step records a per-event error (it is configured with {@code
+ * failOnError=false}) and the job still completes.
  *
  * <pre>{@code
  * A2A_PEER_URL=http://localhost:9999/a2a \
@@ -38,16 +38,18 @@ public final class A2AAgentExample {
     String peerUrl = System.getenv().getOrDefault("A2A_PEER_URL", "http://localhost:9999/a2a");
 
     // (1) A peer exposed to an agent's LLM as a tool: a2a:planner.
-    RemoteAgentSpec planner =
-        RemoteAgentSpec.endpoint("planner", peerUrl, A2ATransport.JSONRPC);
+    RemoteAgentSpec planner = RemoteAgentSpec.endpoint("planner", peerUrl, A2ATransport.JSONRPC);
     Agent coordinator =
         Agent.builder()
             .withId("coordinator-" + UUID.randomUUID())
             .withSystemPrompt("Coordinate work; delegate planning to the planner peer.")
             .withRemoteAgent(planner)
             .build();
-    System.out.println("Agent " + coordinator.getAgentId()
-        + " can call remote tools: " + coordinator.getAllowedTools());
+    System.out.println(
+        "Agent "
+            + coordinator.getAgentId()
+            + " can call remote tools: "
+            + coordinator.getAllowedTools());
 
     // (2) The same peer as an explicit, deterministic pipeline step.
     A2AStep delegate =
@@ -63,8 +65,7 @@ public final class A2AAgentExample {
     env.setParallelism(1);
 
     DataStream<AgentEvent> input =
-        env.fromElements("Plan a trip to SFO", "Plan a trip to JFK")
-            .map(A2AAgentExample::toEvent);
+        env.fromElements("Plan a trip to SFO", "Plan a trip to JFK").map(A2AAgentExample::toEvent);
 
     DataStream<AgentEvent> enriched = delegate.applyTo(input);
     enriched
@@ -84,8 +85,8 @@ public final class A2AAgentExample {
 
   private static AgentEvent toEvent(String prompt) {
     AgentEvent event =
-        new AgentEvent(UUID.randomUUID().toString(), "demo-user", "coordinator",
-            AgentEventType.FLOW_STARTED);
+        new AgentEvent(
+            UUID.randomUUID().toString(), "demo-user", "coordinator", AgentEventType.FLOW_STARTED);
     event.setCorrelationId("conv-" + UUID.randomUUID());
     event.putData("input", prompt);
     return event;

@@ -17,7 +17,8 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
  *   <li>{@link ParameterNamesModule} — binds immutable, all-args-constructor types (the project
  *       compiles with {@code -parameters}); the A2A envelopes and {@code ChatMessage} rely on this.
  *   <li>Field visibility {@code ANY} (getters/setters off) — property names equal field/constructor
- *       parameter names, avoiding boolean-getter renaming (e.g. {@code isFinal()} → {@code "final"}).
+ *       parameter names, avoiding boolean-getter renaming (e.g. {@code isFinal()} → {@code
+ *       "final"}).
  *   <li>{@code ALLOW_FINAL_FIELDS_AS_MUTATORS} — lets field-access deserialization populate final
  *       fields (e.g. {@code RoutingBudget}'s caps and its {@code ArrayDeque}) when a class is
  *       reconstructed via a no-arg creator rather than an all-args constructor.
@@ -32,7 +33,9 @@ public final class FlinkJson {
 
   private FlinkJson() {}
 
-  /** A fresh, fully-configured mapper. Use {@link #mapper()} unless you need to customize a copy. */
+  /**
+   * A fresh, fully-configured mapper. Use {@link #mapper()} unless you need to customize a copy.
+   */
   public static ObjectMapper create() {
     ObjectMapper mapper = new ObjectMapper();
     mapper.registerModule(new ParameterNamesModule());

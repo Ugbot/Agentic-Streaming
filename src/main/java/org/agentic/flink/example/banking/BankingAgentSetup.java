@@ -25,8 +25,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Assembles a role-specific banking agent (the personal assistant or the bank's customer-service
- * agent) from environment configuration: the chat model, the dynamic env toolset, RAG (CS),
- * the personal→CS A2A round-trip, the system prompt, and the threat-screening pipeline.
+ * agent) from environment configuration: the chat model, the dynamic env toolset, RAG (CS), the
+ * personal→CS A2A round-trip, the system prompt, and the threat-screening pipeline.
  *
  * <p>Shared by the standalone gateway executor and any Flink job, so both run identical agents.
  * Built once at startup (not serialized); the bounded {@link ReActTurnBrain} it produces is what
@@ -54,8 +54,8 @@ public final class BankingAgentSetup {
   private final Map<String, ToolExecutor> tools;
   private final String basePrompt;
   private final long toolTimeoutMs;
-  private final Map<org.agentic.flink.example.banking.graph.BankingPath, ReActTurnBrain> pathBrains =
-      new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<org.agentic.flink.example.banking.graph.BankingPath, ReActTurnBrain>
+      pathBrains = new java.util.concurrent.ConcurrentHashMap<>();
 
   private BankingAgentSetup(
       Role role,
@@ -166,18 +166,30 @@ public final class BankingAgentSetup {
     ReActTurnBrain brain =
         new ReActTurnBrain(model.connection(), model.setup(), systemPrompt, tools, toolTimeoutMs);
     LOG.info(
-        "Banking agent [{}] ready: tools={}, model={}", role, tools.keySet(), model.setup().getModelName());
+        "Banking agent [{}] ready: tools={}, model={}",
+        role,
+        tools.keySet(),
+        model.setup().getModelName());
     return new BankingAgentSetup(
-        role, brain, BankingScreening.defaults(), cs, turnDeadlineMs, maxRoundTrips, maxIterations,
-        model, tools, systemPrompt, toolTimeoutMs);
+        role,
+        brain,
+        BankingScreening.defaults(),
+        cs,
+        turnDeadlineMs,
+        maxRoundTrips,
+        maxIterations,
+        model,
+        tools,
+        systemPrompt,
+        toolTimeoutMs);
   }
 
   /**
    * A focused {@link ReActTurnBrain} for one routed-graph {@link
    * org.agentic.flink.example.banking.graph.BankingPath}: the role's base prompt + a path-specific
    * directive, scoped to just the tools that path needs (smaller, more reliable than the monolith).
-   * Returns {@code null} for {@code REFUSE} (the router already produced the safe reply). Cached per
-   * path. Used by {@link org.agentic.flink.example.banking.graph.BankingAgentGraph}.
+   * Returns {@code null} for {@code REFUSE} (the router already produced the safe reply). Cached
+   * per path. Used by {@link org.agentic.flink.example.banking.graph.BankingAgentGraph}.
    */
   public ReActTurnBrain brainFor(org.agentic.flink.example.banking.graph.BankingPath path) {
     if (path == null || path == org.agentic.flink.example.banking.graph.BankingPath.REFUSE) {
@@ -245,9 +257,9 @@ public final class BankingAgentSetup {
       default:
         directive = "";
     }
-    String prompt =
-        basePrompt + "\n\n## This turn\n" + directive;
-    return new ReActTurnBrain(model.connection(), model.setup(), prompt, subset, toolTimeoutMs, offerCs);
+    String prompt = basePrompt + "\n\n## This turn\n" + directive;
+    return new ReActTurnBrain(
+        model.connection(), model.setup(), prompt, subset, toolTimeoutMs, offerCs);
   }
 
   private void keep(Map<String, ToolExecutor> subset, String name) {

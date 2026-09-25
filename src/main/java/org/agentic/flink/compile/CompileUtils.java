@@ -10,12 +10,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Entry point called from Python via PyFlink's {@code invoke_method} gateway. Given a
- * {@link KeyedStream} and a serialized {@link AgentPlan}, attaches an
- * {@link AgentPlanProcessFunction} to the stream and returns the resulting {@link DataStream}.
+ * Entry point called from Python via PyFlink's {@code invoke_method} gateway. Given a {@link
+ * KeyedStream} and a serialized {@link AgentPlan}, attaches an {@link AgentPlanProcessFunction} to
+ * the stream and returns the resulting {@link DataStream}.
  *
- * <p>Mirrors the role of upstream Apache Flink Agents' {@code CompileUtils.connectToAgent} for
- * this framework's plan format.
+ * <p>Mirrors the role of upstream Apache Flink Agents' {@code CompileUtils.connectToAgent} for this
+ * framework's plan format.
  */
 public final class CompileUtils {
 
@@ -31,7 +31,8 @@ public final class CompileUtils {
     }
     AgentPlan plan = AgentPlan.fromJson(planJson);
     LOG.info(
-        "Attaching agent operator: agent_id={}, planJson={} chars", plan.getAgentId(),
+        "Attaching agent operator: agent_id={}, planJson={} chars",
+        plan.getAgentId(),
         planJson.length());
     AgentPlanProcessFunction<K> fn = new AgentPlanProcessFunction<>(plan);
     return stream.process(fn, TypeInformation.of(Object.class)).name("agent:" + plan.getAgentId());

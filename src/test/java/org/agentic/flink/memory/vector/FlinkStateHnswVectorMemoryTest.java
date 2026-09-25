@@ -71,10 +71,8 @@ class FlinkStateHnswVectorMemoryTest {
   @Test
   @DisplayName("Spec rejects non-positive dimension")
   void rejectsBadDimension() {
-    assertThrows(
-        IllegalArgumentException.class, () -> FlinkStateHnswVectorMemory.spec(0));
-    assertThrows(
-        IllegalArgumentException.class, () -> FlinkStateHnswVectorMemory.spec(-128));
+    assertThrows(IllegalArgumentException.class, () -> FlinkStateHnswVectorMemory.spec(0));
+    assertThrows(IllegalArgumentException.class, () -> FlinkStateHnswVectorMemory.spec(-128));
   }
 
   private static Object roundTrip(Object obj) throws Exception {

@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Live DJL embedding test + micro-benchmark. Loads a real sentence-transformer
- * ({@code all-MiniLM-L6-v2}) through DJL/PyTorch, embeds a small corpus into the RAG hot index, and
- * asserts <b>semantic recall</b> — a paraphrased query retrieves the on-topic passage as top-1.
+ * Live DJL embedding test + micro-benchmark. Loads a real sentence-transformer ({@code
+ * all-MiniLM-L6-v2}) through DJL/PyTorch, embeds a small corpus into the RAG hot index, and asserts
+ * <b>semantic recall</b> — a paraphrased query retrieves the on-topic passage as top-1.
  *
  * <p>Tagged {@code djl}; runs only under the {@code djl-native} profile (which bundles the CPU
  * PyTorch native and selects this group):
@@ -75,7 +75,9 @@ class DjlRecallIT {
     float[] q = client.embed("Which European city is France's capital?", setup);
     List<ScoredItem> hits = index.search(q, 4);
     assertEquals("france", hits.get(0).getId(), "the Paris passage must rank first by meaning");
-    assertTrue(hits.get(0).getScore() > 0.4, "top cosine should be clearly positive: " + hits.get(0).getScore());
+    assertTrue(
+        hits.get(0).getScore() > 0.4,
+        "top cosine should be clearly positive: " + hits.get(0).getScore());
 
     // A different topic resolves to its own passage.
     float[] q2 = client.embed("How do plants turn light into energy?", setup);
@@ -101,7 +103,8 @@ class DjlRecallIT {
       client.embed(samples[i % samples.length], setup);
     }
     double meanMs = (System.nanoTime() - start) / 1_000_000.0 / iters;
-    System.out.printf("DJL all-MiniLM-L6-v2 mean embed latency: %.2f ms/doc over %d iters%n", meanMs, iters);
+    System.out.printf(
+        "DJL all-MiniLM-L6-v2 mean embed latency: %.2f ms/doc over %d iters%n", meanMs, iters);
     assertTrue(meanMs > 0, "benchmark ran");
   }
 }

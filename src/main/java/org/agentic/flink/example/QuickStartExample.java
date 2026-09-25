@@ -1,6 +1,6 @@
 package org.agentic.flink.example;
 
-import org.agentic.flink.llm.ChatSetup;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -9,21 +9,23 @@ import org.agentic.flink.dsl.Agent.AgentType;
 import org.agentic.flink.execution.AgentExecutor;
 import org.agentic.flink.execution.ExecutionResult;
 import org.agentic.flink.execution.LLMClient;
+import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.tool.ToolRegistry;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Quick Start Example - Real LangChain4J Integration
  *
  * <p>This example demonstrates the REAL working integration:
+ *
  * <ul>
- *   <li>Real LangChain4J Ollama calls</li>
- *   <li>Declarative agent definition</li>
- *   <li>Actual LLM-based execution</li>
- *   <li>No Flink - just the agent engine</li>
+ *   <li>Real LangChain4J Ollama calls
+ *   <li>Declarative agent definition
+ *   <li>Actual LLM-based execution
+ *   <li>No Flink - just the agent engine
  * </ul>
  *
  * <p><b>Prerequisites:</b>
+ *
  * <pre>
  * # Start Ollama
  * docker compose up -d ollama
@@ -36,6 +38,7 @@ import java.util.concurrent.CompletableFuture;
  * </pre>
  *
  * <p><b>To run:</b>
+ *
  * <pre>
  * mvn exec:java -Dexec.mainClass="org.agentic.flink.example.QuickStartExample"
  * </pre>
@@ -54,16 +57,18 @@ public class QuickStartExample {
 
     System.out.println("📝 Step 1: Defining agent...\n");
 
-    Agent agent = Agent.builder()
-        .withId("assistant")
-        .withName("Helpful Assistant")
-        .withType(AgentType.EXECUTOR)
-        .withSystemPrompt(
-            "You are a helpful AI assistant. Answer questions clearly and concisely. " +
-            "If you don't know something, say so.")
-        .withChatSetup(ChatSetup.builder().withModel("qwen2.5:latest").withTemperature(0.7).build())
-        .withMaxIterations(3)
-        .build();
+    Agent agent =
+        Agent.builder()
+            .withId("assistant")
+            .withName("Helpful Assistant")
+            .withType(AgentType.EXECUTOR)
+            .withSystemPrompt(
+                "You are a helpful AI assistant. Answer questions clearly and concisely. "
+                    + "If you don't know something, say so.")
+            .withChatSetup(
+                ChatSetup.builder().withModel("qwen2.5:latest").withTemperature(0.7).build())
+            .withMaxIterations(3)
+            .build();
 
     System.out.println("✅ Agent created: " + agent.getAgentName());
     System.out.println("   Model: " + agent.getLlmModel());
@@ -73,11 +78,12 @@ public class QuickStartExample {
 
     System.out.println("🔗 Step 2: Creating LLM client...\n");
 
-    LLMClient llmClient = LLMClient.builder()
-        .withModel("qwen2.5:latest")
-        .withTemperature(0.7)
-        .withBaseUrl(ConfigKeys.DEFAULT_OLLAMA_BASE_URL)
-        .build();
+    LLMClient llmClient =
+        LLMClient.builder()
+            .withModel("qwen2.5:latest")
+            .withTemperature(0.7)
+            .withBaseUrl(ConfigKeys.DEFAULT_OLLAMA_BASE_URL)
+            .build();
 
     System.out.println("✅ LLM client created (Ollama @ localhost:11434)");
     System.out.println();
@@ -86,11 +92,12 @@ public class QuickStartExample {
 
     System.out.println("⚙️  Step 3: Creating agent executor...\n");
 
-    AgentExecutor executor = AgentExecutor.builder()
-        .withAgent(agent)
-        .withToolRegistry(ToolRegistry.empty())
-        .withLlmClient(llmClient)
-        .build();
+    AgentExecutor executor =
+        AgentExecutor.builder()
+            .withAgent(agent)
+            .withToolRegistry(ToolRegistry.empty())
+            .withLlmClient(llmClient)
+            .build();
 
     System.out.println("✅ Agent executor ready");
     System.out.println();
@@ -101,12 +108,8 @@ public class QuickStartExample {
     System.out.println("-".repeat(80));
 
     // Create input event
-    AgentEvent inputEvent = new AgentEvent(
-        "flow-001",
-        "user-001",
-        "assistant",
-        AgentEventType.FLOW_STARTED
-    );
+    AgentEvent inputEvent =
+        new AgentEvent("flow-001", "user-001", "assistant", AgentEventType.FLOW_STARTED);
     inputEvent.putData("user_message", "What is Apache Flink and why is it useful for AI?");
 
     System.out.println("❓ Question: What is Apache Flink and why is it useful for AI?");
@@ -131,7 +134,8 @@ public class QuickStartExample {
       System.out.println();
       System.out.println("📊 Metrics:");
       System.out.println("   - Events generated: " + result.getEvents().size());
-      System.out.println("   - Tool calls: " + (result.getToolCalls() != null ? result.getToolCalls().size() : 0));
+      System.out.println(
+          "   - Tool calls: " + (result.getToolCalls() != null ? result.getToolCalls().size() : 0));
     } else {
       System.out.println("❌ FAILED!");
       System.out.println("Error: " + result.getErrorMessage());

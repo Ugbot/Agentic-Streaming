@@ -85,9 +85,7 @@ public class ToolExecutorRegistry implements Serializable {
     return executors.size();
   }
 
-  /**
-   * Clear all executors
-   */
+  /** Clear all executors */
   public void clear() {
     LOG.info("Clearing all tool executors");
     executors.clear();

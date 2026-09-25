@@ -9,19 +9,21 @@ import java.util.Map;
  * Unified configuration for the Agentic Flink framework.
  *
  * <p>Resolves configuration values with the following priority (highest to lowest):
+ *
  * <ol>
- *   <li>Explicit properties passed via constructor or {@link #fromMap(Map)}</li>
- *   <li>Environment variables with {@code AGENTIC_FLINK_} prefix
- *       (e.g., {@code ollama.base.url} maps to {@code AGENTIC_FLINK_OLLAMA_BASE_URL})</li>
- *   <li>System properties with {@code agentic.flink.} prefix
- *       (e.g., {@code agentic.flink.ollama.base.url})</li>
- *   <li>Default values from {@link ConfigKeys}</li>
+ *   <li>Explicit properties passed via constructor or {@link #fromMap(Map)}
+ *   <li>Environment variables with {@code AGENTIC_FLINK_} prefix (e.g., {@code ollama.base.url}
+ *       maps to {@code AGENTIC_FLINK_OLLAMA_BASE_URL})
+ *   <li>System properties with {@code agentic.flink.} prefix (e.g., {@code
+ *       agentic.flink.ollama.base.url})
+ *   <li>Default values from {@link ConfigKeys}
  * </ol>
  *
- * <p>This class implements {@link Serializable} so it can be used safely inside
- * Flink functions that are serialized across the cluster.
+ * <p>This class implements {@link Serializable} so it can be used safely inside Flink functions
+ * that are serialized across the cluster.
  *
  * <p><b>Usage:</b>
+ *
  * <pre>{@code
  * // From environment (production)
  * AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
@@ -88,8 +90,8 @@ public class AgenticFlinkConfig implements Serializable {
   /**
    * Creates a config from an explicit property map.
    *
-   * <p>Environment variables and system properties are still consulted for keys
-   * not present in the map.
+   * <p>Environment variables and system properties are still consulted for keys not present in the
+   * map.
    *
    * @param properties explicit property overrides
    * @return config backed by the given map with env/sysprop fallback
@@ -101,8 +103,8 @@ public class AgenticFlinkConfig implements Serializable {
   /**
    * Creates a config suitable for unit tests.
    *
-   * <p>Returns only defaults -- environment variables and system properties are
-   * <b>not</b> consulted so tests are isolated from the host environment.
+   * <p>Returns only defaults -- environment variables and system properties are <b>not</b>
+   * consulted so tests are isolated from the host environment.
    *
    * @return config with default values only
    */
@@ -113,8 +115,8 @@ public class AgenticFlinkConfig implements Serializable {
   // ==================== Accessors ====================
 
   /**
-   * Returns the resolved value for {@code key}, or {@code null} if no value is found
-   * at any level (explicit, env, sysprop, defaults).
+   * Returns the resolved value for {@code key}, or {@code null} if no value is found at any level
+   * (explicit, env, sysprop, defaults).
    *
    * @param key the configuration key (e.g., {@code "ollama.base.url"})
    * @return resolved value or {@code null}
@@ -124,10 +126,10 @@ public class AgenticFlinkConfig implements Serializable {
   }
 
   /**
-   * Returns the resolved value for {@code key}, falling back to the given default
-   * if no value is found at any level.
+   * Returns the resolved value for {@code key}, falling back to the given default if no value is
+   * found at any level.
    *
-   * @param key          the configuration key
+   * @param key the configuration key
    * @param defaultValue value to return when the key cannot be resolved
    * @return resolved value or {@code defaultValue}
    */
@@ -139,7 +141,7 @@ public class AgenticFlinkConfig implements Serializable {
   /**
    * Returns the resolved value for {@code key} parsed as an {@code int}.
    *
-   * @param key          the configuration key
+   * @param key the configuration key
    * @param defaultValue value to return when the key cannot be resolved or is not a valid integer
    * @return resolved integer value or {@code defaultValue}
    */
@@ -158,10 +160,10 @@ public class AgenticFlinkConfig implements Serializable {
   /**
    * Exports all resolved values as a flat {@code Map<String, String>}.
    *
-   * <p>This is useful for backwards compatibility with code that accepts
-   * {@code Map<String, String>} configuration (e.g., storage stores).
-   * The returned map contains every key that has a resolved non-null value,
-   * combining explicit properties, environment/system overrides, and defaults.
+   * <p>This is useful for backwards compatibility with code that accepts {@code Map<String,
+   * String>} configuration (e.g., storage stores). The returned map contains every key that has a
+   * resolved non-null value, combining explicit properties, environment/system overrides, and
+   * defaults.
    *
    * @return unmodifiable map of all resolved key-value pairs
    */
@@ -182,8 +184,8 @@ public class AgenticFlinkConfig implements Serializable {
   // ==================== Internal Resolution ====================
 
   /**
-   * Resolves a configuration key through the priority chain:
-   * explicit property -> env var -> system property -> default.
+   * Resolves a configuration key through the priority chain: explicit property -> env var -> system
+   * property -> default.
    */
   private String resolve(String key) {
     // 1. Explicit properties (highest priority)
@@ -214,7 +216,7 @@ public class AgenticFlinkConfig implements Serializable {
 
   @Override
   public String toString() {
-    return String.format("AgenticFlinkConfig[properties=%d, resolveEnv=%s]",
-        properties.size(), resolveEnv);
+    return String.format(
+        "AgenticFlinkConfig[properties=%d, resolveEnv=%s]", properties.size(), resolveEnv);
   }
 }

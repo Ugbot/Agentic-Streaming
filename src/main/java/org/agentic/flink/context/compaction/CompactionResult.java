@@ -1,13 +1,13 @@
 package org.agentic.flink.context.compaction;
 
-import org.agentic.flink.context.core.AgentContext;
-import org.agentic.flink.context.core.ContextItem;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.context.core.AgentContext;
+import org.agentic.flink.context.core.ContextItem;
 
 /** Result of compaction operation */
 @Data

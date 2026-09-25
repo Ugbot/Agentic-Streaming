@@ -1,5 +1,14 @@
 package org.agentic.flink.function;
 
+import dev.langchain4j.model.input.Prompt;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -10,15 +19,6 @@ import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.serde.ValidationResult;
-import dev.langchain4j.model.input.Prompt;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ServiceLoader;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
@@ -73,10 +73,7 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     this.promptManager = PromptTemplateManager.getInstance();
     // Moderate creativity for corrections.
     this.chatSetup =
-        ChatSetup.builder()
-            .withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL)
-            .withTemperature(0.5)
-            .build();
+        ChatSetup.builder().withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL).withTemperature(0.5).build();
   }
 
   @Override
@@ -107,7 +104,9 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     String templateId = customTemplateId != null ? customTemplateId : "correction";
     Map<String, Object> variables = new HashMap<>();
     variables.put("result", originalResult != null ? originalResult.toString() : "");
-    variables.put("errors", validation != null ? String.join(", ", validation.getErrors()) : "Unknown errors");
+    variables.put(
+        "errors",
+        validation != null ? String.join(", ", validation.getErrors()) : "Unknown errors");
 
     Prompt correctionPrompt = promptManager.renderTemplate(templateId, variables);
 
@@ -146,8 +145,7 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
           }
 
           String correctedResult = result.getText();
-          LOG.info(
-              "Correction attempt {} completed for flow: {}", attemptCount, event.getFlowId());
+          LOG.info("Correction attempt {} completed for flow: {}", attemptCount, event.getFlowId());
 
           AgentEvent correctionEvent = new AgentEvent();
           correctionEvent.setFlowId(event.getFlowId());
