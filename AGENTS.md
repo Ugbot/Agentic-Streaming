@@ -25,15 +25,22 @@ Java 21 target, Flink 2.2.1, LangChain4J 1.16.3.
 
 ## Build
 
-Use the committed wrapper. The root pom enforces Maven 3.9+, so a system `mvn` 3.6 fails.
-`ports/jagentic-core` is not in the root reactor and must be installed first.
+Use the committed wrapper. `reactor/pom.xml` is the parent and aggregator of every first-class
+JVM module (`org.jagentic`, one version); it enforces Maven 3.9+ and Java 21, so a system
+`mvn` 3.6 fails. The root pom stays the Flink framework module.
 
 ```
-./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # always first
-./mvnw clean test                        # unit tests
-./mvnw test -P integration-tests         # integration tests (requires Podman containers)
+./mvnw -f reactor/pom.xml verify         # every module in dependency order (what CI gates on)
+./mvnw -f reactor/pom.xml verify -P a2a-gateway   # plus the Quarkus A2A gateway (opt-in)
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # first, when building one module at a time
+./mvnw clean test                        # unit tests (Flink framework)
+./mvnw test -P integration-tests         # Testcontainers suites; with Podman set DOCKER_HOST to the
+                                         # podman socket and TESTCONTAINERS_RYUK_DISABLED=true
 ./mvnw clean package -P flink-agents     # build with optional Flink Agents plugin
 ```
+
+`ports/experimental/*` stay outside the reactor. CI audits skipped tests against
+`tools/ci/skip-allowlist.txt`; a test that skips because a service is missing fails the build.
 
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
 Enable it with `-P flink-agents` after building Flink Agents from source.

@@ -1,0 +1,27 @@
+# Skip reasons that are legitimate in CI. One regular expression per line, matched with
+# re.search against the <skipped message="..."> of surefire and pytest JUnit XML reports by
+# tools/ci/skip_audit.py. Anything not matched fails the job. Each entry says why the test
+# cannot or must not run in CI.
+
+# Conformance fixtures whose `requires` names a capability the runtime does not declare. The
+# harness asserts the reason names the undeclared capability, so this is a declared gap that
+# shows up in the generated docs/capabilities.md, not a missing service.
+^skip [\w-]+: requires \[  # jvm-core, pekko and flink JUnit conformance suites
+does not support \[  # python facade conformance suite (python-jvm, python-flink)
+^requires \[  # pyflink and pyagentic conformance runners
+
+# A live Ollama with a pulled model is the only backing service not provisioned in CI: the model
+# download alone is several gigabytes per run. litellm is only imported by the pyagentic test
+# that talks to Ollama (test_embeddings.py), so it is not installed and importorskip reports it.
+Ollama
+^could not import 'litellm'
+
+# Fluss (Alibaba log store) needs a ZooKeeper + coordinator + tablet-server cluster; it is not
+# provisioned in CI. Redis, Postgres, Kafka and Qdrant are.
+^Fluss not reachable
+
+# The two agentic-pekko tests behind @EnabledIfEnvironmentVariable(AGENTIC_PEKKO_INTEGRATION)
+# fail for reasons unrelated to service availability (see the core job in
+# .github/workflows/ci.yml for both), so the variable is not set in CI and JUnit reports
+# them as disabled. Delete this entry when it is.
+^Environment variable \[AGENTIC_PEKKO_INTEGRATION\] does not exist

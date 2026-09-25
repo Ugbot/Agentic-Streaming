@@ -1,9 +1,28 @@
 name: CI
 
-# Builds and tests every language surface in the repo. Until this existed, the
-# only automation was the two PyPI publish jobs — nothing compiled Java, and a
-# compile error in ports/jagentic-core (AGS-9) left the whole JVM tree
-# unbuildable from a clean checkout without anyone noticing.
+# Builds and tests every language surface in the repo.
+#
+# Required status checks (branch protection should list exactly these):
+#   core     the whole Maven reactor (reactor/pom.xml) in one invocation, with the
+#            integration-tests profile and the backing services it needs, plus the
+#            JPype facade (python/tests) and the PyFlink binding (pyflink/tests) run
+#            against the shaded jar that build produced
+#   python   the pure-Python core (ports/pyagentic) with its service-backed tests
+#   clojure  the Clojure/Datomic runtime
+# The conformance matrix is a required check too; it lives in conformance.yml and is
+# not repeated here (the python/pyflink steps below deselect their conformance modules).
+#
+# Advisory jobs (continue-on-error, must not be listed as required checks):
+#   ports-experimental   JVM engine adapters under ports/experimental (pre-agentic/v1,
+#                        not conformance tested, may be removed)
+#   python-experimental  Python adapters under ports/experimental (same status)
+#   go                   the Go port under ports/experimental/go (same status)
+#
+# Skips are audited. Service-backed tests skip themselves when Postgres, Redis, Kafka,
+# Qdrant or a Python with the MCP SDK is unreachable; in CI those services are provisioned
+# and tools/ci/skip_audit.py fails the job for any skip whose reason is not written down
+# in tools/ci/skip-allowlist.txt (declared conformance capability gaps, Ollama, Fluss, and
+# the two AGENTIC_PEKKO_INTEGRATION tests explained on the core job).
 
 on:
   push:
@@ -18,11 +37,76 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  # Every service-backed suite in the reactor reads these; the values match the ports the
+  # tests default to (StoreTest, RedisToolBridgeTest, KafkaToolBridgeTest, pyagentic tests).
+  AGENTIC_TEST_PG_JDBC: jdbc:postgresql://localhost:5434/agentic
+  AGENTIC_TEST_PG_URL: postgresql://agentic:agentic@localhost:5434/agentic
+  AGENTIC_TEST_QDRANT_URL: http://localhost:6333
+  AGENTIC_TEST_REDIS_URL: redis://localhost:6380/0
+  AGENTIC_KAFKA_BOOTSTRAP: localhost:9092
+
 jobs:
-  jvm:
-    name: JVM (Java 21)
+  core:
+    name: core (Maven reactor + Python facades)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      # AGENTIC_REDIS_URL is deliberately not set: the Redis journal suites start their own
+      # container (RedisJournalIT) and one of them asserts that the REDIS profile refuses to
+      # boot without the variable.
+      #
+      # AGENTIC_PEKKO_INTEGRATION is deliberately not set. It enables two
+      # @EnabledIfEnvironmentVariable tests in agentic-pekko that fail against the provisioned
+      # services independent of this workflow, so enabling them would only turn the job red:
+      # - DurabilityProfileTest.postgresJournalSurvivesEntityRestart: application-cluster-jdbc.conf
+      #   configures the database under pekko.persistence.jdbc.shared-databases, but
+      #   pekko-persistence-jdbc 1.1.0 reads pekko-persistence-jdbc.shared-databases, so the
+      #   jdbc-snapshot-store actor fails to start ("No shared database is configured") and
+      #   the profile's cluster seed node 127.0.0.1:25520 is never joined.
+      # - AgentStreamTest.liveKafkaRoundTripProducesNormalizedResults: the round trip itself
+      #   completes, then DrainingControl.drainAndShutdown does not finish within the test's
+      #   30 second limit (reproduced twice against apache/kafka:3.9.0).
+      # Their skip reason is allowlisted in tools/ci/skip-allowlist.txt; remove that entry
+      # and set the variable here once agentic-pekko fixes both.
+      # jagentic-core McpTest spawns a stdio MCP server with this interpreter.
+      AGENTIC_TEST_PYTHON: /tmp/mcp-venv/bin/python
+    services:
+      # Testcontainers-based suites (Redis*IT, Postgres*Test in the integration-tests
+      # profile) start their own containers through the runner's Docker socket; the
+      # containers below serve the tests that connect to a fixed localhost port instead.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agentic
+          POSTGRES_PASSWORD: agentic
+          POSTGRES_DB: agentic
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agentic -d agentic"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      # tool-services-app's RedisToolBridgeTest hard-codes localhost:6379.
+      redis-tool-bridge:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      qdrant:
+        image: qdrant/qdrant:v1.13.2
+        ports: ["6333:6333"]
+      kafka:
+        # KRaft single node; the image's default listener advertises localhost:9092.
+        image: apache/kafka:3.9.0
+        ports: ["9092:9092"]
     steps:
       - uses: actions/checkout@v4
 
@@ -32,46 +116,111 @@ jobs:
           java-version: "21"
           cache: maven
 
-      # The build order below is manual because there is no Maven reactor: the
-      # root pom has no <modules> and every module is built by an explicit -f.
-      # ports/jagentic-core is a hard compile-scope dependency of the main
-      # module and is not published anywhere, so it has to be installed first.
-      # AGS-10 tracks replacing this with a real parent pom.
-      - name: jagentic-core (shared JVM core)
-        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            python/pyproject.toml
+            pyflink/pyproject.toml
+            ports/pyagentic/pyproject.toml
 
-      # `install` rather than `test`: runs the main suite AND publishes the
-      # artifact that a2a-gateway and banking-job depend on.
-      - name: agentic-flink (main module)
-        run: ./mvnw -B -ntp install
+      - name: Wait for services without a health check
+        run: tools/ci/wait-for-ports.sh localhost:6333 localhost:9092
 
-      - name: agentic-pekko (actor runtime)
-        run: ./mvnw -B -ntp -f agentic-pekko/pom.xml test
-
-      - name: tool-services (packs, then app)
+      # McpTest's stub server is written against the mcp 1.x FastMCP API.
+      - name: Python with the MCP SDK for McpTest
         run: |
-          ./mvnw -B -ntp -f tool-services/tool-services-packs/pom.xml install
-          ./mvnw -B -ntp -f tool-services/tool-services-app/pom.xml test
+          python -m venv /tmp/mcp-venv
+          /tmp/mcp-venv/bin/pip install "mcp<2"
 
-      - name: a2a-gateway
-        run: ./mvnw -B -ntp -f a2a-gateway/pom.xml test
+      # One reactor invocation builds every first-class module in dependency order and
+      # runs its tests; `install` (not `verify`) so the Python steps below can resolve
+      # org.jagentic:agentic-flink through the root pom (python/tests/conftest.py runs
+      # `./mvnw dependency:build-classpath`). a2a-gateway is behind the a2a-gateway profile
+      # because Quarkus roughly doubles the build time; it is still exercised here.
+      #
+      # Two test classes of the Flink module are excluded by name:
+      # - PythonExecutorTest embeds CPython through PEMJA 0.4.1, which ships no wheel for
+      #   the Python 3.12 this job installs and pins a different pemja than the apache-flink
+      #   package the PyFlink step needs. It stays a local-only integration test.
+      # - ZeroMqChannelTest has no per-test timeout and hangs on some hosts (jeromq
+      #   PUSH/PULL over tcp://127.0.0.1); a hang here would only surface as this job's
+      #   60 minute timeout. Run it locally with `./mvnw test -Dtest=ZeroMqChannelTest`.
+      - name: Maven reactor (integration-tests profile, a2a-gateway included)
+        run: >-
+          ./mvnw -B -ntp -f reactor/pom.xml install
+          -P integration-tests,a2a-gateway
+          -Dtest='!PythonExecutorTest,!ZeroMqChannelTest'
+          -Dsurefire.failIfNoSpecifiedTests=false
 
-      - name: banking-job (uber-jar assembly)
-        run: ./mvnw -B -ntp -f banking-job/pom.xml test
+      - name: Shaded framework jar is present
+        run: |
+          ls -l target/agentic-flink-*-uber.jar pyflink/java/target/agentic-pyflink-*.jar
+          test "$(ls target/agentic-flink-*-uber.jar | wc -l)" -eq 1
 
-      - name: Collect surefire reports
+      # python/tests/test_pekko_runtime.py boots the `pekko` runtime inside the JPype JVM and
+      # locates agentic-pekko/target/agentic-pekko-*.jar plus this classpath file
+      # (agentic_flink._classpath.pekko_jars); without the file those tests fail, not skip.
+      # mdep.outputFile is resolved against the module directory, hence the absolute path.
+      - name: Pekko classpath for the JPype facade
+        run: >-
+          ./mvnw -B -ntp -q -f reactor/pom.xml -pl :agentic-pekko
+          dependency:build-classpath -Dmdep.outputFile="$PWD/python/tests/.cp-pekko"
+
+      - name: Install the Python facades
+        run: |
+          python -m pip install -e "ports/pyagentic[test]"
+          python -m pip install -e "python[test]" cloudpickle
+          python -m pip install -e "pyflink[test]"
+
+      # test_conformance_jvm.py is the python-jvm / python-flink conformance run and
+      # pyflink/tests/test_conformance.py the pyflink one; conformance.yml owns those.
+      - name: JPype facade (python/tests)
+        run: >-
+          python -m pytest python/tests -q -ra
+          --ignore python/tests/test_conformance_jvm.py
+          --junitxml build/junit/python-facade.xml
+
+      - name: PyFlink binding (pyflink/tests)
+        run: >-
+          python -m pytest pyflink/tests -q -ra
+          --ignore pyflink/tests/test_conformance.py
+          --junitxml build/junit/pyflink.xml
+
+      - name: Skip audit (a skip in CI must be allowlisted)
+        if: always()
+        run: >-
+          python tools/ci/skip_audit.py --allowlist tools/ci/skip-allowlist.txt
+          '**/target/surefire-reports/TEST-*.xml' 'build/junit/*.xml'
+
+      - name: Collect test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
-          path: "**/target/surefire-reports/*.txt"
+          name: core-test-reports
+          path: |
+            **/target/surefire-reports/TEST-*.xml
+            **/target/surefire-reports/*.txt
+            build/junit/*.xml
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Shaded framework jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentic-flink-uber-jar
+          path: |
+            target/agentic-flink-*-uber.jar
+            pyflink/java/target/agentic-pyflink-*.jar
+          if-no-files-found: error
+          retention-days: 7
+
   # The JVM engine adapters under ports/experimental/ predate agentic/v1, are not
-  # conformance tested, and are not on the acceptance path. This job is advisory:
-  # continue-on-error keeps a red adapter from failing the workflow, and it must
-  # not be listed as a required status check.
+  # conformance tested, and are not on the acceptance path. They are deliberately
+  # outside reactor/pom.xml; jagentic-core (their only in-repo dependency) is installed
+  # from the reactor first. continue-on-error keeps a red adapter from failing the
+  # workflow, and this job must not be listed as a required status check.
   ports-experimental:
     name: ports/experimental (JVM adapters, advisory)
     runs-on: ubuntu-latest
@@ -86,8 +235,8 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: jagentic-core (shared JVM core)
-        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install -DskipTests
+      - name: jagentic-core (shared JVM core, from the reactor)
+        run: ./mvnw -B -ntp -f reactor/pom.xml -pl :jagentic-core -am install -DskipTests
 
       - name: ports/experimental/kafka-streams
         run: ./mvnw -B -ntp -f ports/experimental/kafka-streams/pom.xml test
@@ -100,10 +249,33 @@ jobs:
       - name: ports/experimental/pulsar
         run: ./mvnw -B -ntp -f ports/experimental/pulsar/pom.xml test
 
-  go:
-    name: Go
+  # Same status as ports-experimental, for the Python adapters (Celery, NATS, ...).
+  python-experimental:
+    name: ports/experimental (Python adapters, advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # `celery` is needed because ports/experimental/tests exercises the Celery adapter
+      # against the real engine in eager mode (no broker required); without it
+      # two tests hard-fail rather than skipping.
+      - name: Install
+        run: python -m pip install -e "ports/pyagentic[test]" celery
+
+      - name: port adapters
+        run: python -m pytest ports/experimental/tests -q -ra
+
+  go:
+    name: Go (ports/experimental/go, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
     defaults:
       run:
         working-directory: ports/experimental/go
@@ -149,26 +321,47 @@ jobs:
         run: clojure -X:test
 
   python:
-    name: Python (pyagentic + adapters)
+    name: python (ports/pyagentic)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CI: "true"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agentic
+          POSTGRES_PASSWORD: agentic
+          POSTGRES_DB: agentic
+        ports: ["5434:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agentic -d agentic"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      qdrant:
+        image: qdrant/qdrant:v1.13.2
+        ports: ["6333:6333"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ports/pyagentic/pyproject.toml
 
-      # `celery` is needed because ports/experimental/tests exercises the Celery adapter
-      # against the real engine in eager mode (no broker required); without it
-      # two tests hard-fail rather than skipping.
+      - name: Wait for services without a health check
+        run: tools/ci/wait-for-ports.sh localhost:6333
+
+      # The optional backends the service-backed tests importorskip on: qdrant-client and
+      # psycopg for test_rag_memory, duckdb for test_hnsw, mcp 1.x for test_mcp (its stub
+      # server uses the FastMCP API). litellm is not installed: the only test that needs it
+      # also needs a live Ollama, which CI does not provide (see the allowlist).
       - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e "ports/pyagentic[test]" celery
+        run: python -m pip install -e "ports/pyagentic[test]" "mcp<2" qdrant-client "psycopg[binary]" duckdb
 
       - name: pyagentic
-        run: python -m pytest ports/pyagentic/tests -q
+        run: python -m pytest ports/pyagentic/tests -q -ra --junitxml build/junit/pyagentic.xml
 
-      - name: port adapters
-        run: python -m pytest ports/experimental/tests -q
+      - name: Skip audit (a skip in CI must be allowlisted)
+        if: always()
+        run: python tools/ci/skip_audit.py --allowlist tools/ci/skip-allowlist.txt 'build/junit/*.xml'

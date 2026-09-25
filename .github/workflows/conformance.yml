@@ -1,8 +1,8 @@
 name: Conformance matrix
 
 # Validates the frozen agentic/v1 spec, runs the Python spec tooling tests, and
-# executes the 15 shared conformance fixtures against every runtime binding
-# present in the checkout through spec/tools/conformance_matrix.py. The runner
+# executes the shared conformance fixtures under spec/conformance/v1 against every
+# runtime binding present in the checkout through spec/tools/conformance_matrix.py. The runner
 # invokes each runtime's own binding (reference runtime, JUnit ConformanceTest,
 # FlinkConformanceHarness on MiniCluster, PekkoConformanceHarness,
 # agentic.conformance/run-all, installed Python bindings); it never reimplements
@@ -17,11 +17,21 @@ name: Conformance matrix
 #   under spec/conformance/v1/workflows declare no external stores), so this
 #   workflow starts no service containers rather than starting ones nothing uses.
 #   Infrastructure-backed suites stay in ci.yml / the integration-tests profile.
+# - Drift: the matrix job regenerates docs/capabilities.md from the matrix artifact it
+#   just produced (same checkout, same job) and fails when the committed file differs.
+#   On pull requests that catches a change that forgot to regenerate the docs; the
+#   daily schedule catches drift on main itself (a binding whose behaviour changed
+#   through a dependency, a toolchain, or a merge that skipped this check).
+#
+# Both jobs are meant to be required status checks (see the header of ci.yml).
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Daily at 04:17 UTC, against main.
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -86,11 +96,15 @@ jobs:
           # pyflink / python-jvm / python-flink run their own conformance modules over the shaded jar.
           if [ -f pyflink/pyproject.toml ]; then pip install -e pyflink; fi
           if [ -f python/pyproject.toml ]; then pip install -e python; fi
-      - name: Build the shaded jar the Python-over-JVM bindings load
-        run: |
-          ./mvnw -B -ntp -q -f ports/jagentic-core/pom.xml install -DskipTests
-          ./mvnw -B -ntp -q install -DskipTests
-          if [ -f pyflink/java/pom.xml ]; then ./mvnw -B -ntp -q -f pyflink/java/pom.xml package -DskipTests; fi
+      # One reactor build (reactor/pom.xml) in dependency order: jagentic-core and
+      # agentic-pekko for the JUnit conformance suites conformance_matrix.py runs with
+      # `-f <module>/pom.xml test`, the Flink framework's shaded jar for the python-jvm and
+      # python-flink bindings, and the PyFlink bridge jar. Tests are the matrix's job, not
+      # this step's.
+      - name: Build the reactor modules the bindings load
+        run: >-
+          ./mvnw -B -ntp -q -f reactor/pom.xml install -DskipTests
+          -pl :jagentic-core,:agentic-flink,:agentic-pekko,:agentic-pyflink -am
       - name: Run the matrix
         run: |
           python spec/tools/conformance_matrix.py \
@@ -107,9 +121,12 @@ jobs:
           else
             echo "conformance_matrix.py produced no artifact; see the run log" >> "$GITHUB_STEP_SUMMARY"
           fi
+      # build/conformance-matrix.json was written by the previous step from this checkout;
+      # nothing here downloads an artifact from another run.
       - name: Generated docs/capabilities.md must match the artifact of this checkout
         if: hashFiles('docs/capabilities.md') != ''
         run: |
+          test -s build/conformance-matrix.json
           python spec/tools/conformance_matrix.py --render build/conformance-matrix.json --write-docs build/capabilities.rendered.md
           # Compare only the capability table; runtime notes carry hostnames and durations.
           normalize() { sed -n '1,/^## Notes/p' "$1" | grep '^|'; }

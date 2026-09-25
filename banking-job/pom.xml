@@ -4,35 +4,32 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.agentic.flink</groupId>
+    <parent>
+        <groupId>org.jagentic</groupId>
+        <artifactId>agentic-streaming-reactor</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../reactor/pom.xml</relativePath>
+    </parent>
+
     <artifactId>agentic-flink-banking-job</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <!--
-    Standalone, self-contained uber-jar for the banking Flink job (BankingFlinkJob): the embedded
-    MiniCluster process of an agent container. Kept out of the core reactor (like a2a-gateway) and
-    built separately:  mvn install -DskipTests && mvn -f banking-job/pom.xml package
+    Self-contained uber-jar for the banking Flink job (BankingFlinkJob): the embedded MiniCluster
+    process of an agent container. Module of reactor/pom.xml; on its own:
+        ./mvnw install -DskipTests && ./mvnw -f banking-job/pom.xml package
 
     Core marks Flink/Jedis 'provided'/'optional' (it deploys onto a cluster); here we pull them in
     at compile scope so the shaded jar runs a local MiniCluster + Redis bridge with `java -jar`.
     -->
 
-    <properties>
-        <java.version>21</java.version>
-        <flink.version>2.2.1</flink.version>
-        <agentic.flink.version>1.0.0-SNAPSHOT</agentic.flink.version>
-        <maven.compiler.release>${java.version}</maven.compiler.release>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
-
     <dependencies>
         <!-- Core: agents, banking graph, A2A bridge, conversation store (+ its compile deps:
              langchain4j, jackson, …). -->
         <dependency>
-            <groupId>org.agentic.flink</groupId>
+            <groupId>org.jagentic</groupId>
             <artifactId>agentic-flink</artifactId>
-            <version>${agentic.flink.version}</version>
+            <version>${project.version}</version>
         </dependency>
 
         <!-- Flink local-execution stack (provided in core). flink-clients supplies the LocalExecutor
@@ -76,12 +73,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.1</version>
                 <executions>
                     <execution>
                         <phase>package</phase>

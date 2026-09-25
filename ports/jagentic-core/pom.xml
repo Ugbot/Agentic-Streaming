@@ -4,19 +4,19 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.jagentic</groupId>
+  <!-- First module of the reactor (reactor/pom.xml): every other JVM module depends on it. -->
+  <parent>
+    <groupId>org.jagentic</groupId>
+    <artifactId>agentic-streaming-reactor</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../reactor/pom.xml</relativePath>
+  </parent>
+
   <artifactId>jagentic-core</artifactId>
-  <version>0.1.0</version>
   <packaging>jar</packaging>
   <name>jagentic-core</name>
   <description>Pure-Java, Flink-free essence of Agentic-Flink — the shared core the
     Kafka Streams / Spring / Quarkus ports build on (Java mirror of ports/pyagentic).</description>
-
-  <properties>
-    <maven.compiler.release>21</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <langchain4j.version>1.16.3</langchain4j.version>
-  </properties>
 
   <dependencyManagement>
     <dependencies>
@@ -78,7 +78,7 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.10.2</version>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -88,12 +88,10 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.2.5</version>
       </plugin>
     </plugins>
   </build>

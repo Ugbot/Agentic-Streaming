@@ -71,11 +71,14 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Build the canonical core
-        run: ./mvnw -B -ntp -f ports/jagentic-core/pom.xml install -DskipTests
-
+      # The reactor (reactor/pom.xml) builds jagentic-core and then the framework module in
+      # one invocation; `-pl :agentic-flink -am` limits it to those two. The shaded jar lands
+      # at target/agentic-flink-<version>-uber.jar, where python/setup.py picks it up.
       - name: Build the shaded framework jar
-        run: ./mvnw -B -ntp -DskipTests package
+        run: ./mvnw -B -ntp -f reactor/pom.xml -pl :agentic-flink -am -DskipTests package
+
+      - name: Shaded framework jar is present
+        run: test "$(ls target/agentic-flink-*-uber.jar | wc -l)" -eq 1
 
       - name: Build distributions (sdist and wheel for each of the four projects)
         run: |

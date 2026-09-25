@@ -51,27 +51,47 @@ comparison). The engine-agnostic "essence" and per-engine design notes are in `d
   - `a2a/` -- A2A (Agent2Agent) protocol support. Outbound: `RemoteAgentSpec`, `A2AClient` SPI + `SdkA2AClient` (official a2a-java SDK, optional dep, isolated behind the SPI), `A2AToolExecutor` (peer-as-tool), `A2AStep` (explicit pipeline step). `a2a/bridge/` -- pluggable gateway↔Flink transport (`inproc`/`zeromq`/`redis`). `a2a/storage/` -- `A2ATaskStore` (memory/postgres/redis). See `docs/a2a.md`.
   - `example/` -- Working examples (SimpleCalculatorTool, ToolAnnotationExample)
   - `plugins/flintagents/` -- Optional Apache Flink Agents integration (excluded from default build)
-- `a2a-gateway/` -- Optional standalone Quarkus module: inbound A2A gateway (Agent Card + JSON-RPC, with `message/stream` over SSE; no gRPC or REST server is implemented) bridging external A2A callers into a Flink job. Built separately (`./mvnw -f a2a-gateway/pom.xml package`), kept out of the core reactor. See `a2a-gateway/README.md`.
+- `a2a-gateway/` -- Optional standalone Quarkus module: inbound A2A gateway (Agent Card + JSON-RPC, with `message/stream` over SSE; no gRPC or REST server is implemented) bridging external A2A callers into a Flink job. Built on its own (`./mvnw -f a2a-gateway/pom.xml package`) or with `./mvnw -f reactor/pom.xml verify -P a2a-gateway`; not part of the default reactor build. See `a2a-gateway/README.md`.
 - `python/` -- JPype-backed Python facade (`agentic-flink` PyPI package). In-process JVM, `@tool` decorator for Python functions, examples mirror the Java ones. See `docs/python.md`.
 
 ## Build
 
-Use the committed wrapper (`./mvnw`); the root pom enforces Maven 3.9+ and a system `mvn` 3.6
-fails. `ports/jagentic-core` is not in the root reactor and must be installed before anything
-else.
+Use the committed wrapper (`./mvnw`); `reactor/pom.xml` (the parent of every module) enforces
+Maven 3.9+ and Java 21, so a system `mvn` 3.6 fails. All first-class JVM modules share one
+groupId (`org.jagentic`) and one version (`1.0.0-SNAPSHOT`).
 
 ```
-./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # always first
+./mvnw -f reactor/pom.xml verify         # whole reactor in dependency order (what CI gates on):
+                                         # jagentic-core, Flink framework, agentic-pekko, pyflink/java,
+                                         # tool-services-packs, tool-services-app, banking-job
+./mvnw -f reactor/pom.xml verify -P a2a-gateway   # plus the Quarkus A2A gateway (slow, opt-in)
+./mvnw -f reactor/pom.xml install -DskipTests     # compile + install everything, no tests
+```
+
+The root `pom.xml` stays the Flink framework module, so the per-module commands still work.
+A module built on its own needs its upstream modules in the local repository; installing
+`ports/jagentic-core` also installs the reactor parent pom the modules refer to.
+
+```
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # first, when building modules one at a time
 ./mvnw clean test                        # unit tests (Flink framework)
-./mvnw test -P integration-tests         # integration tests (requires Podman containers)
+./mvnw test -P integration-tests         # Testcontainers suites; with Podman export
+                                         # DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+                                         # and TESTCONTAINERS_RYUK_DISABLED=true (docs/getting-started.md)
 ./mvnw clean package -P flink-agents     # build with optional Flink Agents plugin
 ./mvnw install -DskipTests && ./mvnw -f a2a-gateway/pom.xml package   # build the A2A gateway
 ```
 
+`ports/experimental/*` are not modules of the reactor. CI (`.github/workflows/ci.yml`) runs the
+reactor once with the backing services (Postgres, Redis, Kafka, Qdrant, a Python with the MCP
+SDK) and audits every skipped test against `tools/ci/skip-allowlist.txt`; a service-backed test
+that skips in CI fails the build. `PythonExecutorTest` (PEMJA has no CPython 3.12 wheel) and
+`ZeroMqChannelTest` (no timeout, hangs on some hosts) are excluded there by name.
+
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
 Enable it with `-P flink-agents` after building Flink Agents from source.
 
-### Other first-class runtimes (built separately, after `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`)
+### Other first-class runtimes (part of the reactor; on their own after `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`)
 
 ```
 # Agentic Pekko (actors); `compile` must be in the same invocation as exec:java

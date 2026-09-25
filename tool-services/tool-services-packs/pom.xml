@@ -3,24 +3,25 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>org.jagentic</groupId>
+  <parent>
+    <groupId>org.jagentic</groupId>
+    <artifactId>agentic-streaming-reactor</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../reactor/pom.xml</relativePath>
+  </parent>
+
   <artifactId>tool-services-packs</artifactId>
-  <version>0.1.0</version>
   <name>Agentic Tool Services — Packs</name>
   <description>Flink-free library of self-describing tool packs (web/Tika, RAG, inference, utility)
     that register into a jagentic-core ToolRegistry and can be served over MCP/REST/gRPC/pub-sub.</description>
 
   <!--
-  Standalone module (no parent). Build after installing jagentic-core:
-      mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
-      mvn -f tool-services/tool-services-packs/pom.xml install
-  Kept out of the core reactor (mirrors the a2a-gateway module pattern).
+  Module of reactor/pom.xml. On its own, build after installing jagentic-core:
+      ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+      ./mvnw -f tool-services/tool-services-packs/pom.xml install
   -->
   <properties>
-    <maven.compiler.release>21</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.17.2</jackson.version>
-    <langchain4j.version>1.16.3</langchain4j.version>
     <tika.version>2.9.2</tika.version>
     <jsoup.version>1.18.1</jsoup.version>
   </properties>
@@ -30,7 +31,7 @@
     <dependency>
       <groupId>org.jagentic</groupId>
       <artifactId>jagentic-core</artifactId>
-      <version>0.1.0</version>
+      <version>${project.version}</version>
     </dependency>
 
     <!-- @Tool / @P annotations for the utility pack's annotated tools. -->
@@ -73,7 +74,7 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.10.2</version>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -83,7 +84,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.13.0</version>
         <configuration>
           <!-- emit parameter names so the @Tool reflection binder can read them -->
           <parameters>true</parameters>
@@ -92,7 +92,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.2.5</version>
       </plugin>
     </plugins>
   </build>

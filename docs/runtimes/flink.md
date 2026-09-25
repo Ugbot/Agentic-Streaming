@@ -1,7 +1,7 @@
 # Flink runtime
 
 Apache Flink 2.2.1 is the first-class runtime. The main module (root `pom.xml`, artifact
-`org.agentic.flink:agentic-flink`) carries two things that must not be confused:
+`org.jagentic:agentic-flink`) carries two things that must not be confused:
 
 | Surface | Package | Contract | Matrix column |
 |---|---|---|---|
