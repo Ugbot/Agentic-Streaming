@@ -55,6 +55,7 @@ public class AgentJobBuilder {
   SupervisorChain supervisorChain;
   ToolRegistry toolRegistry;
   AgenticFlinkConfig storageConfig;
+  FlinkJobDefaults jobDefaults;
   RoutingConfig routingConfig = RoutingConfig.internal();  // Default to internal routing
   MonitoringConfig monitoringConfig = MonitoringConfig.defaults();  // Default monitoring
   Map<String, Object> jobProperties = new HashMap<>();
@@ -150,6 +151,21 @@ public class AgentJobBuilder {
    */
   public AgentJobBuilder withAgenticFlinkConfig(AgenticFlinkConfig storageConfig) {
     this.storageConfig = storageConfig;
+    return this;
+  }
+
+  /**
+   * Sets the checkpointing and state backend defaults applied when the job is generated
+   * (optional).
+   *
+   * <p>If not set, {@link #build()} resolves them from the storage config when one is present,
+   * otherwise from the process environment ({@link FlinkJobDefaults#fromEnvironment()}).
+   *
+   * @param jobDefaults The fault tolerance defaults
+   * @return this builder
+   */
+  public AgentJobBuilder withJobDefaults(FlinkJobDefaults jobDefaults) {
+    this.jobDefaults = jobDefaults;
     return this;
   }
 
@@ -269,6 +285,12 @@ public class AgentJobBuilder {
   }
 
   private void applyDefaults() {
+    if (jobDefaults == null) {
+      jobDefaults =
+          storageConfig != null
+              ? FlinkJobDefaults.fromConfig(storageConfig)
+              : FlinkJobDefaults.fromEnvironment();
+    }
     // Apply job name default
     if (jobName == null || jobName.isEmpty()) {
       if (supervisorChain != null) {

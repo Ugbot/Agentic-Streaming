@@ -20,6 +20,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.Collector;
 
 import org.agentic.flink.cep.CepSpecTranslator;
+import org.agentic.flink.job.FlinkJobDefaults;
 import org.agentic.flink.runtime.ChatClientFactories;
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
 import org.agentic.flink.runtime.WorkflowTurnFunction;
@@ -198,6 +199,7 @@ public final class FlinkPipelineRunner {
     Map<String, Object> spec = loadYaml(Path.of(yaml));
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
     env.setParallelism(1);
+    FlinkJobDefaults.fromEnvironment().apply(env);
 
     Event seed = new Event(cid, "user", text == null ? "what is my balance?" : text, Map.of());
     DataStream<Event> source = env.fromData(List.of(seed), WorkflowTurnFunction.EVENT_TYPE);

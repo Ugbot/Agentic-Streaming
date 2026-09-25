@@ -77,6 +77,7 @@ public class AgentJob implements Serializable {
   private final SupervisorChain supervisorChain;
   private final ToolRegistry toolRegistry;
   private final AgenticFlinkConfig storageConfig;
+  private final FlinkJobDefaults jobDefaults;
   private final RoutingConfig routingConfig;
   private final MonitoringConfig monitoringConfig;
   private final Map<String, Object> jobProperties;
@@ -90,6 +91,7 @@ public class AgentJob implements Serializable {
     this.supervisorChain = builder.supervisorChain;
     this.toolRegistry = builder.toolRegistry;
     this.storageConfig = builder.storageConfig;
+    this.jobDefaults = builder.jobDefaults;
     this.routingConfig = builder.routingConfig;
     this.monitoringConfig = builder.monitoringConfig;
     this.jobProperties = Collections.unmodifiableMap(new HashMap<>(builder.jobProperties));
@@ -104,6 +106,8 @@ public class AgentJob implements Serializable {
   public SupervisorChain getSupervisorChain() { return supervisorChain; }
   public ToolRegistry getToolRegistry() { return toolRegistry; }
   public AgenticFlinkConfig getStorageConfig() { return storageConfig; }
+  /** Checkpointing and state backend defaults {@link AgentJobGenerator} applies to the environment. */
+  public FlinkJobDefaults getJobDefaults() { return jobDefaults; }
   public RoutingConfig getRoutingConfig() { return routingConfig; }
   public MonitoringConfig getMonitoringConfig() { return monitoringConfig; }
   public List<org.agentic.flink.a2a.A2AStep> getA2ASteps() { return a2aSteps; }
@@ -168,6 +172,7 @@ public class AgentJob implements Serializable {
         .withSupervisorChain(this.supervisorChain)
         .withToolRegistry(this.toolRegistry)
         .withAgenticFlinkConfig(this.storageConfig)
+        .withJobDefaults(this.jobDefaults)
         .withRoutingConfig(this.routingConfig)
         .withMonitoringConfig(this.monitoringConfig);
   }

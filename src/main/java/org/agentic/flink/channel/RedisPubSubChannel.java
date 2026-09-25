@@ -28,7 +28,14 @@ import redis.clients.jedis.JedisPubSub;
  * <p>This source is single-parallelism by design. A subscriber per task would receive duplicate
  * messages from Redis.
  *
- * <p>Migrated from {@code RedisPubSubFeed}; behaviour unchanged.
+ * <p>Redis pub/sub is fire-and-forget: the server keeps no log and a subscriber cannot ask for
+ * messages published while it was away, so there is no position to checkpoint. The source
+ * therefore runs as a plain {@link PollingSource.PollFn} (not a {@link
+ * PollingSource.PositionedPollFn}) and {@link PollingSource} logs at WARN on start that messages
+ * published between the last checkpoint and a failure are not redelivered. Use a replayable
+ * transport (Kafka, or Postgres via {@link PostgresChangeChannel}) where that matters.
+ *
+ * <p>Migrated from {@code RedisPubSubFeed}.
  */
 public final class RedisPubSubChannel implements Channel<KeyedContextItem> {
   private static final long serialVersionUID = 1L;

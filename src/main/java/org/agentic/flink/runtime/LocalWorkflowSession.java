@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.agentic.flink.job.FlinkJobDefaults;
 import org.agentic.flink.pipeline.FlinkPipelineRunner;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.RuntimeExecutionMode;
@@ -70,8 +71,9 @@ public final class LocalWorkflowSession implements AutoCloseable {
    * @param spec the validated agentic/v1 workflow document
    * @param options Flink runtime options ({@code runtime.flink} of the document)
    * @param parallelism job parallelism (at least 1)
-   * @param checkpointInterval periodic checkpoint interval; {@code null} keeps checkpoints off between
-   *     restarts (stop-with-savepoint does not need them)
+   * @param checkpointInterval periodic checkpoint interval; {@code null} uses the framework default
+   *     ({@link FlinkJobDefaults}, {@code AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS}). Stop-with-savepoint
+   *     on {@link #restart()} does not depend on periodic checkpoints
    * @param savepointDir local directory that receives savepoints and checkpoints
    * @param timeout how long to wait for a result, a savepoint, or the job to start
    * @param jobName the Flink job name
@@ -186,20 +188,22 @@ public final class LocalWorkflowSession implements AutoCloseable {
   }
 
   private void startFrom(String savepoint) throws Exception {
-    Configuration conf = new Configuration();
+    FlinkJobDefaults defaults = FlinkJobDefaults.fromEnvironment()
+        .withStorageDir(savepointDir.resolve("checkpoints").toUri().toString());
+    if (checkpointInterval != null) {
+      defaults = defaults.withInterval(checkpointInterval);
+    }
+    Configuration conf = defaults.toConfiguration();
     conf.set(ExecutionOptions.RUNTIME_MODE, RuntimeExecutionMode.STREAMING);
     conf.set(RestartStrategyOptions.RESTART_STRATEGY, "fixed-delay");
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 10);
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(100));
-    conf.set(CheckpointingOptions.CHECKPOINTS_DIRECTORY, savepointDir.resolve("checkpoints").toUri().toString());
-    if (checkpointInterval != null) {
-      conf.set(CheckpointingOptions.CHECKPOINTING_INTERVAL, checkpointInterval);
-    }
     if (savepoint != null) {
       conf.set(StateRecoveryOptions.SAVEPOINT_PATH, savepoint);
     }
     StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(parallelism, conf);
     env.setParallelism(parallelism);
+    defaults.apply(env);
 
     // One poller: with several, turns of one conversation submitted back to back could be taken
     // by different subtasks and reach the keyed operator out of submission order.
