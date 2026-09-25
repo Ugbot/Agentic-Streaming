@@ -11,6 +11,7 @@ This guide explains the key concepts of Agentic Flink using simple analogies and
 6. [Validation and Correction](#validation-and-correction)
 7. [RAG - Knowledge Retrieval](#rag)
 8. [Apache Flink - The Engine](#apache-flink)
+9. [One Workflow, Many Runtimes](#one-workflow-many-runtimes)
 
 ---
 
@@ -577,6 +578,21 @@ The framework handles all the Flink complexity:
 
 ---
 
+## One Workflow, Many Runtimes
+
+The sections above describe the Flink framework's `Agent.builder()` API. Beside it, the
+repository has a runtime-neutral contract, `agentic/v1` ([spec/v1/primitives.md](../spec/v1/primitives.md)):
+an agent is a workflow document (YAML or JSON) with a router, paths, tools and policies, and its
+state is an ordered log of events per conversation. The same document runs on Flink, on Pekko, on
+Clojure, on pure Python and on PyFlink, and the shared conformance fixtures check that each of
+them produces the same normalized result. The generated [capability matrix](capabilities.md) says
+what each runtime has proven; the pages under [runtimes/](runtimes/README.md) say what each
+runtime is made of, starting with the guarantees they all share
+([common primitives](runtimes/common-primitives.md)). From Python, both the high-level and the
+full-control API for that contract are in [python.md](python.md).
+
+---
+
 ## Putting It All Together
 
 Here's how all the concepts work together:
@@ -650,6 +666,7 @@ if (policyContainsRequiredInfo(policy)) {
 6. **Validation** checks if work is correct
 7. **RAG** gives agents knowledge of your documents
 8. **Flink** ensures reliability and scalability
+9. **Runtimes** are interchangeable for an `agentic/v1` workflow; the matrix says what each has proven
 
 ---
 

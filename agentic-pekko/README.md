@@ -8,6 +8,11 @@ a thin port.
 
 > Supersedes the `ports/pekko/` proof-of-concept (in-memory state, unused persistence dep).
 
+This module is the `pekko` column of the generated [capability matrix](../docs/capabilities.md).
+The runtime page, [docs/runtimes/pekko.md](../docs/runtimes/pekko.md), describes the journal as
+event log, durable timers, sharding, the durability profiles and where the runtime stands in the
+matrix; this README keeps the module-level detail and the commands.
+
 ## Why Pekko fits the essence
 
 The agent essence is *one durable thing per conversation, processed in order, surviving failure.*
@@ -122,7 +127,9 @@ recovery path are exercised, `restart_runtime` passivates the entities), emits t
 `result.schema.json` shape and applies the comparison rules of `spec/conformance/v1/README.md`
 (regex replies, error class, ordered tool calls, event subsequence / exclusion, state subset).
 A fixture whose `requires` the runtime does not declare is recorded as a skip, never a pass.
-All 15 fixtures currently pass on Pekko.
+The current per-fixture outcomes for the `pekko` binding are in the generated
+[capability matrix](../docs/capabilities.md#pekko), excerpted on the
+[runtime page](../docs/runtimes/pekko.md).
 
 ## Tests (all offline by default)
 

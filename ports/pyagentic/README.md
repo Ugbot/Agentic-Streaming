@@ -2,7 +2,11 @@
 
 Pure-Python implementation of the Agentic Streaming v1 model (`spec/v1`). One workflow IR,
 one user-facing `agentic` API, and the local runtime that is the Python reference for the
-shared conformance fixtures.
+shared conformance fixtures. It is the `python` column of the generated
+[capability matrix](../../docs/capabilities.md); what the runtime is made of and where it
+stands is on the [pure Python runtime page](../../docs/runtimes/python.md), and the two-level
+Python API (this package, the JVM facade and PyFlink on the same workflow) is in
+[docs/python.md](../../docs/python.md).
 
 ```python
 from agentic import Agent, load
@@ -81,7 +85,7 @@ uv sync                                             # .venv from uv.lock (or: py
 .venv/bin/pytest
 .venv/bin/ruff check agentic tests/test_agentic_*.py
 .venv/bin/mypy
-.venv/bin/python -m agentic.conformance             # 15 fixtures against the local runtime
+.venv/bin/python -m agentic.conformance             # the fixtures against the local runtime (the `python` column)
 uv lock                                             # refresh uv.lock after changing dependencies
 ```
 

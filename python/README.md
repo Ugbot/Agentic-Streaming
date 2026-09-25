@@ -1,6 +1,10 @@
 # agentic-flink (Python)
 
-JPype-backed Python facade over the [Agentic Flink](../README.md) Java framework.
+JPype-backed Python facade over the [Agentic Flink](../README.md) Java framework. Two surfaces
+live here: the `agentic/v1` runtimes `local-jvm`, `flink-jvm` and `pekko` (the `python-jvm` and
+`python-flink` columns of the generated [capability matrix](../docs/capabilities.md), described
+on the [Python facade runtime page](../docs/runtimes/python-facade.md)), and the legacy Flink DSL
+(`Agent.builder()` and `@tool`), a pure-Flink API outside the conformance matrix.
 
 ## Install
 
@@ -17,13 +21,16 @@ pip install agentic-flink[pyflink]
 You'll also need the framework jar, see [`docs/python.md`](../docs/python.md)
 for the discovery rules.
 
-## Quick start
+## Quick start (legacy Flink DSL)
+
+The shaded jar excludes the Flink distribution classes the DSL needs, so pass them to
+`start_jvm` (`flink_jars()` finds them in `FLINK_HOME` or the `apache-flink` wheel).
 
 ```python
 import agentic_flink as af
-from agentic_flink import Agent, ChatSetup, langchain4j_ollama, tool
+from agentic_flink import Agent, ChatSetup, flink_jars, langchain4j_ollama, tool
 
-af.start_jvm()
+af.start_jvm(extra_jars=flink_jars())
 
 @tool
 def add(a: int, b: int) -> int:
@@ -71,17 +78,25 @@ result = spec.run(runtime="local-jvm", text="refund me", conversation_id="c1", t
 rt = get_runtime("flink-jvm", parallelism=8)   # full control
 rt.capabilities()                          # {capability: supported|partial|unsupported|not_tested}
 rt.deploy(spec)                            # raises CapabilityError listing what is missing
-rt.submit_all([...])                       # one bounded Flink job per batch
+rt.submit_all([...])                       # turns into the long-lived streaming job
+rt.restart()                               # stop with savepoint, restore, recorded turns not re-run
 rt.close()
 ```
 
-Runtimes and what proves them:
+Runtimes, what they wrap and what they need on the classpath:
 
-| name | over | jars | conformance (`python -m agentic_flink.conformance --runtime <name>`) |
-|---|---|---|---|
-| `local-jvm` (alias `local`) | `org.jagentic.core.LocalRuntime` | shaded jar | 15/15 pass |
-| `flink-jvm` | Flink adapter, one streaming job on a local cluster per `deploy()` (`LocalWorkflowSession`), `restart()` = stop with savepoint + restore; `durable=False` runs one bounded job per submit (`pyflink` is the separate agentic-pyflink package) | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) | 21 pass, 3 skip (see `docs/capabilities.md`) |
-| `pekko` | `agentic-pekko` `PekkoBackendProvider` | + `mvn -f agentic-pekko/pom.xml package` and `AGENTIC_PEKKO_CLASSPATH` | reachable; every capability `not_tested`, fixtures skip |
+| name | over | jars |
+|---|---|---|
+| `local-jvm` (alias `local`) | `org.jagentic.core.LocalRuntime` | shaded jar |
+| `flink-jvm` | Flink adapter, one streaming job on a local cluster per `deploy()` (`LocalWorkflowSession`), `restart()` = stop with savepoint + restore; `durable=False` runs one bounded job per submit (`pyflink` is the separate agentic-pyflink package) | + Flink distribution (`FLINK_HOME`, `pip install "agentic-flink[flink]"`, or `AGENTIC_FLINK_CLASSPATH`) |
+| `pekko` | `agentic-pekko` `PekkoBackendProvider` | + `./mvnw -f agentic-pekko/pom.xml package` and `AGENTIC_PEKKO_CLASSPATH` |
+
+What each of them has proven is the generated [capability matrix](../docs/capabilities.md)
+(`python-jvm` and `python-flink` columns; `python -m agentic_flink.conformance --runtime <name>`
+produces the rows). `pekko` through this facade has no column, declares every capability
+`not_tested`, and is unsupported because of a Jackson version conflict between the shaded jar
+and Pekko's Jackson Scala module; the [Python facade runtime page](../docs/runtimes/python-facade.md)
+has the details and the [Pekko page](../docs/runtimes/pekko.md) the supported native path.
 
 Legacy `agentic_flink.Agent` (the LangChain4J `AgentBuilder` proxy) is unchanged; the
 shared-contract builder is `agentic_flink.workflow.Agent` (also exported as

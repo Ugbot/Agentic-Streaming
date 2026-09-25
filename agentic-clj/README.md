@@ -7,6 +7,11 @@ as the first-class storage engine: each message is an immutable datom, so the co
 *is* an event log with time-travel (`d/history` / `as-of`) for free. A peer to the Flink framework and
 Agentic Pekko, at byte-for-byte parity with the other cores (the FNV embedder + banking goldens).
 
+This module is the `clojure` column of the generated [capability matrix](../docs/capabilities.md).
+The runtime page, [docs/runtimes/clojure.md](../docs/runtimes/clojure.md), describes the Datomic
+event log, time travel and where the runtime stands in the matrix; this README keeps the
+module-level detail and the commands.
+
 ## Why Clojure + Datomic fits the essence
 
 The essence is *an agent's state is a materialized view over an ordered, immutable log of events.*
@@ -183,7 +188,10 @@ it builds each workflow, delivers the turns (honouring `restart_runtime`, `signa
 validates every normalized result against the result schema and applies the comparison rules from
 `spec/conformance/v1/README.md`. A fixture whose `requires` this runtime does not claim is recorded
 as a skip. `clojure -X:test` runs it with the rest of the suite; from a REPL,
-`(agentic.conformance/report (agentic.conformance/run-all))` prints one line per fixture.
+`(agentic.conformance/report (agentic.conformance/run-all))` prints one line per fixture. The
+current per-fixture outcomes for the `clojure` binding are in the generated
+[capability matrix](../docs/capabilities.md#clojure), excerpted on the
+[runtime page](../docs/runtimes/clojure.md).
 
 ## Model-free by default
 

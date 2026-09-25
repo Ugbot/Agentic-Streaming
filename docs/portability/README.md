@@ -27,11 +27,17 @@ management, an in-process **HNSW** vector index, vector/long-term/conversation s
 - [`stream-stateful-core.md`](stream-stateful-core.md), the **stream-stateful core**: CEP, timers,
   windows, replay, human-in-the-loop, and tracing, portable across all four cores (CEP is no longer
   Flink-only).
-- [`parity-matrix.md`](parity-matrix.md), what each backend can do + its limitations,
-  and the full three-core capability/parity table (hand-maintained).
 - [`../capabilities.md`](../capabilities.md), the **generated** agentic/v1 capability matrix:
   per-runtime `supported` / `partial` / `unsupported` / `not_tested`, derived by
-  `spec/tools/conformance_matrix.py` from the shared conformance fixtures.
+  `spec/tools/conformance_matrix.py` from the shared conformance fixtures. The only place a
+  capability status is authored.
+- [`../runtimes/`](../runtimes/README.md), one page per conformance tested runtime:
+  [common primitives](../runtimes/common-primitives.md), [Flink](../runtimes/flink.md),
+  [Pekko](../runtimes/pekko.md), [Clojure](../runtimes/clojure.md),
+  [pure Python](../runtimes/python.md), [Python facade](../runtimes/python-facade.md),
+  [PyFlink](../runtimes/pyflink.md) and [experimental adapters](../runtimes/experimental.md).
+  Each carries an excerpt derived from the generated matrix.
+- [`parity-matrix.md`](parity-matrix.md) is retired; it redirects to the two entries above.
 
 **Design (the why):**
 - [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md),
