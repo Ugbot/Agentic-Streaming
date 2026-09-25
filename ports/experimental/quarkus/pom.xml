@@ -78,17 +78,44 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-messaging-kafka</artifactId>
     </dependency>
+
+    <!-- Tests: @QuarkusTest boots the real application; the REST edge is driven with
+         RestAssured and the Kafka channels are switched to the in-memory connector by the
+         %test profile in application.properties, so no broker is needed. -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.rest-assured</groupId>
+      <artifactId>rest-assured</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.smallrye.reactive</groupId>
+      <artifactId>smallrye-reactive-messaging-in-memory</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
     <plugins>
+      <!-- Same build-environment gate as reactor/pom.xml: this module is outside the reactor,
+           so it declares the rule itself. The verify-phase execution is the packaging check:
+           it fails unless the Quarkus build produced the runnable fast-jar. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
         <version>3.5.0</version>
         <executions>
           <execution>
-            <id>enforce-jdk-and-maven</id>
+            <id>enforce-build-environment</id>
             <goals>
               <goal>enforce</goal>
             </goals>
@@ -96,10 +123,30 @@
               <rules>
                 <requireJavaVersion>
                   <version>[21,22)</version>
+                  <message>This project requires JDK 21 or newer.</message>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9,)</version>
+                  <message>Use the committed wrapper (./mvnw) or Maven 3.9+.</message>
                 </requireMavenVersion>
+              </rules>
+            </configuration>
+          </execution>
+          <execution>
+            <id>verify-quarkus-package</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireFilesExist>
+                  <files>
+                    <file>${project.build.directory}/quarkus-app/quarkus-run.jar</file>
+                    <file>${project.build.directory}/quarkus-app/lib/main/org.jagentic.jagentic-core-1.0.0-SNAPSHOT.jar</file>
+                  </files>
+                  <message>quarkus-maven-plugin did not produce target/quarkus-app; the module cannot be packaged.</message>
+                </requireFilesExist>
               </rules>
             </configuration>
           </execution>
@@ -111,6 +158,34 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <release>21</release>
+        </configuration>
+      </plugin>
+      <!-- Builds the runnable application (target/quarkus-app) in the package phase and
+           augments the test classpath for @QuarkusTest. -->
+      <plugin>
+        <groupId>${quarkus.platform.group-id}</groupId>
+        <artifactId>quarkus-maven-plugin</artifactId>
+        <version>${quarkus.platform.version}</version>
+        <extensions>true</extensions>
+        <executions>
+          <execution>
+            <goals>
+              <goal>build</goal>
+              <goal>generate-code</goal>
+              <goal>generate-code-tests</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+        <configuration>
+          <systemPropertyVariables>
+            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+            <maven.home>${maven.home}</maven.home>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
     </plugins>
