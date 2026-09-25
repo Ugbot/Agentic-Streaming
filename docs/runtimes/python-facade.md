@@ -72,18 +72,16 @@ provided dependencies; `agentic_flink.flink_jars()` resolves them from the insta
 ## Where it stands
 
 <!-- matrix: python-jvm, python-flink -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
 Binding `python-jvm`: 24 passed, 0 failed, 0 skipped.
 
-Binding `python-flink`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `python-flink`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | python-jvm | python-flink |
 |---|---|---|
-| `timers` | [supported](../capabilities.md#capabilities) | [unsupported](../capabilities.md#python-flink) |
-| `checkpoint_recovery` | [supported](../capabilities.md#capabilities) | [unsupported](../capabilities.md#python-flink) |
 <!-- /matrix -->
 
 ## Legacy Flink DSL

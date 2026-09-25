@@ -15,6 +15,13 @@ Two ways to run:
   savepoint and restores a fresh job from it, which is how the conformance fixtures exercise
   ``restart_runtime``. The streaming path needs a :class:`FileSource` and a :class:`FileSink`
   whose directories this process can read and write (a local spool in ``local`` mode).
+
+Workflow ``timers`` read processing time from the operator's wall clock unless the runtime is
+constructed with ``clock="manual"``: then they read a ``ManualProcessingClock`` registered in the
+gateway JVM under an id this runtime owns, which starts at zero and moves only through
+:meth:`FlinkRuntime.advance_time` (the fixtures' ``advance_time_ms``). Local mode runs the cluster
+inside the gateway JVM, so the operator and this process see the same reading, and the reading
+outlives a :meth:`FlinkRuntime.restart`.
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ from typing import Any
 from pyflink.common import Configuration
 from pyflink.datastream import DataStream, StreamExecutionEnvironment
 from pyflink.java_gateway import get_gateway
+from pyflink.util.java_utils import add_jars_to_context_class_loader
 
 from ._contract import Runtime, required_capabilities
 from .capabilities import CAPABILITIES, check_requirements
@@ -50,7 +58,9 @@ from .jars import as_urls, classpath_jars
 from .workflow import Workflow, as_workflow, workflow_json
 
 BRIDGE_CLASS = "org.agentic.pyflink.PyFlinkJob"
+MANUAL_CLOCK_CLASS = "org.agentic.flink.runtime.ManualProcessingClock"
 SAVEPOINT_PATH_KEY = "execution.state-recovery.path"
+CLOCKS = ("system", "manual")
 
 Result = dict[str, Any]
 
@@ -79,13 +89,19 @@ class FlinkRuntime(Runtime):
         source: Source | None = None,
         sink: Sink | None = None,
         result_timeout: float = 60.0,
+        clock: str = "system",
         **overrides: Any,
     ) -> None:
+        if clock not in CLOCKS:
+            raise ValueError(f"clock must be one of {CLOCKS}, got {clock!r}")
         base = config or FlinkConfig()
         self.config = FlinkConfig(**{**base.__dict__, **overrides}) if overrides else base
         self._source = source
         self._sink = sink
         self.result_timeout = result_timeout
+        self.clock_kind = clock
+        self._clock_id: str | None = f"pyflink-{uuid.uuid4()}" if clock == "manual" else None
+        self._clock = None
         self._spec: Workflow | None = None
         self._job_client = None
         self._env: StreamExecutionEnvironment | None = None
@@ -167,6 +183,22 @@ class FlinkRuntime(Runtime):
         self._env = None
         self._start()
 
+    def advance_time(self, ms: int) -> int:
+        """Move the manual processing clock forward by ``ms`` milliseconds and return its new reading.
+
+        Logical time never moves backwards, so a negative ``ms`` raises :class:`ValueError`. Only
+        a runtime constructed with ``clock="manual"`` can be advanced; the default reads wall time.
+        """
+        self._ensure_open()
+        if int(ms) < 0:
+            raise ValueError(f"logical time never moves backwards: advance by {ms}")
+        return int(self._manual_clock().advance(int(ms)))
+
+    def now_ms(self) -> int:
+        """The manual processing clock's current reading in milliseconds."""
+        self._ensure_open()
+        return int(self._manual_clock().nowMs())
+
     def close(self) -> None:
         if self._closed:
             return
@@ -177,6 +209,9 @@ class FlinkRuntime(Runtime):
                 client.cancel().result()
             except Exception as e:  # the job may already have finished or failed
                 warnings.warn(f"cancelling the Flink job failed: {e}", stacklevel=2)
+        clock, self._clock = self._clock, None
+        if clock is not None:
+            clock.release()
         self._env = None
 
     def __enter__(self) -> FlinkRuntime:
@@ -224,8 +259,22 @@ class FlinkRuntime(Runtime):
         source.check_available()
         turns = source.attach(env)
         bridge = _java_class(BRIDGE_CLASS)
-        j_results = bridge.assemble(env._j_stream_execution_environment, workflow_json(workflow), turns._j_data_stream)
+        clock_id = self._manual_clock().clockId() if self.clock_kind == "manual" else None
+        j_results = bridge.assemble(
+            env._j_stream_execution_environment, workflow_json(workflow), turns._j_data_stream, clock_id
+        )
         return DataStream(j_results)
+
+    def _manual_clock(self):
+        """The Java ``ManualProcessingClock`` handle this runtime owns, registered on first use."""
+        if self._clock_id is None:
+            raise RuntimeStateError(
+                f"runtime {self.name!r} reads wall time; construct it with clock='manual' to control time"
+            )
+        if self._clock is None:
+            add_jars_to_context_class_loader(as_urls(classpath_jars(self.config.extra_jars)))
+            self._clock = _java_class(MANUAL_CLOCK_CLASS).named(self._clock_id)
+        return self._clock
 
     def _start(self) -> None:
         assert self._spec is not None and self._source is not None and self._sink is not None
