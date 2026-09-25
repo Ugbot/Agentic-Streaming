@@ -42,10 +42,11 @@ from the fold after recovery, so a restart or a passivation cannot lose one
 `timerFiresAcrossPassivationWhenItExpiresWhileTheEntityIsDown`; with a real Redis,
 `RedisJournalIT.durableTimerSurvivesASystemRestartAndFiresExactlyOnce`).
 
-These are runtime timers behind the suspend and resume path. The spec's declared `timers` block
-and its three fixtures are skipped by the `pekko` binding, so the matrix records `timers` and
-`checkpoint_recovery` as unsupported and `event_time` and `durable_store` as partial for this
-column ([pekko notes](../capabilities.md#pekko)). This page does not claim otherwise.
+The spec's declared `timers` block uses the same journal path: due timers fire before the turn
+that observes the deadline, `timer_fired` is journaled, event-time timers read the conversation
+watermark folded from `event_time_ms`, and pending timers plus the logical clock are rebuilt from
+the journal on recovery. The `pekko` binding passes the three timer fixtures
+([pekko notes](../capabilities.md#pekko)).
 
 ## Journals: memory, Postgres, Cassandra, Redis
 

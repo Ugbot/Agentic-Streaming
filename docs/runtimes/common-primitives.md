@@ -57,9 +57,9 @@ watermark is the highest `event_time_ms` seen, reduced into `state.watermark_ms`
 processed in arrival order and does not move the watermark. `checkpoint_recovery` means pending
 timers and the logical clock survive a restart, rebuilt from the log.
 [Clocks](../../spec/v1/primitives.md#clocks) and [Timers](../../spec/v1/primitives.md#timers).
-Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`. In the current matrix only
-the reference runtime passes them; every other binding skips them and therefore reports `timers`
-and `checkpoint_recovery` as [unsupported](../capabilities.md#capabilities).
+Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`. In the current matrix every
+binding passes them except `pyflink` and `python-flink`, which skip them and therefore report
+`timers` and `checkpoint_recovery` as [unsupported](../capabilities.md#capabilities).
 
 ## CEP fold
 

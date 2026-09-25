@@ -67,8 +67,9 @@ Binding `clojure`: 24 passed, 0 failed, 0 skipped.
 |---|---|
 <!-- /matrix -->
 
-The three skipped fixtures are the spec's declared `timers`; the module declares no `timers`
-capability, so they are recorded as skips, never passes ([clojure notes](../capabilities.md#clojure)).
+The spec's declared `timers` block is folded from the log like every other primitive: due timers
+fire before the turn that observes the deadline, the watermark is the highest `event_time_ms` seen,
+and pending timers are rebuilt from the log on restart ([clojure notes](../capabilities.md#clojure)).
 
 ## Running it
 

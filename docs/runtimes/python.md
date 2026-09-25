@@ -42,10 +42,12 @@ spelled out. The conformance verb `restart_runtime` maps onto it, so the `python
 
 `LocalRuntime.capabilities()` is the runtime's own declaration. `deploy(spec)` compares the
 workflow's requirements against it and raises `CapabilityError` listing every unsupported
-requirement instead of running a subset. The declaration says `timers` and `checkpoint_recovery`
-are unsupported and `llm_brain` is partial (only the scripted `stub` provider runs locally); the
-matrix agrees on the first two and, because the one `llm_brain` fixture uses the stub, records
-`llm_brain` as supported. What counts is the matrix, derived from fixture outcomes.
+requirement instead of running a subset. The declaration says `llm_brain` is partial (only the
+scripted `stub` provider runs locally); because the one `llm_brain` fixture uses the stub, the
+matrix records `llm_brain` as supported. `timers` read the runtime's `clock` (wall time by default,
+or a `ManualClock` whose `advance(ms)` moves it) and the conversation watermark; pending timers
+and a manual clock's reading survive `restart()` because both are rebuilt from the log. What counts is the matrix, derived from fixture
+outcomes.
 
 ## Where it stands
 
