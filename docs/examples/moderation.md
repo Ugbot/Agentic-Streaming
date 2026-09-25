@@ -7,6 +7,26 @@
 > Source: `src/main/java/org/agentic/flink/example/moderation/ContentModerationExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/moderation/README.md`
 
+## Running it
+
+```bash
+bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
+bash examples-bin/run-moderation.sh
+```
+
+Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama), and outbound internet on the
+first run: DJL downloads `unitary/toxic-bert` from Hugging Face plus the PyTorch CPU native
+runtime (about 700 MB) into its cache directory (`DJL_CACHE_DIR`, or `.djl.ai` under the home
+directory). No API key. `AUDIT_ENDPOINT` (default `http://localhost:8081/audit`) receives the
+blocked posts; when nothing listens there the POST failure is logged and the job continues.
+The script resolves the provided-scope Flink dependencies and runs the example in a forked JVM,
+see `examples-bin/_common.sh`.
+
+The input is a fixed list of four posts. Safe posts print one `id | user | summary` line each on
+the main output (`safe-output`); toxic posts print from the side output as
+`BLOCKED <id> by <user> label=<label> score=<score>` lines. With the fixed input, `p-001` and
+`p-003` are summarized and `p-002` and `p-004` are blocked with `label=toxic`.
+
 ## Why this shape
 
 Moderation has the opposite cost shape from triage: most content is fine, a
@@ -26,9 +46,11 @@ Post
   └──── safe    ─►  LLM summary  ─►  main output
 ```
 
-Toxic-BERT exposes four labels: `toxic`, `severe_toxic`, `obscene`, `threat`.
-Any of them in the block-set sends the post to the side output without an LLM
-call.
+Toxic-BERT is a multi-label model, so every post comes back with a top label even when the
+score is close to zero. A post goes to the side output without an LLM call only when its top
+label is in the block-set (`toxic`, `severe_toxic`, `obscene`, `threat`) and the score is at
+least `0.5` (`ContentModerationExample.BLOCK_THRESHOLD`, covered by
+`ContentModerationExampleTest`).
 
 ## Why a side output, not a filter?
 
@@ -72,8 +94,8 @@ DataStream<Post> posts =
 ```
 
 Add `flink-connector-kafka` to your local pom (the framework marks it
-optional). The compose snippet at the bottom of this doc spins up a Kafka +
-Zookeeper pair for local testing.
+optional). `docker-compose-kafka.yml` in the repository root brings up a Kafka plus
+Zookeeper pair for local testing, see the end of this page.
 
 ## Backpressure shape
 
@@ -83,25 +105,17 @@ If you find the operator buffering up, raise parallelism on the keyBy and
 consider a smaller classifier, `unitary/unbiased-toxic-roberta` is 2× faster
 on CPU at a tiny recall cost.
 
-## Compose snippet for Kafka
+## Kafka for local testing
 
-```yaml
-# docker-compose-kafka.yml
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.4.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-  kafka:
-    image: confluentinc/cp-kafka:7.4.0
-    depends_on: [zookeeper]
-    ports: ["9092:9092"]
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+`docker-compose-kafka.yml` (repository root) defines a single Confluent 7.4.0 broker plus
+Zookeeper on the shared `agentic-flink-network`, advertised to the host as `localhost:9092`
+and to other containers as `kafka:29092`. Boot it with Podman:
+
+```bash
+bash examples-bin/setup-network.sh
+export POSTGRES_PASSWORD=... REDIS_PASSWORD=...     # required by the services in docker-compose.yml
+podman-compose -f docker-compose.yml -f docker-compose-kafka.yml up -d
 ```
 
-Boot with `docker compose -f docker-compose.yml -f docker-compose-kafka.yml up
--d`.
+Use `podman compose` instead of `podman-compose` where the compose provider plugin is
+installed. `bash examples-bin/down-all.sh` stops everything.

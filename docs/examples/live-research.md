@@ -1,8 +1,10 @@
 # Live-research walkthrough
 
-> **Flink-runtime showcase**, a crawler frontier + LLM-steered crawl composed as **Flink operators**
-> over an HNSW corpus. Not the portable baseline; for the agent that runs unchanged on every runtime
-> see [the banking agent on every runtime](banking-everywhere.md).
+> **Flink-runtime showcase, design sketch.** A crawler frontier + LLM-steered crawl composed as
+> **Flink operators** over an HNSW corpus. Not the portable baseline; for the agent that runs on
+> the portable runtimes see [the banking agent on the portable runtimes](banking-everywhere.md).
+> This example does not run end to end in the current checkout; see "Running it" below.
+> For a working Flink RAG loop use [the RAG walkthrough](rag.md).
 
 > Source: `src/main/java/org/agentic/flink/example/research/LiveResearchExample.java`
 > Inline README: `src/main/java/org/agentic/flink/example/research/README.md`
@@ -100,31 +102,40 @@ When the consumer is a different job (or not a Flink job at all), swap to
 producer. The LLM still sees just one tool; the transport choice lives
 inside the channel.
 
-## Prerequisites
+## Running it
 
 ```bash
-docker compose up -d ollama
-docker compose exec ollama ollama pull qwen2.5:3b
+bash examples-bin/run-live-research.sh
 ```
 
-Add `ai.djl.pytorch:pytorch-native-cpu:0.30.0` to your downstream pom (the
-framework deliberately doesn't pull a native binary itself).
+The script exits with status 2 and an explanation. The composition above is the target shape,
+but three things stop it from running in this checkout, and they need framework changes rather
+than example changes:
 
-## Run
+1. `IngestionPipeline.into()` and `RetrievalPipeline.search()` are plain (unkeyed) Flink
+   operators, while `FlinkStateHnswVectorMemory` binds keyed `MapState`. The job fails in
+   `open()` with `Keyed state 'vector.hnsw.entries' ... can only be used on a 'keyed stream'`.
+2. Even on keyed streams the ingest operator and the search operator would own separate Flink
+   state, so the retrieve side would never see what the ingest side indexed. The "broadcast"
+   in `BroadcastCorpus` is not implemented by the pipeline builders yet; `BroadcastCorpus.Spec
+   .bind` returns a per-operator `SingleOperatorCorpus`.
+3. `ToolInvocationChannel.sideOutput("crawl-url", ...)` opens an unbounded polling source, so
+   the job never finishes, and the two static queries are answered before any page has been
+   indexed.
 
-```bash
-./examples-bin/run-live-research.sh
-```
+Set `AGENTIC_RUN_LIVE_RESEARCH=1` to run the example anyway and observe the first failure. That
+path needs JDK 21, the Maven wrapper, Ollama at `OLLAMA_URL` with `qwen2.5:3b`
+(`bash examples-bin/run-ollama.sh`), and outbound internet for the Wikipedia seeds and the
+first-run DJL downloads of `sentence-transformers/all-MiniLM-L6-v2`,
+`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` and the PyTorch CPU native runtime.
 
-On first run, DJL caches ~150 MB of model weights into `~/.djl.ai`. Each
-query takes a couple of seconds; the LLM is the dominant cost.
+## What the design intends you to see
 
-## What you should see
+- Ingest acks, one `ingested <chunk> into research-kb` line per chunk, as the seed URLs are
+  fetched, chunked, embedded and indexed.
+- `Answer[...]` records with `[1] [2]` citations drawn from the corpus.
+- URLs pushed through an external `KafkaChannel<UrlRequest>` joining the same crawler frontier,
+  with the corpus growing on the fly.
 
-- Two ingest streams emit "ingested chunk-XX into research-kb" lines as
-  the seed URLs are fetched, chunked, embedded, and indexed.
-- Two answer streams emit `Answer[...]` records with `[1] [2]` citations
-  drawn from the corpus.
-- If you point a Kafka producer at the optional `crawl-requests` topic,
-  those URLs join the same crawler frontier and the corpus grows
-  on the fly, searchable on the very next query.
+None of that output is produced today. `tools/smoke-examples.sh` lists this example as a skip
+with the reason above.

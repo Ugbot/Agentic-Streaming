@@ -6,14 +6,13 @@
 #   - Kafka (broker + ZooKeeper; topics auto-created on first produce)
 #   - Flink session cluster (so submitted market jobs land somewhere)
 #
-# Bring up:
-#   podman network create agentic-flink-network
-#   podman compose -f docker-compose-markets.yml up -d
+# Bring up (creates the agentic-flink-network external network, then podman compose up):
+#   bash examples-bin/run-markets-stack.sh
 #
-# Then either:
-#   python examples-bin/markets/coinbase_producer.py --products BTC-USD,ETH-USD,SOL-USD
-#   flink run target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-#       org.agentic.flink.example.markets.CryptoMarketAgentExample
+# Then, from the repository root:
+#   python3 examples-bin/markets/coinbase_producer.py --products BTC-USD,ETH-USD,SOL-USD
+#   flink run -c org.agentic.flink.example.markets.CryptoMarketAgentExample \
+#       target/agentic-flink-1.0.0-SNAPSHOT-uber.jar
 
 include:
   - docker-compose-kafka.yml

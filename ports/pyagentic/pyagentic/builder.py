@@ -153,9 +153,10 @@ def _register_a2a(tools: ToolRegistry, specs: Optional[List[Dict[str, Any]]]) ->
     for a in specs or []:
         from .a2a import peer_tool
 
+        name = a.get("name", a.get("id"))
         url = _resolve_env(a["url"])
-        tools.register(a["id"], a.get("description", f"Delegate to peer agent {a['id']}"),
-                       peer_tool(url, int(a.get("retries", 2))))
+        tools.register(name, a.get("description", f"Delegate to peer agent {name}"),
+                       peer_tool(url, retries=int(a.get("retries", 2))))
 
 
 def _build_guardrail(g: Dict[str, Any], embed):

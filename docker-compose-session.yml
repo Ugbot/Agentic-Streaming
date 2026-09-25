@@ -1,5 +1,6 @@
-# Flink 1.20.1 session cluster for local development. Sits on the same podman network as
-# `docker-compose-fluss.yml` so submitted jobs can reach `fluss-coordinator:9120` by service
+# Flink 2.2.1 (Java 21) session cluster for local development, matching the Flink version the
+# root module builds against. Sits on the same podman network as `docker-compose-fluss.yml` so
+# submitted jobs can reach `fluss-coordinator:9120` by service
 # name (use `FLUSS_BOOTSTRAP=fluss-coordinator:9120` for inter-container jobs, or
 # `localhost:9123` for clients running on the host).
 #
@@ -11,7 +12,7 @@
 
 services:
   flink-jobmanager:
-    image: flink:1.20.1-scala_2.12-java17
+    image: docker.io/library/flink:2.2.1-scala_2.12-java21
     container_name: agentic-flink-jm
     command: jobmanager
     # Dev only: the Flink REST API has no authentication and accepts jar uploads and job
@@ -39,7 +40,7 @@ services:
       - agentic-flink-network
 
   flink-taskmanager:
-    image: flink:1.20.1-scala_2.12-java17
+    image: docker.io/library/flink:2.2.1-scala_2.12-java21
     container_name: agentic-flink-tm
     command: taskmanager
     depends_on:

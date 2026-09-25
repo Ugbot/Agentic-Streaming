@@ -1,44 +1,59 @@
 # Closing the loop: an agent that consumes the standalone Tool Services over MCP.
 #
 # The tool packs (web/Tika, RAG, inference, utility) run as a separate, framework-agnostic
-# MCP server (tool-services-app). Any agent — in any language, on any backend — pulls those
+# MCP server (tool-services-app). Any agent, in any language, on any backend, pulls those
 # tools in via the `mcp:` section. Here the agent spawns the tool-services stdio MCP server
-# and exposes its `util_*` / `web_*` tools to the LLM brain.
+# from this repository and exposes its `tools_util_*` tools to the LLM brain.
 #
-# Build the tool-services app first (see tool-services/README.md), then point the command at it:
-#   mvn -q -f ports/jagentic-core/pom.xml install -DskipTests
-#   mvn -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
-#   mvn -f tool-services/tool-services-app/pom.xml package
+# Prerequisites (run from the repository root, which is also the working directory the
+# stdio command's relative classpath assumes):
+#   ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+#   ./mvnw -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
+#   ./mvnw -q -f tool-services/tool-services-app/pom.xml package -DskipTests
+#   python -m pip install -e ports/pyagentic -e ports/agentic-pipeline mcp   # Python core needs the MCP SDK
 #
-# This is a documentation example (it needs the built tool-services jar + a real LLM), not part
-# of the offline suite.
+# Run on either core (both spawn the same MCP server as a subprocess):
+#   python -m agentic_pipeline run examples/pipelines/tools-mcp.yaml --text "add 40 and 2"
+#   ./mvnw -q -f ports/jagentic-core/pom.xml compile exec:java \
+#     -Dexec.mainClass=org.jagentic.core.pipeline.PipelineCli \
+#     -Dexec.args="examples/pipelines/tools-mcp.yaml --text 'add 40 and 2'"
+#
+# The default brain is the deterministic stub provider: its script calls the MCP tool
+# tools_util_add and answers with the result, so the example runs offline and is part of
+# tools/smoke-examples.sh. To let a real model choose the tools, replace the llm section with
+#   llm: {provider: ollama, model: qwen2.5:3b, base_url: http://localhost:11434}
+# and start Ollama with examples-bin/run-ollama.sh.
 
 backend: local
 
 llm:
-  provider: ollama
-  model: qwen2.5:3b
-  base_url: http://localhost:11434
+  provider: stub                    # ollama | openai | stub
+  model: qwen2.5:3b                 # used by the ollama provider only
+  script:                           # used by the stub provider only (deterministic)
+    - {tool: tools_util_add, args: {a: 40, b: 2}}
+    - {text: "40 plus 2 is 42."}
 
 # Spawn the tool-services stdio MCP server and register its tools (id-prefixed `tools_`).
-# TOOL_PACKS selects which packs the server exposes.
+# The last argument selects the packs the server exposes (util = calculator and string ops).
 mcp:
   - name: tools
     transport: stdio
     command: [java, "-cp", "tool-services/tool-services-app/target/quarkus-app/app/*:tool-services/tool-services-app/target/quarkus-app/lib/main/*",
-              "org.jagentic.tools.app.mcp.StdioMain", "util,web"]
+              "org.jagentic.tools.app.mcp.StdioMain", "util"]
 
 agent:
   router:
     kind: keyword
     default: assistant
     rules:
-      assistant: [add, sum, fetch, url, page, upper, lower]
+      assistant: [add, sum, multiply, upper, lower]
   paths:
     assistant:
       brain: llm
-      prompt: "You are a helpful assistant. Use the available tools (math, string, web fetch) to answer."
-      # the MCP tools arrive as tools_util_add, tools_web_fetch, ... — allow them all by leaving tools unset
+      prompt: "You are a helpful assistant. Use the available tools (math, string) to answer."
+      # the MCP tools arrive as tools_util_add, tools_util_toUpperCase, ...; leaving tools unset allows them all
+      # verifier: none because the scripted stub reply carries no [assistant] prefix for the prefix verifier
+      verifier: {kind: none}
   verifier:
     kind: prefix
 

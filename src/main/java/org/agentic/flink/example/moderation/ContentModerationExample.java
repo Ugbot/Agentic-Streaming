@@ -67,6 +67,17 @@ public class ContentModerationExample {
   /** Audit record for posts that didn't make it through. */
   public record BlockedPost(String id, String user, String label, double score, String snippet) {}
 
+  /**
+   * toxic-bert is multi-label: every post gets a top label, so the label alone says nothing about
+   * toxicity. A post is blocked only when its top label is a blocked one and the sigmoid score
+   * clears this threshold.
+   */
+  static final double BLOCK_THRESHOLD = 0.5;
+
+  static boolean shouldBlock(ClassificationResult cls, Set<String> blockedLabels) {
+    return blockedLabels.contains(cls.getLabel()) && cls.getScore() >= BLOCK_THRESHOLD;
+  }
+
   static final OutputTag<BlockedPost> BLOCKED =
       new OutputTag<>("blocked") {};
 
@@ -163,7 +174,7 @@ public class ContentModerationExample {
       metrics.onInference("moderator", "toxic-bert", "classifier", durationMs);
       audit.onInference("moderator", "toxic-bert", "classifier", durationMs);
 
-      if (blockedLabels.contains(cls.getLabel())) {
+      if (shouldBlock(cls, blockedLabels)) {
         metrics.onGuardrailBlock("moderator", "toxic-bert", cls.getLabel());
         audit.onGuardrailBlock("moderator", "toxic-bert", cls.getLabel());
         ctx.output(

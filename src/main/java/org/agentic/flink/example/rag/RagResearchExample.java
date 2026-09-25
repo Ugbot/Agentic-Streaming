@@ -65,6 +65,10 @@ import org.apache.flink.util.Collector;
  * </pre>
  */
 public class RagResearchExample {
+  /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
+  public static final String RERANKER_MODEL_URI =
+      "djl://ai.djl.huggingface.pytorch/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1";
+
 
   /** A user query into the RAG assistant. Keyed by topic so each topic owns its own KB. */
   public record Query(String topic, String question) {}
@@ -96,7 +100,7 @@ public class RagResearchExample {
             "djl://ai.djl.huggingface.pytorch/sentence-transformers/all-MiniLM-L6-v2");
     DjlInferenceConnection reranker =
         DjlInferenceConnection.classification(
-            "djl://ai.djl.huggingface.pytorch/cross-encoder/ms-marco-MiniLM-L-6-v2");
+            RERANKER_MODEL_URI);
     LangChain4jChatConnection chat = LangChain4jChatConnection.ollama(ollamaUrl);
     VectorMemorySpec memorySpec = FlinkStateVectorMemory.spec(384); // MiniLM dimension
 
@@ -153,7 +157,7 @@ public class RagResearchExample {
       reranker = rerankerConn.bind(getRuntimeContext()).asScorer();
       rerankerSetup =
           InferenceSetup.builder()
-              .withModelName("ms-marco-MiniLM-L-6-v2")
+              .withModelName("mmarco-mMiniLMv2-L12-H384-v1")
               .withModelUri(rerankerConn.getDefaultModelUri())
               .build();
       chat = chatConn.bind(getRuntimeContext());

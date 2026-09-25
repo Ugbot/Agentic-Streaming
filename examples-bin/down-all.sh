@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Tears down every service brought up by any of the scenario composes. Safe to run when
-# only some services are up. Doesn't remove the agentic-flink-network (run
-# `podman network rm agentic-flink-network` if you want a full reset).
-
+# Tears down every service brought up by any of the scenario composes plus the standalone
+# Ollama container started by run-ollama.sh. Safe to run when only some services are up.
+# Keeps the agentic-flink-network and the Ollama model volume; remove them with
+# `podman network rm agentic-flink-network` and `podman volume rm agentic-flink-ollama`.
+#
+# Prerequisites: Podman with `podman compose` or podman-compose.
 set -euo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO="$(cd "$HERE/.." && pwd)"
-
-info(){ printf '\033[34m→\033[0m %s\n' "$*"; }
-ok()  { printf '\033[32m✓\033[0m %s\n' "$*"; }
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_common.sh
+source "$HERE/_common.sh"
 
 info "stopping everything from docker-compose-all.yml"
-podman compose -f "$REPO/docker-compose-all.yml" down --remove-orphans 2>/dev/null || true
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-unused}" REDIS_PASSWORD="${REDIS_PASSWORD:-unused}" \
+  podman_compose -f docker-compose-all.yml down --remove-orphans 2>/dev/null || true
 
-ok "all services stopped. Run \`podman network rm agentic-flink-network\` to remove the network."
+if podman container exists "$OLLAMA_CONTAINER" >/dev/null 2>&1; then
+  info "removing container $OLLAMA_CONTAINER"
+  podman rm -f "$OLLAMA_CONTAINER" >/dev/null
+fi
+
+ok "all services stopped"
