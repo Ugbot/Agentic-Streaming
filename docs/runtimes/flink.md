@@ -83,19 +83,14 @@ unsupported and `event_time` and `durable_store` as partial for this column; see
 ## Where it stands
 
 <!-- matrix: flink -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T16:33:10+00:00, commit `ec936052943c`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
-Binding `flink`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `flink`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | flink |
 |---|---|
-| `tools` | [partial](../capabilities.md#flink) |
-| `timers` | [unsupported](../capabilities.md#flink) |
-| `event_time` | [partial](../capabilities.md#flink) |
-| `checkpoint_recovery` | [unsupported](../capabilities.md#flink) |
-| `durable_store` | [partial](../capabilities.md#flink) |
 <!-- /matrix -->
 
 ## Running it

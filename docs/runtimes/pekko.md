@@ -83,19 +83,14 @@ exists for managed deployments that forbid `CONFIG` and is logged at WARN on eve
 ## Where it stands
 
 <!-- matrix: pekko -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T16:33:10+00:00, commit `ec936052943c`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
-Binding `pekko`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `pekko`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | pekko |
 |---|---|
-| `tools` | [partial](../capabilities.md#pekko) |
-| `timers` | [unsupported](../capabilities.md#pekko) |
-| `event_time` | [partial](../capabilities.md#pekko) |
-| `checkpoint_recovery` | [unsupported](../capabilities.md#pekko) |
-| `durable_store` | [partial](../capabilities.md#pekko) |
 <!-- /matrix -->
 
 Pekko is also reachable from Python through the facade's `pekko` runtime name, but that path is

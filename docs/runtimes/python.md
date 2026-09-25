@@ -50,16 +50,14 @@ matrix agrees on the first two and, because the one `llm_brain` fixture uses the
 ## Where it stands
 
 <!-- matrix: python -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T16:33:10+00:00, commit `ec936052943c`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
-Binding `python`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `python`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | python |
 |---|---|
-| `timers` | [unsupported](../capabilities.md#python) |
-| `checkpoint_recovery` | [unsupported](../capabilities.md#python) |
 <!-- /matrix -->
 
 ## Running it
