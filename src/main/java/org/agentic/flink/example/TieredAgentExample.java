@@ -11,6 +11,7 @@ import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.inference.ValidationVerdict;
 import org.agentic.flink.tools.builtin.CalculatorTools;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.functions.RichFlatMapFunction;
@@ -174,8 +175,7 @@ public class TieredAgentExample {
                     "You are a helpful validation assistant. Respond with only 'VALID' or 'INVALID'."),
                 UserMessage.from(prompt));
 
-        String validation = response.aiMessage().text().trim().toUpperCase();
-        boolean isValid = validation.contains("VALID") && !validation.contains("INVALID");
+        boolean isValid = ValidationVerdict.parse(response.aiMessage().text()).isValid();
 
         System.out.println(
             "[ValidationAgent] Validation result: " + (isValid ? "VALID" : "INVALID"));

@@ -1,7 +1,6 @@
 package org.agentic.flink.inference;
 
 import java.io.Serializable;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -12,8 +11,13 @@ import org.agentic.flink.annotation.Experimental;
  * [reason]}.
  *
  * <p>The verdict is decided by whole-word matching, so {@code INVALID} never reads as {@code
- * VALID}. The first verdict word in the response wins; a response with no verdict word is {@link
- * Outcome#UNDETERMINED} and must be treated as a failure by callers rather than as a pass.
+ * VALID}, and a negated {@code NOT VALID} (any spacing, case or hyphenation between the two words)
+ * reads as {@code INVALID}. The first verdict in the response wins, wherever it sits in the
+ * surrounding prose; a response with no verdict word is {@link Outcome#UNDETERMINED} and must be
+ * treated as a failure by callers rather than as a pass.
+ *
+ * <p>This is the single verdict parser for the framework: {@code ValidationFunction}, {@code
+ * ValidationExecutor}, {@code ValidationGuardrail} and the examples all go through {@link #parse}.
  */
 @Experimental
 public final class ValidationVerdict implements Serializable {
@@ -26,7 +30,7 @@ public final class ValidationVerdict implements Serializable {
   }
 
   private static final Pattern VERDICT_WORD =
-      Pattern.compile("\\b(VALID|INVALID)\\b", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("\\b(?:(NOT[\\s_-]+VALID)|(INVALID)|(VALID))\\b", Pattern.CASE_INSENSITIVE);
   private static final Pattern SCORE = Pattern.compile("\\b(?:0(?:\\.\\d+)?|1(?:\\.0+)?)\\b");
 
   private final Outcome outcome;
@@ -47,7 +51,7 @@ public final class ValidationVerdict implements Serializable {
     if (!m.find()) {
       return new ValidationVerdict(Outcome.UNDETERMINED, 0.0, response);
     }
-    Outcome outcome = Outcome.valueOf(m.group(1).toUpperCase(Locale.ROOT));
+    Outcome outcome = m.group(3) != null ? Outcome.VALID : Outcome.INVALID;
     double score = outcome == Outcome.VALID ? 1.0 : 0.0;
     Matcher s = SCORE.matcher(response);
     if (s.find(m.end())) {

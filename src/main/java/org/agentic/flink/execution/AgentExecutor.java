@@ -22,6 +22,7 @@ import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.tool.ToolRegistry;
 import org.slf4j.Logger;
@@ -683,6 +684,13 @@ public class AgentExecutor implements Serializable, AutoCloseable {
       if (llmClient == null) {
         // Create default LLM client
         llmClient = LLMClient.createDefault(agent.getLlmModel(), agent.getTemperature());
+      }
+      if (agent.hasGuardrails() && !llmClient.hasGuardrails()) {
+        List<AgentEventListener> listeners = agent.getListeners();
+        llmClient.withGuardrails(
+            agent.getGuardrails(),
+            agent.getAgentId(),
+            listeners == null || listeners.isEmpty() ? null : AgentEventListener.fanOut(listeners));
       }
       if (turnResultStore == null) {
         turnResultStore = new InMemoryTurnResultStore();

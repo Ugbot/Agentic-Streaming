@@ -155,7 +155,9 @@
 ;; ---- declarative compiler: weave a pipeline `cep:` section into runnable wirings ----
 ;;
 ;; Mirror of jagentic-core's org.jagentic.core.cep.CepSpec / CepWiring. A `cep:` section is a list of
-;; specs (string keys, from YAML/EDN):
+;; specs, read either in raw form (string snake_case keys, straight from YAML/EDN) or in the canonical
+;; kebab-keyword form `agentic.spec/load-workflow` produces (`:pattern`, `:where {:text-contains ..}`,
+;; `:on-match`), which is what `agentic.pipeline/system-from` hands over. Raw spelling:
 ;;   {"name" "host_incident"
 ;;    "key"  "conversation_id"            ; conversation_id | conversationId | metadata.<field>
 ;;    "ts"   "metadata.ts"                ; metadata.<field> (else a per-rule arrival counter)
@@ -177,6 +179,20 @@
   [v]
   (cond (sequential? v) (map str v) (nil? v) [] :else [(str v)]))
 
+(defn- kv
+  "Read `k` from a spec fragment in canonical (kebab keyword) or raw (snake_case string) form."
+  ([m k] (kv m k nil))
+  ([m k default]
+   (let [kebab (keyword (str/replace (name k) "_" "-"))]
+     (cond (contains? m kebab) (get m kebab)
+           (contains? m (name k)) (get m (name k))
+           :else default))))
+
+(defn- has-kv?
+  "True when `m` carries `k` in either spelling."
+  [m k]
+  (not (identical? ::absent (kv m k ::absent))))
+
 (defn- spec-condition
   "Compile a `where` clause into a stage condition (fn [event matched-so-far] -> boolean)."
   [where]
@@ -185,16 +201,16 @@
 
     (map? where)
     (cond
-      (contains? where "text_contains")
-      (let [needles (->seq (get where "text_contains"))]
+      (has-kv? where :text_contains)
+      (let [needles (->seq (kv where :text_contains))]
         (simple-cond (fn [e] (when-let [t (:text e)] (boolean (some #(str/includes? t %) needles))))))
 
-      (contains? where "metadata_equals")
-      (let [kv (get where "metadata_equals")]
+      (has-kv? where :metadata_equals)
+      (let [kv (kv where :metadata_equals)]
         (simple-cond (fn [e] (every? (fn [[k v]] (= (str v) (get-in e [:metadata k]))) kv))))
 
-      (contains? where "metadata_gt")
-      (let [kv (get where "metadata_gt")]
+      (has-kv? where :metadata_gt)
+      (let [kv (kv where :metadata_gt)]
         (simple-cond (fn [e] (every? (fn [[k n]]
                                        (try
                                          (> (Double/parseDouble (str (get-in e [:metadata k])))
@@ -214,11 +230,11 @@
     (throw (ex-info "cep pattern needs at least one stage" {})))
   (-> (reduce
        (fn [pattern st]
-         (let [stage (str (get st "stage" "s"))
-               cnd (spec-condition (get st "where"))]
+         (let [stage (str (kv st :stage "s"))
+               cnd (spec-condition (kv st :where))]
            (if (nil? pattern)
              (begin stage cnd)
-             (if (= "next" (str/lower-case (str (get st "contiguity" "followedBy"))))
+             (if (= "next" (str/lower-case (str (kv st :contiguity "followedBy"))))
                (pnext pattern stage cnd)
                (followed-by pattern stage cnd)))))
        nil
@@ -257,12 +273,12 @@
   [on-match]
   (if (nil? on-match)
     (fn [_match _key _submit-fn _tools] nil)
-    (let [kind (str (get on-match "kind" "submit"))]
+    (let [kind (str (kv on-match :kind "submit"))]
       (case kind
-        "tool" (let [tool-id (str (get on-match "tool"))
-                     args (get on-match "args" {})]
+        "tool" (let [tool-id (str (kv on-match :tool))
+                     args (kv on-match :args {})]
                  (fn [_match _key _submit-fn tools] (tools/execute tools tool-id args)))
-        "submit" (let [text (str (get on-match "text" "cep match"))]
+        "submit" (let [text (str (kv on-match :text "cep match"))]
                    (fn [_match key submit-fn _tools]
                      (let [body (str/replace text "{key}" (if (nil? key) "" (str key)))]
                        (submit-fn (event/event key "cep" body {derived-key "true"})))))
@@ -273,11 +289,11 @@
    {:name :matcher :key-fn :ts-fn :action}. Mirror of org.jagentic.core.cep.CepSpec/compile."
   [specs]
   (mapv (fn [s]
-          {:name (str (get s "name" "cep"))
-           :matcher (cep-matcher (spec-pattern (get s "pattern") (get s "within" 0)))
-           :key-fn (spec-key-fn (get s "key"))
-           :ts-fn (spec-ts-fn (get s "ts"))
-           :action (spec-action (get s "on_match"))})
+          {:name (str (kv s :name "cep"))
+           :matcher (cep-matcher (spec-pattern (kv s :pattern) (kv s :within 0)))
+           :key-fn (spec-key-fn (kv s :key))
+           :ts-fn (spec-ts-fn (kv s :ts))
+           :action (spec-action (kv s :on_match))})
         specs))
 
 (defn cep-on-event

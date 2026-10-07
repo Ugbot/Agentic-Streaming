@@ -5,6 +5,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [agentic.cep :as cep]
             [agentic.pipeline :as pipeline]
+            [agentic.spec :as spec]
             [agentic.tools :as tools]
             [agentic.store :as store]
             [agentic.graph :as graph]
@@ -46,6 +47,27 @@
       ;; Recursion guard: feeding the derived (DERIVED-tagged) event back must add nothing.
       (cep/cep-on-event w (first @submitted) submit-fn tools-reg)
       (is (= 1 (count @submitted)) "derived events are skipped — no recursion"))))
+
+(deftest compile-cep-accepts-canonical-rules
+  (testing "the canonical kebab-keyword form (what pipeline/system-from hands over) compiles like the raw one"
+    (let [raw {"spec_version" "agentic/v1" "backend" "local"
+               "agent" {"id" "monitor" "router" {"kind" "keyword" "default" "monitor"}
+                        "paths" {"monitor" {"brain" "rule" "prompt" "You acknowledge signals."}}}
+               "cep" [(incident-submit-spec)]}
+          [rule] (:cep (spec/canonical raw))
+          host (str "host-" (rand-int 1000000))
+          [w] (cep/compile-cep [rule])
+          submitted (atom [])
+          feed (fn [ts] (cep/cep-on-event w (event host "monitor" "anomaly cpu" {"ts" (str ts)})
+                                          #(swap! submitted conj %) (tools/registry)))]
+      (is (= {:text-contains "anomaly"} (:where (first (:pattern rule))))
+          "precondition: the canonical rule spells its keys as kebab keywords")
+      (is (= "metadata.ts" (:ts rule)) "precondition: ts selector survives canonicalisation")
+      (feed 0) (feed 60000)
+      (is (= 0 (count @submitted)) "two anomalies: nothing submitted")
+      (feed 120000)
+      (is (= 1 (count @submitted)) "third anomaly within the bound: exactly one derived submit")
+      (is (= (str "incident on " host) (:text (first @submitted))) "{key} substituted"))))
 
 (deftest tool-action-fires-once
   (testing "on_match kind=tool executes the tool exactly once on a completed match"

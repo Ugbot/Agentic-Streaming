@@ -1,6 +1,9 @@
 package org.agentic.flink.storage;
 
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
 import org.agentic.flink.annotation.Public;
@@ -28,6 +31,10 @@ import org.slf4j.LoggerFactory;
  *       default)
  *   <li>{@code "redis"} — optional, discovered via ServiceLoader if Jedis is on the classpath
  * </ul>
+ *
+ * <p>Every ServiceLoader iteration in this class goes through {@link #providers(Class)}, which
+ * skips a provider whose class fails to load, link or construct (optional backend on the classpath
+ * without its driver) and keeps iterating, so one broken optional backend never hides the others.
  */
 @Public
 public final class StorageFactory {
@@ -90,20 +97,9 @@ public final class StorageFactory {
         return new PostgresConversationStore();
       default:
         // ServiceLoader path — supports third-party backends and the optional Redis store.
-        // Use Provider.get() in a try/catch so a missing optional dep (e.g. Jedis) doesn't
-        // poison the iteration for unrelated backends.
-        for (ServiceLoader.Provider<LongTermMemoryStore> p :
-            ServiceLoader.load(LongTermMemoryStore.class).stream().toList()) {
-          try {
-            LongTermMemoryStore candidate = p.get();
-            if (matches(candidate, backend)) {
-              return candidate;
-            }
-          } catch (Throwable t) {
-            LOG.debug(
-                "Skipping LongTermMemoryStore provider {} (missing dependency?): {}",
-                p.type().getName(),
-                t.toString());
+        for (LongTermMemoryStore candidate : providers(LongTermMemoryStore.class)) {
+          if (matches(candidate, backend)) {
+            return candidate;
           }
         }
         throw new IllegalArgumentException(
@@ -131,9 +127,8 @@ public final class StorageFactory {
 
   private static String discoveredNames() {
     TreeSet<String> names = new TreeSet<>();
-    for (ServiceLoader.Provider<LongTermMemoryStore> p :
-        ServiceLoader.load(LongTermMemoryStore.class).stream().toList()) {
-      names.add(p.type().getSimpleName());
+    for (LongTermMemoryStore s : providers(LongTermMemoryStore.class)) {
+      names.add(s.getClass().getSimpleName());
     }
     return names.isEmpty() ? "<none>" : String.join(", ", names);
   }
@@ -149,7 +144,7 @@ public final class StorageFactory {
     require(backend, "backend");
     require(config, "config");
 
-    for (VectorStore candidate : ServiceLoader.load(VectorStore.class)) {
+    for (VectorStore candidate : providers(VectorStore.class)) {
       if (backend.equalsIgnoreCase(candidate.getClass().getSimpleName())
           || backend.equalsIgnoreCase(candidate.getClass().getName())
           || backend.equalsIgnoreCase(candidate.getProviderName())) {
@@ -173,9 +168,8 @@ public final class StorageFactory {
         warm.add("memory");
         warm.add("postgres");
         warm.add("postgresql");
-        for (ServiceLoader.Provider<LongTermMemoryStore> p :
-            ServiceLoader.load(LongTermMemoryStore.class).stream().toList()) {
-          String name = p.type().getSimpleName();
+        for (LongTermMemoryStore s : providers(LongTermMemoryStore.class)) {
+          String name = s.getClass().getSimpleName();
           warm.add(name);
           // Expose common short aliases derived from the class name.
           String lower = name.toLowerCase();
@@ -189,7 +183,7 @@ public final class StorageFactory {
         return new String[] {"rocksdb", "hashmap"};
       case VECTOR:
         TreeSet<String> vec = new TreeSet<>();
-        for (VectorStore s : ServiceLoader.load(VectorStore.class)) {
+        for (VectorStore s : providers(VectorStore.class)) {
           vec.add(s.getClass().getSimpleName());
         }
         return vec.toArray(new String[0]);
@@ -206,6 +200,61 @@ public final class StorageFactory {
       }
     }
     return false;
+  }
+
+  /**
+   * Lazily instantiated {@code spi} providers from {@link ServiceLoader}. A provider whose class
+   * cannot be loaded or linked ({@link ServiceConfigurationError}, {@link NoClassDefFoundError} and
+   * other {@link LinkageError}s) or whose constructor throws is logged and skipped; iteration
+   * continues with the next registered provider.
+   */
+  static <S> Iterable<S> providers(Class<S> spi) {
+    return () -> new GuardedProviderIterator<>(spi, ServiceLoader.load(spi).iterator());
+  }
+
+  private static final class GuardedProviderIterator<S> implements Iterator<S> {
+    private final Class<S> spi;
+    private final Iterator<S> delegate;
+    private S next;
+    private boolean exhausted;
+
+    GuardedProviderIterator(Class<S> spi, Iterator<S> delegate) {
+      this.spi = spi;
+      this.delegate = delegate;
+    }
+
+    @Override
+    public boolean hasNext() {
+      while (next == null && !exhausted) {
+        try {
+          if (!delegate.hasNext()) {
+            exhausted = true;
+          } else {
+            next = delegate.next();
+          }
+        } catch (ServiceConfigurationError | LinkageError e) {
+          // ServiceLoader consumes the provider name before loading it, so both the
+          // ServiceConfigurationError raised from next() (class not found, constructor failed)
+          // and the LinkageError raised from hasNext() (class found but fails to link) leave the
+          // iterator positioned at the following provider.
+          LOG.warn(
+              "Skipping {} provider that failed to load (missing optional dependency?): {}",
+              spi.getSimpleName(),
+              e.toString());
+        }
+      }
+      return next != null;
+    }
+
+    @Override
+    public S next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      S out = next;
+      next = null;
+      return out;
+    }
   }
 
   private static void require(Object value, String name) {

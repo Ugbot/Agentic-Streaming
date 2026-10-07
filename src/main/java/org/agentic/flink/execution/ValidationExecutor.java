@@ -3,6 +3,7 @@ package org.agentic.flink.execution;
 import java.io.Serializable;
 import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.inference.ValidationVerdict;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,16 +99,13 @@ public class ValidationExecutor implements Serializable {
         + "Reason: <your reason>";
   }
 
-  private ValidationResult parseValidationResponse(String llmResponse) {
+  ValidationResult parseValidationResponse(String llmResponse) {
     ValidationResult result = new ValidationResult();
+    ValidationVerdict verdict = ValidationVerdict.parse(llmResponse);
+    result.setValid(verdict.isValid());
 
-    // Simple parsing - look for VALID/INVALID and score
-    String upper = llmResponse.toUpperCase();
-    result.setValid(upper.contains("VALID") && !upper.contains("INVALID"));
-
-    // Try to extract score
-    double score = 0.9; // Default score if valid
-    if (llmResponse.contains("Score:") || llmResponse.contains("score:")) {
+    double score = verdict.getScore();
+    if (llmResponse != null && (llmResponse.contains("Score:") || llmResponse.contains("score:"))) {
       try {
         String[] parts = llmResponse.split("[Ss]core:");
         if (parts.length > 1) {
@@ -115,12 +113,12 @@ public class ValidationExecutor implements Serializable {
           score = Double.parseDouble(scoreStr);
         }
       } catch (Exception e) {
-        LOG.warn("Could not parse score from validation response, using default");
+        LOG.warn("Could not parse score from validation response, using verdict score");
       }
     }
 
     result.setScore(result.isValid() ? score : 0.0);
-    result.setMessage(llmResponse.trim());
+    result.setMessage(llmResponse == null ? "" : llmResponse.trim());
 
     return result;
   }

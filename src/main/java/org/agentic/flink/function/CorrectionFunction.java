@@ -4,10 +4,8 @@ import dev.langchain4j.model.input.Prompt;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
@@ -15,7 +13,6 @@ import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.langchain.PromptTemplateManager;
 import org.agentic.flink.llm.ChatClient;
-import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
@@ -65,13 +62,7 @@ public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   @Override
   public void open(OpenContext openContext) throws Exception {
     super.open(openContext);
-    ServiceLoader<ChatConnection> loader = ServiceLoader.load(ChatConnection.class);
-    Iterator<ChatConnection> it = loader.iterator();
-    if (!it.hasNext()) {
-      throw new IllegalStateException(
-          "CorrectionFunction requires a ChatConnection registered via ServiceLoader");
-    }
-    this.chatClient = it.next().bind(getRuntimeContext());
+    this.chatClient = ChatConnections.require("CorrectionFunction").bind(getRuntimeContext());
     this.promptManager = PromptTemplateManager.getInstance();
     // Moderate creativity for corrections.
     this.chatSetup =

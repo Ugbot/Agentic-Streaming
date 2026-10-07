@@ -42,7 +42,13 @@ class ValidationVerdictTest {
         Arguments.of("The response is INVALID because " + reason()),
         Arguments.of(
             "Verdict: INVALID\nConfidence: 0." + ThreadLocalRandom.current().nextInt(10, 99)),
-        Arguments.of("invalid"));
+        Arguments.of("invalid"),
+        Arguments.of("NOT VALID: " + reason()),
+        Arguments.of(randomCase("not valid") + " because " + reason()),
+        Arguments.of("The output is not  valid; " + reason()),
+        Arguments.of("Verdict: Not-Valid\nScore: 0." + ThreadLocalRandom.current().nextInt(1, 9)),
+        Arguments.of("NOT_VALID " + reason()),
+        Arguments.of("This is definitely not valid, the tool result is wrong: " + reason()));
   }
 
   static Stream<Arguments> validResponses() {
