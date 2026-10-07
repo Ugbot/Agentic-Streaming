@@ -1,9 +1,8 @@
 package org.agentic.flink.statemachine;
 
-import org.agentic.flink.annotation.Public;
-
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 

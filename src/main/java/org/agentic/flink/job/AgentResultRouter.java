@@ -1,7 +1,6 @@
 package org.agentic.flink.job;
 
 import org.agentic.flink.annotation.Internal;
-
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.statemachine.AgentState;

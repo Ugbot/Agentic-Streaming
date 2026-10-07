@@ -1,12 +1,11 @@
 package org.agentic.flink.dsl;
 
-import org.agentic.flink.annotation.Public;
-
 import java.time.Duration;
 import java.util.*;
 import org.agentic.flink.a2a.A2AClientFactory;
 import org.agentic.flink.a2a.A2ASkillMapper;
 import org.agentic.flink.a2a.RemoteAgentSpec;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.dsl.Agent.AgentType;
 import org.agentic.flink.inference.Guardrail;

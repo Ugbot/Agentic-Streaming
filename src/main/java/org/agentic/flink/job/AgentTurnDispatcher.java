@@ -1,11 +1,10 @@
 package org.agentic.flink.job;
 
-import org.agentic.flink.annotation.Internal;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;

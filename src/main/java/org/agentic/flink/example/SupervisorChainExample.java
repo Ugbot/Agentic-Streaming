@@ -1,7 +1,6 @@
 package org.agentic.flink.example;
 
 import org.agentic.flink.annotation.Internal;
-
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;

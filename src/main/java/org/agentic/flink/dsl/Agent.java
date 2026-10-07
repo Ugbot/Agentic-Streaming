@@ -1,10 +1,9 @@
 package org.agentic.flink.dsl;
 
-import org.agentic.flink.annotation.Public;
-
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.inference.Guardrail;
 import org.agentic.flink.inference.InferenceToolAdapter;
 import org.agentic.flink.listener.AgentEventListener;

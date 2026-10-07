@@ -1,7 +1,5 @@
 package org.agentic.flink.stream;
 
-import org.agentic.flink.annotation.Internal;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.a2a.A2AToolRegistry;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;

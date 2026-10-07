@@ -1,10 +1,9 @@
 package org.agentic.flink.statemachine;
 
-import org.agentic.flink.annotation.Public;
-
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.cep.pattern.Pattern;
