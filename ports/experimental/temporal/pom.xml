@@ -91,7 +91,7 @@
               <rules>
                 <requireJavaVersion>
                   <version>[21,22)</version>
-                  <message>This project requires JDK 21 or newer.</message>
+                  <message>This project requires JDK 21 (the reactor baseline).</message>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9,)</version>
