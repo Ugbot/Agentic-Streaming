@@ -68,6 +68,13 @@
       (if (> (count messages) n) (subvec messages (- (count messages) n)) messages))
     messages))
 
+(defn- watermark
+  "The highest `event_time_ms` seen; a turn without one, or a late one, leaves it where it is."
+  [state payload]
+  (if-let [t (:event-time-ms payload)]
+    (assoc state :watermark-ms (max (get state :watermark-ms t) t))
+    state))
+
 (defn reduce-state
   "Conversation state as a fold over its events — the only definition of state. With a workflow
    `context` block of `compaction: window`, `:transcript-length` reports the retained transcript, at
@@ -76,10 +83,11 @@
   (let [window (window-size context)]
     (reduce (fn [state {:keys [type payload]}]
               (case type
-                :turn-received (update state :turn-count inc)
+                :turn-received (watermark (update state :turn-count inc) payload)
                 :memory-written (let [n (+ (:transcript-length state) (count (:messages payload)))]
                                   (assoc state :transcript-length (if window (min n window) n)))
                 :retrieved (assoc state :last-retrieved-ids (vec (:ids payload)))
+                :timer-fired (update state :fired-timers (fnil conj []) (:timer-id payload))
                 state))
             {:turn-count 0 :transcript-length 0}
             events)))

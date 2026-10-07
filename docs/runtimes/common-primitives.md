@@ -57,9 +57,9 @@ watermark is the highest `event_time_ms` seen, reduced into `state.watermark_ms`
 processed in arrival order and does not move the watermark. `checkpoint_recovery` means pending
 timers and the logical clock survive a restart, rebuilt from the log.
 [Clocks](../../spec/v1/primitives.md#clocks) and [Timers](../../spec/v1/primitives.md#timers).
-Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`. In the current matrix only
-the reference runtime passes them; every other binding skips them and therefore reports `timers`
-and `checkpoint_recovery` as [unsupported](../capabilities.md#capabilities).
+Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`. In the current matrix every
+binding passes them except `pyflink` and `python-flink`, which skip them and therefore report
+`timers` and `checkpoint_recovery` as [unsupported](../capabilities.md#capabilities).
 
 ## CEP fold
 
@@ -116,19 +116,14 @@ Three cores implement these primitives once each, and the runtimes reuse them:
 in-memory stores; it is the floor for every JVM runtime's results.
 
 <!-- matrix: reference, jvm-core -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T16:33:10+00:00, commit `ec936052943c`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
 Binding `reference`: 24 passed, 0 failed, 0 skipped.
 
-Binding `jvm-core`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `jvm-core`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | reference | jvm-core |
 |---|---|---|
-| `tools` | [supported](../capabilities.md#capabilities) | [partial](../capabilities.md#jvm-core) |
-| `timers` | [supported](../capabilities.md#capabilities) | [unsupported](../capabilities.md#jvm-core) |
-| `event_time` | [supported](../capabilities.md#capabilities) | [partial](../capabilities.md#jvm-core) |
-| `checkpoint_recovery` | [supported](../capabilities.md#capabilities) | [unsupported](../capabilities.md#jvm-core) |
-| `durable_store` | [supported](../capabilities.md#capabilities) | [partial](../capabilities.md#jvm-core) |
 <!-- /matrix -->

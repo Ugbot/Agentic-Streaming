@@ -207,7 +207,7 @@
             (throw (spec/validation-error (str "backend " (:backend wf) " is not a Clojure runtime; one of "
                                                (str/join ", " (sort backends)))
                                           ["backend"])))
-        {:keys [agent retrieval embeddings context llm skills policies saga]} wf
+        {:keys [agent retrieval embeddings context llm skills policies saga timers]} wf
         dim (or (:dim embeddings) (:dim retrieval) 256)
         top-k (or (:top-k retrieval) 4)
         cc (or chat-client (build-chat-client llm)
@@ -235,6 +235,7 @@
              :saga saga
              :context context
              :cep (cep-fold/compile-patterns (:cep wf))
+             :timers (vec timers)
              :listeners []}
      :tools reg
      :retriever (build-retriever retrieval dim)
@@ -297,7 +298,8 @@
 ;; ---- systems ----
 
 (defn system-from
-  "A runnable system from a raw or canonical workflow document plus opened stores."
+  "A runnable system from a raw or canonical workflow document plus opened stores. `stores` may also
+   carry `:clock`, the processing clock workflow timers read (see agentic.core/local-system)."
   [document stores & [opts]]
   (let [{:keys [graph tools retriever workflow]} (build document opts)]
     (assoc (core/local-system graph tools retriever stores)

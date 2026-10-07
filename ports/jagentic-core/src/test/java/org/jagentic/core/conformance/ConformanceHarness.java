@@ -22,6 +22,7 @@ import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Event;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LocalRuntime;
+import org.jagentic.core.LogicalClock;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.pipeline.GraphBuilder;
 
@@ -41,7 +42,7 @@ public final class ConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time");
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
@@ -107,13 +108,17 @@ public final class ConformanceHarness {
       throw new IllegalStateException("conformance fixtures only use llm.provider: stub, got " + llm.get("provider"));
     });
     ConversationLog log = new ConversationLog.InMemory();
-    LocalRuntime runtime = newRuntime(built, log);
+    LocalRuntime runtime = newRuntime(built, log, new LogicalClock.Manual());
 
     List<CompletableFuture<TurnResult>> pending = new ArrayList<>();
     for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
       if (Boolean.TRUE.equals(turn.get("restart_runtime"))) {
         pending.forEach(CompletableFuture::join);
-        runtime = newRuntime(built, log);
+        runtime = newRuntime(built, log, LogicalClock.Manual.recoveredFrom(log));
+      }
+      if (turn.get("advance_time_ms") != null) {
+        pending.forEach(CompletableFuture::join);
+        ((LogicalClock.Manual) runtime.clock()).advance(((Number) turn.get("advance_time_ms")).longValue());
       }
       String conversationId = String.valueOf(turn.get("conversation_id"));
       String turnId = String.valueOf(turn.get("turn_id"));
@@ -157,10 +162,13 @@ public final class ConformanceHarness {
     return out;
   }
 
-  /** A restart keeps only the log: every materialized view is rebuilt from it. */
-  private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log) {
+  /**
+   * A restart keeps only the log: every materialized view, pending timers and the logical clock
+   * included, is rebuilt from it.
+   */
+  private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log, LogicalClock clock) {
     return new LocalRuntime(built.graph(), new ConversationStore.InMemory(), new KeyedStateStore.InMemory(),
-        built.tools(), built.retriever(), log);
+        built.tools(), built.retriever(), log, clock);
   }
 
   /** Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance README. */

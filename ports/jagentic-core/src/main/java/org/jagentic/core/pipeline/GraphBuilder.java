@@ -31,6 +31,7 @@ import org.jagentic.core.Retrieval;
 import org.jagentic.core.RoutedGraph;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.SagaPlan;
+import org.jagentic.core.TimerSpec;
 import org.jagentic.core.ToolRegistry;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.VectorStore;
@@ -208,6 +209,10 @@ public final class GraphBuilder {
     RoutedGraph graph = new RoutedGraph(router, paths, verifier, pathVerifiers, guardrails, List.of(), policies,
         saga, suspendUntil, contextWindow,
         org.jagentic.core.cep.SequencePattern.compile((List<Map<String, Object>>) spec.get("cep")));
+    List<TimerSpec> timers = TimerSpec.fromSpecs(spec.get("timers"));
+    if (!timers.isEmpty()) {
+      graph = graph.withTimers(timers);
+    }
     return new Built(graph, tools, retriever, availability.degradations());
   }
 

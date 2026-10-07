@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
+import org.agentic.flink.runtime.testkit.FixtureProcessingClock;
 import org.agentic.flink.runtime.testkit.MiniClusterWorkflowDriver;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.jagentic.core.Event;
@@ -33,7 +34,10 @@ import org.jagentic.core.TurnResult;
  * {@code concurrent_with} submits the turns back to back into the same keyed stream, which the job
  * runs at {@link #PARALLELISM} subtasks so different conversations execute at the same time while
  * Flink's per-key ordering keeps each conversation serial; {@code restart_runtime} is stop-with-savepoint
- * followed by a fresh job restored from that savepoint, so only checkpointed state survives.
+ * followed by a fresh job restored from that savepoint, so only checkpointed state survives;
+ * {@code advance_time_ms} moves the {@link FixtureProcessingClock} the job's operator reads as the
+ * spec's processing clock, and a turn's {@code metadata} (including {@code event_time_ms}) is
+ * carried on the event.
  *
  * <p>Mirrors {@code org.jagentic.core.conformance.ConformanceHarness}; the comparison rules are the
  * same port and must stay identical.
@@ -44,7 +48,7 @@ public final class FlinkConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time");
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery");
 
   /** Operator parallelism of every fixture job; more than one subtask is what {@code parallelism} claims. */
   public static final int PARALLELISM = 2;
@@ -109,14 +113,20 @@ public final class FlinkConformanceHarness {
     }
 
     List<Map<String, Object>> results = new ArrayList<>();
-    try (MiniClusterWorkflowDriver driver = new MiniClusterWorkflowDriver(cluster, workflow,
-        FlinkRuntimeOptions.fromSpec(workflow), savepointDir.resolve(id), PARALLELISM)) {
+    try (FixtureProcessingClock clock = new FixtureProcessingClock();
+         MiniClusterWorkflowDriver driver = new MiniClusterWorkflowDriver(cluster, workflow,
+             FlinkRuntimeOptions.fromSpec(workflow).withProcessingClock(clock), savepointDir.resolve(id),
+             PARALLELISM)) {
       driver.start();
       List<Event> batch = new ArrayList<>();
       for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
         if (Boolean.TRUE.equals(turn.get("restart_runtime"))) {
           flush(driver, batch, results);
           driver.restart();
+        }
+        if (turn.get("advance_time_ms") instanceof Number advance) {
+          flush(driver, batch, results);
+          clock.advance(advance.longValue());
         }
         String conversationId = String.valueOf(turn.get("conversation_id"));
         String turnId = String.valueOf(turn.get("turn_id"));

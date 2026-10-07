@@ -42,24 +42,24 @@ spelled out. The conformance verb `restart_runtime` maps onto it, so the `python
 
 `LocalRuntime.capabilities()` is the runtime's own declaration. `deploy(spec)` compares the
 workflow's requirements against it and raises `CapabilityError` listing every unsupported
-requirement instead of running a subset. The declaration says `timers` and `checkpoint_recovery`
-are unsupported and `llm_brain` is partial (only the scripted `stub` provider runs locally); the
-matrix agrees on the first two and, because the one `llm_brain` fixture uses the stub, records
-`llm_brain` as supported. What counts is the matrix, derived from fixture outcomes.
+requirement instead of running a subset. The declaration says `llm_brain` is partial (only the
+scripted `stub` provider runs locally); because the one `llm_brain` fixture uses the stub, the
+matrix records `llm_brain` as supported. `timers` read the runtime's `clock` (wall time by default,
+or a `ManualClock` whose `advance(ms)` moves it) and the conversation watermark; pending timers
+and a manual clock's reading survive `restart()` because both are rebuilt from the log. What counts is the matrix, derived from fixture
+outcomes.
 
 ## Where it stands
 
 <!-- matrix: python -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T16:33:10+00:00, commit `ec936052943c`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
-Binding `python`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `python`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | python |
 |---|---|
-| `timers` | [unsupported](../capabilities.md#python) |
-| `checkpoint_recovery` | [unsupported](../capabilities.md#python) |
 <!-- /matrix -->
 
 ## Running it

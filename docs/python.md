@@ -338,9 +338,9 @@ Run on `pyflink`. It printed:
 Every capability claim for these runtimes lives in that generated file, and the per-runtime pages
 under [runtimes/](runtimes/) repeat only the entries that are not `supported`, with a test in
 `docs/tools/test_docs.py` that fails when a page and the matrix disagree. In the current matrix
-`timers` and `checkpoint_recovery` are `unsupported` on all four Python bindings, so the three
-timer fixtures are skipped there. Do not read a `supported` entry in `rt.capabilities()` as a
-conformance result; only the matrix is.
+`local` and `local-jvm` pass the three timer fixtures, while `timers` and `checkpoint_recovery`
+are `unsupported` on `flink-jvm` and `pyflink`, which skip them. Do not read a `supported` entry
+in `rt.capabilities()` as a conformance result; only the matrix is.
 
 ## Pekko through the facade: unsupported
 

@@ -63,7 +63,7 @@ public final class WorkflowValidator {
       "timeout_ms");
   private static final Set<String> SAGA = Set.of("steps");
   private static final Set<String> SAGA_STEP = Set.of("name", "tool", "args", "compensate_with");
-  private static final Set<String> TIMER = Set.of("id", "after_ms", "tool", "payload");
+  private static final Set<String> TIMER = Set.of("id", "after_ms", "clock", "tool", "payload");
   private static final Set<String> CHANNEL = Set.of("id", "kind", "direction", "config");
 
   private WorkflowValidator() {}
@@ -177,7 +177,12 @@ public final class WorkflowValidator {
     }
     i = 0;
     for (Map<String, Object> t : listOfMaps("timers", spec.get("timers"))) {
-      keys("timers[" + i++ + "]", t, TIMER, false);
+      String path = "timers[" + i++ + "]";
+      keys(path, t, TIMER, false);
+      Object clock = t.get("clock");
+      if (clock != null && !"processing".equals(clock) && !"event".equals(clock)) {
+        throw new WorkflowValidationException(path + ".clock", "must be processing or event, got " + clock);
+      }
     }
     i = 0;
     for (Map<String, Object> c : listOfMaps("channels", spec.get("channels"))) {

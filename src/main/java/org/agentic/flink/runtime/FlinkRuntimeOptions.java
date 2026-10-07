@@ -28,8 +28,11 @@ import org.apache.flink.streaming.api.TimeDomain;
  * @param stateTtl retention for keyed conversation state, or {@code null} for unbounded retention
  * @param resumeAfter delay before a suspended turn is resumed by timer, or {@code null} for none
  * @param timerDomain the Flink time domain the resume timer is registered in
+ * @param processingClock where workflow {@code timers} read processing time; the operator's own
+ *     processing time unless a harness substitutes a manual clock (not settable from the document)
  */
-public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain)
+public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain,
+                                  ProcessingClock processingClock)
     implements Serializable {
 
   public static final String RUNTIME_KEY = "runtime";
@@ -41,8 +44,13 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
   public static final FlinkRuntimeOptions DEFAULTS =
       new FlinkRuntimeOptions(null, null, TimeDomain.PROCESSING_TIME);
 
+  public FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain) {
+    this(stateTtl, resumeAfter, timerDomain, ProcessingClock.flink());
+  }
+
   public FlinkRuntimeOptions {
     timerDomain = timerDomain == null ? TimeDomain.PROCESSING_TIME : timerDomain;
+    processingClock = processingClock == null ? ProcessingClock.flink() : processingClock;
     if (stateTtl != null && (stateTtl.isZero() || stateTtl.isNegative())) {
       throw new IllegalArgumentException(STATE_TTL_MS + " must be positive, got " + stateTtl);
     }
@@ -52,15 +60,20 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
   }
 
   public FlinkRuntimeOptions withStateTtl(Duration ttl) {
-    return new FlinkRuntimeOptions(ttl, resumeAfter, timerDomain);
+    return new FlinkRuntimeOptions(ttl, resumeAfter, timerDomain, processingClock);
   }
 
   public FlinkRuntimeOptions withResumeAfter(Duration delay) {
-    return new FlinkRuntimeOptions(stateTtl, delay, timerDomain);
+    return new FlinkRuntimeOptions(stateTtl, delay, timerDomain, processingClock);
   }
 
   public FlinkRuntimeOptions withTimerDomain(TimeDomain domain) {
-    return new FlinkRuntimeOptions(stateTtl, resumeAfter, domain);
+    return new FlinkRuntimeOptions(stateTtl, resumeAfter, domain, processingClock);
+  }
+
+  /** The clock workflow timers read for processing time; see {@link ProcessingClock}. */
+  public FlinkRuntimeOptions withProcessingClock(ProcessingClock clock) {
+    return new FlinkRuntimeOptions(stateTtl, resumeAfter, timerDomain, clock);
   }
 
   /** Whether suspended turns are resumed by a registered timer rather than an explicit signal. */

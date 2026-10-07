@@ -10,6 +10,7 @@
       :policies   canonical `policies` block (retry, verification, on-tool-error, ...)
       :saga       canonical `saga` block, when the workflow runs a saga instead of a brain
       :cep        [agentic.cep-fold patterns] evaluated in-turn after `routed`
+      :timers     canonical `timers` block (agentic.workflow-timers), scheduled on the first turn
       :listeners  [..]}
 
    Legacy transcript/attribute writes to the ConversationStore are kept as a projection of the log,
@@ -19,7 +20,8 @@
             [agentic.context :as ctx]
             [agentic.tools :as tools]
             [agentic.cep-fold :as cep-fold]
-            [agentic.listener :as listener]))
+            [agentic.listener :as listener]
+            [agentic.workflow-timers :as wt]))
 
 (def phase-attr "phase")
 (def path-attr "path")
@@ -167,7 +169,10 @@
   [graph event c]
   (let [listeners (:listeners c) text (:text event)]
     (listener/fire listeners :on-turn-start {:event event :ctx c})
-    (ctx/emit! c :turn-received (received-payload (assoc event :turn-id (:turn-id c))))
+    (wt/fire-due! graph event c)
+    (ctx/emit! c :turn-received
+               (wt/received-payload graph event c (received-payload (assoc event :turn-id (:turn-id c)))))
+    (wt/schedule! graph event c)
     (if-let [reason (guardrail-reason graph :check-input text)]
       (finish-rejected graph c reason)
       (do

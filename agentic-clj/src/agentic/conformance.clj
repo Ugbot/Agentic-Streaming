@@ -1,14 +1,19 @@
 (ns agentic.conformance
   "Binding of the shared v1 conformance fixtures (spec/conformance/v1/fixtures/*.yaml, read in place,
    never copied) to the Clojure runtime. A fixture is built with agentic.pipeline, its turns are
-   delivered in order — honouring restart_runtime, signal and concurrent_with — and each normalized
-   result is compared with the rules of spec/conformance/v1/README.md. A fixture whose `requires` we
-   do not support is a skip, never a pass."
+   delivered in order — honouring restart_runtime, advance_time_ms, metadata, signal and
+   concurrent_with — and each normalized result is compared with the rules of
+   spec/conformance/v1/README.md. A fixture whose `requires` we do not support is a skip, never a pass.
+
+   The processing clock is an agentic.workflow-timers manual clock moved by `advance_time_ms`. A
+   `restart_runtime` rebuilds the system over the same stores and log, and the clock from the
+   `processing_time_ms` the log recorded, so timers and time both come back from the log alone."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [agentic.spec :as spec]
             [agentic.pipeline :as pipeline]
             [agentic.core :as core]
+            [agentic.workflow-timers :as wt]
             [agentic.log :as log]))
 
 (def capabilities
@@ -18,7 +23,8 @@
    "ordering" :supported "idempotency" :supported "retry" :supported "memory" :supported
    "retrieval" :supported "replay" :supported "suspend_resume" :supported "saga" :supported
    "a2a" :supported "parallelism" :supported "durable_store" :supported "context_window" :supported
-   "llm_brain" :supported "cep" :supported "event_time" :supported})
+   "llm_brain" :supported "cep" :supported "event_time" :supported "timers" :supported
+   "checkpoint_recovery" :supported})
 
 (defn fixtures-dir []
   (io/file (spec/spec-root) "conformance" "v1" "fixtures"))
@@ -115,6 +121,12 @@
         (recur rest (conj out (vec batch))))
       :else (recur more (conj out [t])))))
 
+(defn- recovered-clock
+  "The processing clock a restarted system starts from: rebuilt from every conversation's log."
+  [system]
+  (let [elog (:log system)]
+    (wt/manual-clock (wt/recovered-processing-time (map #(log/conversation-events elog %) (log/conversation-ids elog))))))
+
 (defn run-fixture
   "Run one fixture file. Returns {:id :status (:passed|:failed|:skipped) :problems [...] :results [...]}."
   [^java.io.File f]
@@ -125,10 +137,13 @@
       {:id id :status :skipped :problems [(str "requires " (pr-str missing))]}
       (let [workflow (spec/load-workflow (workflow-of fixture f))
             stores (pipeline/open-stores workflow)
-            system (atom (pipeline/system-from workflow stores))
+            system (atom (pipeline/system-from workflow (assoc stores :clock (wt/manual-clock))))
             results (reduce (fn [acc batch]
                               (when (get (first batch) "restart_runtime")
-                                (swap! system #(pipeline/system-from workflow (select-keys % [:store :state :log]))))
+                                (swap! system #(pipeline/system-from workflow (assoc (select-keys % [:store :state :log])
+                                                                                    :clock (recovered-clock %)))))
+                              (when-let [ms (get (first batch) "advance_time_ms")]
+                                (wt/advance! (:clock @system) ms))
                               (into acc (deliver-batch @system batch)))
                             [] (batches (get fixture "turns")))
             wire (mapv log/->wire results)

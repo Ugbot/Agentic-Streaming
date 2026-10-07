@@ -75,27 +75,25 @@ timers are kept in keyed state and survive a savepoint restore
 `registeredTimerSurvivesSavepointRestart`,
 `WorkflowTurnFunctionHarnessTest.eventTimeTimerResumesSuspendedTurnWhenWatermarkPasses`).
 
-That is not the same thing as the spec's declared `timers` block, and the `flink` binding skips
-the three timer fixtures. The matrix therefore records `timers` and `checkpoint_recovery` as
-unsupported and `event_time` and `durable_store` as partial for this column; see the
-[flink notes](../capabilities.md#flink). This page does not claim otherwise.
+The spec's declared `timers` block runs on the same operator: `WorkflowTurnFunction` fires every
+due timer before processing the turn that observes the deadline, appends `timer_fired`, reads
+processing time from a pluggable `ProcessingClock` (Flink's clock in production, a fixture clock
+in the harness) and event time from the conversation watermark folded from `event_time_ms`.
+Pending timers and the clock reading are rebuilt from keyed state after a savepoint restore, so a
+timer fires exactly once across a restart. The `flink` binding passes the three timer fixtures;
+see the [flink notes](../capabilities.md#flink).
 
 ## Where it stands
 
 <!-- matrix: flink -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T16:33:10+00:00, commit `ec936052943c`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 
-Binding `flink`: 21 passed, 0 failed, 3 skipped: `timer-fires` skipped, `event-time-timer` skipped, `timer-survives-restart` skipped.
+Binding `flink`: 24 passed, 0 failed, 0 skipped.
 
 | Capability | flink |
 |---|---|
-| `tools` | [partial](../capabilities.md#flink) |
-| `timers` | [unsupported](../capabilities.md#flink) |
-| `event_time` | [partial](../capabilities.md#flink) |
-| `checkpoint_recovery` | [unsupported](../capabilities.md#flink) |
-| `durable_store` | [partial](../capabilities.md#flink) |
 <!-- /matrix -->
 
 ## Running it

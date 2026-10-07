@@ -26,6 +26,7 @@ import yaml
 from .errors import AgenticError
 from .events import Turn
 from .runtime import LocalRuntime, Runtime, get_runtime
+from .workflow_timers import ManualClock
 
 
 @runtime_checkable
@@ -150,14 +151,20 @@ def turn_metadata(spec: Mapping[str, Any]) -> Dict[str, str]:
     return {str(k): str(v) for k, v in dict(spec.get("metadata") or {}).items()}
 
 
-def run_fixture(path: Path, make_runtime: RuntimeFactory = LocalRuntime) -> Outcome:
+def fixture_runtime() -> LocalRuntime:
+    """The default runtime under a fixture: local, on a manual processing clock starting at
+    zero so `advance_time_ms` is the only thing that moves time."""
+    return LocalRuntime(clock=ManualClock())
+
+
+def run_fixture(path: Path, make_runtime: RuntimeFactory = fixture_runtime) -> Outcome:
     fixture = load_yaml(path)
     if fixture.get("workflow") is None:
         fixture["workflow"] = load_yaml((path.parent / fixture["workflow_ref"]).resolve())
     return run_fixture_document(fixture, make_runtime, path)
 
 
-def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactory = LocalRuntime,
+def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactory = fixture_runtime,
                          path: Optional[Path] = None) -> Outcome:
     """Run one fixture whose `workflow` is already resolved and compare it with `expect`."""
     fixture_id = fixture["id"]
@@ -177,6 +184,8 @@ def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactor
         for batch in concurrent_batches(fixture["turns"]):
             if batch[0].get("restart_runtime"):
                 runtime = _restart(runtime, workflow)
+            if batch[0].get("advance_time_ms"):
+                _advance(runtime, int(batch[0]["advance_time_ms"]))
             results.extend(_deliver_batch(runtime, batch))
     except AgenticError as exc:
         return Outcome(fixture_id, path, "fail", [f"raised {type(exc).__name__}: {exc}"], results)
@@ -253,7 +262,15 @@ def _restart(runtime: Runtime, workflow: Mapping[str, Any]) -> Runtime:
     return fresh
 
 
-def run_all(make_runtime: RuntimeFactory = LocalRuntime, only: Sequence[str] = (),
+def _advance(runtime: Runtime, ms: int) -> None:
+    clock = runtime.clock if isinstance(runtime, LocalRuntime) else None
+    if not isinstance(clock, ManualClock):
+        raise AgenticError(f"runtime {runtime.name!r} is not on a ManualClock; fixtures with advance_time_ms "
+                           f"cannot run against it")
+    clock.advance(ms)
+
+
+def run_all(make_runtime: RuntimeFactory = fixture_runtime, only: Sequence[str] = (),
             directory: Optional[Path] = None) -> List[Outcome]:
     paths = fixture_paths(directory)
     if only:

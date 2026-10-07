@@ -40,6 +40,8 @@ public final class AgentContext {
   public LongConsumer sleeper = AgentContext::sleep;
   /** Randomness for {@code jitter: true} policies only; unused (and irrelevant) when jitter is off. */
   public RandomGenerator random = null;
+  /** The runtime's processing-time clock for workflow timers (spec section 8); null when the runtime has none. */
+  public LogicalClock clock = null;
 
   private int nextToolIndex = 0;
 

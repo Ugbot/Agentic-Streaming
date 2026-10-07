@@ -8,21 +8,25 @@
             [agentic.context :as ctx]
             [agentic.store :as store]
             [agentic.log :as log]
+            [agentic.workflow-timers :as wt]
             [agentic.banking :as banking])
   (:import [java.util UUID]))
 
 (defn local-system
-  "A runnable system over the given graph/tools/retriever. `opts` may carry :store, :state and :log
-   (defaults are in-memory); pass a system's :log to a new system to restart over the same history."
+  "A runnable system over the given graph/tools/retriever. `opts` may carry :store, :state, :log
+   (defaults are in-memory) and :clock, the processing clock workflow timers read (default wall
+   time; a `agentic.workflow-timers/manual-clock` under a fixture); pass a system's :log to a new
+   system to restart over the same history."
   ([graph tools retriever]
    (local-system graph tools retriever {}))
   ([graph tools retriever conversation-store keyed-state-store]
    (local-system graph tools retriever {:store conversation-store :state keyed-state-store}))
-  ([graph tools retriever {:keys [store state log]}]
+  ([graph tools retriever {:keys [store state log clock]}]
    {:graph graph :tools tools :retriever retriever
     :store (or store (store/in-memory-conversation-store))
     :state (or state (store/in-memory-keyed-state-store))
     :log (or log (log/in-memory-event-log))
+    :clock (or clock (wt/system-clock))
     :mailboxes (atom {})}))
 
 (defn restart
@@ -38,10 +42,11 @@
 (defn- turn-id-of [event]
   (or (:turn-id event) (get-in event [:metadata "turn_id"]) (str (UUID/randomUUID))))
 
-(defn- make-ctx [system event turn-id text]
+(defn- make-ctx [system event turn-id text prior-events]
   (let [cid (:conversation-id event)
         elog (:log system)]
-    (ctx/make-context
+    (assoc
+     (ctx/make-context
      {:conversation-id cid
       :user-id (or (:user-id event) "anonymous")
       :turn-id turn-id
@@ -54,7 +59,9 @@
       :policies (get-in system [:graph :policies])
       :emit! (fn [type payload]
                (log/append-event! elog cid {:turn-id turn-id :type type :payload payload}))
-      :events (fn [conversation-id] (log/conversation-events elog conversation-id))})))
+      :events (fn [conversation-id] (log/conversation-events elog conversation-id))})
+     :clock (:clock system)
+     :prior-events prior-events)))
 
 (defn- run-guarded
   "Run `f`; anything that is not a turn-level outcome is recorded as a fatal `turn_failed` so the log
@@ -79,7 +86,7 @@
         pending (get (log/suspended-turns events) turn-id)]
     (cond
       (and (:signal event) pending)
-      (let [c (make-ctx system event turn-id (:text pending))]
+      (let [c (make-ctx system event turn-id (:text pending) events)]
         (run-guarded c #(graph/resume (:graph system) c pending (:signal event)))
         (result system cid turn-id))
 
@@ -88,7 +95,7 @@
           (assoc :status :duplicate :ok false :events []))
 
       :else
-      (let [c (make-ctx system event turn-id (:text event))]
+      (let [c (make-ctx system event turn-id (:text event) events)]
         (run-guarded c #(graph/handle (:graph system) (assoc event :turn-id turn-id) c))
         (result system cid turn-id)))))
 
