@@ -1,5 +1,7 @@
 package org.agentic.flink.conformance;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -13,10 +15,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
 import org.agentic.flink.runtime.testkit.FixtureProcessingClock;
 import org.agentic.flink.runtime.testkit.MiniClusterWorkflowDriver;
@@ -26,36 +24,66 @@ import org.jagentic.core.TurnResult;
 
 /**
  * Flink binding of {@code spec/conformance/v1}: loads each fixture YAML straight from the
- * repository, runs its workflow as a Flink job on a {@link MiniCluster} (via
- * {@link MiniClusterWorkflowDriver}), and applies the comparator of
- * {@code spec/tools/run_conformance.py} to the normalized result documents.
+ * repository, runs its workflow as a Flink job on a {@link MiniCluster} (via {@link
+ * MiniClusterWorkflowDriver}), and applies the comparator of {@code spec/tools/run_conformance.py}
+ * to the normalized result documents.
  *
  * <p>Fixture verbs map onto Flink as follows: a turn is an element keyed by its conversation id;
  * {@code concurrent_with} submits the turns back to back into the same keyed stream, which the job
  * runs at {@link #PARALLELISM} subtasks so different conversations execute at the same time while
- * Flink's per-key ordering keeps each conversation serial; {@code restart_runtime} is stop-with-savepoint
- * followed by a fresh job restored from that savepoint, so only checkpointed state survives;
- * {@code advance_time_ms} moves the {@link FixtureProcessingClock} the job's operator reads as the
- * spec's processing clock, and a turn's {@code metadata} (including {@code event_time_ms}) is
- * carried on the event.
+ * Flink's per-key ordering keeps each conversation serial; {@code restart_runtime} is
+ * stop-with-savepoint followed by a fresh job restored from that savepoint, so only checkpointed
+ * state survives; {@code advance_time_ms} moves the {@link FixtureProcessingClock} the job's
+ * operator reads as the spec's processing clock, and a turn's {@code metadata} (including {@code
+ * event_time_ms}) is carried on the event.
  *
  * <p>Mirrors {@code org.jagentic.core.conformance.ConformanceHarness}; the comparison rules are the
  * same port and must stay identical.
  */
 public final class FlinkConformanceHarness {
 
-  /** Capability terms ({@code spec/v1/primitives.md}) the Flink runtime implements and this suite exercises. */
-  public static final Set<String> CAPABILITIES = Set.of(
-      "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
-      "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery");
+  /**
+   * Capability terms ({@code spec/v1/primitives.md}) the Flink runtime implements and this suite
+   * exercises.
+   */
+  public static final Set<String> CAPABILITIES =
+      Set.of(
+          "routing",
+          "rule_brain",
+          "llm_brain",
+          "tools",
+          "structured_tool_args",
+          "guardrails",
+          "verifier",
+          "ordering",
+          "idempotency",
+          "retry",
+          "memory",
+          "retrieval",
+          "context_window",
+          "replay",
+          "suspend_resume",
+          "saga",
+          "a2a",
+          "parallelism",
+          "durable_store",
+          "cep",
+          "event_time",
+          "timers",
+          "checkpoint_recovery");
 
-  /** Operator parallelism of every fixture job; more than one subtask is what {@code parallelism} claims. */
+  /**
+   * Operator parallelism of every fixture job; more than one subtask is what {@code parallelism}
+   * claims.
+   */
   public static final int PARALLELISM = 2;
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
-  /** Outcome of one fixture: exactly one of passed, skipped (with reason), or failed (with problems). */
+  /**
+   * Outcome of one fixture: exactly one of passed, skipped (with reason), or failed (with
+   * problems).
+   */
   public record Outcome(String id, String skipReason, List<String> problems) {
     public boolean skipped() {
       return skipReason != null;
@@ -78,7 +106,8 @@ public final class FlinkConformanceHarness {
       }
       dir = dir.getParent();
     }
-    throw new IllegalStateException("spec/conformance/v1/fixtures not found above " + System.getProperty("user.dir"));
+    throw new IllegalStateException(
+        "spec/conformance/v1/fixtures not found above " + System.getProperty("user.dir"));
   }
 
   public static List<Path> fixtureFiles() {
@@ -99,7 +128,8 @@ public final class FlinkConformanceHarness {
   }
 
   @SuppressWarnings("unchecked")
-  public static Outcome run(Path fixturePath, MiniCluster cluster, Path savepointDir) throws Exception {
+  public static Outcome run(Path fixturePath, MiniCluster cluster, Path savepointDir)
+      throws Exception {
     Map<String, Object> fixture = load(fixturePath);
     String id = String.valueOf(fixture.get("id"));
     Set<String> missing = new LinkedHashSet<>((List<String>) fixture.get("requires"));
@@ -109,14 +139,23 @@ public final class FlinkConformanceHarness {
     }
     Map<String, Object> workflow = (Map<String, Object>) fixture.get("workflow");
     if (workflow == null) {
-      workflow = load(fixturePath.getParent().resolve(String.valueOf(fixture.get("workflow_ref"))).normalize());
+      workflow =
+          load(
+              fixturePath
+                  .getParent()
+                  .resolve(String.valueOf(fixture.get("workflow_ref")))
+                  .normalize());
     }
 
     List<Map<String, Object>> results = new ArrayList<>();
     try (FixtureProcessingClock clock = new FixtureProcessingClock();
-         MiniClusterWorkflowDriver driver = new MiniClusterWorkflowDriver(cluster, workflow,
-             FlinkRuntimeOptions.fromSpec(workflow).withProcessingClock(clock), savepointDir.resolve(id),
-             PARALLELISM)) {
+        MiniClusterWorkflowDriver driver =
+            new MiniClusterWorkflowDriver(
+                cluster,
+                workflow,
+                FlinkRuntimeOptions.fromSpec(workflow).withProcessingClock(clock),
+                savepointDir.resolve(id),
+                PARALLELISM)) {
       driver.start();
       List<Event> batch = new ArrayList<>();
       for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
@@ -131,10 +170,15 @@ public final class FlinkConformanceHarness {
         String conversationId = String.valueOf(turn.get("conversation_id"));
         String turnId = String.valueOf(turn.get("turn_id"));
         Map<String, Object> signal = (Map<String, Object>) turn.get("signal");
-        Event event = signal != null
-            ? Event.resume(conversationId, turnId, signal)
-            : Event.turn(conversationId, turnId, "anonymous", String.valueOf(turn.getOrDefault("text", "")),
-                metadata(turn));
+        Event event =
+            signal != null
+                ? Event.resume(conversationId, turnId, signal)
+                : Event.turn(
+                    conversationId,
+                    turnId,
+                    "anonymous",
+                    String.valueOf(turn.getOrDefault("text", "")),
+                    metadata(turn));
         if (turn.get("concurrent_with") != null) {
           batch.add(event);
         } else {
@@ -160,7 +204,9 @@ public final class FlinkConformanceHarness {
     return new Outcome(id, null, problems);
   }
 
-  /** The fixture turn's {@code metadata} (string values, as the spec carries them), empty if none. */
+  /**
+   * The fixture turn's {@code metadata} (string values, as the spec carries them), empty if none.
+   */
   public static Map<String, String> metadata(Map<String, Object> turn) {
     Map<String, String> out = new LinkedHashMap<>();
     if (turn.get("metadata") instanceof Map<?, ?> m) {
@@ -171,8 +217,9 @@ public final class FlinkConformanceHarness {
     return out;
   }
 
-  private static void flush(MiniClusterWorkflowDriver driver, List<Event> batch,
-                            List<Map<String, Object>> results) throws Exception {
+  private static void flush(
+      MiniClusterWorkflowDriver driver, List<Event> batch, List<Map<String, Object>> results)
+      throws Exception {
     if (batch.isEmpty()) {
       return;
     }
@@ -182,9 +229,13 @@ public final class FlinkConformanceHarness {
     batch.clear();
   }
 
-  /** Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance README. */
+  /**
+   * Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance
+   * README.
+   */
   @SuppressWarnings("unchecked")
-  public static List<String> checkExpectation(Map<String, Object> expected, Map<String, Object> actual) {
+  public static List<String> checkExpectation(
+      Map<String, Object> expected, Map<String, Object> actual) {
     List<String> problems = new ArrayList<>();
     for (String field : List.of("conversation_id", "status", "path", "reply")) {
       if (expected.containsKey(field) && !Objects.equals(expected.get(field), actual.get(field))) {
@@ -206,7 +257,8 @@ public final class FlinkConformanceHarness {
     }
     if (expected.containsKey("tool_calls")) {
       List<Map<String, Object>> want = (List<Map<String, Object>>) expected.get("tool_calls");
-      List<Map<String, Object>> got = (List<Map<String, Object>>) actual.getOrDefault("tool_calls", List.of());
+      List<Map<String, Object>> got =
+          (List<Map<String, Object>>) actual.getOrDefault("tool_calls", List.of());
       if (want.size() != got.size()) {
         problems.add(mismatch("tool_calls length", want.size(), got.size()));
       } else {
@@ -229,7 +281,8 @@ public final class FlinkConformanceHarness {
       }
     }
     List<String> types = new ArrayList<>();
-    for (Map<String, Object> e : (List<Map<String, Object>>) actual.getOrDefault("events", List.of())) {
+    for (Map<String, Object> e :
+        (List<Map<String, Object>>) actual.getOrDefault("events", List.of())) {
       types.add(String.valueOf(e.get("type")));
     }
     if (expected.containsKey("events_include")) {
@@ -275,7 +328,8 @@ public final class FlinkConformanceHarness {
   }
 
   /** Convenience for reports: fixture id to outcome, in file order. */
-  public static Map<String, Outcome> runAll(MiniCluster cluster, Path savepointDir) throws Exception {
+  public static Map<String, Outcome> runAll(MiniCluster cluster, Path savepointDir)
+      throws Exception {
     Map<String, Outcome> out = new LinkedHashMap<>();
     for (Path p : fixtureFiles()) {
       Outcome o = run(p, cluster, savepointDir);

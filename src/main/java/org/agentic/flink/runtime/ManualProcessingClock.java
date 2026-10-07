@@ -9,16 +9,16 @@ import org.apache.flink.streaming.api.TimerService;
  * A {@link ProcessingClock} whose reading moves only when {@link #advance(long)} is called.
  *
  * <p>The clock is identified by a {@code clockId}; its reading lives in a registry the whole JVM
- * shares, not in the clock object. That is what lets one logical time be observed by every
- * parallel instance of the workflow operator on an in-process cluster, and by the process that
- * drives it (a JUnit harness, or Python over Py4J or JPype), while the object itself stays a small
- * serializable handle Flink can ship inside the job graph and restore from a savepoint. The
- * reading is stored as a system property ({@value #PROPERTY_PREFIX}{@code <clockId>}) rather than
- * in a static field because an in-process cluster may load this class more than once: a job's
- * user code class loader (PyFlink adds the framework jar to the pipeline) sees its own copy of
- * every static, whereas system properties are one per JVM. A stop-with-savepoint followed by a
- * restore in the same JVM therefore keeps the reading, and pending workflow timers restored with
- * the conversation log fire exactly once when the clock reaches their deadline.
+ * shares, not in the clock object. That is what lets one logical time be observed by every parallel
+ * instance of the workflow operator on an in-process cluster, and by the process that drives it (a
+ * JUnit harness, or Python over Py4J or JPype), while the object itself stays a small serializable
+ * handle Flink can ship inside the job graph and restore from a savepoint. The reading is stored as
+ * a system property ({@value #PROPERTY_PREFIX}{@code <clockId>}) rather than in a static field
+ * because an in-process cluster may load this class more than once: a job's user code class loader
+ * (PyFlink adds the framework jar to the pipeline) sees its own copy of every static, whereas
+ * system properties are one per JVM. A stop-with-savepoint followed by a restore in the same JVM
+ * therefore keeps the reading, and pending workflow timers restored with the conversation log fire
+ * exactly once when the clock reaches their deadline.
  *
  * <p>The registry entry exists from {@link #named(String)} until {@link #release()}. Reading or
  * advancing a released (or never registered) clock fails: an operator that runs in another JVM,
@@ -43,8 +43,8 @@ public final class ManualProcessingClock implements ProcessingClock {
   }
 
   /**
-   * The clock registered under {@code clockId}, registering it at reading zero first when it is
-   * not registered yet. Two handles with the same id are the same clock.
+   * The clock registered under {@code clockId}, registering it at reading zero first when it is not
+   * registered yet. Two handles with the same id are the same clock.
    */
   public static ManualProcessingClock named(String clockId) {
     Objects.requireNonNull(clockId, "clockId");
@@ -104,8 +104,11 @@ public final class ManualProcessingClock implements ProcessingClock {
   private long reading(Properties registry) {
     String value = registry.getProperty(key(clockId));
     if (value == null) {
-      throw new IllegalStateException("manual clock " + clockId + " is not registered in this JVM: it was"
-          + " released, or the operator reading it does not share the JVM of the process that drives it");
+      throw new IllegalStateException(
+          "manual clock "
+              + clockId
+              + " is not registered in this JVM: it was"
+              + " released, or the operator reading it does not share the JVM of the process that drives it");
     }
     return Long.parseLong(value);
   }
