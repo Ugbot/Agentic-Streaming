@@ -78,7 +78,12 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.2.0</version>
         <configuration>
+          <!-- LocalDemo and the reflective InMemoryContext it runs on live in src/test: the demo
+               exercises the function against a fake Context, not a Pulsar cluster, so the shipped
+               jar carries only the function and its stores. Run with
+               ./mvnw -f ports/experimental/pulsar/pom.xml -q test-compile exec:java -->
           <mainClass>org.jagentic.ports.pulsar.LocalDemo</mainClass>
+          <classpathScope>test</classpathScope>
         </configuration>
       </plugin>
     </plugins>

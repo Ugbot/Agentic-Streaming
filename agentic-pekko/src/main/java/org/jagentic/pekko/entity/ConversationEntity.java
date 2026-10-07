@@ -8,10 +8,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
+import org.apache.pekko.Done;
 import org.apache.pekko.actor.NoSerializationVerificationNeeded;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.BackoffSupervisorStrategy;
@@ -84,9 +86,11 @@ public final class ConversationEntity
       @JsonSubTypes.Type(value = ProcessTurn.class, name = "process_turn"),
       @JsonSubTypes.Type(value = GetState.class, name = "get_state"),
       @JsonSubTypes.Type(value = ScheduleTimer.class, name = "schedule_timer"),
-      @JsonSubTypes.Type(value = TimerDue.class, name = "timer_due")})
+      @JsonSubTypes.Type(value = TimerDue.class, name = "timer_due"),
+      @JsonSubTypes.Type(value = Passivate.class, name = "passivate"),
+      @JsonSubTypes.Type(value = Stop.class, name = "stop")})
   public sealed interface Command extends CborSerializable
-      permits ProcessTurn, GetState, ScheduleTimer, TurnFinished, TimerDue {}
+      permits ProcessTurn, GetState, ScheduleTimer, TurnFinished, TimerDue, Passivate, Stop {}
 
   /** Apply one turn (or resume signal) and reply with its normalized result. {@code event.turnId()} is the idempotency key. */
   public record ProcessTurn(Event event, ActorRef<TurnReply> replyTo) implements Command {
@@ -126,6 +130,21 @@ public final class ConversationEntity
 
   /** Internal: a Pekko timer expired for a durably scheduled timer. */
   public record TimerDue(String timerId) implements Command {}
+
+  /**
+   * Leave memory once no turn is in flight; {@code ack} is told when the entity has committed to
+   * stopping. Under Cluster Sharding the entity hands itself to its shard (which buffers commands
+   * arriving meanwhile and recreates the entity from the journal); standalone it simply stops, and
+   * the local router recreates it on the next envelope.
+   */
+  public record Passivate(ActorRef<Done> ack) implements Command {}
+
+  /**
+   * Stop once no turn is in flight. Cluster Sharding's stop message ({@code Entity.withStopMessage}):
+   * the shard sends it after {@link Passivate} and buffers later commands for the conversation until
+   * the entity has terminated, then recreates the entity from the journal and delivers them.
+   */
+  public record Stop() implements Command {}
 
   /** The normalized result document ({@code spec/v1/result.schema.json}) as a message. */
   public record TurnReply(String conversationId, String turnId, TurnStatus status, String path,
@@ -229,12 +248,22 @@ public final class ConversationEntity
   private final TimerScheduler<Command> timers;
   private final String conversationId;
   private final AgentDeps deps;
+  private final Consumer<ActorRef<Command>> passivator;
   private final Executor blockingExecutor;
   private boolean inFlight = false;
 
   public static Behavior<Command> create(String conversationId, AgentDeps deps) {
+    return create(conversationId, deps, null);
+  }
+
+  /**
+   * Entity whose {@link Passivate} is delegated to {@code passivator} (given the entity's own ref)
+   * instead of stopping directly: Cluster Sharding uses this to run its passivation protocol.
+   */
+  public static Behavior<Command> create(String conversationId, AgentDeps deps,
+                                         Consumer<ActorRef<Command>> passivator) {
     return Behaviors.withTimers(timers ->
-        Behaviors.setup(ctx -> new ConversationEntity(ctx, timers, conversationId, deps)));
+        Behaviors.setup(ctx -> new ConversationEntity(ctx, timers, conversationId, deps, passivator)));
   }
 
   public static PersistenceId persistenceId(String conversationId) {
@@ -242,12 +271,14 @@ public final class ConversationEntity
   }
 
   private ConversationEntity(ActorContext<Command> context, TimerScheduler<Command> timers,
-                             String conversationId, AgentDeps deps) {
+                             String conversationId, AgentDeps deps,
+                             Consumer<ActorRef<Command>> passivator) {
     super(persistenceId(conversationId), PERSIST_FAILURE_BACKOFF);
     this.context = context;
     this.timers = timers;
     this.conversationId = conversationId;
     this.deps = deps;
+    this.passivator = passivator;
     this.blockingExecutor = context.getSystem().dispatchers().lookup(DispatcherSelector.blocking());
   }
 
@@ -265,6 +296,8 @@ public final class ConversationEntity
         .onCommand(ScheduleTimer.class, this::onScheduleTimer)
         .onCommand(TimerDue.class, this::onTimerDue)
         .onCommand(GetState.class, this::onGetState)
+        .onCommand(Passivate.class, this::onPassivate)
+        .onCommand(Stop.class, this::onStop)
         .build();
   }
 
@@ -413,6 +446,27 @@ public final class ConversationEntity
     StateSnapshot snap = new StateSnapshot(conversationId, f.turnCount(), f.transcriptLength(),
         f.reduced(), Set.copyOf(f.suspended().keySet()), state.pendingTimers(), state.events());
     return Effect().none().thenReply(cmd.replyTo(), s -> snap);
+  }
+
+  // ---- lifecycle ----
+
+  private Effect<Appended, State> onPassivate(State state, Passivate cmd) {
+    if (inFlight) {
+      return Effect().stash();
+    }
+    if (passivator != null) {
+      return Effect().none()
+          .thenRun(s -> passivator.accept(context.getSelf()))
+          .thenReply(cmd.ack(), s -> Done.getInstance());
+    }
+    return Effect().none().thenStop().thenReply(cmd.ack(), s -> Done.getInstance());
+  }
+
+  private Effect<Appended, State> onStop(State state, Stop cmd) {
+    if (inFlight) {
+      return Effect().stash();
+    }
+    return Effect().stop();
   }
 
   @Override

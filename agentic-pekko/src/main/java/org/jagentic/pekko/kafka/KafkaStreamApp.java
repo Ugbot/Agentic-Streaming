@@ -1,5 +1,6 @@
 package org.jagentic.pekko.kafka;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -9,6 +10,7 @@ import java.util.concurrent.CompletionStage;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.pekko.Done;
@@ -31,12 +33,18 @@ import org.jagentic.pekko.runtime.TurnWire;
  * Kafka ingress/egress: a committable source of request records ({@link TurnWire} JSON) →
  * backpressured {@code mapAsync} that asks the conversation entity → the normalized result document
  * produced to the output topic, keyed by conversationId → offset commit. Delivery is
- * at-least-once; because the record's own {@code turn_id} is the entity's idempotency key, a
- * redelivered record produces a {@code duplicate} result instead of re-running the turn. A record
- * that is not a valid turn is answered with an error document (see {@link #malformed}) and
- * committed, so one bad record cannot wedge the partition.
+ * at-least-once; the record's {@code turn_id} is the entity's idempotency key, so a redelivered
+ * record produces a {@code duplicate} result instead of re-running the turn. The id is resolved by
+ * {@link #turnId}: the payload's {@code turn_id}, else a {@value #TURN_ID_HEADER} header, else
+ * {@code topic-partition-offset}, which is the same for every redelivery of one record and so
+ * dedupes even when the producer never set an id. A record that is not a valid turn is answered
+ * with an error document (see {@link #malformed}) and committed, so one bad record cannot wedge the
+ * partition.
  */
 public final class KafkaStreamApp {
+
+  /** Record header consulted for the turn id when the JSON payload has none. */
+  public static final String TURN_ID_HEADER = "turn_id";
 
   private KafkaStreamApp() {}
 
@@ -69,13 +77,29 @@ public final class KafkaStreamApp {
       String outTopic, Duration timeout) {
     Event event;
     try {
-      event = TurnWire.parse(in.value());
+      event = TurnWire.parse(in.value(), () -> turnId(in));
     } catch (TurnWire.MalformedTurn e) {
       return CompletableFuture.completedFuture(
           new ProducerRecord<>(outTopic, in.key(), TurnWire.write(malformed(in, e))));
     }
     return PekkoRuntime.ask(system, event, timeout)
         .thenApply(reply -> new ProducerRecord<>(outTopic, reply.conversationId(), TurnWire.write(reply)));
+  }
+
+  /**
+   * The turn id a record carries outside its payload: the {@value #TURN_ID_HEADER} header when
+   * present and non-blank, else {@code topic-partition-offset}. Deterministic per record, so the
+   * same record redelivered after a crash or rebalance resolves to the same id.
+   */
+  public static String turnId(ConsumerRecord<String, String> in) {
+    Header h = in.headers() == null ? null : in.headers().lastHeader(TURN_ID_HEADER);
+    if (h != null && h.value() != null) {
+      String v = new String(h.value(), StandardCharsets.UTF_8).trim();
+      if (!v.isEmpty()) {
+        return v;
+      }
+    }
+    return in.topic() + "-" + in.partition() + "-" + in.offset();
   }
 
   static Map<String, Object> malformed(ConsumerRecord<String, String> in, TurnWire.MalformedTurn e) {

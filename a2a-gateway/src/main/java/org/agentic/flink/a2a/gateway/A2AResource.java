@@ -87,6 +87,13 @@ public class A2AResource {
 
   // ---- Agent Card ----
 
+  /** The only A2A transport this gateway serves: JSON-RPC at {@link GatewayConfig#publicUrl()}. */
+  public static final String TRANSPORT = "JSONRPC";
+
+  /**
+   * The Agent Card. {@code url}/{@code preferredTransport} and the single {@code additionalInterfaces}
+   * entry describe the one implemented transport; the card never lists an interface nothing serves.
+   */
   @GET
   @Path("/.well-known/agent-card.json")
   @Produces(MediaType.APPLICATION_JSON)
@@ -97,13 +104,23 @@ public class A2AResource {
     card.put("description", config.agentDescription());
     card.put("version", config.agentVersion());
     card.put("url", config.publicUrl());
-    card.put("preferredTransport", "JSONRPC");
+    card.put("preferredTransport", TRANSPORT);
+    ObjectNode iface = card.putArray("additionalInterfaces").addObject();
+    iface.put("url", config.publicUrl());
+    iface.put("transport", TRANSPORT);
     ObjectNode caps = card.putObject("capabilities");
     caps.put("streaming", config.streamingEnabled());
     caps.put("pushNotifications", config.pushEnabled());
     card.putArray("defaultInputModes").add("text/plain");
     card.putArray("defaultOutputModes").add("text/plain");
-    card.putArray("skills");
+    ArrayNode skills = card.putArray("skills");
+    for (GatewayConfig.Skill s : config.skills()) {
+      ObjectNode skill = skills.addObject();
+      skill.put("id", s.id());
+      skill.put("name", s.name());
+      skill.put("description", s.description());
+      skill.putArray("tags");
+    }
     return JSON.writeValueAsString(card);
   }
 

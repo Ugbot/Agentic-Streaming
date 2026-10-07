@@ -10,9 +10,13 @@ transport, holding A2A task lifecycle state on behalf of disconnected callers.
 JSON-RPC and SSE are the only inbound A2A transports implemented. There is no gRPC server and no
 A2A REST binding in this module: the wire is served by one hand-rolled JAX-RS resource
 (`A2AResource`), not by the a2a-java SDK reference servers, because the SDK's JSON-RPC server
-registers proto method names instead of the spec's `message/send`. `GatewayConfig.grpcUrl()` is
-configuration metadata only and nothing listens on it. The separate `rag/RagResource` is a plain
-HTTP resource for RAG ingest and query; it is not an A2A binding.
+registers proto method names instead of the spec's `message/send`. The served Agent Card lists
+exactly that one transport: `preferredTransport` is `JSONRPC`, `url` and the single
+`additionalInterfaces` entry both point at `AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL`, and
+`capabilities.streaming` describes SSE on that same endpoint (`AgentCardTest` pins this). Setting
+`a2a.gateway.grpc.url` or `a2a.gateway.rest.url` makes `GatewayConfig` fail at startup rather than
+advertise an endpoint nothing serves. The separate `rag/RagResource` is a plain HTTP resource for
+RAG ingest and query; it is not an A2A binding.
 
 ```
  external A2A client ──JSON-RPC/SSE──▶ a2a-gateway (Quarkus) ──A2ABridge──▶ Flink agent job
@@ -63,7 +67,7 @@ Configuration is read from `AgenticFlinkConfig` (`AGENTIC_FLINK_*` env vars / sy
 | `AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT` | `zeromq` | `inproc` / `zeromq` / `redis` |
 | `AGENTIC_FLINK_A2A_BRIDGE_REQUEST_ENDPOINT` | `tcp://127.0.0.1:5760` | gateway→job |
 | `AGENTIC_FLINK_A2A_BRIDGE_RESPONSE_ENDPOINT` | `tcp://127.0.0.1:5761` | job→gateway |
-| `AGENTIC_FLINK_A2A_GATEWAY_AGENT_SKILLS` | _(one generic skill)_ | `id:name:desc,...` |
+| `AGENTIC_FLINK_A2A_GATEWAY_AGENT_SKILLS` | _(one generic skill)_ | `id:name:desc,...`, published as the card's `skills` |
 
 ## Verify
 

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Agentic Streaming</title></head>
+<body>
+<h1>Agentic Streaming</h1>
+<p>Agentic Streaming builds agents as streaming, stateful, event-sourced systems. An agent's
+state is a materialized view over an ordered log of events. Processing a turn is a command;
+reading the view is a query; each conversation has a single writer.</p>
+
+<h2>Runtimes</h2>
+<p>The agentic/v1 specification is executed by a reference runtime and by bindings for Apache
+Flink, Apache Pekko, Clojure, and Python. A conformance harness runs the same fixtures against
+every binding and generates the capability matrix.</p>
+
+<h2>Knowledge base</h2>
+<p>The KnowledgeBase component fetches a page, extracts its text, splits the text into chunks,
+embeds each chunk, and stores the vectors in a vector store. Search embeds the question and
+returns the nearest chunks. With a chat connection configured, ask returns an answer grounded in
+the retrieved passages with citations.</p>
+
+<p>See also: <a href="/flink.html">Apache Flink Overview</a>.</p>
+</body>
+</html>

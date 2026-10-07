@@ -214,7 +214,7 @@ class LiteLLMChatClient:
     """Real chat via `litellm` — one API across OpenAI / Anthropic / Ollama / Gemini /
     etc. Uses the same JSON-mode ReAct protocol as the rest of the framework
     (``{"tool": ...}`` / ``{"text": ...}``), so ``LlmBrain`` works unchanged. ``model``
-    is a litellm model string, e.g. ``ollama/llama3.2`` or ``anthropic/claude-3-5-haiku-latest``;
+    is a litellm model string, e.g. ``ollama/llama3.2`` or ``anthropic/claude-haiku-4-5``;
     it is required, there is no default."""
 
     def __init__(self, model: str, api_base: Optional[str] = None,
