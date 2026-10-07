@@ -17,27 +17,111 @@ Nothing under this directory may be imported by `ports/jagentic-core`, `ports/py
 main Flink module, `agentic-pekko`, `agentic-clj`, `pyflink`, or `python/`. The one allowed
 consumer is the backend registry in
 [`ports/agentic-pipeline/agentic_pipeline/backends.py`](../agentic-pipeline/agentic_pipeline/backends.py),
-which can select the `celery` and `nats` adapters below by name when their directory is on
-`PYTHONPATH`; its tests pin the adapter paths.
+which imports the installed `agentic_celery`, `agentic_nats` and `agentic_ray` packages by name
+for its `celery`, `nats` and `ray` backends (see "Pipeline backends" below).
 
 The design note for each engine is under [`docs/portability/`](../../docs/portability/). The
 comparison table across all of them is in [`ports/README.md`](../README.md).
 
 ## Python adapters (over `ports/pyagentic`)
 
-Install the core first: `python -m pip install -e ports/pyagentic`. Every command below runs
-from the repository root.
+Every Python adapter is an installable package named `agentic-<engine>` with a `pyproject.toml`
+and a package directory `agentic_<engine>` (the gateway is `agentic-gateway-fastapi`, package
+`gateway_fastapi`). The core `pyagentic` is a dependency declared without a version, and each
+`pyproject.toml` carries a `[tool.uv.sources]` entry pointing at `../../pyagentic` as an editable
+path, so `uv pip install -e` resolves the core from the checkout. The engine itself is an
+optional extra of the same name, and `pytest` is the `test` extra. No adapter manipulates
+`sys.path`: with the packages installed, the adapters, their tests and `ports/agentic-pipeline`
+import them like any other distribution.
 
-| Adapter | What it does | How to run it |
-|---|---|---|
-| [`celery/`](celery/) | one Celery task per turn; eager mode runs the banking example in-process with no broker | `python -m pip install celery` then `python ports/experimental/celery/agentic_celery.py`. Also selectable as `--backend celery` in `agentic-pipeline` with `ports/experimental/celery` on `PYTHONPATH` |
-| [`nats/`](nats/) | NATS JetStream subjects per conversation, JetStream KV as the keyed state store | `python -m pip install nats-py`, start a server (`podman run -d -p 4222:4222 nats:latest -js`), then `python ports/experimental/nats/agentic_nats.py`. Also selectable as `--backend nats` in `agentic-pipeline`. Without a server it fails with `ConnectionRefusedError` |
-| [`dask/`](dask/) | the batch data plane: ingest and embed a corpus, evaluate recall, replay a transcript | `python -m pip install dask` then `python ports/experimental/dask/agentic_dask.py` |
-| [`airflow/`](airflow/) | a routing DAG; without Airflow installed the module still simulates the routing decision | `python ports/experimental/airflow/agentic_banking_dag.py` (the DAG object is only built when `airflow` imports) |
-| [`faust/`](faust/) | one Faust agent per conversation over Kafka | needs Kafka and `faust-streaming`; `cd ports/experimental/faust && faust -A agentic_faust:app worker -l info`. Without Faust installed the module imports and prints the install hint |
-| [`ray/`](ray/) | one Ray actor per conversation | needs `ray[default]`; `python ports/experimental/ray/agentic_ray.py`. Without Ray installed the module imports and prints the install hint |
-| [`gateway-fastapi/`](gateway-fastapi/) | FastAPI HTTP front door over the Python core with `local`, `celery`, and `nats` backends | `python -m pip install fastapi httpx pydantic uvicorn` then `python -m pytest ports/experimental/gateway-fastapi/tests -q`; serve with `cd ports/experimental/gateway-fastapi && python -m gateway_fastapi` |
-| [`tests/`](tests/) | pytest over the adapters above (Celery and Dask on the real engine, NATS when a server is up, Faust and Ray import only) | `python -m pytest ports/experimental/tests -q` |
+The package directories are named `agentic_<engine>`, never `<engine>`, so that nothing under
+this directory shadows the engine it ports to. From inside `ports/experimental`,
+`python -c "import celery, dask, ray"` must resolve to the installed distributions;
+`tests/test_celery.py`, `test_dask.py` and `test_ray.py` assert that.
+
+### Install (workspace-style development install)
+
+Every command below runs from the repository root. Install the core first, then every adapter
+with the engines you have, as editable packages into one virtual environment:
+
+```bash
+python -m venv .venv-ports && . .venv-ports/bin/activate
+pip install -e 'ports/pyagentic[test]'
+pip install -e 'ports/experimental/celery[celery]' \
+            -e 'ports/experimental/nats[nats]' \
+            -e 'ports/experimental/ray[ray]' \
+            -e 'ports/experimental/dask[dask]' \
+            -e 'ports/experimental/faust[faust]' \
+            -e 'ports/experimental/airflow[airflow]' \
+            -e 'ports/experimental/gateway-fastapi[celery,nats,test]'
+```
+
+With `uv`, `uv pip install -e 'ports/experimental/<engine>[<engine>]'` pulls `pyagentic` from the
+relative path in `[tool.uv.sources]` without installing it separately. Leave an extra out when the
+engine is not wanted: the adapter still installs and its engine-free functions and tests run;
+the engine-backed tests skip and print why. `apache-airflow>=3` pins many transitive versions,
+so the `airflow` extra is best installed into its own virtual environment. Nothing here is
+published, there is no publishing configuration, and none of these names exist on PyPI.
+
+| Distribution | Import | Extra | What it does | Run it |
+|---|---|---|---|---|
+| `agentic-celery` ([`celery/`](celery/)) | `agentic_celery` | `celery` | one Celery task per turn, conversations routed to a stable queue by `zlib.crc32` (a per-process `hash()` would split one conversation across workers); eager mode needs no broker | `python -m agentic_celery` |
+| `agentic-nats` ([`nats/`](nats/)) | `agentic_nats` | `nats` | JetStream stream per turn, JetStream KV envelope per conversation (subject-safe keys), an ordered worker | start a server, then `python -m agentic_nats` |
+| `agentic-ray` ([`ray/`](ray/)) | `agentic_ray` | `ray` | one Ray actor per conversation in an isolated namespace; `RayRuntime.close()` kills the actors and the local cluster it started | `python -m agentic_ray` |
+| `agentic-dask` ([`dask/`](dask/)) | `agentic_dask` | `dask` | the batch data plane: parallel ingestion, recall@k eval, transcript replay (parallel across conversations, ordered within one); falls back to sequential without Dask | `python -m agentic_dask` |
+| `agentic-faust` ([`faust/`](faust/)) | `agentic_faust` | `faust` | a keyed Faust agent with Faust Tables as the `ConversationStore`; the turn logic runs over in-memory tables without a broker | `python -m agentic_faust`; the worker is `faust -A agentic_faust.app worker -l info` against Kafka |
+| `agentic-airflow` ([`airflow/`](airflow/)) | `agentic_airflow` | `airflow` | a branching Airflow 3 DAG (`airflow.sdk`) per turn plus an ingestion DAG; `simulate()` runs the routing without a scheduler or a model | `python -m agentic_airflow`; `airflow dags test routed_triage` with the DAGs folder set to the package |
+| `agentic-gateway-fastapi` ([`gateway-fastapi/`](gateway-fastapi/)) | `gateway_fastapi` | `celery`, `nats`, `test` | FastAPI HTTP front door over the core with `local`, `celery` and `nats` backends | `python -m gateway_fastapi` |
+
+Each adapter's own `README.md` documents its seams and the engine-specific run commands.
+
+### Pipeline backends
+
+`ports/agentic-pipeline` registers an adapter as a `backend:` value only when its test suite runs
+`examples/pipelines/banking.yaml` end to end on the real engine, locally or in a Podman
+container. That holds for `celery` (eager tasks), `nats` (a JetStream server in Podman) and
+`ray` (a local cluster), alongside the always-available `local`.
+
+`airflow` (an orchestration plane, one DAG run per turn), `dask` (a batch data plane), `faust`
+(a Kafka worker; no Kafka-backed end to end test of `banking.yaml` runs in this repository) and
+`gateway-fastapi` (an HTTP edge over the backends, not a runtime) are demonstration-only. The
+pipeline CLI rejects them by name:
+
+```text
+$ python -m agentic_pipeline run examples/pipelines/banking.yaml --backend dask --text "hi"
+error: backend 'dask' is demonstration-only (a batch data plane (ingestion, retrieval eval,
+transcript replay), not a turn runtime); demonstration-only adapters under ports/experimental:
+airflow, dask, faust, gateway-fastapi; supported backends: celery, local, nats, ray
+```
+
+`ports/agentic-pipeline/tests/test_pipeline.py` pins the registry to exactly those four names
+and asserts the rejection message for every demonstration-only adapter.
+
+### Tests and lint
+
+```bash
+python -m pytest ports/experimental -q -rs          # every adapter module, from the repo root
+python -m pytest ports/agentic-pipeline -q          # backend registration and banking.yaml on each backend
+ruff check ports/experimental                       # rules in ports/experimental/ruff.toml
+```
+
+[`pytest.ini`](pytest.ini) collects [`tests/`](tests/) and `gateway-fastapi/tests/` and declares
+one marker per engine (`airflow`, `celery`, `dask`, `faust`, `gateway`, `nats`, `ray`); `-rs` is on
+by default so every skip prints its reason. A test skips only when its engine is genuinely
+unavailable: the import error of a missing extra, or the connection error of an unreachable
+JetStream server. Everything that does not need the engine (Celery routing, Dask sequential
+fallback, Faust table store, NATS key mapping and envelopes, Airflow `simulate`) always runs.
+[`tests/test_event_keywords.py`](tests/test_event_keywords.py) parses every adapter and test
+source and fails on a positional `Event(...)` or `AgentContext(...)` call, because the Python
+core's second positional field is `text` while the Java and Go cores put `userId` there.
+
+NATS JetStream for the live `nats` tests, the `nats` pipeline backend and the gateway's `nats`
+backend runs in Podman:
+
+```bash
+podman run -d --name nats-js -p 4222:4222 nats:latest -js
+# a different server: export AGENTIC_NATS_URL=nats://host:4222
+```
 
 ## JVM adapters (over `ports/jagentic-core`)
 
@@ -64,4 +148,4 @@ adapter is its own Maven project, not a module of the root reactor.
 The JVM adapters are built by the `ports-experimental` job in
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). That job is advisory
 (`continue-on-error`), is not a required status check, and is separate from the core JVM job.
-The Go module and the Python adapter tests run in the `go` and `python` jobs at their new paths.
+The Go module runs in the `go` job and the Python adapters (`pytest ports/experimental`) in the `python-experimental` job.

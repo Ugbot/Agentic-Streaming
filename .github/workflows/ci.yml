@@ -262,14 +262,19 @@ jobs:
         with:
           python-version: "3.12"
 
-      # `celery` is needed because ports/experimental/tests exercises the Celery adapter
-      # against the real engine in eager mode (no broker required); without it
-      # two tests hard-fail rather than skipping.
+      # The adapters are installed packages (agentic-<engine>, see ports/experimental/README.md);
+      # each engine is an optional extra. celery, dask and ray run for real here; airflow,
+      # faust and nats skip their engine-backed tests with the reason printed.
       - name: Install
-        run: python -m pip install -e "ports/pyagentic[test]" celery
+        run: |
+          python -m pip install -e "ports/pyagentic[test]" \
+            -e "ports/experimental/celery[celery]" -e "ports/experimental/dask[dask]" \
+            -e "ports/experimental/ray[ray]" -e "ports/experimental/nats[nats]" \
+            -e "ports/experimental/faust" -e "ports/experimental/airflow" \
+            -e "ports/experimental/gateway-fastapi[test]"
 
       - name: port adapters
-        run: python -m pytest ports/experimental/tests -q -ra
+        run: python -m pytest ports/experimental -q -ra
 
   go:
     name: Go (ports/experimental/go, advisory)

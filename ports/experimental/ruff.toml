@@ -1,0 +1,7 @@
+# Lint settings for the Python adapters under ports/experimental (same rule set as
+# ports/pyagentic). Run from the repository root: ruff check ports/experimental
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "I", "B"]

@@ -10,32 +10,41 @@ which substrate ran the turn:
 The portable router->path->verifier graph, tools, and retrieval all come from
 ``pyagentic``; only the runtime/transport seam differs per backend. The ``local``
 backend is always available and has zero third-party dependencies; ``celery`` and
-``nats`` guard their imports so this module imports cleanly without them, raising a
-clear error only when such a backend is actually constructed.
+``nats`` import their adapter packages (``agentic-celery``, ``agentic-nats``, the
+gateway's optional extras of the same names) when constructed, so this module imports
+cleanly without them and raises a clear error only when such a backend is selected.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-import sys
 import threading
-from pathlib import Path
-from typing import Dict, List, Optional, Protocol
+from typing import List, Optional, Protocol
 
-# Make the pure-Python core at ports/pyagentic importable (mirrors ../celery/agentic_celery.py).
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pyagentic"))
-
-from pyagentic.banking import build_banking_graph, default_tools, seed_kb  # noqa: E402
-from pyagentic.core import Event, TurnResult  # noqa: E402
-from pyagentic.memory import (  # noqa: E402
-    ChatMessage,
+from pyagentic.banking import build_banking_graph, default_tools, seed_kb
+from pyagentic.core import Event, TurnResult
+from pyagentic.memory import (
     ConversationStore,
     InMemoryConversationStore,
     InMemoryKeyedStateStore,
 )
-from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever  # noqa: E402
-from pyagentic.runtime import LocalRuntime  # noqa: E402
+from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever
+from pyagentic.runtime import LocalRuntime
+
+try:
+    import agentic_celery
+    _CELERY_IMPORT_ERROR: Optional[ImportError] = None
+except ImportError as exc:
+    agentic_celery = None
+    _CELERY_IMPORT_ERROR = exc
+
+try:
+    import agentic_nats
+    _NATS_IMPORT_ERROR: Optional[ImportError] = None
+except ImportError as exc:
+    agentic_nats = None
+    _NATS_IMPORT_ERROR = exc
 
 
 def _build_retriever() -> TwoTierRetriever:
@@ -73,7 +82,7 @@ class LocalBackend:
     """In-process backend: ``LocalRuntime`` over the banking graph with a shared
     ``InMemoryConversationStore`` so transcripts are inspectable via :meth:`history`.
 
-    Always available — zero third-party dependencies. This is the default."""
+    Always available, zero third-party dependencies. This is the default."""
 
     name = "local"
 
@@ -88,35 +97,29 @@ class LocalBackend:
         )
 
     def submit(self, conversation_id: str, text: str, user_id: str = "anonymous") -> dict:
-        return _result_to_dict(self._runtime.submit(Event(conversation_id, text, user_id)))
+        event = Event(conversation_id=conversation_id, text=text, user_id=user_id)
+        return _result_to_dict(self._runtime.submit(event))
 
     def history(self, conversation_id: str) -> List[dict]:
         return _history_from_store(self._store, conversation_id)
 
 
 class CeleryBackend:
-    """Backend over the Celery adapter (``ports/experimental/celery/agentic_celery.py``) in eager
+    """Backend over the Celery adapter (the ``agentic-celery`` package) in eager
     (in-process, no broker) mode. Uses a shared ``InMemoryConversationStore`` injected
     via the adapter's ``configure`` so transcripts stay inspectable for :meth:`history`.
 
-    Raises a clear error at construction if Celery is not installed; importing this
-    module never requires Celery."""
+    Raises a clear error at construction if the adapter or Celery is not installed;
+    importing this module never requires either."""
 
     name = "celery"
 
     def __init__(self) -> None:
-        celery_dir = Path(__file__).resolve().parents[2] / "celery"
-        if str(celery_dir) not in sys.path:
-            sys.path.insert(0, str(celery_dir))
-        try:
-            import agentic_celery  # type: ignore
-        except ImportError as exc:  # pragma: no cover - depends on environment
+        if agentic_celery is None:
             raise RuntimeError(
-                "celery backend unavailable: could not import the Celery adapter "
-                f"({exc}). Install celery: pip install celery"
-            ) from exc
-        if getattr(agentic_celery, "Celery", None) is None:
-            raise RuntimeError("celery backend unavailable: celery not installed (pip install celery)")
+                f"celery backend unavailable: {_CELERY_IMPORT_ERROR}. Install the gateway's celery extra: "
+                "pip install 'agentic-gateway-fastapi[celery]'"
+            ) from _CELERY_IMPORT_ERROR
 
         # Share a ConversationStore so /conversations works, and seed the retriever.
         self._store: ConversationStore = InMemoryConversationStore()
@@ -127,20 +130,18 @@ class CeleryBackend:
             store=self._store,
             state=InMemoryKeyedStateStore(),
         )
-        try:
-            self._runtime = agentic_celery.CeleryRuntime(eager=True)
-        except RuntimeError as exc:
-            raise RuntimeError(f"celery backend unavailable: {exc}") from exc
+        self._runtime = agentic_celery.CeleryRuntime(eager=True)
 
     def submit(self, conversation_id: str, text: str, user_id: str = "anonymous") -> dict:
-        return _result_to_dict(self._runtime.submit(Event(conversation_id, text, user_id)))
+        event = Event(conversation_id=conversation_id, text=text, user_id=user_id)
+        return _result_to_dict(self._runtime.submit(event))
 
     def history(self, conversation_id: str) -> List[dict]:
         return _history_from_store(self._store, conversation_id)
 
 
 class NatsBackend:
-    """Backend over the NATS JetStream adapter (``ports/experimental/nats/agentic_nats.py``).
+    """Backend over the NATS JetStream adapter (the ``agentic-nats`` package).
 
     ``NatsRuntime`` is asyncio-native and a NATS connection is bound to the event loop
     it was created on, so this backend owns ONE persistent loop in a background thread:
@@ -149,37 +150,26 @@ class NatsBackend:
     so :meth:`history` reads the transcript back from KV (not a local store).
 
     Requires a reachable JetStream server (``AGENTIC_NATS_URL``); construction raises a
-    clear error if ``nats-py`` is missing or the server is unreachable."""
+    clear error if the adapter or ``nats-py`` is missing or the server is unreachable."""
 
     name = "nats"
 
     def __init__(self, url: Optional[str] = None) -> None:
-        nats_dir = Path(__file__).resolve().parents[2] / "nats"
-        if str(nats_dir) not in sys.path:
-            sys.path.insert(0, str(nats_dir))
-        try:
-            import agentic_nats  # type: ignore
-        except ImportError as exc:  # pragma: no cover - depends on environment
+        if agentic_nats is None:
             raise RuntimeError(
-                "nats backend unavailable: could not import the NATS adapter "
-                f"({exc}). Install nats-py: pip install nats-py"
-            ) from exc
-        if getattr(agentic_nats, "nats", None) is None:
-            raise RuntimeError("nats backend unavailable: nats-py not installed (pip install nats-py)")
+                f"nats backend unavailable: {_NATS_IMPORT_ERROR}. Install the gateway's nats extra: "
+                "pip install 'agentic-gateway-fastapi[nats]'"
+            ) from _NATS_IMPORT_ERROR
 
-        self._agentic_nats = agentic_nats
         resolved_url = url or os.environ.get("AGENTIC_NATS_URL", agentic_nats.DEFAULT_URL)
-        try:
-            self._runtime = agentic_nats.NatsRuntime(
-                url=resolved_url,
-                graph=build_banking_graph(),
-                tools=default_tools(),
-                retriever=_build_retriever(),
-            )
-        except RuntimeError as exc:
-            raise RuntimeError(f"nats backend unavailable: {exc}") from exc
+        self._runtime = agentic_nats.NatsRuntime(
+            url=resolved_url,
+            graph=build_banking_graph(),
+            tools=default_tools(),
+            retriever=_build_retriever(),
+        )
 
-        # One persistent loop on a background thread — the connection binds to it.
+        # One persistent loop on a background thread; the connection binds to it.
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, name="nats-loop", daemon=True)
         self._thread.start()
@@ -216,8 +206,8 @@ class NatsBackend:
             self._loop.close()
 
     def submit(self, conversation_id: str, text: str, user_id: str = "anonymous") -> dict:
-        result = self._run(self._runtime.submit(Event(conversation_id, text, user_id)))
-        return _result_to_dict(result)
+        event = Event(conversation_id=conversation_id, text=text, user_id=user_id)
+        return _result_to_dict(self._run(self._runtime.submit(event)))
 
     def history(self, conversation_id: str) -> List[dict]:
         # Read the durable transcript back from JetStream KV via the adapter's loader.

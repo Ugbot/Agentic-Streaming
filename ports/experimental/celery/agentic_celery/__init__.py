@@ -1,11 +1,11 @@
-"""Agentic-Flink on **Celery** — pure Python.
+"""Agentic Streaming on **Celery**, pure Python.
 
 See ../../../docs/portability/celery.md. Celery is a distributed *task queue*, not a
 stream processor, so the essence maps a little differently than Faust/Ray:
 
   - **one turn = one Celery task** (``process_turn``). The task is stateless; all
     durable state lives in a shared ``pyagentic.ConversationStore`` (Redis-backed in
-    production — Celery already runs on Redis/RabbitMQ), so C1 is *external*.
+    production, Celery already runs on Redis/RabbitMQ), so C1 is *external*.
   - **single-writer-per-conversation (C2)** is not native. Celery has no keyed
     ordering, so we recover it the way the design doc prescribes: route every task
     for a conversation to the *same* queue (``conversation_queue(cid)``) consumed by a
@@ -14,14 +14,14 @@ stream processor, so the essence maps a little differently than Faust/Ray:
   - **fault tolerance (C3)** rides Celery's ``acks_late`` + ``retry`` + the result
     backend: a task that dies is redelivered; the ConversationStore is the source of
     truth so a retried turn is idempotent against the transcript.
-  - **async I/O (C4)** is a Celery ``chord``/``chain`` (or an async task body) — the
+  - **async I/O (C4)** is a Celery ``chord``/``chain`` (or an async task body): the
     LLM/A2A call is its own task whose result feeds the verifier task.
 
 The portable router->path->verifier graph + tools + retrieval are reused verbatim
 from ``pyagentic``; only the task/runtime seam is Celery-specific.
 
-Run live, no broker needed (eager mode, in-process — this is what the test uses):
-    python agentic_celery.py
+Run live, no broker needed (eager mode, in-process, what the test uses):
+    python -m agentic_celery
 Run distributed (needs Redis + a worker):
     AGENTIC_CELERY_BROKER=redis://localhost:6379/0 \
     AGENTIC_CELERY_BACKEND=redis://localhost:6379/1 \
@@ -32,26 +32,29 @@ Run distributed (needs Redis + a worker):
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
+import zlib
 from threading import Lock
 from typing import Dict
 
-# Make the pure-Python core at ports/pyagentic importable (or `pip install -e ../../pyagentic`).
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pyagentic"))
-
-from pyagentic.banking import build_banking_graph, default_tools, seed_kb  # noqa: E402
-from pyagentic.core import AgentContext, Event, TurnResult  # noqa: E402
-from pyagentic.memory import InMemoryConversationStore, InMemoryKeyedStateStore  # noqa: E402
-from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever  # noqa: E402
+from pyagentic.banking import build_banking_graph, default_tools, seed_kb
+from pyagentic.core import AgentContext, Event, TurnResult
+from pyagentic.memory import InMemoryConversationStore, InMemoryKeyedStateStore
+from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever
 
 try:
-    import celery as _celery_pkg
     from celery import Celery
-    if not hasattr(_celery_pkg, "Celery"):  # guard against a namespace-package shadow
-        Celery = None  # type: ignore
-except ImportError:  # keep importable without the engine installed
-    Celery = None  # type: ignore
+except ImportError as exc:
+    raise ImportError(
+        "agentic-celery needs the optional 'celery' extra: pip install 'agentic-celery[celery]'"
+    ) from exc
+
+__all__ = [
+    "CeleryRuntime",
+    "app",
+    "configure",
+    "conversation_queue",
+    "process_turn",
+]
 
 
 # ---- per-worker, process-local agent dependencies -------------------------------
@@ -63,10 +66,11 @@ _NUM_CONVERSATION_QUEUES = int(os.environ.get("AGENTIC_CELERY_QUEUES", "4"))
 
 
 def conversation_queue(conversation_id: str) -> str:
-    """Stable queue name for a conversation — the C2 seam. Every turn for a given
+    """Stable queue name for a conversation, the C2 seam. Every turn for a given
     conversation is routed here, so a single worker processes the conversation in
-    order (the Celery analogue of a Kafka partition / Flink keyBy)."""
-    bucket = (hash(conversation_id) & 0x7FFFFFFF) % _NUM_CONVERSATION_QUEUES
+    order (the Celery analogue of a Kafka partition / Flink keyBy). The bucket is a
+    CRC32 of the id, so producers and workers in different processes agree on it."""
+    bucket = zlib.crc32(conversation_id.encode("utf-8")) % _NUM_CONVERSATION_QUEUES
     return f"agentic.conv.{bucket}"
 
 
@@ -75,8 +79,8 @@ class _Deps:
 
     Every field defaults to the shared ``pyagentic`` banking essence, so adding a new
     tool/path to the core propagates here with no adapter change. The components are
-    injectable (see :func:`configure`) for production — e.g. a Redis-backed
-    ConversationStore shared across workers — and for tests that exercise an *extended*
+    injectable (see :func:`configure`) for production, e.g. a Redis-backed
+    ConversationStore shared across workers, and for tests that exercise an *extended*
     core graph through this same Celery task seam.
     """
 
@@ -119,7 +123,7 @@ def configure(graph=None, tools=None, retriever=None, store=None, state=None) ->
 
 
 def _run_turn(conversation_id: str, text: str, user_id: str) -> dict:
-    """The actual work — identical regardless of how Celery delivered it. Takes the
+    """The actual work, identical regardless of how Celery delivered it. Takes the
     per-conversation lock so concurrent worker threads can't interleave a single
     conversation (C2 within the worker), then runs the portable graph."""
     deps = _Deps.get()
@@ -132,7 +136,8 @@ def _run_turn(conversation_id: str, text: str, user_id: str) -> dict:
             tools=deps.tools,
             retriever=deps.retriever,
         )
-        result: TurnResult = deps.graph.handle(Event(conversation_id, text, user_id), ctx)
+        event = Event(conversation_id=conversation_id, text=text, user_id=user_id)
+        result: TurnResult = deps.graph.handle(event, ctx)
         return {
             "conversation_id": result.conversation_id,
             "reply": result.reply,
@@ -144,33 +149,30 @@ def _run_turn(conversation_id: str, text: str, user_id: str) -> dict:
 
 # ---- the Celery app + task ------------------------------------------------------
 
-if Celery is not None:
-    app = Celery(
-        "agentic-celery",
-        broker=os.environ.get("AGENTIC_CELERY_BROKER", "memory://"),
-        backend=os.environ.get("AGENTIC_CELERY_BACKEND", "cache+memory://"),
-    )
-    # C3 knobs: redeliver on worker loss; the ConversationStore makes a redelivered
-    # turn idempotent. C2 knob: a worker process handles one conversation queue.
-    app.conf.update(
-        task_acks_late=True,
-        task_reject_on_worker_lost=True,
-        task_default_queue="agentic.conv.0",
-        worker_prefetch_multiplier=1,
-        result_expires=3600,
-    )
+app = Celery(
+    "agentic-celery",
+    broker=os.environ.get("AGENTIC_CELERY_BROKER", "memory://"),
+    backend=os.environ.get("AGENTIC_CELERY_BACKEND", "cache+memory://"),
+)
+# C3 knobs: redeliver on worker loss; the ConversationStore makes a redelivered
+# turn idempotent. C2 knob: a worker process handles one conversation queue.
+app.conf.update(
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_default_queue="agentic.conv.0",
+    worker_prefetch_multiplier=1,
+    result_expires=3600,
+)
 
-    @app.task(name="agentic.process_turn", bind=True, max_retries=2, acks_late=True)
-    def process_turn(self, conversation_id: str, text: str, user_id: str = "anonymous") -> dict:
-        """One conversational turn as a Celery task. Routed to the conversation's queue
-        so it is single-writer; retried with backoff on transient failure (C3/C4)."""
-        try:
-            return _run_turn(conversation_id, text, user_id)
-        except Exception as exc:  # transient backend/tool failure -> retry with backoff
-            raise self.retry(exc=exc, countdown=min(2 ** self.request.retries, 8))
-else:
-    app = None  # importable for inspection/tests without celery installed
-    process_turn = None  # type: ignore
+
+@app.task(name="agentic.process_turn", bind=True, max_retries=2, acks_late=True)
+def process_turn(self, conversation_id: str, text: str, user_id: str = "anonymous") -> dict:
+    """One conversational turn as a Celery task. Routed to the conversation's queue
+    so it is single-writer; retried with backoff on transient failure (C3/C4)."""
+    try:
+        return _run_turn(conversation_id, text, user_id)
+    except Exception as exc:  # transient backend/tool failure -> retry with backoff
+        raise self.retry(exc=exc, countdown=min(2 ** self.request.retries, 8)) from exc
 
 
 class CeleryRuntime:
@@ -180,8 +182,6 @@ class CeleryRuntime:
     it to a real worker over the configured broker."""
 
     def __init__(self, eager: bool = True) -> None:
-        if Celery is None:
-            raise RuntimeError("celery not installed: pip install celery")
         self.eager = eager
         app.conf.task_always_eager = eager
         app.conf.task_eager_propagates = eager
@@ -193,7 +193,11 @@ class CeleryRuntime:
         )
         d = async_result.get(timeout=30)
         return TurnResult(
-            d["conversation_id"], d["reply"], d["path"], d["ok"], d["tool_calls"]
+            conversation_id=d["conversation_id"],
+            reply=d["reply"],
+            path=d["path"],
+            ok=d["ok"],
+            tool_calls=d["tool_calls"],
         )
 
 
@@ -206,13 +210,6 @@ def _demo() -> None:
         ("c3", "where is the nearest branch?"),
     ]
     for cid, text in turns:
-        r = rt.submit(Event(cid, text, user_id="demo"))
+        r = rt.submit(Event(conversation_id=cid, text=text, user_id="demo"))
         print(f"[{cid}] queue={conversation_queue(cid)} path={r.path} ok={r.ok} "
               f"reply={r.reply!r} tools={r.tool_calls}")
-
-
-if __name__ == "__main__":  # pragma: no cover
-    if Celery is None:
-        print("celery not installed. `pip install celery`, then: python agentic_celery.py")
-    else:
-        _demo()

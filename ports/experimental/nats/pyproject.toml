@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-nats"
+version = "0.1.0"
+description = "Experimental Agentic Streaming adapter: JetStream KV state and a persistent turn stream on the pyagentic core"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = ["pyagentic"]
+
+[project.optional-dependencies]
+nats = ["nats-py>=2.6"]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/Ugbot/Agentic-Streaming"
+Source = "https://github.com/Ugbot/Agentic-Streaming/tree/main/ports/experimental/nats"
+
+[tool.setuptools.packages.find]
+include = ["agentic_nats*"]
+
+[tool.uv.sources]
+pyagentic = { path = "../../pyagentic", editable = true }

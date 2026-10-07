@@ -28,11 +28,13 @@ around the KV (the same shape as the Pulsar Function's state access).
 ## Run
 
 ```bash
+pip install -e ports/pyagentic -e 'ports/experimental/nats[nats]'
+
 # start a JetStream server (podman):
 podman run -d --name nats-js -p 4222:4222 nats:latest -js
 
 # run the live stream→worker→KV→reply round-trip:
-python ports/experimental/nats/agentic_nats.py
+python -m agentic_nats
 # ->
 # [c1] path=cards    ok=True reply='[cards] We offer three card types...'
 # [c1] path=cards    ok=True reply='[cards] Crypto cash-back can be redeemed...'
@@ -41,6 +43,8 @@ python ports/experimental/nats/agentic_nats.py
 # c1 persisted message count = 4 (state durable in JetStream KV)
 ```
 
-Covered by the adapter suite (`ports/experimental/tests/test_adapters.py`): a live KV-roundtrip +
-extended-graph-through-the-seam test that **skips** when no JetStream server is
-reachable. Point at a remote server with `AGENTIC_NATS_URL`.
+Covered by `ports/experimental/tests/test_nats.py` (run `pytest ports/experimental` from the
+repository root): the pure key mapping and envelope round trip always run; the live KV
+round trip, the streamed worker and the extended-graph-through-the-seam test **skip** with
+the connection error printed when no JetStream server is reachable. Point at a remote server
+with `AGENTIC_NATS_URL`.
