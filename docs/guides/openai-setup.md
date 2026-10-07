@@ -20,9 +20,20 @@ echo $OPENAI_API_KEY
 
 ### 3. Run the Demo
 
+`OpenAIFlinkAgentsDemo` lives in the optional Flink Agents plugin
+(`src/main/java/org/agentic/flink/plugins/flintagents/examples/`), which the default build excludes. It
+compiles only with the `flink-agents` Maven profile, which needs Apache Flink Agents `0.2-SNAPSHOT` installed
+in the local repository from source (see
+[flink-agents-integration.md](flink-agents-integration.md#getting-started-with-integration)). With that in
+place, run it through the `examples` profile (Flink is a provided dependency, so a plain `mvn exec:java` has
+no Flink on its classpath):
+
 ```bash
-mvn exec:java -Dexec.mainClass="org.agentic.flink.example.OpenAIFlinkAgentsDemo"
+./mvnw -q -P flink-agents,examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.plugins.flintagents.examples.OpenAIFlinkAgentsDemo
 ```
+
+This command was not executed for this page because Flink Agents is not published to Maven Central.
 
 ## Installation Methods
 
@@ -56,10 +67,13 @@ source ~/.config/fish/config.fish
 ### Method 2: System Property (For Testing)
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="org.agentic.flink.example.OpenAIFlinkAgentsDemo" \
-  -Dopenai.api.key="sk-your-key-here"
+./mvnw -q -P flink-agents,examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.plugins.flintagents.examples.OpenAIFlinkAgentsDemo \
+  -Dexec.args="-Dopenai.api.key=sk-your-key-here"
 ```
+
+The property has to reach the forked JVM, hence `-Dexec.args`; a `-D` on the `./mvnw` command line only sets
+it for Maven itself.
 
 ### Method 3: .env File (For Development)
 
@@ -104,8 +118,9 @@ echo '.env' >> .gitignore
 # Set your key first
 export OPENAI_API_KEY="sk-..."
 
-# Run the OpenAI-specific demo
-mvn exec:java -Dexec.mainClass="org.agentic.flink.example.OpenAIFlinkAgentsDemo"
+# Run the OpenAI-specific demo (flink-agents profile required, see "Run the Demo" above)
+./mvnw -q -P flink-agents,examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.plugins.flintagents.examples.OpenAIFlinkAgentsDemo
 ```
 
 **What it demonstrates:**
@@ -213,7 +228,7 @@ echo $OPENAI_API_KEY
 export OPENAI_API_KEY="sk-your-key-here"
 
 # Try again
-mvn exec:java -Dexec.mainClass="..."
+./mvnw -q -P flink-agents,examples compile exec:exec -Dexec.mainClass=...
 ```
 
 ### Error: "Incorrect API key provided"
@@ -382,8 +397,8 @@ public String analyzeDocument(String documentText) {
 
 1. **Get API key:** https://platform.openai.com/api-keys
 2. **Set environment variable:** `export OPENAI_API_KEY="sk-..."`
-3. **Run demo:** `mvn exec:java -Dexec.mainClass="org.agentic.flink.example.OpenAIFlinkAgentsDemo"`
-4. **Read examples:** See `OpenAIFlinkAgentsDemo.java`
+3. **Run demo:** see [Run the Demo](#3-run-the-demo) (flink-agents plus examples profiles)
+4. **Read examples:** See `src/main/java/org/agentic/flink/plugins/flintagents/examples/OpenAIFlinkAgentsDemo.java`
 5. **Build your agent:** Use patterns above
 
 ## Support
@@ -391,7 +406,7 @@ public String analyzeDocument(String documentText) {
 - **OpenAI Docs:** https://platform.openai.com/docs
 - **LangChain4J Docs:** https://docs.langchain4j.dev/
 - **Our Examples:** See `src/main/java/org/agentic/flink/example/`
-- **Troubleshooting:** See this document or DEMO_GUIDE.md
+- **Troubleshooting:** See this document or [troubleshooting.md](../reference/troubleshooting.md)
 
 ---
 

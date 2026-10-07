@@ -28,30 +28,29 @@ ShortTermMemory memory = spec.bind(getRuntimeContext());
 
 Then in `processElement`, the memory is implicitly scoped to the operator's current key, no `flowId` arg, because Flink supplies it.
 
-TTL is set per agent via `AgentBuilder.withShortTermTtl(Duration)` and falls back to the config key `memory.shortterm.ttl.seconds`. State cleanup is incremental and runs alongside the state-backend's own work.
+TTL is set on the spec (`FlinkStateShortTermMemory.spec(Duration)`); `Duration.ZERO` disables it. State cleanup is incremental and runs alongside the state-backend's own work. `AgentBuilder.withShortTermTtl(Duration)` and `withShortTermMemory(ShortTermMemorySpec)` record values on the built `Agent` that no operator in this repository reads yet, so configure the spec on the operator that binds it. The config key `memory.shortterm.ttl.seconds` is declared in `ConfigKeys` but is not read by any class.
 
 ## Long-term memory (optional)
 
 ```java
 LongTermMemoryStore postgres = StorageFactory.createLongTermStore("postgres", postgresConfig);
-agent = Agent.builder().withId(...).withLongTermStore(postgres).build();
 ```
 
-Hydration happens on the first event seen for a cold key: the operator reads the conversation context and facts from Postgres into Flink state, after which all reads and writes hit Flink state directly. Sync back to Postgres is write-behind, triggered on event-count intervals and on successful MoSCoW compaction. Checkpoint barriers never block on Postgres acks.
+`AgentBuilder.withLongTermStore(store)` stores the reference on the `Agent` but no operator in the default build reads it. The operator that performs hydration and write-behind today is `ContextManagementActionWithStorage` in `plugins/flintagents` (compiled only with `-P flink-agents`): on the first event for a cold key it reads the conversation context and facts from the long-term store into Flink state, after which reads and writes hit Flink state directly; sync back is write-behind, triggered on event-count intervals and on successful MoSCoW compaction, and checkpoint barriers do not block on store acks.
 
-Redis is supported via the `RedisLongTermStore` (formerly `RedisConversationStore`) but is no longer the default. Pull it in by selecting `"redis"` from the factory or by registering the implementation via `ServiceLoader`.
+Redis is supported via `org.agentic.flink.storage.redis.RedisConversationStore` but is not the default. Select it with `StorageFactory.createLongTermStore("redis", redisConfig)`; the factory resolves the name through `ServiceLoader`. The Jedis client is an optional dependency and must be on the job classpath.
 
 ## Vector memory
 
 Default: in-JVM brute-force KNN over Flink `MapState`. At d=768, brute-force handles the typical "conversation-local recall" workload (hundreds to low thousands of vectors per key) in well under a millisecond. The state itself is checkpointed; no graph is materialized outside of an active search.
 
 ```java
-agent = Agent.builder()
-    .withVectorMemory(FlinkStateVectorMemory.spec(768))
-    .build();
+VectorMemorySpec spec = FlinkStateVectorMemory.spec(768);
 ```
 
-For larger graphs (10⁵+ vectors per key), drop in a JVector- or Lucene-HNSW-backed `VectorMemorySpec` via `ServiceLoader`. The default does not pull a heavyweight ANN library into the artifact.
+A `VectorMemorySpec` is bound in `open()` the same way as a `ShortTermMemorySpec`; `SingleOperatorCorpus.spec(name, vectorSpec)` is the shipped consumer. `AgentBuilder.withVectorMemory(spec)` records the spec on the `Agent` but no operator reads it yet.
+
+For larger graphs the module ships `FlinkStateHnswVectorMemory.spec(dimension)`, a per-key HNSW-style index over the same Flink `MapState` that is rebuilt from state on first access after a restore. Any other `VectorMemorySpec` implementation can be passed in the same place; there is no `ServiceLoader` lookup for `VectorMemorySpec`. The default does not pull a heavyweight ANN library into the artifact.
 
 ## Memory feeds (now `Channel<KeyedContextItem>`)
 
@@ -69,6 +68,8 @@ agent = Agent.builder()
     .build();
 ```
 
+`withMemoryChannel` records the channels on the `Agent`; no operator in this repository consumes that list yet, so wire channels into your job graph directly (see [`docs/channels.md`](channels.md)).
+
 Channels are transport-agnostic: a `RedisPubSubChannel`, `WebhookChannel`,
 or custom `Channel<KeyedContextItem>` works the same way. See
 [`docs/channels.md`](channels.md) for the full SPI.
@@ -76,8 +77,11 @@ or custom `Channel<KeyedContextItem>` works the same way. See
 ## Service discovery
 
 The framework discovers `LongTermMemoryStore`, `VectorStore`, and
-`ShortTermMemorySpec` implementations through `java.util.ServiceLoader`.
-Channels are configured programmatically through `AgentBuilder` /
-`ChannelRegistry`. Built-in service entries live under
-`src/main/resources/META-INF/services/`; third parties register their own
-by dropping a jar that contains the matching service files.
+`ConversationStore` implementations through `java.util.ServiceLoader`.
+`ShortTermMemorySpec` and `VectorMemorySpec` are passed programmatically.
+Built-in service entries live under `src/main/resources/META-INF/services/`;
+third parties register their own by dropping a jar that contains the matching
+service files. See [Storage Architecture](reference/storage-architecture.md)
+for the registered classes and
+[Creating Storage Backends](guides/creating-storage-backends.md) for the
+registration procedure.

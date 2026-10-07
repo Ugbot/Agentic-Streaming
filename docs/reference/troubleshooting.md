@@ -38,15 +38,15 @@ $ java -version
    where java
    ```
 
-2. **Install Java 17 or higher:**
+2. **Install Java 21:**
    - Download from https://adoptium.net/
-   - Choose your OS and Java 17+
+   - Choose your OS and Java 21 (the project baseline; the build fails on older JDKs)
    - Run the installer
 
 3. **Verify installation:**
    ```bash
    java -version
-   # Should show: openjdk version "11.0.x" or higher
+   # Should show: openjdk version "21.x.x"
    ```
 
 4. **If still not working, add to PATH:**
@@ -76,34 +76,17 @@ $ mvn -version
 -bash: mvn: command not found
 ```
 
-**Cause:** Maven is not installed or not in your PATH.
+**Cause:** Maven is not installed system wide. The repository does not need it.
 
-**Solution:**
+**Solution:** use the Maven wrapper that is checked in at the repository root; it downloads the
+pinned Maven version on first use:
 
-1. **Install Maven:**
+```bash
+./mvnw -version
+# Prints the Maven version and the Java 21 runtime it found
+```
 
-**On Mac:**
-   ```bash
-   brew install maven
-   ```
-
-**On Linux:**
-   ```bash
-   sudo apt-get install maven  # Ubuntu/Debian
-   # or
-   sudo yum install maven      # CentOS/RHEL
-   ```
-
-**On Windows:**
-   - Download from https://maven.apache.org/download.cgi
-   - Extract to `C:\Program Files\Maven`
-   - Add `C:\Program Files\Maven\bin` to PATH
-
-2. **Verify:**
-   ```bash
-   mvn -version
-   # Should show Maven version 3.6 or higher
-   ```
+On Windows use `mvnw.cmd` in place of `./mvnw`.
 
 ---
 
@@ -166,7 +149,7 @@ Could not resolve dependencies for project org.agentic.flink:agentic-flink:jar:1
 2. **Clear Maven cache and retry:**
    ```bash
    rm -rf ~/.m2/repository
-   mvn clean package
+   ./mvnw clean package
    ```
 
 3. **Try with different Maven repository:**
@@ -182,7 +165,7 @@ Could not resolve dependencies for project org.agentic.flink:agentic-flink:jar:1
 
 4. **Use Maven with debug output:**
    ```bash
-   mvn clean package -X
+   ./mvnw clean package -X
    ```
 
 ---
@@ -205,7 +188,7 @@ Could not resolve dependencies for project org.agentic.flink:agentic-flink:jar:1
 
 2. **Reimport Maven project:**
    ```bash
-   mvn clean install
+   ./mvnw clean install
    ```
 
 3. **If using IDE (IntelliJ/Eclipse):**
@@ -214,7 +197,7 @@ Could not resolve dependencies for project org.agentic.flink:agentic-flink:jar:1
 
 4. **Verify Java version:**
    ```bash
-   mvn -version
+   ./mvnw -version
    # Check Java version matches requirements
    ```
 
@@ -235,13 +218,13 @@ java.lang.OutOfMemoryError: Java heap space
 1. **Increase Maven memory:**
    ```bash
    export MAVEN_OPTS="-Xmx2g -XX:MaxMetaspaceSize=512m"
-   mvn clean package
+   ./mvnw clean package
    ```
 
 2. **On Windows:**
    ```cmd
    set MAVEN_OPTS=-Xmx2g -XX:MaxMetaspaceSize=512m
-   mvn clean package
+   ./mvnw clean package
    ```
 
 3. **Or create `.mvn/jvm.config`:**
@@ -279,13 +262,13 @@ org.agentic.flink.example.SimpleAgentExample
 
 3. **Rebuild with clean:**
    ```bash
-   mvn clean package
+   ./mvnw clean package
    ```
 
 4. **Run with correct classpath:**
    ```bash
-   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-     org.agentic.flink.example.SimpleAgentExample
+   ./mvnw -q -P examples compile exec:exec \
+     -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob -Dexec.args=memory
    ```
 
 ---
@@ -301,13 +284,15 @@ Error: Could not find or load main class org.agentic.flink.example.SimpleAgentEx
 
 **Solution:**
 
-1. **Use correct syntax:**
+1. **Use the `examples` profile instead of `java -cp`:**
    ```bash
-   # Correct
-   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample
+   # Correct: the forked JVM gets Flink (a provided dependency) on its classpath
+   ./mvnw -q -P examples compile exec:exec \
+     -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob -Dexec.args=memory
 
-   # Wrong (missing -cp)
-   java target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample
+   # Wrong: the uber jar excludes the provided Flink runtime, so this fails with
+   # NoClassDefFoundError: org/apache/flink/configuration/ReadableConfig
+   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample
    ```
 
 2. **Check package name:**
@@ -318,7 +303,7 @@ Error: Could not find or load main class org.agentic.flink.example.SimpleAgentEx
 
 3. **Rebuild:**
    ```bash
-   mvn clean package -DskipTests
+   ./mvnw clean package -DskipTests
    ```
 
 ---
@@ -336,12 +321,12 @@ java.lang.NoSuchMethodError: 'void org.apache.flink.streaming.api.environment.St
 
 1. **Check dependency tree:**
    ```bash
-   mvn dependency:tree
+   ./mvnw dependency:tree
    ```
 
 2. **Look for version conflicts:**
    ```bash
-   mvn dependency:tree | grep flink
+   ./mvnw dependency:tree | grep flink
    ```
 
 3. **Force specific version in `pom.xml`:**
@@ -359,7 +344,7 @@ java.lang.NoSuchMethodError: 'void org.apache.flink.streaming.api.environment.St
 
 4. **Clean and rebuild:**
    ```bash
-   mvn clean install -U
+   ./mvnw clean install -U
    ```
 
 ---
@@ -522,9 +507,9 @@ Connection refused
 
 **Solution:**
 
-1. **Start Qdrant with Docker:**
+1. **Start Qdrant with Podman:**
    ```bash
-   docker run -d -p 6333:6333 qdrant/qdrant
+   podman run -d -p 6333:6333 qdrant/qdrant
    ```
 
 2. **Verify it's running:**
@@ -533,14 +518,14 @@ Connection refused
    # Should return Qdrant version info
    ```
 
-3. **Check Docker status:**
+3. **Check the container status:**
    ```bash
-   docker ps | grep qdrant
+   podman ps | grep qdrant
    ```
 
 4. **View Qdrant logs:**
    ```bash
-   docker logs <container-id>
+   podman logs <container-id>
    ```
 
 5. **Access Qdrant dashboard:**
@@ -698,21 +683,18 @@ Exception in thread "main"
 
 **Solution:**
 
-1. **Increase heap size:**
+1. **Increase heap size:** the `examples` profile forks a JVM, which reads `JAVA_TOOL_OPTIONS`:
    ```bash
-   java -Xmx4g -Xms1g \
-     -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-     org.agentic.flink.example.SimpleAgentExample
+   JAVA_TOOL_OPTIONS="-Xmx4g -Xms1g" ./mvnw -q -P examples compile exec:exec \
+     -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob -Dexec.args=memory
    ```
 
 2. **For persistent fix, create run script:**
    ```bash
    #!/bin/bash
-   java -Xmx4g -Xms1g \
-        -XX:+UseG1GC \
-        -XX:MaxMetaspaceSize=512m \
-        -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-        org.agentic.flink.example.SimpleAgentExample
+   export JAVA_TOOL_OPTIONS="-Xmx4g -Xms1g -XX:+UseG1GC -XX:MaxMetaspaceSize=512m"
+   ./mvnw -q -P examples compile exec:exec \
+     -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob -Dexec.args=memory
    ```
 
 3. **Monitor memory usage:**
@@ -1043,20 +1025,20 @@ public void testOllamaConnection() {
 # 1. Stop everything
 pkill java
 pkill ollama
-docker stop $(docker ps -q)
+podman stop $(podman ps -q)
 
 # 2. Clean build
-cd /Users/bengamble/Agentic-Flink
+cd Agentic-Streaming
 rm -rf target/
 rm -rf ~/.m2/repository/org/agentic
-mvn clean
+./mvnw clean
 
 # 3. Rebuild
-mvn package
+./mvnw package
 
 # 4. Restart services
 ollama serve &
-docker run -d -p 6333:6333 qdrant/qdrant
+podman run -d -p 6333:6333 qdrant/qdrant
 
 # 5. Wait 10 seconds
 sleep 10
@@ -1066,8 +1048,8 @@ ollama pull llama2:latest
 ollama pull nomic-embed-text
 
 # 7. Test
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.SimpleAgentExample
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob -Dexec.args=memory
 ```
 
 ---

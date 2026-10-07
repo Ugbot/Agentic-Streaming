@@ -311,6 +311,8 @@ Annotated tool classes are plain Java objects, so test them directly:
 
 ```java
 import static org.junit.jupiter.api.Assertions.*;
+
+import org.agentic.flink.tools.builtin.CalculatorTools;
 import org.junit.jupiter.api.Test;
 
 class CalculatorToolsTest {
@@ -336,6 +338,9 @@ Verify that your tools are discovered correctly:
 
 ```java
 import static org.junit.jupiter.api.Assertions.*;
+
+import org.agentic.flink.core.ToolDefinition;
+import org.agentic.flink.langchain.ToolAnnotationRegistry;
 import org.junit.jupiter.api.Test;
 
 class ToolAnnotationRegistryTest {
@@ -371,10 +376,11 @@ Test execution, validation, and error handling:
 
 ```java
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.Test;
+
 import java.util.Map;
-import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
+import org.agentic.flink.example.SimpleCalculatorTool;
+import org.junit.jupiter.api.Test;
 
 class SimpleCalculatorToolTest {
 
@@ -416,8 +422,11 @@ class SimpleCalculatorToolTest {
 
 ```java
 import static org.junit.jupiter.api.Assertions.*;
-import org.junit.jupiter.api.Test;
+
 import java.util.Set;
+import org.agentic.flink.example.SimpleCalculatorTool;
+import org.agentic.flink.tool.ToolRegistry;
+import org.junit.jupiter.api.Test;
 
 class ToolRegistryTest {
 

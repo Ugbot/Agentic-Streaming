@@ -1,24 +1,30 @@
 # Creating Storage Backends
 
-This guide covers how to implement custom storage backends for the Agentic Flink multi-tier memory architecture. The storage system is organized into tiers with different latency profiles, and each tier defines an interface you can implement against any backing store.
+This guide explains how to add a storage backend to the Flink framework module and how it becomes visible to `StorageFactory`. The registration mechanism is `java.util.ServiceLoader` plus a `META-INF/services` file; `StorageFactory` is not edited when a backend is added. Read [Storage Architecture](../reference/storage-architecture.md) first for what ships today and which factory names resolve.
 
-## Storage Architecture
+The procedure below is executed by `src/test/java/org/agentic/flink/storage/toy/ToyBackendRegistrationTest.java`, which registers the toy backend listed in this guide through a test-scope service file and resolves it through the factory. Run it with:
 
-Agentic Flink uses a tiered storage model defined by the `StorageTier` enum:
+```bash
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw test -Dtest=ToyBackendRegistrationTest -Dsurefire.failIfNoSpecifiedTests=false
+```
 
-| Tier | Latency | Purpose | Existing Backends |
+Java snippets in this guide that start with a `package` line are compiled by `docs/tools/check_java_snippets.py` (run through `pytest docs/tools/test_docs.py`). Snippets without a `package` line are fragments.
+
+## Extension points
+
+| Interface | Tier | Registration | Resolved by |
 |---|---|---|---|
-| HOT | <1ms | Active conversation context, recent tool results | `InMemoryShortTermStore`, `RedisShortTermStore` |
-| WARM | 1-10ms | Conversation persistence, long-term facts | `InMemoryLongTermStore`, `RedisConversationStore`, `PostgresConversationStore` |
-| COLD | 10-100ms | Historical data, analytics | (planned: S3, ClickHouse) |
-| VECTOR | 5-50ms | Semantic search over embeddings | (planned: Qdrant, Pinecone, Weaviate, pgvector) |
-| CHECKPOINT | <1ms local | Flink-managed fault tolerance | Managed by Flink (RocksDB, HashMapStateBackend) |
+| `org.agentic.flink.memory.ShortTermMemorySpec` | HOT (Flink keyed state) | Passed as an object; no ServiceLoader | `spec.bind(getRuntimeContext())` in `RichFunction.open()` |
+| `org.agentic.flink.storage.LongTermMemoryStore` | WARM | `META-INF/services/org.agentic.flink.storage.LongTermMemoryStore` | `StorageFactory.createLongTermStore(name, config)` |
+| `org.agentic.flink.storage.VectorStore` | VECTOR | `META-INF/services/org.agentic.flink.storage.VectorStore` | `StorageFactory.createVectorStore(name, config)` |
+| `org.agentic.flink.memory.conversation.ConversationStore` | shared transcript | `META-INF/services/org.agentic.flink.memory.conversation.ConversationStore` | `ConversationStores.discover()` |
 
-All storage providers implement `StorageProvider<K, V>`, the base interface. The HOT and WARM tiers have specialized sub-interfaces (`ShortTermMemoryStore` and `LongTermMemoryStore`) that add tier-specific operations.
+`StorageFactory.createShortTermStore` accepts only `"memory"` (the legacy `InMemoryShortTermStore`). A new HOT tier backend is therefore not a `ShortTermMemoryStore` registered anywhere; it is a `ShortTermMemorySpec` whose `bind` method returns a `ShortTermMemory`. The shipped implementation is `FlinkStateShortTermMemory`, and a job that needs a different short-term behaviour passes its own spec to the operator that binds it.
 
-### StorageProvider Base Interface
+## Requirements common to every provider
 
-Every storage backend implements this contract:
+`StorageProvider<K, V>` is the base interface for the WARM and VECTOR tiers:
 
 ```java
 public interface StorageProvider<K, V> extends Serializable {
@@ -36,641 +42,327 @@ public interface StorageProvider<K, V> extends Serializable {
 }
 ```
 
-Key requirements:
+- The class must have a public no-argument constructor. `ServiceLoader` instantiates it, then `StorageFactory` calls `initialize(config)`.
+- The class must be `Serializable`. Flink ships operator fields to task managers, so connections, clients, and thread pools are `transient` and are reopened from the retained configuration. Extend `org.agentic.flink.storage.ReopenableStore` to get this for free: it keeps the `config` map, calls your `open(config)` from `initialize`, and reopens lazily through `ensureOpen()` after deserialization.
+- `close()` and `delete()` must be idempotent.
+- `getProviderName()` is the short name users pass to the factory. Without an override it is the simple class name.
 
-- **Serializable**: Flink serializes operators across the cluster. Use `transient` for non-serializable resources (connections, thread pools) and reinitialize them in `initialize()`.
-- **initialize()**: Called once after construction to establish connections and configure the backend. The `config` map carries backend-specific key-value pairs.
-- **close()**: Must be idempotent. Release all resources (connections, clients, threads).
-- **delete()**: Must be idempotent. Deleting a nonexistent key must not throw.
+## Implementing a LongTermMemoryStore
 
-## Implementing ShortTermMemoryStore (HOT Tier)
+`LongTermMemoryStore extends StorageProvider<String, AgentContext>` and adds the conversation and fact operations listed in its Javadoc (`saveContext`, `loadContext`, `conversationExists`, `deleteConversation`, `saveFacts`, `loadFacts`, `addFact`, `removeFact`, `listActiveConversations`, `listConversationsForUser`, `getConversationMetadata`, `setConversationTTL`, `archiveConversation`). `getTier()` defaults to `StorageTier.WARM` and `getExpectedLatencyMs()` to 5.
 
-The `ShortTermMemoryStore` interface stores `List<ContextItem>` keyed by a flow ID string. It extends `StorageProvider<String, List<ContextItem>>` and adds methods for item-level operations, statistics, and TTL.
-
-### Interface Methods
-
-Beyond the base `StorageProvider` methods, you must implement:
-
-| Method | Purpose |
-|---|---|
-| `putItems(flowId, items)` | Replace all items for a conversation |
-| `getItems(flowId)` | Retrieve all items (returns empty list if none) |
-| `addItem(flowId, item)` | Append a single item |
-| `removeItem(flowId, itemId)` | Remove a specific item by ID |
-| `getItemCount(flowId)` | Return item count without fetching all data |
-| `clearItems(flowId)` | Remove all items for a conversation |
-| `getStatistics()` | Return monitoring metrics (total_items, active_conversations, cache_hit_rate, avg_items_per_conversation) |
-| `setTTL(flowId, ttlSeconds)` | Set per-conversation expiration |
-
-The interface provides default implementations for `getTier()` (returns `StorageTier.HOT`) and `getExpectedLatencyMs()` (returns 1).
-
-### Example: Caffeine-backed ShortTermMemoryStore
+The following complete class is the toy backend used by `ToyBackendRegistrationTest`. It keeps everything in transient maps so the guide can be verified without an external service; a real backend replaces the maps with a client and keeps the same shape.
 
 ```java
-package org.agentic.flink.storage.caffeine;
-
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.ShortTermMemoryStore;
-import org.agentic.flink.storage.StorageTier;
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-public class CaffeineShortTermStore implements ShortTermMemoryStore {
-
-    private static final Logger LOG = LoggerFactory.getLogger(CaffeineShortTermStore.class);
-
-    private transient Cache<String, List<ContextItem>> cache;
-    private long ttlSeconds = 3600;
-    private int maxSize = 10000;
-
-    @Override
-    public void initialize(Map<String, String> config) throws Exception {
-        this.ttlSeconds = Long.parseLong(config.getOrDefault("cache.ttl.seconds", "3600"));
-        this.maxSize = Integer.parseInt(config.getOrDefault("cache.max.size", "10000"));
-
-        this.cache = Caffeine.newBuilder()
-            .maximumSize(maxSize)
-            .expireAfterAccess(ttlSeconds, TimeUnit.SECONDS)
-            .recordStats()
-            .build();
-
-        LOG.info("CaffeineShortTermStore initialized: maxSize={}, ttl={}s", maxSize, ttlSeconds);
-    }
-
-    @Override
-    public void put(String key, List<ContextItem> value) throws Exception {
-        putItems(key, value);
-    }
-
-    @Override
-    public Optional<List<ContextItem>> get(String key) throws Exception {
-        List<ContextItem> items = getItems(key);
-        return items.isEmpty() ? Optional.empty() : Optional.of(items);
-    }
-
-    @Override
-    public void putItems(String flowId, List<ContextItem> items) throws Exception {
-        if (flowId == null || items == null) {
-            throw new IllegalArgumentException("flowId and items cannot be null");
-        }
-        cache.put(flowId, new ArrayList<>(items));
-    }
-
-    @Override
-    public List<ContextItem> getItems(String flowId) throws Exception {
-        if (flowId == null) {
-            throw new IllegalArgumentException("flowId cannot be null");
-        }
-        List<ContextItem> items = cache.getIfPresent(flowId);
-        return items != null ? new ArrayList<>(items) : new ArrayList<>();
-    }
-
-    @Override
-    public void addItem(String flowId, ContextItem item) throws Exception {
-        if (flowId == null || item == null) {
-            throw new IllegalArgumentException("flowId and item cannot be null");
-        }
-        List<ContextItem> items = cache.getIfPresent(flowId);
-        if (items == null) {
-            items = new ArrayList<>();
-        }
-        items.add(item);
-        cache.put(flowId, items);
-    }
-
-    @Override
-    public void removeItem(String flowId, String itemId) throws Exception {
-        if (flowId == null || itemId == null) {
-            throw new IllegalArgumentException("flowId and itemId cannot be null");
-        }
-        List<ContextItem> items = cache.getIfPresent(flowId);
-        if (items != null) {
-            items.removeIf(item -> itemId.equals(item.getItemId()));
-            cache.put(flowId, items);
-        }
-    }
-
-    @Override
-    public int getItemCount(String flowId) throws Exception {
-        if (flowId == null) {
-            throw new IllegalArgumentException("flowId cannot be null");
-        }
-        List<ContextItem> items = cache.getIfPresent(flowId);
-        return items != null ? items.size() : 0;
-    }
-
-    @Override
-    public void clearItems(String flowId) throws Exception {
-        if (flowId == null) {
-            throw new IllegalArgumentException("flowId cannot be null");
-        }
-        cache.invalidate(flowId);
-    }
-
-    @Override
-    public Map<String, Object> getStatistics() throws Exception {
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("active_conversations", cache.estimatedSize());
-        stats.put("cache_hit_rate", cache.stats().hitRate());
-        stats.put("hit_count", cache.stats().hitCount());
-        stats.put("miss_count", cache.stats().missCount());
-        stats.put("max_size", maxSize);
-        stats.put("ttl_seconds", ttlSeconds);
-        return stats;
-    }
-
-    @Override
-    public void setTTL(String flowId, long ttlSeconds) throws Exception {
-        // Caffeine does not support per-entry TTL; this is a no-op.
-        // The global TTL configured at initialization applies to all entries.
-        LOG.debug("Per-entry TTL not supported by Caffeine; global TTL is {}s", this.ttlSeconds);
-    }
-
-    @Override
-    public void delete(String key) throws Exception {
-        clearItems(key);
-    }
-
-    @Override
-    public boolean exists(String key) throws Exception {
-        return key != null && cache.getIfPresent(key) != null;
-    }
-
-    @Override
-    public void close() throws Exception {
-        if (cache != null) {
-            cache.invalidateAll();
-            cache.cleanUp();
-        }
-        LOG.info("CaffeineShortTermStore closed");
-    }
-
-    @Override
-    public StorageTier getTier() {
-        return StorageTier.HOT;
-    }
-
-    @Override
-    public long getExpectedLatencyMs() {
-        return 0; // Sub-millisecond
-    }
-}
-```
-
-## Implementing LongTermMemoryStore (WARM Tier)
-
-The `LongTermMemoryStore` interface stores `AgentContext` objects and supports conversation management (facts, metadata, TTL, archival). It extends `StorageProvider<String, AgentContext>`.
-
-### Interface Methods
-
-Beyond the base methods, you must implement:
-
-| Method | Purpose |
-|---|---|
-| `saveContext(flowId, context)` | Persist complete agent context |
-| `loadContext(flowId)` | Load context (returns `Optional.empty()` if not found or expired) |
-| `conversationExists(flowId)` | Check existence without loading full context |
-| `deleteConversation(flowId)` | Remove conversation and all associated data |
-| `saveFacts(flowId, facts)` | Replace all long-term facts for a conversation |
-| `loadFacts(flowId)` | Load facts (returns empty map if none) |
-| `addFact(flowId, factId, fact)` | Add or update a single fact |
-| `removeFact(flowId, factId)` | Remove a specific fact |
-| `listActiveConversations()` | List all non-expired conversation IDs |
-| `listConversationsForUser(userId)` | List conversations for a user |
-| `getConversationMetadata(flowId)` | Get lightweight metadata (created_at, last_updated_at, user_id, agent_id, turn_count) |
-| `setConversationTTL(flowId, ttlSeconds)` | Set conversation expiration |
-| `archiveConversation(flowId, coldStore)` | Move conversation to cold tier |
-
-The interface provides default implementations for `getTier()` (returns `StorageTier.WARM`) and `getExpectedLatencyMs()` (returns 5).
-
-### Implementation Pattern
-
-Here is the skeleton for a DynamoDB-backed long-term store, showing the structure you would follow for any new backend:
-
-```java
-package org.agentic.flink.storage.dynamodb;
+package org.agentic.flink.storage.toy;
 
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.LongTermMemoryStore;
+import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
-import org.agentic.flink.storage.StorageTier;
-import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
-public class DynamoDbLongTermStore implements LongTermMemoryStore {
+public final class ToyLongTermStore extends ReopenableStore implements LongTermMemoryStore {
 
-    private static final Logger LOG = LoggerFactory.getLogger(DynamoDbLongTermStore.class);
+  private static final long serialVersionUID = 1L;
 
-    // Mark non-serializable resources as transient
-    private transient Object dynamoClient; // Replace with actual DynamoDB client type
-    private String tableName;
-    private String region;
+  public static final String PROVIDER_NAME = "toy";
+  public static final String NAMESPACE_KEY = "toy.namespace";
 
-    @Override
-    public void initialize(Map<String, String> config) throws Exception {
-        this.tableName = config.getOrDefault("dynamodb.table", "agent_conversations");
-        this.region = config.getOrDefault("dynamodb.region", "us-east-1");
+  private String namespace;
+  private transient Map<String, AgentContext> contexts;
+  private transient Map<String, Map<String, ContextItem>> facts;
+  private transient Map<String, Long> ttlSeconds;
 
-        // Initialize the DynamoDB client
-        // this.dynamoClient = DynamoDbClient.builder()
-        //     .region(Region.of(region))
-        //     .build();
+  @Override
+  protected void open(Map<String, String> config) {
+    this.namespace = config.getOrDefault(NAMESPACE_KEY, "default");
+    this.contexts = new HashMap<>();
+    this.facts = new HashMap<>();
+    this.ttlSeconds = new HashMap<>();
+  }
 
-        LOG.info("DynamoDbLongTermStore initialized: table={}, region={}", tableName, region);
+  public String getNamespace() {
+    return namespace;
+  }
+
+  @Override
+  public String getProviderName() {
+    return PROVIDER_NAME;
+  }
+
+  @Override
+  public void put(String key, AgentContext value) throws Exception {
+    saveContext(key, value);
+  }
+
+  @Override
+  public Optional<AgentContext> get(String key) throws Exception {
+    return loadContext(key);
+  }
+
+  @Override
+  public void delete(String key) throws Exception {
+    deleteConversation(key);
+  }
+
+  @Override
+  public boolean exists(String key) throws Exception {
+    return conversationExists(key);
+  }
+
+  @Override
+  public void close() {
+    markClosed();
+  }
+
+  @Override
+  public void saveContext(String flowId, AgentContext context) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    requireNonNull(context, "context");
+    contexts.put(flowId, context);
+  }
+
+  @Override
+  public Optional<AgentContext> loadContext(String flowId) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    return Optional.ofNullable(contexts.get(flowId));
+  }
+
+  @Override
+  public boolean conversationExists(String flowId) {
+    ensureOpen();
+    return flowId != null && contexts.containsKey(flowId);
+  }
+
+  @Override
+  public void deleteConversation(String flowId) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    contexts.remove(flowId);
+    facts.remove(flowId);
+    ttlSeconds.remove(flowId);
+  }
+
+  @Override
+  public void saveFacts(String flowId, Map<String, ContextItem> newFacts) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    requireNonNull(newFacts, "facts");
+    facts.put(flowId, new HashMap<>(newFacts));
+  }
+
+  @Override
+  public Map<String, ContextItem> loadFacts(String flowId) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    Map<String, ContextItem> stored = facts.get(flowId);
+    return stored == null ? new HashMap<>() : new HashMap<>(stored);
+  }
+
+  @Override
+  public void addFact(String flowId, String factId, ContextItem fact) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    requireNonNull(factId, "factId");
+    requireNonNull(fact, "fact");
+    facts.computeIfAbsent(flowId, k -> new HashMap<>()).put(factId, fact);
+  }
+
+  @Override
+  public void removeFact(String flowId, String factId) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    requireNonNull(factId, "factId");
+    Map<String, ContextItem> stored = facts.get(flowId);
+    if (stored != null) {
+      stored.remove(factId);
     }
+  }
 
-    @Override
-    public void put(String key, AgentContext value) throws Exception {
-        saveContext(key, value);
-    }
+  @Override
+  public List<String> listActiveConversations() {
+    ensureOpen();
+    return new ArrayList<>(contexts.keySet());
+  }
 
-    @Override
-    public Optional<AgentContext> get(String key) throws Exception {
-        return loadContext(key);
+  @Override
+  public List<String> listConversationsForUser(String userId) {
+    ensureOpen();
+    requireNonNull(userId, "userId");
+    List<String> out = new ArrayList<>();
+    for (Map.Entry<String, AgentContext> e : contexts.entrySet()) {
+      if (userId.equals(e.getValue().getUserId())) {
+        out.add(e.getKey());
+      }
     }
+    return out;
+  }
 
-    @Override
-    public void saveContext(String flowId, AgentContext context) throws Exception {
-        // Serialize AgentContext and write to DynamoDB
-        // Include metadata: userId, agentId, timestamps
-        throw new UnsupportedOperationException("Implement DynamoDB put logic");
+  @Override
+  public Map<String, Object> getConversationMetadata(String flowId) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    Map<String, Object> meta = new HashMap<>();
+    AgentContext context = contexts.get(flowId);
+    if (context != null) {
+      meta.put("flowId", flowId);
+      meta.put("userId", context.getUserId());
+      meta.put("agentId", context.getAgentId());
+      meta.put("created_at", context.getCreatedAt());
+      meta.put("last_updated_at", context.getLastUpdatedAt());
+      meta.put("ttl_seconds", ttlSeconds.get(flowId));
     }
+    return meta;
+  }
 
-    @Override
-    public Optional<AgentContext> loadContext(String flowId) throws Exception {
-        // Read from DynamoDB and deserialize
-        throw new UnsupportedOperationException("Implement DynamoDB get logic");
-    }
+  @Override
+  public void setConversationTTL(String flowId, long seconds) {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    ttlSeconds.put(flowId, seconds);
+  }
 
-    @Override
-    public boolean conversationExists(String flowId) throws Exception {
-        // Use a lightweight query (project only the key)
-        throw new UnsupportedOperationException("Implement DynamoDB exists check");
+  @Override
+  public void archiveConversation(String flowId, StorageProvider<String, AgentContext> coldStore)
+      throws Exception {
+    ensureOpen();
+    requireNonNull(flowId, "flowId");
+    requireNonNull(coldStore, "coldStore");
+    Optional<AgentContext> context = loadContext(flowId);
+    if (context.isPresent()) {
+      coldStore.put(flowId, context.get());
+      deleteConversation(flowId);
     }
+  }
 
-    @Override
-    public void deleteConversation(String flowId) throws Exception {
-        // Delete the conversation item and all associated fact items
-        throw new UnsupportedOperationException("Implement DynamoDB delete logic");
+  private static void requireNonNull(Object value, String name) {
+    if (value == null) {
+      throw new IllegalArgumentException(name + " cannot be null");
     }
-
-    @Override
-    public void saveFacts(String flowId, Map<String, ContextItem> facts) throws Exception {
-        // Store facts as a nested map or separate items
-        throw new UnsupportedOperationException("Implement facts storage");
-    }
-
-    @Override
-    public Map<String, ContextItem> loadFacts(String flowId) throws Exception {
-        throw new UnsupportedOperationException("Implement facts retrieval");
-    }
-
-    @Override
-    public void addFact(String flowId, String factId, ContextItem fact) throws Exception {
-        throw new UnsupportedOperationException("Implement single fact update");
-    }
-
-    @Override
-    public void removeFact(String flowId, String factId) throws Exception {
-        throw new UnsupportedOperationException("Implement fact removal");
-    }
-
-    @Override
-    public List<String> listActiveConversations() throws Exception {
-        // Scan or query with a GSI for active conversations
-        throw new UnsupportedOperationException("Implement conversation listing");
-    }
-
-    @Override
-    public List<String> listConversationsForUser(String userId) throws Exception {
-        // Query a GSI on userId
-        throw new UnsupportedOperationException("Implement user conversation listing");
-    }
-
-    @Override
-    public Map<String, Object> getConversationMetadata(String flowId) throws Exception {
-        // Project only metadata attributes
-        throw new UnsupportedOperationException("Implement metadata retrieval");
-    }
-
-    @Override
-    public void setConversationTTL(String flowId, long ttlSeconds) throws Exception {
-        // Update the TTL attribute for DynamoDB TTL feature
-        throw new UnsupportedOperationException("Implement TTL update");
-    }
-
-    @Override
-    public void archiveConversation(
-            String flowId, StorageProvider<String, AgentContext> coldStore) throws Exception {
-        Optional<AgentContext> context = loadContext(flowId);
-        if (context.isPresent()) {
-            coldStore.put(flowId, context.get());
-            deleteConversation(flowId);
-            LOG.info("Archived conversation {} to cold storage", flowId);
-        }
-    }
-
-    @Override
-    public void delete(String key) throws Exception {
-        deleteConversation(key);
-    }
-
-    @Override
-    public boolean exists(String key) throws Exception {
-        return conversationExists(key);
-    }
-
-    @Override
-    public void close() throws Exception {
-        // Close the DynamoDB client
-        // if (dynamoClient != null) { dynamoClient.close(); }
-        LOG.info("DynamoDbLongTermStore closed");
-    }
-
-    @Override
-    public StorageTier getTier() {
-        return StorageTier.WARM;
-    }
-
-    @Override
-    public long getExpectedLatencyMs() {
-        return 5;
-    }
+  }
 }
 ```
 
-## Registering with StorageFactory
+`PostgresConversationStore` in `src/main/java/org/agentic/flink/storage/postgres/` is the production example of the same shape with a JDBC connection held in a `transient` field.
 
-After implementing your backend, register it in `StorageFactory` so it can be created by name.
+## Registering the backend
 
-### Step 1: Add the case to the factory switch
+### Step 1: list the class in a service file
 
-Edit `src/main/java/org/agentic/flink/storage/StorageFactory.java`. For a new short-term backend, add a case to `createShortTermStore()`:
+Create (or append to) a file named after the interface, one fully qualified implementation class per line:
 
-```java
-case "caffeine":
-    store = new CaffeineShortTermStore();
-    break;
+```text
+src/main/resources/META-INF/services/org.agentic.flink.storage.LongTermMemoryStore
 ```
 
-For a new long-term backend, add a case to `createLongTermStore()`:
-
-```java
-case "dynamodb":
-    store = new DynamoDbLongTermStore();
-    break;
+```text
+org.agentic.flink.storage.toy.ToyLongTermStore
 ```
 
-### Step 2: Update the available backends list
+For a backend that lives in a separate jar, the file goes into that jar's `META-INF/services/`. `ServiceLoader` merges service files from every jar on the class path, so nothing in `agentic-flink` changes. The toy backend uses the test-scope copy of this file under `src/test/resources/`, which is why it is visible to `./mvnw test` but not to production code.
 
-In `getAvailableBackends()`, add your backend to the returned array for the corresponding tier:
+For a `VectorStore` the file name is `org.agentic.flink.storage.VectorStore`; for a `ConversationStore` it is `org.agentic.flink.memory.conversation.ConversationStore`.
+
+### Step 2: resolve it through StorageFactory
+
+`createLongTermStore` checks the built-in names `memory`, `postgres`, and `postgresql` first and then iterates the discovered providers. A provider matches when the requested name equals, ignoring case, its `getProviderName()`, its simple class name, or its fully qualified class name, or when the request is a substring of the simple class name. Any of the following resolve the toy backend:
 
 ```java
-case HOT:
-    return new String[] {"memory", "redis", "caffeine"};
+Map<String, String> config = Map.of("toy.namespace", "orders");
 
-case WARM:
-    return new String[] {"memory", "redis", "postgresql", "dynamodb"};
+LongTermMemoryStore a = StorageFactory.createLongTermStore("toy", config);
+LongTermMemoryStore b = StorageFactory.createLongTermStore("ToyLongTermStore", config);
+LongTermMemoryStore c =
+    StorageFactory.createLongTermStore("org.agentic.flink.storage.toy.ToyLongTermStore", config);
 ```
 
-### Step 3: Use via StorageFactory
+A provider whose constructor throws (for example because an optional client library is absent) is skipped with a debug log and does not prevent other providers from resolving.
 
-Once registered, your backend can be created by name:
+### Step 3: know what `getAvailableBackends` reports
 
-```java
-Map<String, String> config = new HashMap<>();
-config.put("cache.max.size", "50000");
-config.put("cache.ttl.seconds", "1800");
+`StorageFactory.getAvailableBackends(StorageTier.WARM)` returns `memory`, `postgres`, `postgresql`, the simple class name of every discovered provider, and the aliases `redis`, `postgres`, `dynamodb`, and `cassandra` when a class name contains that word. It does not include `getProviderName()`. Consequently:
 
-ShortTermMemoryStore store = StorageFactory.createShortTermStore("caffeine", config);
-```
+- `isBackendAvailable(WARM, "ToyLongTermStore")` is `true`;
+- `isBackendAvailable(WARM, "toy")` is `false`, even though `createLongTermStore("toy", ...)` works.
 
-### Using StorageConfiguration
-
-You can also configure tiers programmatically via `StorageConfiguration`:
+`StorageConfiguration.validate()` uses `isBackendAvailable` and throws `IllegalStateException` for a name it does not find, so a `StorageConfiguration` must name the class:
 
 ```java
-StorageConfiguration storageConfig = StorageConfiguration.builder()
-    .withHotTier("caffeine", Map.of(
-        "cache.max.size", "50000",
-        "cache.ttl.seconds", "1800"))
-    .withWarmTier("dynamodb", Map.of(
-        "dynamodb.table", "agent_conversations",
-        "dynamodb.region", "us-east-1"))
+StorageConfiguration storage = StorageConfiguration.builder()
+    .withWarmTier("ToyLongTermStore", Map.of("toy.namespace", "orders"))
     .build();
-
-ShortTermMemoryStore hotStore = storageConfig.createShortTermStore();
-LongTermMemoryStore warmStore = storageConfig.createLongTermStore();
+LongTermMemoryStore store = storage.createLongTermStore();
 ```
 
-## Testing Storage Backends
+`StorageConfiguration.fromYamlFile` and `fromResource` are not implemented; they log a warning and return an empty configuration.
 
-### Unit Test Pattern
+## Implementing a VectorStore
 
-Follow the pattern established in `StorageFactoryTest`. Test creation, configuration propagation, CRUD operations, and error handling:
+`VectorStore extends StorageProvider<String, float[]>` and adds `storeEmbedding`, `storeEmbeddingsBatch`, `searchSimilar`, `searchSimilarWithFilter`, `storeContextItem`, `searchContextItems`, `getEmbedding`, `getMetadata`, `deleteEmbedding`, `deleteByFlowId`, `getEmbeddingDimension`, `getSimilarityMetric`, `getStatistics`, and `createCollection`. Registration is the same service-file mechanism with `org.agentic.flink.storage.VectorStore` as the file name. `createVectorStore` has no built-in names and matches only `getProviderName()`, the simple class name, or the fully qualified class name (no substring alias). `getAvailableBackends(VECTOR)` returns simple class names only.
 
-```java
-package org.agentic.flink.storage.caffeine;
+Four of the shipped implementations (`InMemoryVectorStore`, `QdrantVectorStore`, `MilvusVectorStore`, `FlussVectorStore`) read the dimension from `vector.dimension`; `PgVectorStore` reads `postgres.dimension`. Prefer `vector.dimension` in a new backend so callers can switch between the majority of backends without changing keys. `VectorStoreDiscoveryTest` in `src/test/java/org/agentic/flink/storage/vector/` shows the discovery assertions to copy.
 
-import static org.junit.jupiter.api.Assertions.*;
+## Testing a backend
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.ShortTermMemoryStore;
-import org.agentic.flink.storage.StorageFactory;
-import org.agentic.flink.storage.StorageTier;
-import java.util.*;
-import org.junit.jupiter.api.*;
-
-class CaffeineShortTermStoreTest {
-
-    private ShortTermMemoryStore store;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        Map<String, String> config = new HashMap<>();
-        config.put("cache.max.size", "1000");
-        config.put("cache.ttl.seconds", "60");
-        store = StorageFactory.createShortTermStore("caffeine", config);
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        if (store != null) {
-            store.close();
-        }
-    }
-
-    @Test
-    void tierIsHot() {
-        assertEquals(StorageTier.HOT, store.getTier());
-    }
-
-    @Test
-    void putAndGetItems() throws Exception {
-        String flowId = UUID.randomUUID().toString();
-        List<ContextItem> items = List.of(
-            new ContextItem("item-1", "First item"),
-            new ContextItem("item-2", "Second item")
-        );
-
-        store.putItems(flowId, items);
-        List<ContextItem> retrieved = store.getItems(flowId);
-
-        assertEquals(2, retrieved.size());
-    }
-
-    @Test
-    void getItemsReturnsEmptyListForUnknownFlow() throws Exception {
-        List<ContextItem> items = store.getItems("nonexistent-flow");
-        assertNotNull(items);
-        assertTrue(items.isEmpty());
-    }
-
-    @Test
-    void addItemAppendsToExistingList() throws Exception {
-        String flowId = UUID.randomUUID().toString();
-        store.putItems(flowId, new ArrayList<>(List.of(
-            new ContextItem("item-1", "First")
-        )));
-
-        store.addItem(flowId, new ContextItem("item-2", "Second"));
-
-        assertEquals(2, store.getItemCount(flowId));
-    }
-
-    @Test
-    void clearItemsRemovesAllItems() throws Exception {
-        String flowId = UUID.randomUUID().toString();
-        store.putItems(flowId, List.of(new ContextItem("item-1", "Data")));
-
-        store.clearItems(flowId);
-
-        assertEquals(0, store.getItemCount(flowId));
-        assertFalse(store.exists(flowId));
-    }
-
-    @Test
-    void statisticsReturnsMetrics() throws Exception {
-        Map<String, Object> stats = store.getStatistics();
-        assertNotNull(stats);
-        assertTrue(stats.containsKey("max_size"));
-        assertTrue(stats.containsKey("ttl_seconds"));
-    }
-
-    @Test
-    void closeIsIdempotent() throws Exception {
-        store.close();
-        assertDoesNotThrow(() -> store.close());
-    }
-
-    @Test
-    void nullFlowIdThrows() {
-        assertThrows(IllegalArgumentException.class, () -> store.putItems(null, List.of()));
-        assertThrows(IllegalArgumentException.class, () -> store.getItems(null));
-    }
-}
-```
-
-### Testing Long-Term Store Implementations
-
-For `LongTermMemoryStore`, test the full lifecycle of conversations and facts:
+`ToyBackendRegistrationTest` covers the registration contract; copy its structure for a new backend:
 
 ```java
 @Test
-void saveAndLoadContext() throws Exception {
-    String flowId = UUID.randomUUID().toString();
-    AgentContext context = createTestContext(flowId);
+void factoryResolvesProviderName() throws Exception {
+  String namespace = UUID.randomUUID().toString();
+  Map<String, String> config = new HashMap<>();
+  config.put(ToyLongTermStore.NAMESPACE_KEY, namespace);
 
-    store.saveContext(flowId, context);
-    Optional<AgentContext> loaded = store.loadContext(flowId);
+  LongTermMemoryStore store = StorageFactory.createLongTermStore("toy", config);
 
-    assertTrue(loaded.isPresent());
-    assertEquals(flowId, loaded.get().getFlowId());
-}
-
-@Test
-void deleteConversationRemovesContextAndFacts() throws Exception {
-    String flowId = UUID.randomUUID().toString();
-    store.saveContext(flowId, createTestContext(flowId));
-    store.saveFacts(flowId, Map.of("key", new ContextItem("fact-1", "value")));
-
-    store.deleteConversation(flowId);
-
-    assertFalse(store.conversationExists(flowId));
-    assertTrue(store.loadFacts(flowId).isEmpty());
-}
-
-@Test
-void addFactDoesNotOverwriteOtherFacts() throws Exception {
-    String flowId = UUID.randomUUID().toString();
-    store.saveFacts(flowId, Map.of("tier", new ContextItem("f1", "premium")));
-    store.addFact(flowId, "language", new ContextItem("f2", "en"));
-
-    Map<String, ContextItem> facts = store.loadFacts(flowId);
-    assertEquals(2, facts.size());
-    assertNotNull(facts.get("tier"));
-    assertNotNull(facts.get("language"));
+  ToyLongTermStore toy = assertInstanceOf(ToyLongTermStore.class, store);
+  assertEquals(namespace, toy.getNamespace());
+  assertEquals(StorageTier.WARM, toy.getTier());
 }
 ```
 
-### Integration Testing with Testcontainers
-
-For backends that require external services (Redis, PostgreSQL, DynamoDB), use Testcontainers:
+Behavioural tests build `ContextItem` values with the explicit constructor `ContextItem(String content, ContextPriority priority, MemoryType memoryType)`; `ContextItem` has no `(String, String)` constructor.
 
 ```java
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+String flowId = UUID.randomUUID().toString();
+AgentContext context = new AgentContext("agent", flowId, "user-" + flowId, 4096, 50);
+ContextItem fact = new ContextItem("plan=premium", ContextPriority.MUST, MemoryType.LONG_TERM);
 
-@Testcontainers
-class RedisShortTermStoreIntegrationTest {
+store.saveContext(flowId, context);
+store.addFact(flowId, "plan", fact);
 
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
-        .withExposedPorts(6379);
-
-    private ShortTermMemoryStore store;
-
-    @BeforeEach
-    void setUp() throws Exception {
-        Map<String, String> config = Map.of(
-            "redis.host", redis.getHost(),
-            "redis.port", String.valueOf(redis.getMappedPort(6379))
-        );
-        store = StorageFactory.createShortTermStore("redis", config);
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        if (store != null) store.close();
-    }
-
-    // Same test methods as the unit tests above -- the interface contract
-    // is identical regardless of backend.
-}
+assertTrue(store.loadContext(flowId).isPresent());
+assertEquals("plan=premium", store.loadFacts(flowId).get("plan").getContent());
 ```
 
-Run integration tests with:
+Also serialize the store with `ObjectOutputStream` and use the deserialized copy; `StorageProviderFlinkSerializationTest` shows the Flink-side check (Kryo, Java serialization, `InstantiationUtil`) applied to the shipped stores.
 
+Backends that need an external service are tagged `@Tag("integration")` and excluded from the default `./mvnw test` run. `PostgresConversationStoreTest` uses Testcontainers; run it with:
+
+```bash
+systemctl --user start podman.socket
+export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+export TESTCONTAINERS_RYUK_DISABLED=true
+./mvnw test -P integration-tests
 ```
-mvn test -P integration-tests
-```
 
-## File Locations
+## File locations
 
-- `StorageProvider` base interface: `src/main/java/org/agentic/flink/storage/StorageProvider.java`
-- `ShortTermMemoryStore`: `src/main/java/org/agentic/flink/storage/ShortTermMemoryStore.java`
+- `StorageProvider`: `src/main/java/org/agentic/flink/storage/StorageProvider.java`
+- `ReopenableStore`: `src/main/java/org/agentic/flink/storage/ReopenableStore.java`
 - `LongTermMemoryStore`: `src/main/java/org/agentic/flink/storage/LongTermMemoryStore.java`
-- `StorageTier` enum: `src/main/java/org/agentic/flink/storage/StorageTier.java`
+- `VectorStore`: `src/main/java/org/agentic/flink/storage/VectorStore.java`
+- `ShortTermMemorySpec`, `ShortTermMemory`, `FlinkStateShortTermMemory`: `src/main/java/org/agentic/flink/memory/`
 - `StorageFactory`: `src/main/java/org/agentic/flink/storage/StorageFactory.java`
 - `StorageConfiguration`: `src/main/java/org/agentic/flink/storage/config/StorageConfiguration.java`
-- In-memory reference implementations: `src/main/java/org/agentic/flink/storage/memory/`
-- Redis implementations: `src/main/java/org/agentic/flink/storage/redis/`
-- PostgreSQL implementation: `src/main/java/org/agentic/flink/storage/postgres/`
-- Factory tests: `src/test/java/org/agentic/flink/storage/StorageFactoryTest.java`
+- Service files: `src/main/resources/META-INF/services/`
+- Toy backend and registration test: `src/test/java/org/agentic/flink/storage/toy/`, `src/test/resources/META-INF/services/org.agentic.flink.storage.LongTermMemoryStore`
+- Shipped implementations: `src/main/java/org/agentic/flink/storage/{memory,postgres,redis,vector}/`

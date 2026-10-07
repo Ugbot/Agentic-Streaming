@@ -673,6 +673,41 @@
         </profile>
 
         <!--
+        Examples profile. Flink is a provided dependency, so a plain `exec:java` run lacks
+        org.apache.flink.streaming.*, and even with the test-scope classpath the in-process
+        exec:java run fails because Flink's MiniCluster deserializes the stream graph through a
+        class loader that cannot see the plugin's isolated classpath. This profile therefore forks
+        a JVM (exec:exec) with the test-scope classpath (which includes provided) and the same
+        reflective opens as the surefire argLine. `compile` must be in the same invocation:
+
+            ./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob
+            ./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
+                -Dexec.args="examples/pipelines/incident.yaml"
+
+        The showcase scripts under examples-bin/ wrap the same classpath with prerequisite checks.
+        -->
+        <profile>
+            <id>examples</id>
+            <properties>
+                <exec.args></exec.args>
+                <examples.add.opens>--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED</examples.add.opens>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <classpathScope>test</classpathScope>
+                            <commandlineArgs>${examples.add.opens} -classpath %classpath ${exec.mainClass} ${exec.args}</commandlineArgs>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
         DJL live profile. The default build pulls the DJL API + pytorch-engine but not the native
         PyTorch shared library (a no-DL build stays small). Enabling this profile selects the live
         DJL test group ({@code @Tag("djl")}); DJL's pytorch-engine auto-downloads the
