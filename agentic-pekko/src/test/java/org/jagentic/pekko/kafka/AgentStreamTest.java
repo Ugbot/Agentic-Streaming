@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +21,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.pekko.kafka.javadsl.Consumer;
@@ -112,6 +114,68 @@ class AgentStreamTest {
       Map<String, Object> error = (Map<String, Object>) errDoc.get("error");
       assertEquals("malformed_record", error.get("error_class"));
       assertTrue(String.valueOf(error.get("message")).contains("conversation_id"));
+      assertEquals(1, graph.brainCalls.get());
+    }
+  }
+
+  @Test
+  void redeliveredRecordWithoutPayloadTurnIdDedupesOnTopicPartitionOffset() throws Exception {
+    CountingGraph graph = new CountingGraph();
+    try (PekkoSystem sys = new PekkoSystem(graph.deps())) {
+      String cid = rnd("c");
+      String topic = rnd("turns");
+      int partition = ThreadLocalRandom.current().nextInt(0, 64);
+      long offset = ThreadLocalRandom.current().nextLong(0, 1_000_000L);
+      String body = TurnWire.write(Map.of("conversation_id", cid, "user_id", "u", "text", "what is my balance?"));
+
+      // The same record, delivered twice (two ConsumerRecord instances, as a rebalance or crash produces).
+      ConsumerRecord<String, String> first = new ConsumerRecord<>(topic, partition, offset, cid, body);
+      ConsumerRecord<String, String> redelivered = new ConsumerRecord<>(topic, partition, offset, cid, body);
+
+      Map<String, Object> doc = TurnWire.readObject(KafkaStreamApp.answer(sys.system(), first, "out", Duration.ofSeconds(10))
+          .toCompletableFuture().get(30, TimeUnit.SECONDS).value());
+      assertEquals(topic + "-" + partition + "-" + offset, doc.get("turn_id"));
+      assertEquals("completed", doc.get("status"));
+
+      Map<String, Object> dup = TurnWire.readObject(KafkaStreamApp.answer(sys.system(), redelivered, "out", Duration.ofSeconds(10))
+          .toCompletableFuture().get(30, TimeUnit.SECONDS).value());
+      assertEquals("duplicate", dup.get("status"));
+      assertEquals(doc.get("turn_id"), dup.get("turn_id"));
+      assertEquals(doc.get("reply"), dup.get("reply"));
+      assertEquals(1, graph.brainCalls.get(), "the redelivery must not re-run the turn");
+
+      // The next offset on the same partition is a new turn.
+      ConsumerRecord<String, String> next = new ConsumerRecord<>(topic, partition, offset + 1, cid, body);
+      Map<String, Object> second = TurnWire.readObject(KafkaStreamApp.answer(sys.system(), next, "out", Duration.ofSeconds(10))
+          .toCompletableFuture().get(30, TimeUnit.SECONDS).value());
+      assertEquals("completed", second.get("status"));
+      assertEquals(2, graph.brainCalls.get());
+    }
+  }
+
+  @Test
+  void turnIdHeaderWinsOverRecordCoordinates() throws Exception {
+    CountingGraph graph = new CountingGraph();
+    try (PekkoSystem sys = new PekkoSystem(graph.deps())) {
+      String cid = rnd("c");
+      String headerId = rnd("hdr");
+      String body = TurnWire.write(Map.of("conversation_id", cid, "user_id", "u", "text", "hello there"));
+
+      ConsumerRecord<String, String> a = new ConsumerRecord<>("turns", 0, 10L, cid, body);
+      a.headers().add(new RecordHeader(KafkaStreamApp.TURN_ID_HEADER, headerId.getBytes(StandardCharsets.UTF_8)));
+      // Re-produced by the client at another offset but carrying the same explicit id: still one turn.
+      ConsumerRecord<String, String> b = new ConsumerRecord<>("turns", 0, 11L, cid, body);
+      b.headers().add(new RecordHeader(KafkaStreamApp.TURN_ID_HEADER, headerId.getBytes(StandardCharsets.UTF_8)));
+      assertEquals(headerId, KafkaStreamApp.turnId(a));
+      assertEquals("turns-0-12", KafkaStreamApp.turnId(new ConsumerRecord<>("turns", 0, 12L, cid, body)));
+
+      Map<String, Object> doc = TurnWire.readObject(KafkaStreamApp.answer(sys.system(), a, "out", Duration.ofSeconds(10))
+          .toCompletableFuture().get(30, TimeUnit.SECONDS).value());
+      Map<String, Object> dup = TurnWire.readObject(KafkaStreamApp.answer(sys.system(), b, "out", Duration.ofSeconds(10))
+          .toCompletableFuture().get(30, TimeUnit.SECONDS).value());
+      assertEquals(headerId, doc.get("turn_id"));
+      assertEquals("completed", doc.get("status"));
+      assertEquals("duplicate", dup.get("status"));
       assertEquals(1, graph.brainCalls.get());
     }
   }

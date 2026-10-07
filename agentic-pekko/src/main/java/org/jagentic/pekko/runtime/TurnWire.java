@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,8 +15,8 @@ import org.jagentic.pekko.entity.ConversationEntity;
 
 /**
  * The JSON wire format shared by the HTTP and Kafka front doors. A request is one turn:
- * {@code conversation_id}, {@code turn_id} (the idempotency key; generated when the caller omits it
- * and always echoed back in the result), {@code user_id}, {@code text}, optional string
+ * {@code conversation_id}, {@code turn_id} (the idempotency key; supplied by the front door when the
+ * caller omits it and always echoed back in the result), {@code user_id}, {@code text}, optional string
  * {@code metadata}, and an optional structured {@code signal} that resumes a suspended turn. A
  * response is the normalized result document of {@code spec/v1/result.schema.json}.
  */
@@ -37,7 +38,17 @@ public final class TurnWire {
     }
   }
 
+  /** Parse with a fresh random {@code turn_id} when the payload has none (HTTP: each request is a new turn). */
   public static Event parse(String json) {
+    return parse(json, () -> UUID.randomUUID().toString());
+  }
+
+  /**
+   * Parse, taking the {@code turn_id} from {@code fallbackTurnId} when the payload has none. Front
+   * doors that can redeliver the same payload (Kafka) pass a deterministic id derived from the
+   * record, so the entity's idempotency check sees the redelivery as the same turn.
+   */
+  public static Event parse(String json, Supplier<String> fallbackTurnId) {
     JsonNode n;
     try {
       n = JSON.readTree(json);
@@ -52,8 +63,8 @@ public final class TurnWire {
       throw new MalformedTurn("conversation_id is required");
     }
     String turnId = text(n, "turn_id", "turnId");
-    if (turnId == null) {
-      turnId = UUID.randomUUID().toString();
+    if (turnId == null || turnId.isBlank()) {
+      turnId = fallbackTurnId.get();
     }
     String uid = text(n, "user_id", "userId");
     Map<String, Object> signal = n.hasNonNull("signal") ? convert(n.get("signal"), OBJECT, "signal") : null;
