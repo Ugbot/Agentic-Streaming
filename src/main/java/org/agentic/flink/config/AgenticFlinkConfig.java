@@ -3,6 +3,7 @@ package org.agentic.flink.config;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import org.agentic.flink.annotation.Public;
 
@@ -65,6 +66,15 @@ public class AgenticFlinkConfig implements Serializable {
     defaults.put(ConfigKeys.QDRANT_HOST, ConfigKeys.DEFAULT_QDRANT_HOST);
     defaults.put(ConfigKeys.QDRANT_PORT, ConfigKeys.DEFAULT_QDRANT_PORT);
     defaults.put(ConfigKeys.OPENAI_MODEL, ConfigKeys.DEFAULT_OPENAI_MODEL);
+    defaults.put(ConfigKeys.CHECKPOINT_ENABLED, ConfigKeys.DEFAULT_CHECKPOINT_ENABLED);
+    defaults.put(ConfigKeys.CHECKPOINT_INTERVAL_MS, ConfigKeys.DEFAULT_CHECKPOINT_INTERVAL_MS);
+    defaults.put(ConfigKeys.CHECKPOINT_MIN_PAUSE_MS, ConfigKeys.DEFAULT_CHECKPOINT_MIN_PAUSE_MS);
+    defaults.put(ConfigKeys.CHECKPOINT_TIMEOUT_MS, ConfigKeys.DEFAULT_CHECKPOINT_TIMEOUT_MS);
+    defaults.put(ConfigKeys.CHECKPOINT_RETENTION, ConfigKeys.DEFAULT_CHECKPOINT_RETENTION);
+    defaults.put(ConfigKeys.CHECKPOINT_STATE_BACKEND, ConfigKeys.DEFAULT_CHECKPOINT_STATE_BACKEND);
+    defaults.put(
+        ConfigKeys.CHECKPOINT_STATE_BACKEND_INCREMENTAL,
+        ConfigKeys.DEFAULT_CHECKPOINT_STATE_BACKEND_INCREMENTAL);
     DEFAULTS = Collections.unmodifiableMap(defaults);
   }
 
@@ -157,6 +167,53 @@ public class AgenticFlinkConfig implements Serializable {
     } catch (NumberFormatException e) {
       return defaultValue;
     }
+  }
+
+  /**
+   * Returns the resolved value for {@code key} parsed as a {@code long}.
+   *
+   * @param key the configuration key
+   * @param defaultValue value to return when the key cannot be resolved
+   * @return resolved long value or {@code defaultValue}
+   * @throws IllegalArgumentException when a value is present but is not a valid long
+   */
+  public long getLong(String key, long defaultValue) {
+    String value = resolve(key);
+    if (value == null) {
+      return defaultValue;
+    }
+    try {
+      return Long.parseLong(value.trim());
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          "Configuration key " + key + " must be a long, got '" + value + "'", e);
+    }
+  }
+
+  /**
+   * Returns the resolved value for {@code key} parsed as a {@code boolean}. Accepts {@code true}
+   * and {@code false} (case-insensitive) only, so a typo is reported instead of silently changing
+   * behaviour.
+   *
+   * @param key the configuration key
+   * @param defaultValue value to return when the key cannot be resolved
+   * @return resolved boolean value or {@code defaultValue}
+   * @throws IllegalArgumentException when a value is present but is neither true nor false
+   */
+  public boolean getBoolean(String key, boolean defaultValue) {
+    String value = resolve(key);
+    if (value == null) {
+      return defaultValue;
+    }
+    String normalized = value.trim().toLowerCase(Locale.ROOT);
+    if (normalized.equals("true")) {
+      return true;
+    }
+    if (normalized.equals("false")) {
+      return false;
+    }
+    throw new IllegalArgumentException(
+        "Configuration key " + key + " must be true or false, got '" + value + "'");
   }
 
   /**

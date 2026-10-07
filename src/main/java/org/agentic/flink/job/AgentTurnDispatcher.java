@@ -11,13 +11,8 @@ import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.execution.AgentExecutor;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.tool.ToolRegistry;
-import org.apache.flink.api.common.functions.OpenContext;
-import org.apache.flink.api.common.state.MapState;
-import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.cep.functions.PatternProcessFunction;
 import org.apache.flink.cep.functions.TimedOutPartialMatchHandler;
-import org.apache.flink.metrics.Counter;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
@@ -31,10 +26,12 @@ import org.slf4j.LoggerFactory;
  * org.agentic.flink.stream.AgentExecutionFunction}, so the keyed CEP operator never blocks on model
  * or tool latency and checkpoints are not stalled by agent execution.
  *
- * <p>Dispatched turns are recorded in keyed state ({@code legacy.dispatched-turns}, keyed by flow
- * id) so that a match redelivered after a restore does not dispatch the same turn twice. The state
- * TTL is {@link Agent#getShortTermTtl()} when positive, else {@link #DEFAULT_DEDUP_TTL}. Duplicates
- * are dropped and counted by the {@code duplicate_turns_dropped} metric.
+ * <p>This function holds no state: Flink's CEP runtime context does not support keyed state inside
+ * a {@link PatternProcessFunction}. Each emitted request carries its turn id under {@link
+ * #REQUEST_TURN_ID}; the keyed {@link TurnDispatchDedupFunction} returned by {@link #dedup()} runs
+ * directly after this function in the job graph and drops a match that is redelivered after a
+ * restore, so a completed turn is never dispatched twice. Its state TTL is {@link
+ * Agent#getShortTermTtl()} when positive, else {@link #DEFAULT_DEDUP_TTL}.
  *
  * <p>Pattern timeouts and compensation requests are still emitted through side outputs here; {@link
  * AgentResultRouter} routes execution results and these events to the same tags at the end of the
@@ -54,10 +51,11 @@ public class AgentTurnDispatcher extends PatternProcessFunction<AgentEvent, Agen
   private static final long serialVersionUID = 2L;
   private static final Logger LOG = LoggerFactory.getLogger(AgentTurnDispatcher.class);
 
-  public static final Duration DEFAULT_DEDUP_TTL = Duration.ofHours(24);
-  public static final String DISPATCHED_TURNS_STATE = "legacy.dispatched-turns";
-  public static final String DUPLICATES_METRIC = "duplicate_turns_dropped";
-  public static final String DISPATCHED_METRIC = "turns_dispatched";
+  public static final Duration DEFAULT_DEDUP_TTL = TurnDispatchDedupFunction.DEFAULT_DEDUP_TTL;
+  public static final String DISPATCHED_TURNS_STATE =
+      TurnDispatchDedupFunction.DISPATCHED_TURNS_STATE;
+  public static final String DUPLICATES_METRIC = TurnDispatchDedupFunction.DUPLICATES_METRIC;
+  public static final String DISPATCHED_METRIC = TurnDispatchDedupFunction.DISPATCHED_METRIC;
 
   /** Data key marking an emitted event as an execution request for the async operator. */
   public static final String REQUEST_TURN_ID = "request_turn_id";
@@ -68,17 +66,8 @@ public class AgentTurnDispatcher extends PatternProcessFunction<AgentEvent, Agen
 
   private static final OutputTag<AgentEvent> TIMEOUT_TAG = AgentJobGenerator.TIMEOUT_TAG;
 
-  private transient MapState<String, Long> dispatchedTurns;
-  private transient Counter duplicatesDropped;
-  private transient Counter dispatched;
-
   public AgentTurnDispatcher(Agent agent, ToolRegistry toolRegistry) {
-    this(agent, toolRegistry, dedupTtlOf(agent));
-  }
-
-  private static Duration dedupTtlOf(Agent agent) {
-    Duration ttl = Objects.requireNonNull(agent, "agent").getShortTermTtl();
-    return ttl == null || ttl.isZero() || ttl.isNegative() ? DEFAULT_DEDUP_TTL : ttl;
+    this(agent, toolRegistry, TurnDispatchDedupFunction.dedupTtlOf(agent));
   }
 
   public AgentTurnDispatcher(Agent agent, ToolRegistry toolRegistry, Duration dedupTtl) {
@@ -102,19 +91,9 @@ public class AgentTurnDispatcher extends PatternProcessFunction<AgentEvent, Agen
     return Duration.ofMillis(dedupTtlMillis);
   }
 
-  @Override
-  public void open(OpenContext openContext) throws Exception {
-    super.open(openContext);
-    MapStateDescriptor<String, Long> descriptor =
-        new MapStateDescriptor<>(DISPATCHED_TURNS_STATE, String.class, Long.class);
-    descriptor.enableTimeToLive(
-        StateTtlConfig.newBuilder(Duration.ofMillis(dedupTtlMillis))
-            .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
-            .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
-            .build());
-    dispatchedTurns = getRuntimeContext().getMapState(descriptor);
-    duplicatesDropped = getRuntimeContext().getMetricGroup().counter(DUPLICATES_METRIC);
-    dispatched = getRuntimeContext().getMetricGroup().counter(DISPATCHED_METRIC);
+  /** The keyed dedup operator that follows this function in the job graph. */
+  public TurnDispatchDedupFunction dedup() {
+    return new TurnDispatchDedupFunction(agent, getDedupTtl());
   }
 
   @Override
@@ -133,27 +112,10 @@ public class AgentTurnDispatcher extends PatternProcessFunction<AgentEvent, Agen
     AgentEvent startEvent = startEvents.get(0);
     String turnId = AgentExecutor.turnIdOf(startEvent);
 
-    if (dispatchedTurns.contains(turnId)) {
-      duplicatesDropped.inc();
-      LOG.warn(
-          "Turn {} for flow {} already dispatched to agent {}, dropping duplicate match",
-          turnId,
-          startEvent.getFlowId(),
-          agent.getAgentId());
-      return;
-    }
-    dispatchedTurns.put(turnId, ctx.currentProcessingTime());
-    dispatched.inc();
-
     AgentEvent request = startEvent.withEventType(startEvent.getEventType());
     request.setAgentId(agent.getAgentId());
     request.putData(REQUEST_TURN_ID, turnId);
     request.putMetadata("state", AgentState.EXECUTING.name());
-    LOG.info(
-        "Dispatching agent {} for flow: {} (turn {})",
-        agent.getAgentId(),
-        startEvent.getFlowId(),
-        turnId);
     out.collect(request);
   }
 

@@ -6,7 +6,7 @@ import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.example.banking.graph.BankingAgentGraph;
-import org.apache.flink.configuration.Configuration;
+import org.agentic.flink.job.FlinkJobDefaults;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,8 +66,11 @@ public final class BankingFlinkJob {
     BankingAgentSetup setup = BankingAgentSetup.fromEnv(role, cs);
 
     int parallelism = intEnv("A2A_FLINK_PARALLELISM", 1);
+    FlinkJobDefaults jobDefaults = FlinkJobDefaults.fromConfig(config);
     StreamExecutionEnvironment env =
-        StreamExecutionEnvironment.createLocalEnvironment(parallelism, new Configuration());
+        StreamExecutionEnvironment.createLocalEnvironment(
+            parallelism, jobDefaults.toConfiguration());
+    jobDefaults.apply(env);
 
     A2ABridge bridge = A2ABridgeFactory.create(config);
     LOG.info(

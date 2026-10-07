@@ -215,7 +215,10 @@ public final class FlinkStateVectorMemory implements VectorMemory {
       MapStateDescriptor<String, VectorEntry> descriptor =
           new MapStateDescriptor<>("vector.entries", String.class, VectorEntry.class);
       return new FlinkStateVectorMemory(
-          rc.getMapState(descriptor), dimension, similarity, maxItems);
+          KeyedVectorState.mapState(rc, descriptor, providerName()),
+          dimension,
+          similarity,
+          maxItems);
     }
 
     @Override

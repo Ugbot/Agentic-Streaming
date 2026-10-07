@@ -219,8 +219,8 @@ public final class FlinkStateHnswVectorMemory implements VectorMemory {
       ValueStateDescriptor<String> graphIdDescriptor =
           new ValueStateDescriptor<>(GRAPH_ID_STATE, String.class);
       return new FlinkStateHnswVectorMemory(
-          rc.getMapState(descriptor),
-          rc.getState(graphIdDescriptor),
+          KeyedVectorState.mapState(rc, descriptor, providerName()),
+          KeyedVectorState.valueState(rc, graphIdDescriptor, providerName()),
           dimension,
           config,
           maxCachedKeys);

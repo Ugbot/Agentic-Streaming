@@ -3,6 +3,8 @@ package org.agentic.flink.job;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -13,6 +15,7 @@ import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.statemachine.AgentStateMachine;
 import org.agentic.flink.statemachine.AgentTransition;
 import org.agentic.flink.tool.ToolRegistry;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.cep.functions.PatternProcessFunction;
 import org.apache.flink.cep.functions.TimedOutPartialMatchHandler;
 import org.junit.jupiter.api.*;
@@ -436,6 +439,58 @@ class AgentTurnDispatcherTest {
       try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
         assertDoesNotThrow(() -> oos.writeObject(function));
       }
+    }
+  }
+
+  // ==================== Stateless Dispatch + Keyed Dedup Handoff ====================
+
+  @Nested
+  @DisplayName("stateless dispatch with keyed dedup handoff")
+  class DedupHandoffTests {
+
+    @Test
+    @DisplayName("should hold no runtime state (CEP runtime context rejects keyed state)")
+    void holdsNoRuntimeState() throws Exception {
+      for (Field field : AgentTurnDispatcher.class.getDeclaredFields()) {
+        assertFalse(
+            Modifier.isTransient(field.getModifiers()),
+            "transient field " + field.getName() + " implies runtime state in the CEP function");
+      }
+      assertNotEquals(
+          AgentTurnDispatcher.class,
+          AgentTurnDispatcher.class.getMethod("open", OpenContext.class).getDeclaringClass(),
+          "the CEP function must not override open() to acquire state");
+    }
+
+    @Test
+    @DisplayName("should hand the agent's short-term TTL to the keyed dedup operator")
+    void dedupUsesAgentShortTermTtl() {
+      Duration ttl = Duration.ofMinutes(ThreadLocalRandom.current().nextLong(1, 600));
+      Agent agent =
+          Agent.builder()
+              .withId("ttl-" + UUID.randomUUID().toString().substring(0, 8))
+              .withSystemPrompt("s")
+              .withShortTermTtl(ttl)
+              .withStateMachine(buildValidStateMachine("ttl-sm", 30, false))
+              .build();
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, ToolRegistry.empty());
+      assertEquals(ttl, function.getDedupTtl());
+      TurnDispatchDedupFunction dedup = function.dedup();
+      assertEquals(ttl, dedup.getDedupTtl());
+      assertEquals(ttl, new TurnDispatchDedupFunction(agent).getDedupTtl());
+    }
+
+    @Test
+    @DisplayName("should fall back to the default TTL when the agent sets none")
+    void dedupFallsBackToDefaultTtl() {
+      Agent agent = randomAgent();
+      assertEquals(Duration.ZERO, agent.getShortTermTtl());
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, ToolRegistry.empty());
+      assertEquals(TurnDispatchDedupFunction.DEFAULT_DEDUP_TTL, function.getDedupTtl());
+      assertEquals(TurnDispatchDedupFunction.DEFAULT_DEDUP_TTL, function.dedup().getDedupTtl());
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> new AgentTurnDispatcher(agent, ToolRegistry.empty(), Duration.ZERO));
     }
   }
 

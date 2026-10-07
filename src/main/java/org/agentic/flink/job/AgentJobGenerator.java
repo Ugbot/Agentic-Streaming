@@ -8,6 +8,8 @@ import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.SupervisorChain;
+import org.agentic.flink.execution.LLMClient;
+import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.stream.CompensationFunction;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.cep.CEP;
@@ -141,9 +143,12 @@ public class AgentJobGenerator implements Serializable {
     if (asyncCapacity <= 0) {
       throw new IllegalArgumentException("asyncCapacity must be positive, got " + asyncCapacity);
     }
-    this.env = env;
-    this.job = job;
+    this.env = Objects.requireNonNull(env, "env");
+    this.job = Objects.requireNonNull(job, "job");
     this.asyncCapacity = asyncCapacity;
+    FlinkJobDefaults defaults =
+        job.getJobDefaults() != null ? job.getJobDefaults() : FlinkJobDefaults.fromEnvironment();
+    defaults.apply(env);
   }
 
   /**
@@ -208,18 +213,24 @@ public class AgentJobGenerator implements Serializable {
         CEP.pattern(
             agentEvents.keyBy(AgentEvent::getFlowId), agent.getStateMachine().generateCepPattern());
 
-    // Pattern matches → execution requests (keyed, non-blocking, dedups redelivered turns)
+    // Pattern matches → execution requests; a keyed operator then drops redelivered turns
+    // (CEP functions cannot hold keyed state, the dedup set must live in checkpointed state)
+    AgentTurnDispatcher matchFunction = new AgentTurnDispatcher(agent, job.getToolRegistry());
     SingleOutputStreamOperator<AgentEvent> requests =
-        patternStream
-            .process(new AgentTurnDispatcher(agent, job.getToolRegistry()))
+        patternStream.process(matchFunction).name("match-" + agent.getAgentId());
+    DataStream<AgentEvent> dispatched =
+        requests
+            .keyBy(AgentEvent::getFlowId)
+            .process(matchFunction.dedup())
             .name("dispatch-" + agent.getAgentId());
 
     // Execution requests → LLM/tool loop on the async operator with a cancelling timeout
     org.agentic.flink.stream.AgentExecutionFunction asyncExecution =
-        new org.agentic.flink.stream.AgentExecutionFunction(agent, job.getToolRegistry());
+        new org.agentic.flink.stream.AgentExecutionFunction(
+            agent, job.getToolRegistry(), llmClientFor(agent));
     DataStream<AgentEvent> results =
         AsyncDataStream.unorderedWait(
-                requests,
+                dispatched,
                 asyncExecution,
                 asyncExecution.getTimeout().toMillis(),
                 TimeUnit.MILLISECONDS,
@@ -255,6 +266,24 @@ public class AgentJobGenerator implements Serializable {
     }
 
     return processedEvents;
+  }
+
+  /**
+   * The LLM client for the async execution operator: the agent's {@link
+   * org.agentic.flink.llm.ChatConnection} when one was configured through {@code
+   * AgentBuilder.withChatConnection}, otherwise {@code null} so {@code AgentExecutor} builds the
+   * default LangChain4J client from the agent's model settings.
+   */
+  static LLMClient llmClientFor(Agent agent) {
+    ChatConnection connection = agent.getChatConnection();
+    if (connection == null) {
+      return null;
+    }
+    LLMClient.LLMClientBuilder builder = LLMClient.builder();
+    if (agent.getLlmModel() != null) {
+      builder.withModel(agent.getLlmModel());
+    }
+    return builder.withTemperature(agent.getTemperature()).build(connection);
   }
 
   // ==================== Multi-Agent Pipeline ====================

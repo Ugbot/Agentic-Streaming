@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.agentic.flink.annotation.Experimental;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.context.core.ContextPriority;
+import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.corpus.Corpus;
 import org.agentic.flink.corpus.CorpusSpec;
 import org.agentic.flink.embedding.EmbeddingClient;
@@ -12,6 +15,8 @@ import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.inference.InferenceConnection;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.Scorer;
+import org.agentic.flink.ingest.IngestAck;
+import org.agentic.flink.ingest.IngestionPipeline.EmbeddedChunk;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
@@ -19,9 +24,14 @@ import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.memory.vector.ScoredItem;
 import org.apache.flink.api.common.functions.OpenContext;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,6 +105,30 @@ public final class RetrievalPipeline {
     }
 
     /**
+     * Search a corpus that lives in Flink keyed state ({@code SingleOperatorCorpus} over {@code
+     * FlinkStateVectorMemory} or {@code FlinkStateHnswVectorMemory}). Both the embedded ingest
+     * stream and the embedded queries are keyed by the corpus name and processed by one keyed
+     * operator, so every write is visible to the next query on that operator and the vectors
+     * checkpoint with the job. The ingest acknowledgements are available through {@link
+     * StageRerank#ingestAcks()}.
+     */
+    public StageRerank search(CorpusSpec corpusSpec, int k, DataStream<EmbeddedChunk> ingest) {
+      Objects.requireNonNull(corpusSpec, "corpusSpec");
+      Objects.requireNonNull(ingest, "ingest");
+      String name = corpusSpec.name();
+      KeySelector<EmbeddedChunk, String> chunkKey = c -> name;
+      KeySelector<EmbeddedQuery, String> queryKey = q -> name;
+      SingleOutputStreamOperator<QueryWithHits> hits =
+          ingest
+              .keyBy(chunkKey, TypeInformation.of(String.class))
+              .connect(upstream.keyBy(queryKey, TypeInformation.of(String.class)))
+              .process(new KeyedSearchFn(corpusSpec, k))
+              .returns(QueryWithHits.class)
+              .name("retrieve-keyed-corpus[" + name + "]");
+      return new StageRerank(hits, hits.getSideOutput(INGEST_ACKS));
+    }
+
+    /**
      * Live two-tier search: merge the {@link HotVectorIndex hot} tier (recent, just-ingested docs)
      * with the durable cold {@code corpusSpec}, de-duplicated by id, top-{@code k}. A document is
      * retrievable the instant it lands in the hot window, before the cold index catches up.
@@ -114,9 +148,27 @@ public final class RetrievalPipeline {
   /** Rerank stage (optional). */
   public static final class StageRerank {
     private final DataStream<QueryWithHits> upstream;
+    private final DataStream<IngestAck> ingestAcks;
 
     StageRerank(DataStream<QueryWithHits> upstream) {
+      this(upstream, null);
+    }
+
+    StageRerank(DataStream<QueryWithHits> upstream, DataStream<IngestAck> ingestAcks) {
       this.upstream = upstream;
+      this.ingestAcks = ingestAcks;
+    }
+
+    /**
+     * Ingest acknowledgements of a keyed corpus search; see {@link StageSearch#search(CorpusSpec,
+     * int, DataStream)}.
+     */
+    public DataStream<IngestAck> ingestAcks() {
+      if (ingestAcks == null) {
+        throw new IllegalStateException(
+            "ingest acks are only produced by search(corpusSpec, k, ingest)");
+      }
+      return ingestAcks;
     }
 
     /** Pass-through: skip reranking and go straight to answer. */
@@ -143,6 +195,11 @@ public final class RetrievalPipeline {
 
     StageAnswer(DataStream<QueryWithHits> upstream) {
       this.upstream = upstream;
+    }
+
+    /** The retrieved (and possibly reranked) passages, without an LLM answer stage. */
+    public DataStream<QueryWithHits> hits() {
+      return upstream;
     }
 
     public DataStream<Answer> answer(ChatConnection conn, ChatSetup setup) {
@@ -198,6 +255,82 @@ public final class RetrievalPipeline {
   }
 
   // ---------- per-stage operators ----------
+
+  static final OutputTag<IngestAck> INGEST_ACKS =
+      new OutputTag<>("retrieve-ingest-acks", TypeInformation.of(IngestAck.class));
+
+  static List<RetrievedPassage> toPassages(List<ScoredItem> hits) {
+    List<RetrievedPassage> passages = new ArrayList<>(hits.size());
+    for (ScoredItem si : hits) {
+      String text = si.getItem() == null ? "" : si.getItem().getContent();
+      String url =
+          si.getItem() == null || si.getItem().getMetadata() == null
+              ? null
+              : si.getItem().getMetadata().get("source_url");
+      passages.add(new RetrievedPassage(si.getId(), text, si.getScore(), url));
+    }
+    return passages;
+  }
+
+  /**
+   * One keyed operator that both indexes embedded chunks and answers embedded queries against a
+   * corpus kept in Flink keyed state. Keyed by the corpus name so a corpus is one state partition.
+   */
+  static final class KeyedSearchFn
+      extends KeyedCoProcessFunction<String, EmbeddedChunk, EmbeddedQuery, QueryWithHits> {
+    private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(KeyedSearchFn.class);
+
+    private final CorpusSpec corpusSpec;
+    private final int k;
+    private transient Corpus corpus;
+
+    KeyedSearchFn(CorpusSpec corpusSpec, int k) {
+      this.corpusSpec = corpusSpec;
+      this.k = Math.max(1, k);
+    }
+
+    @Override
+    public void open(OpenContext openContext) throws Exception {
+      corpus = corpusSpec.bind(getRuntimeContext());
+    }
+
+    @Override
+    public void processElement1(EmbeddedChunk e, Context ctx, Collector<QueryWithHits> out) {
+      try {
+        ContextItem item =
+            new ContextItem(e.getChunk().getText(), ContextPriority.SHOULD, MemoryType.LONG_TERM);
+        item.setItemId(e.getChunk().getId());
+        corpus.upsert(e.getChunk().getId(), e.getEmbedding(), item).get();
+        ctx.output(
+            INGEST_ACKS,
+            new IngestAck(
+                e.getChunk().getId(),
+                e.getChunk().getSourceId(),
+                corpusSpec.name(),
+                System.currentTimeMillis()));
+      } catch (Exception ex) {
+        LOG.warn("upsert failed for chunk {}: {}", e.getChunk().getId(), ex.getMessage());
+      }
+    }
+
+    @Override
+    public void processElement2(EmbeddedQuery q, Context ctx, Collector<QueryWithHits> out) {
+      try {
+        List<ScoredItem> hits = corpus.search(q.getEmbedding(), k).get();
+        out.collect(new QueryWithHits(q.getQuestion(), toPassages(hits)));
+      } catch (Exception e) {
+        LOG.warn("search failed for '{}': {}", q.getQuestion(), e.getMessage());
+      }
+    }
+
+    @Override
+    public void close() throws Exception {
+      if (corpus != null) {
+        corpus.close();
+      }
+    }
+  }
 
   static final class EmbedQueryFn extends ProcessFunction<String, EmbeddedQuery> {
     private static final long serialVersionUID = 1L;
