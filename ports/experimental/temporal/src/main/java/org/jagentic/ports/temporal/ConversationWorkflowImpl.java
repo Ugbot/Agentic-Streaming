@@ -65,7 +65,11 @@ public final class ConversationWorkflowImpl implements ConversationWorkflow {
 
   @Override
   public TurnReply turn(TurnRequest request) {
-    Event event = new Event(cid, request.userId, request.text);
+    Event event = EventBuilder.turn()
+        .conversationId(cid)
+        .userId(request.userId)
+        .text(request.text)
+        .build();
     AgentContext ctx = new AgentContext(cid, request.userId, store, state, tools, retriever);
     // === The engine seam: the portable router->path->verifier graph ===
     TurnResult result = graph.handle(event, ctx);
