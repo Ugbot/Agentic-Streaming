@@ -100,7 +100,7 @@ A third-party jar adds a backend by shipping the same service file name with its
 
 Package names in the table are relative to `org.agentic.flink`. Dependencies marked optional are declared `<optional>true</optional>` in the root `pom.xml`; a job that selects one of those backends must add the client library to its own classpath.
 
-`PostgresConversationStore` creates the tables `agent_contexts` and `agent_facts` itself when `postgres.auto.create.tables` is `true`. The file `sql/schema.sql` in the repository root defines a different, wider schema (`conversations`, `context_items`, `messages`, `tool_executions`, `validation_results`) and is not read by the store.
+`PostgresConversationStore` creates the tables `agent_contexts` and `agent_facts` itself when `postgres.auto.create.tables` is `true`. There is no SQL schema file in the repository; the store is the only place the tables are defined.
 
 Test coverage that backs this table: `StorageFactoryTest`, `VectorStoreDiscoveryTest`, `InMemoryLongTermStoreTest`, `InMemoryShortTermStoreTest`, `InMemoryVectorStoreTest`, `StorageProviderFlinkSerializationTest`, `MemorySpecSerializationTest`, and the Testcontainers-backed `PostgresConversationStoreTest`, `RedisConversationStoreIT`, and `FlussConversationStoreIT` (tagged `integration`, run with `./mvnw test -Pintegration-tests` and a Podman socket).
 
