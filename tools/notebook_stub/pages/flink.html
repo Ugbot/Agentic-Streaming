@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Apache Flink Overview</title></head>
+<body>
+<h1>Apache Flink Overview</h1>
+<p>Apache Flink is a framework and distributed processing engine for stateful computations over
+unbounded and bounded data streams. A Flink program is compiled into a dataflow graph of
+operators. The JobManager schedules the graph onto TaskManagers, which run the operator
+subtasks in parallel slots.</p>
+
+<h2>State and checkpoints</h2>
+<p>Operators keep keyed state in a state backend. Flink takes periodic checkpoints by injecting
+barriers into the streams; when a barrier has passed every input of an operator, the operator
+snapshots its state to durable storage. After a failure the job restarts from the latest
+completed checkpoint and replays the source from the recorded offsets, which gives exactly-once
+state semantics for the operator state.</p>
+
+<h2>Savepoints</h2>
+<p>A savepoint is a manually triggered, self-contained snapshot of the job state. It is used to
+upgrade a job, change parallelism, or migrate to a new cluster while keeping the accumulated
+state.</p>
+
+<h2>Event time and watermarks</h2>
+<p>Flink separates processing time from event time. Watermarks flow with the data and mark how
+far event time has progressed, so windows can close deterministically even when records arrive
+out of order.</p>
+
+<p>See also: <a href="/agents.html">Agentic Streaming</a>.</p>
+</body>
+</html>
