@@ -1,83 +1,108 @@
 package org.agentic.flink.execution;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for tool call parsing from LLM responses.
- *
- * <p>Verifies that tool call patterns are correctly extracted from various LLM output formats.
+ * The text tool-call protocol as implemented by {@link LLMClient#parseToolCallsFromText}: {@code
+ * TOOL_CALL: name {json}} and {@code TOOL_CALL: name(k=v, ...)} embedded in prose. Every case goes
+ * through the production parser, not a copy of its patterns.
  */
+@SuppressWarnings("deprecation")
 class ToolCallParsingTest {
-
-  private static final Pattern JSON_TOOL_CALL_PATTERN =
-      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\{([^}]+)\\}");
-
-  private static final Pattern FUNCTION_TOOL_CALL_PATTERN =
-      Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]+)\\)");
 
   @Test
   void shouldParseJsonFormatToolCall() {
+    int a = ThreadLocalRandom.current().nextInt(1, 1_000);
+    int b = ThreadLocalRandom.current().nextInt(1, 1_000);
     String llmText =
         "I need to add two numbers.\n\n"
-            + "TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}\n\n"
+            + "TOOL_CALL: calculator-add {\"a\": "
+            + a
+            + ", \"b\": "
+            + b
+            + "}\n\n"
             + "Let me call the calculator tool.";
 
-    Matcher matcher = JSON_TOOL_CALL_PATTERN.matcher(llmText);
-    assertTrue(matcher.find(), "Should detect JSON-format tool call");
-    assertEquals("calculator-add", matcher.group(1));
-    assertTrue(matcher.group(2).contains("\"a\": 5"));
-    assertTrue(matcher.group(2).contains("\"b\": 3"));
+    List<ToolCall> calls = LLMClient.parseToolCallsFromText(llmText);
+
+    assertEquals(1, calls.size(), calls.toString());
+    assertEquals("calculator-add", calls.get(0).getToolName());
+    assertEquals("call_0", calls.get(0).getToolCallId());
+    assertEquals(Map.of("a", a, "b", b), calls.get(0).getParameters());
   }
 
   @Test
   void shouldParseFunctionCallFormat() {
+    int a = ThreadLocalRandom.current().nextInt(1, 1_000);
+    int b = ThreadLocalRandom.current().nextInt(1, 1_000);
     String llmText =
         "To multiply these numbers:\n\n"
-            + "TOOL_CALL: calculator-multiply(a=10, b=5)\n\n"
+            + "TOOL_CALL: calculator-multiply(a="
+            + a
+            + ", b="
+            + b
+            + ")\n\n"
             + "This will give us the result.";
 
-    Matcher matcher = FUNCTION_TOOL_CALL_PATTERN.matcher(llmText);
-    assertTrue(matcher.find(), "Should detect function-call format");
-    assertEquals("calculator-multiply", matcher.group(1));
-    assertTrue(matcher.group(2).contains("a=10"));
-    assertTrue(matcher.group(2).contains("b=5"));
+    List<ToolCall> calls = LLMClient.parseToolCallsFromText(llmText);
+
+    assertEquals(1, calls.size(), calls.toString());
+    assertEquals("calculator-multiply", calls.get(0).getToolName());
+    assertEquals(Map.of("a", a, "b", b), calls.get(0).getParameters());
   }
 
   @Test
   void shouldParseMultipleToolCallsInOneResponse() {
+    int a = ThreadLocalRandom.current().nextInt(1, 1_000);
+    int b = ThreadLocalRandom.current().nextInt(1, 1_000);
     String llmText =
         "I'll solve this step by step:\n\n"
-            + "First, let me add 5 and 3:\n"
-            + "TOOL_CALL: calculator-add {\"a\": 5, \"b\": 3}\n\n"
+            + "First, let me add the numbers:\n"
+            + "TOOL_CALL: calculator-add {\"a\": "
+            + a
+            + ", \"b\": "
+            + b
+            + "}\n\n"
             + "Then, multiply the result by 2:\n"
-            + "TOOL_CALL: calculator-multiply {\"a\": 8, \"b\": 2}\n\n"
-            + "That's how we solve (5 + 3) * 2.";
+            + "TOOL_CALL: calculator-multiply {\"a\": "
+            + (a + b)
+            + ", \"b\": 2}\n\n"
+            + "That's how we solve it.";
 
-    Matcher matcher = JSON_TOOL_CALL_PATTERN.matcher(llmText);
-    List<String> toolNames = new ArrayList<>();
-    while (matcher.find()) {
-      toolNames.add(matcher.group(1));
-    }
+    List<ToolCall> calls = LLMClient.parseToolCallsFromText(llmText);
 
-    assertEquals(2, toolNames.size(), "Should detect two tool calls");
-    assertEquals("calculator-add", toolNames.get(0));
-    assertEquals("calculator-multiply", toolNames.get(1));
+    assertEquals(2, calls.size(), calls.toString());
+    assertEquals("calculator-add", calls.get(0).getToolName());
+    assertEquals("call_0", calls.get(0).getToolCallId());
+    assertEquals(Map.of("a", a, "b", b), calls.get(0).getParameters());
+    assertEquals("calculator-multiply", calls.get(1).getToolName());
+    assertEquals("call_1", calls.get(1).getToolCallId());
+    assertEquals(Map.of("a", a + b, "b", 2), calls.get(1).getParameters());
+  }
+
+  @Test
+  void jsonFormTakesPrecedenceOverFunctionFormInTheSameResponse() {
+    String llmText = "TOOL_CALL: first {\"x\": 1}\nTOOL_CALL: second(y=2)";
+
+    List<ToolCall> calls = LLMClient.parseToolCallsFromText(llmText);
+
+    assertEquals(1, calls.size(), calls.toString());
+    assertEquals("first", calls.get(0).getToolName());
   }
 
   @Test
   void shouldNotMatchWhenNoToolCallPresent() {
-    String llmText = "The answer to 5 plus 3 is 8. No tools needed.";
+    int sum = ThreadLocalRandom.current().nextInt(1, 1_000);
+    String llmText = "The answer is " + sum + ". No tools needed. TOOL_CALL is just a word here.";
 
-    Matcher jsonMatcher = JSON_TOOL_CALL_PATTERN.matcher(llmText);
-    Matcher funcMatcher = FUNCTION_TOOL_CALL_PATTERN.matcher(llmText);
-
-    assertFalse(jsonMatcher.find(), "Should not detect JSON tool call in plain text");
-    assertFalse(funcMatcher.find(), "Should not detect function tool call in plain text");
+    assertTrue(LLMClient.parseToolCallsFromText(llmText).isEmpty());
+    assertTrue(LLMClient.parseToolCallsFromText("").isEmpty());
+    assertTrue(LLMClient.parseToolCallsFromText(null).isEmpty());
   }
 }

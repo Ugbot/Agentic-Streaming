@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test;
  * task/context, and use after Flink serialization.
  */
 @Tag("integration")
-class PostgresA2ATaskStoreTest {
+class PostgresA2ATaskStoreIT {
 
   private static PostgresTestDatabase database;
 

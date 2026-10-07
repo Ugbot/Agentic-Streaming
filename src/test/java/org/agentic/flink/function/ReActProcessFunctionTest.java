@@ -1,17 +1,18 @@
 package org.agentic.flink.function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
@@ -23,8 +24,10 @@ import org.agentic.flink.statemachine.AgentTransition;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.typeinfo.Types;
+import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -34,9 +37,18 @@ import org.junit.jupiter.api.Test;
  */
 class ReActProcessFunctionTest {
 
-  /** Two-turn scripted client: action then final. */
+  /** Two-turn scripted client: an {@code adder} action with the given operands, then a final. */
   static final class ScriptedConnection implements ChatConnection {
     private static final long serialVersionUID = 1L;
+
+    final AtomicInteger chatCalls = new AtomicInteger();
+    private final int a;
+    private final int b;
+
+    ScriptedConnection(int a, int b) {
+      this.a = a;
+      this.b = b;
+    }
 
     @Override
     public ChatClient bind(RuntimeContext runtimeContext) {
@@ -46,12 +58,19 @@ class ReActProcessFunctionTest {
         @Override
         public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
           turn++;
+          chatCalls.incrementAndGet();
           String text =
               turn == 1
                   ? "{\"type\":\"action\",\"thought\":\"need calc\",\"tool\":\"adder\","
-                      + "\"arguments\":{\"a\":2,\"b\":3},\"answer\":null}"
+                      + "\"arguments\":{\"a\":"
+                      + a
+                      + ",\"b\":"
+                      + b
+                      + "},\"answer\":null}"
                   : "{\"type\":\"final\",\"thought\":\"done\",\"tool\":null,"
-                      + "\"arguments\":{},\"answer\":\"5\"}";
+                      + "\"arguments\":{},\"answer\":\""
+                      + (a + b)
+                      + "\"}";
           return new ChatResponse(
               text, setup.getModelName(), List.of(), 0L, ChatResponse.FinishReason.STOP);
         }
@@ -64,14 +83,38 @@ class ReActProcessFunctionTest {
     }
   }
 
-  /** Counts invocations and returns the sum of "a" + "b". */
+  /** Records every tool lifecycle event the operator emits. */
+  static final class RecordingListener implements AgentEventListener {
+    private static final long serialVersionUID = 1L;
+    final List<String> events = new ArrayList<>();
+
+    @Override
+    public void onAgentStart(String agentId) {
+      events.add("start");
+    }
+
+    @Override
+    public void onToolCallStart(String agentId, String toolName, String toolCallId) {
+      events.add("tool-start:" + toolName + ":" + toolCallId);
+    }
+
+    @Override
+    public void onToolCallEnd(
+        String agentId, String toolName, String toolCallId, boolean success, long durationMs) {
+      events.add("tool-end:" + toolName + ":" + toolCallId + ":" + success);
+    }
+  }
+
+  /** Counts invocations, remembers the last arguments and returns the sum of "a" + "b". */
   static final class AdderExecutor implements ToolExecutor {
     private static final long serialVersionUID = 1L;
     final AtomicInteger calls = new AtomicInteger();
+    volatile Map<String, Object> lastParameters;
 
     @Override
     public CompletableFuture<Object> execute(Map<String, Object> parameters) {
       calls.incrementAndGet();
+      lastParameters = parameters;
       int a = ((Number) parameters.get("a")).intValue();
       int b = ((Number) parameters.get("b")).intValue();
       return CompletableFuture.completedFuture(a + b);
@@ -88,50 +131,62 @@ class ReActProcessFunctionTest {
     }
   }
 
+  private static List<String> outputs(
+      KeyedOneInputStreamOperatorTestHarness<String, String, String> harness) {
+    List<String> out = new ArrayList<>();
+    for (Object o : harness.getOutput()) {
+      if (o instanceof StreamRecord<?> r) {
+        out.add((String) r.getValue());
+      }
+    }
+    return out;
+  }
+
   @Test
   @DisplayName("ReAct loop terminates after action + final and dispatches the tool once")
   void reactLoopTerminates() throws Exception {
+    int a = ThreadLocalRandom.current().nextInt(1, 1_000);
+    int b = ThreadLocalRandom.current().nextInt(1, 1_000);
     AdderExecutor adder = new AdderExecutor();
+    ScriptedConnection connection = new ScriptedConnection(a, b);
+    RecordingListener listener = new RecordingListener();
     ToolRegistry registry = ToolRegistry.builder().registerTool("adder", adder).build();
     Agent agent =
         Agent.builder()
             .withId("a-" + UUID.randomUUID())
             .withSystemPrompt("solve math problems")
-            .withChatConnection(new ScriptedConnection())
+            .withChatConnection(connection)
+            .withListener(listener)
             .withMaxIterations(8)
             .withToolTimeout(Duration.ofSeconds(5))
             .withStateMachine(twoStepStateMachine())
             .build();
 
-    ReActProcessFunction<String> fn = new ReActProcessFunction<>(agent, registry);
+    String question = "what is " + a + "+" + b + "?";
+    String key = "k-" + UUID.randomUUID();
+    try (KeyedOneInputStreamOperatorTestHarness<String, String, String> harness =
+        new KeyedOneInputStreamOperatorTestHarness<>(
+            new KeyedProcessOperator<>(new ReActProcessFunction<String>(agent, registry)),
+            s -> key,
+            Types.STRING)) {
+      harness.open();
+      harness.processElement(new StreamRecord<>(question));
 
-    // We can't run KeyedProcessFunction.processElement without a Flink test harness on the
-    // classpath, so this test focuses on the parts of the ReAct loop that don't require
-    // Flink-state plumbing: the OutputSchema parse step and the tool-registry dispatch.
-    org.agentic.flink.llm.OutputSchema<ReActProcessFunction.ReActStep> schema =
-        org.agentic.flink.llm.OutputSchema.of(ReActProcessFunction.ReActStep.class);
-    ReActProcessFunction.ReActStep first =
-        schema.parse(
-            "{\"type\":\"action\",\"thought\":\"need calc\",\"tool\":\"adder\","
-                + "\"arguments\":{\"a\":2,\"b\":3},\"answer\":null}");
-    assertEquals("action", first.getType());
-    assertEquals("adder", first.getTool());
-    assertNotNull(first.getArguments());
+      assertEquals(List.of(question), outputs(harness), "the event passes through once");
+      assertEquals(2, connection.chatCalls.get(), "action turn, then final turn");
+      assertEquals(1, adder.calls.get(), "the tool is dispatched exactly once");
+      assertEquals(a, ((Number) adder.lastParameters.get("a")).intValue());
+      assertEquals(b, ((Number) adder.lastParameters.get("b")).intValue());
+      assertEquals(
+          List.of("start", "tool-start:adder:react-1", "tool-end:adder:react-1:true"),
+          listener.events);
 
-    Object result =
-        registry.getExecutor(first.getTool()).orElseThrow().execute(first.getArguments()).get();
-    assertEquals(5, result);
-    assertEquals(1, adder.calls.get());
-
-    ReActProcessFunction.ReActStep second =
-        schema.parse(
-            "{\"type\":\"final\",\"thought\":\"done\",\"tool\":null,"
-                + "\"arguments\":{},\"answer\":\"5\"}");
-    assertEquals("final", second.getType());
-    assertEquals("5", second.getAnswer());
-
-    // Sanity: the function instance itself constructs cleanly.
-    assertNotNull(fn);
+      // The key is finished: a second element on it passes through without another chat round.
+      harness.processElement(new StreamRecord<>(question));
+      assertEquals(List.of(question, question), outputs(harness));
+      assertEquals(2, connection.chatCalls.get(), "finished keys do not re-enter the loop");
+      assertEquals(1, adder.calls.get());
+    }
   }
 
   /** Counts tool calls across operator (de)serialization in the MiniCluster. */
@@ -266,64 +321,5 @@ class ReActProcessFunctionTest {
 
   private static AgentTransition t(AgentState from, AgentState to, AgentEventType on) {
     return AgentTransition.builder().from(from).to(to).on(on).build();
-  }
-
-  /**
-   * Minimal in-memory ValueState/ListState used by stubs above. Unused in this test path but kept
-   * here as scaffolding for a future Flink-test-harness based driver.
-   */
-  static final class InMemoryValueState<T> implements ValueState<T> {
-    private T value;
-
-    @Override
-    public T value() {
-      return value;
-    }
-
-    @Override
-    public void update(T value) {
-      this.value = value;
-    }
-
-    @Override
-    public void clear() {
-      value = null;
-    }
-  }
-
-  static final class InMemoryListState<T> implements ListState<T> {
-    private final java.util.List<T> data = new java.util.ArrayList<>();
-
-    @Override
-    public Iterable<T> get() {
-      return data;
-    }
-
-    @Override
-    public void add(T value) {
-      data.add(value);
-    }
-
-    @Override
-    public void update(List<T> values) {
-      data.clear();
-      data.addAll(values);
-    }
-
-    @Override
-    public void addAll(List<T> values) {
-      data.addAll(values);
-    }
-
-    @Override
-    public void clear() {
-      data.clear();
-    }
-  }
-
-  /** Probe to keep the assertion list non-empty in case future refactors hit unreachable code. */
-  @SuppressWarnings("unused")
-  private static void assertion() {
-    assertTrue(true);
   }
 }

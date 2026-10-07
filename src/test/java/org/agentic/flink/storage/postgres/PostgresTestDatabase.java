@@ -34,6 +34,10 @@ public final class PostgresTestDatabase implements AutoCloseable {
   public static final String IMAGE =
       System.getProperty("agentic.test.postgres.image", "postgres:16-alpine");
 
+  /** PostgreSQL 16 with the pgvector extension preinstalled, for {@code PgVectorStore}. */
+  public static final String PGVECTOR_IMAGE =
+      System.getProperty("agentic.test.pgvector.image", "pgvector/pgvector:pg16");
+
   private final GenericContainer<?> container;
   private final String databaseName;
   private final String username;
@@ -48,12 +52,21 @@ public final class PostgresTestDatabase implements AutoCloseable {
   }
 
   public static PostgresTestDatabase start() {
+    return start(IMAGE);
+  }
+
+  /** Same as {@link #start()} on the {@link #PGVECTOR_IMAGE} image. */
+  public static PostgresTestDatabase startWithPgVector() {
+    return start(PGVECTOR_IMAGE);
+  }
+
+  private static PostgresTestDatabase start(String image) {
     requireContainerRuntime();
     String db = "agentic_" + UUID.randomUUID().toString().replace('-', '_');
     String user = "agentic_" + UUID.randomUUID().toString().substring(0, 8);
     String pass = UUID.randomUUID().toString();
     GenericContainer<?> pg =
-        new GenericContainer<>(DockerImageName.parse(IMAGE))
+        new GenericContainer<>(DockerImageName.parse(image))
             .withEnv("POSTGRES_DB", db)
             .withEnv("POSTGRES_USER", user)
             .withEnv("POSTGRES_PASSWORD", pass)

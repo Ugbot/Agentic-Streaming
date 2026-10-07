@@ -4,6 +4,7 @@
    recursion guard, condition mini-language, and the end-to-end incident.yaml escalation."
   (:require [clojure.test :refer [deftest is testing]]
             [agentic.cep :as cep]
+            [agentic.fixtures :as fixtures]
             [agentic.pipeline :as pipeline]
             [agentic.spec :as spec]
             [agentic.tools :as tools]
@@ -116,7 +117,7 @@
 
 (deftest incident-yaml-integration-escalates
   (testing "loading incident.yaml and feeding 3 anomalies for one host escalates that conversation"
-    (let [sys (pipeline/load-system "../examples/pipelines/incident.yaml")
+    (let [sys (pipeline/load-system (fixtures/example-pipeline "incident.yaml"))
           host "host-7"
           feed (fn [ts] (pipeline/submit sys (event host "monitor" "anomaly: cpu high"
                                                     {"ts" (str ts)})))]

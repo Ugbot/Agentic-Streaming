@@ -3,53 +3,42 @@ package org.agentic.flink.memory.conversation.fluss;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.List;
 import java.util.UUID;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.memory.conversation.ConversationStore;
+import org.agentic.flink.testkit.FlussTestCluster;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration test for {@link FlussConversationStore} against a real Fluss cluster. Runs only under
- * {@code -P integration-tests}; bring the cluster up first:
- *
- * <pre>
- *   podman network create agentic-flink-network   # once
- *   podman compose -f docker-compose-fluss.yml up -d
- *   mvn test -P integration-tests -Dtest=FlussConversationStoreIT
- * </pre>
- *
- * Bootstrap defaults to {@code localhost:9123} (the compose's coordinator CLIENT listener),
- * override with {@code FLUSS_BOOTSTRAP_SERVERS}. If the cluster is unreachable the test self-skips
- * (assumption) rather than failing, so the integration profile stays green without a Fluss up.
- * Exercises the same {@link ConversationStore} contract as the in-JVM unit test, with randomized
- * data.
+ * Integration test for {@link FlussConversationStore} against a real Fluss cluster. Runs under
+ * {@code ./mvnw verify -P integration-tests}. The cluster comes from {@link FlussTestCluster}:
+ * {@code FLUSS_BOOTSTRAP_SERVERS} if set (for example the compose stack in {@code
+ * docker-compose-fluss.yml}), otherwise Testcontainers on Podman. An unreachable cluster fails the
+ * test. Exercises the same {@link ConversationStore} contract as the in-JVM unit test, with
+ * randomized data.
  */
 @Tag("integration")
 class FlussConversationStoreIT {
 
+  private static FlussTestCluster cluster;
   private static String bootstrap;
 
   @BeforeAll
-  static void requireCluster() {
-    bootstrap = System.getenv().getOrDefault("FLUSS_BOOTSTRAP_SERVERS", "localhost:9123");
-    assumeTrue(reachable(bootstrap), "Fluss not reachable at " + bootstrap + " — skipping");
+  static void startCluster() {
+    cluster = FlussTestCluster.start();
+    bootstrap = cluster.bootstrapServers();
   }
 
-  private static boolean reachable(String hostPort) {
-    String[] hp = hostPort.split(",")[0].split(":");
-    try (Socket s = new Socket()) {
-      s.connect(new InetSocketAddress(hp[0], Integer.parseInt(hp[1])), 2000);
-      return true;
-    } catch (Exception e) {
-      return false;
+  @AfterAll
+  static void stopCluster() {
+    if (cluster != null) {
+      cluster.close();
     }
   }
 

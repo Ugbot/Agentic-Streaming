@@ -18,11 +18,13 @@ name: CI
 #   python-experimental  Python adapters under ports/experimental (same status)
 #   go                   the Go port under ports/experimental/go (same status)
 #
-# Skips are audited. Service-backed tests skip themselves when Postgres, Redis, Kafka,
-# Qdrant or a Python with the MCP SDK is unreachable; in CI those services are provisioned
-# and tools/ci/skip_audit.py fails the job for any skip whose reason is not written down
-# in tools/ci/skip-allowlist.txt (declared conformance capability gaps, Ollama, Fluss, and
-# the two AGENTIC_PEKKO_INTEGRATION tests explained on the core job).
+# Skips are audited. The Maven *IT classes start their own PostgreSQL, pgvector, Redis,
+# Qdrant and Fluss containers through Testcontainers and fail (never skip) without a
+# container runtime; the remaining service-backed tests skip themselves when Postgres,
+# Redis, Kafka, Qdrant or a Python with the MCP SDK is unreachable, so in CI those services
+# are provisioned and tools/ci/skip_audit.py fails the job for any skip whose reason is not
+# written down in tools/ci/skip-allowlist.txt (declared conformance capability gaps, Ollama,
+# and the two AGENTIC_PEKKO_INTEGRATION tests explained on the core job).
 
 on:
   push:
@@ -74,9 +76,10 @@ jobs:
       # jagentic-core McpTest spawns a stdio MCP server with this interpreter.
       AGENTIC_TEST_PYTHON: /tmp/mcp-venv/bin/python
     services:
-      # Testcontainers-based suites (Redis*IT, Postgres*Test in the integration-tests
-      # profile) start their own containers through the runner's Docker socket; the
-      # containers below serve the tests that connect to a fixed localhost port instead.
+      # The *IT classes run by failsafe in the integration-tests profile (Redis, PostgreSQL,
+      # pgvector, Qdrant, Fluss) start their own containers through the runner's Docker
+      # socket; the containers below serve the tests that connect to a fixed localhost
+      # port instead.
       postgres:
         image: postgres:16-alpine
         env:
@@ -135,23 +138,28 @@ jobs:
           /tmp/mcp-venv/bin/pip install "mcp<2"
 
       # One reactor invocation builds every first-class module in dependency order and
-      # runs its tests; `install` (not `verify`) so the Python steps below can resolve
+      # runs its tests: the unit suite through surefire, then the *IT classes through
+      # failsafe in the integration-test phase (the integration-tests profile binds it in
+      # reactor/pom.xml); `install` (not `verify`) so the Python steps below can resolve
       # org.jagentic:agentic-flink through the root pom (python/tests/conftest.py runs
       # `./mvnw dependency:build-classpath`). a2a-gateway is behind the a2a-gateway profile
       # because Quarkus roughly doubles the build time; it is still exercised here.
       #
-      # Two test classes of the Flink module are excluded by name:
+      # Two surefire test classes of the Flink module are excluded by name (failsafe
+      # does not read -Dtest, so the *IT classes are unaffected):
       # - PythonExecutorTest embeds CPython through PEMJA 0.4.1, which ships no wheel for
       #   the Python 3.12 this job installs and pins a different pemja than the apache-flink
       #   package the PyFlink step needs. It stays a local-only integration test.
       # - ZeroMqChannelTest has no per-test timeout and hangs on some hosts (jeromq
       #   PUSH/PULL over tcp://127.0.0.1); a hang here would only surface as this job's
       #   60 minute timeout. Run it locally with `./mvnw test -Dtest=ZeroMqChannelTest`.
+      # - `-Dtest` replaces surefire's include patterns, so `!*IT` keeps the *IT.java classes
+      #   out of surefire; failsafe runs them once in the integration-test phase.
       - name: Maven reactor (integration-tests profile, a2a-gateway included)
         run: >-
           ./mvnw -B -ntp -f reactor/pom.xml install
           -P integration-tests,a2a-gateway
-          -Dtest='!PythonExecutorTest,!ZeroMqChannelTest'
+          -Dtest='!PythonExecutorTest,!ZeroMqChannelTest,!*IT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: Shaded framework jar is present
@@ -192,7 +200,8 @@ jobs:
         if: always()
         run: >-
           python tools/ci/skip_audit.py --allowlist tools/ci/skip-allowlist.txt
-          '**/target/surefire-reports/TEST-*.xml' 'build/junit/*.xml'
+          '**/target/surefire-reports/TEST-*.xml' '**/target/failsafe-reports/TEST-*.xml'
+          'build/junit/*.xml'
 
       - name: Collect test reports
         if: always()
@@ -202,6 +211,8 @@ jobs:
           path: |
             **/target/surefire-reports/TEST-*.xml
             **/target/surefire-reports/*.txt
+            **/target/failsafe-reports/TEST-*.xml
+            **/target/failsafe-reports/*.txt
             build/junit/*.xml
           if-no-files-found: warn
           retention-days: 7

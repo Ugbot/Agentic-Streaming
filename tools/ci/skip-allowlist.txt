@@ -16,10 +16,6 @@ does not support \[  # python facade conformance suite (python-jvm, python-flink
 Ollama
 ^could not import 'litellm'
 
-# Fluss (Alibaba log store) needs a ZooKeeper + coordinator + tablet-server cluster; it is not
-# provisioned in CI. Redis, Postgres, Kafka and Qdrant are.
-^Fluss not reachable
-
 # The two agentic-pekko tests behind @EnabledIfEnvironmentVariable(AGENTIC_PEKKO_INTEGRATION)
 # fail for reasons unrelated to service availability (see the core job in
 # .github/workflows/ci.yml for both), so the variable is not set in CI and JUnit reports

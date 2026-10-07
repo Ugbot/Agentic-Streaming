@@ -3,30 +3,28 @@ package org.agentic.flink.pipeline;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.agentic.flink.runtime.WorkflowTurnFunction;
+import org.agentic.flink.testkit.RepoRoot;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.CloseableIterator;
 import org.jagentic.core.Event;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 /**
  * YAML→Flink-job runner: the shared pipeline.yaml assembled + run as a real (local MiniCluster)
  * Flink job. Proves the portable graph runs in a keyed operator and the cep: section becomes native
- * Flink CEP whose match escalates through the graph.
+ * Flink CEP whose match escalates through the graph. The fixtures are resolved from the repository
+ * root, so a missing YAML fails the test instead of skipping it.
  */
 class FlinkPipelineRunnerTest {
-
-  private static final Path PIPELINES = Path.of("examples", "pipelines");
 
   private static List<String> run(Map<String, Object> spec, List<Event> seeds) throws Exception {
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -55,8 +53,7 @@ class FlinkPipelineRunnerTest {
 
   @Test
   void bankingYamlEmitsNormalizedResults() throws Exception {
-    Path yaml = PIPELINES.resolve("banking.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "banking.yaml not found");
+    Path yaml = RepoRoot.examplePipeline("banking.yaml");
     Map<String, Object> spec = FlinkPipelineRunner.loadYaml(yaml);
     String cid = "c-" + UUID.randomUUID();
     String tid = "t-" + UUID.randomUUID();
@@ -93,8 +90,7 @@ class FlinkPipelineRunnerTest {
 
   @Test
   void incidentCepDerivedTurnIsDeterministicAndIdempotent() throws Exception {
-    Path yaml = PIPELINES.resolve("incident.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "incident.yaml not found");
+    Path yaml = RepoRoot.examplePipeline("incident.yaml");
     Map<String, Object> spec = FlinkPipelineRunner.loadYaml(yaml);
     String host = "host-" + UUID.randomUUID();
     List<Event> anomalies = new ArrayList<>();
@@ -121,8 +117,7 @@ class FlinkPipelineRunnerTest {
   @Test
   @SuppressWarnings("deprecation")
   void deprecatedGraphFunctionDelegatesToTheCoreOperator() throws Exception {
-    Path yaml = PIPELINES.resolve("banking.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "banking.yaml not found");
+    Path yaml = RepoRoot.examplePipeline("banking.yaml");
     Map<String, Object> spec = FlinkPipelineRunner.loadYaml(yaml);
     String cid = "c-" + UUID.randomUUID();
     String tid = "t-" + UUID.randomUUID();
@@ -153,8 +148,7 @@ class FlinkPipelineRunnerTest {
 
   @Test
   void bankingYamlRunsAsAFlinkJob() throws Exception {
-    Path yaml = PIPELINES.resolve("banking.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "banking.yaml not found");
+    Path yaml = RepoRoot.examplePipeline("banking.yaml");
     Map<String, Object> spec = FlinkPipelineRunner.loadYaml(yaml);
 
     List<String> out = run(spec, List.of(new Event("c1", "u", "what is my balance?", Map.of())));
@@ -165,8 +159,7 @@ class FlinkPipelineRunnerTest {
 
   @Test
   void incidentYamlCepEscalatesAsNativeFlinkCep() throws Exception {
-    Path yaml = PIPELINES.resolve("incident.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "incident.yaml not found");
+    Path yaml = RepoRoot.examplePipeline("incident.yaml");
     Map<String, Object> spec = FlinkPipelineRunner.loadYaml(yaml);
 
     // Three anomalies on one host within the 5-minute window → native CEP fires an escalation event

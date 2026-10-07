@@ -1,17 +1,14 @@
 package org.agentic.flink.channel;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.agentic.flink.testkit.FlussTestCluster;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -23,33 +20,28 @@ import org.junit.jupiter.api.Test;
  * log via {@link FlussChannel}'s native {@link FlussChannel.FlussLogPollFn} (FLIP-27). Proves the
  * durable stage→Fluss→stage boundary round-trips on Flink 2.2.
  *
- * <p>Runs only under {@code -P integration-tests}; bring the cluster up first:
- *
- * <pre>
- *   podman network create agentic-flink-network   # once
- *   podman compose -f docker-compose-fluss.yml up -d
- *   mvn test -P integration-tests -Dtest=FlussChannelIT
- * </pre>
- *
- * Bootstrap defaults to {@code localhost:9123}; self-skips if the cluster is unreachable.
+ * <p>Runs under {@code ./mvnw verify -P integration-tests}. The cluster comes from {@link
+ * FlussTestCluster}: {@code FLUSS_BOOTSTRAP_SERVERS} if set (for example the compose stack in
+ * {@code docker-compose-fluss.yml}), otherwise Testcontainers on Podman. An unreachable cluster
+ * fails the test.
  */
 @Tag("integration")
 class FlussChannelIT {
 
+  private static FlussTestCluster cluster;
   private static String bootstrap;
 
   @BeforeAll
-  static void requireCluster() {
-    bootstrap = System.getenv().getOrDefault("FLUSS_BOOTSTRAP_SERVERS", "localhost:9123");
-    String[] hp = bootstrap.split(",")[0].split(":");
-    boolean up;
-    try (Socket s = new Socket()) {
-      s.connect(new InetSocketAddress(hp[0], Integer.parseInt(hp[1])), 2000);
-      up = true;
-    } catch (Exception e) {
-      up = false;
+  static void startCluster() {
+    cluster = FlussTestCluster.start();
+    bootstrap = cluster.bootstrapServers();
+  }
+
+  @AfterAll
+  static void stopCluster() {
+    if (cluster != null) {
+      cluster.close();
     }
-    assumeTrue(up, "Fluss not reachable at " + bootstrap + " — skipping");
   }
 
   /** Public POJO so Jackson round-trips it through the Fluss payload column. */
@@ -113,11 +105,5 @@ class FlussChannelIT {
     }
     assertTrue(
         maxValue == n - 1, "payload values must survive the round trip; maxValue=" + maxValue);
-  }
-
-  /** Quiet "unused" guard for the imports used only when the cluster is present. */
-  @SuppressWarnings("unused")
-  private static List<TypeInformation<?>> never() {
-    return null;
   }
 }

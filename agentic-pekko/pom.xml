@@ -208,9 +208,10 @@
   </build>
 
   <profiles>
-    <!-- The unit suite plus the real-infrastructure tests (Redis via Testcontainers on Podman or
-         Docker, and the persistence TCK through the vintage engine) in one surefire run:
-         ./mvnw -f agentic-pekko/pom.xml test -P integration-tests -->
+    <!-- The unit suite plus the real-infrastructure tests: the persistence TCK through the
+         vintage engine in surefire, and the *IT.java classes (Redis via Testcontainers on Podman
+         or Docker) through the failsafe plugin the reactor parent binds for this profile:
+         ./mvnw -f agentic-pekko/pom.xml verify -P integration-tests -->
     <profile>
       <id>integration-tests</id>
       <build>
@@ -221,7 +222,6 @@
             <configuration combine.self="override">
               <includes>
                 <include>**/*Test.java</include>
-                <include>**/*IT.java</include>
                 <include>**/*TckSpec.java</include>
               </includes>
             </configuration>

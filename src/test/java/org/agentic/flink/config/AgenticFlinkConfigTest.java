@@ -4,7 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.*;
+import org.junitpioneer.jupiter.ClearEnvironmentVariable;
+import org.junitpioneer.jupiter.ClearSystemProperty;
+import org.junitpioneer.jupiter.SetEnvironmentVariable;
+import org.junitpioneer.jupiter.SetSystemProperty;
 
 /**
  * Unit tests for {@link AgenticFlinkConfig}.
@@ -15,6 +21,7 @@ import org.junit.jupiter.api.*;
  *   <li>Factory methods (forTesting, fromMap, fromEnvironment)
  *   <li>Default value resolution
  *   <li>Explicit property overrides via fromMap
+ *   <li>Environment variable and system property resolution, including their precedence
  *   <li>get() with and without default
  *   <li>getInt() parsing and fallback
  *   <li>toMap() export of all resolved values
@@ -23,6 +30,86 @@ import org.junit.jupiter.api.*;
  * @author Agentic Flink Team
  */
 class AgenticFlinkConfigTest {
+
+  private static final String ENV_REDIS_HOST = "AGENTIC_FLINK_REDIS_HOST";
+  private static final String ENV_REDIS_PORT = "AGENTIC_FLINK_REDIS_PORT";
+  private static final String ENV_CUSTOM = "AGENTIC_FLINK_MY_CUSTOM_KEY";
+  private static final String SYSPROP_REDIS_HOST = "agentic.flink.redis.host";
+  private static final String SYSPROP_REDIS_PORT = "agentic.flink.redis.port";
+
+  // ==================== environment / system property resolution ====================
+
+  @Test
+  @SetEnvironmentVariable(key = ENV_REDIS_HOST, value = "redis-from-env.example")
+  @SetEnvironmentVariable(key = ENV_CUSTOM, value = "custom-from-env")
+  @DisplayName("fromEnvironment() should map AGENTIC_FLINK_<KEY> variables onto dotted keys")
+  void testFromEnvironmentReadsEnvironmentVariables() {
+    AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
+
+    assertEquals("redis-from-env.example", config.get(ConfigKeys.REDIS_HOST));
+    assertEquals("custom-from-env", config.get("my.custom.key"));
+    assertEquals("redis-from-env.example", config.toMap().get(ConfigKeys.REDIS_HOST));
+    assertEquals(ConfigKeys.DEFAULT_REDIS_PORT, config.get(ConfigKeys.REDIS_PORT));
+  }
+
+  @Test
+  @SetEnvironmentVariable(key = ENV_REDIS_PORT, value = "16390")
+  @SetEnvironmentVariable(key = ENV_CUSTOM, value = "not-a-number")
+  @DisplayName("fromEnvironment() should parse integer environment variables with getInt()")
+  void testFromEnvironmentParsesIntegerVariables() {
+    AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
+
+    assertEquals(16390, config.getInt(ConfigKeys.REDIS_PORT, -1));
+    assertEquals(
+        -1,
+        config.getInt("my.custom.key", -1),
+        "a variable that is present but not numeric falls back to the default");
+  }
+
+  @Test
+  @SetEnvironmentVariable(key = ENV_REDIS_HOST, value = "redis-from-env.example")
+  @SetSystemProperty(key = SYSPROP_REDIS_HOST, value = "redis-from-sysprop.example")
+  @DisplayName("explicit properties beat environment variables, which beat system properties")
+  void testResolutionPrecedence() {
+    String explicit = "redis-explicit-" + UUID.randomUUID();
+
+    assertEquals(
+        "redis-from-env.example",
+        AgenticFlinkConfig.fromEnvironment().get(ConfigKeys.REDIS_HOST),
+        "env var beats sysprop");
+    assertEquals(
+        explicit,
+        AgenticFlinkConfig.fromMap(Map.of(ConfigKeys.REDIS_HOST, explicit))
+            .get(ConfigKeys.REDIS_HOST),
+        "explicit property beats env var");
+  }
+
+  @Test
+  @ClearEnvironmentVariable(key = ENV_REDIS_HOST)
+  @ClearEnvironmentVariable(key = ENV_REDIS_PORT)
+  @ClearSystemProperty(key = SYSPROP_REDIS_PORT)
+  @SetSystemProperty(key = SYSPROP_REDIS_HOST, value = "redis-from-sysprop.example")
+  @DisplayName("system properties are consulted when no env var is set, and beat defaults")
+  void testSystemPropertyBeatsDefault() {
+    int port = ThreadLocalRandom.current().nextInt(1024, 65535);
+    System.setProperty(SYSPROP_REDIS_PORT, Integer.toString(port));
+
+    AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
+
+    assertEquals("redis-from-sysprop.example", config.get(ConfigKeys.REDIS_HOST));
+    assertEquals(port, config.getInt(ConfigKeys.REDIS_PORT, -1));
+  }
+
+  @Test
+  @SetEnvironmentVariable(key = ENV_REDIS_HOST, value = "redis-from-env.example")
+  @SetSystemProperty(key = SYSPROP_REDIS_HOST, value = "redis-from-sysprop.example")
+  @DisplayName("forTesting() ignores environment variables and system properties")
+  void testForTestingIgnoresEnvironment() {
+    AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
+
+    assertEquals(ConfigKeys.DEFAULT_REDIS_HOST, config.get(ConfigKeys.REDIS_HOST));
+    assertEquals(ConfigKeys.DEFAULT_REDIS_HOST, config.toMap().get(ConfigKeys.REDIS_HOST));
+  }
 
   // ==================== forTesting() Factory ====================
 
