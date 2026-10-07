@@ -112,7 +112,11 @@ public final class BankingFunction implements Function<String, String> {
     ConversationStore store = new PulsarStateConversationStore(sb);
     KeyedStateStore keyed = new PulsarStateKeyedStore(sb);
 
-    Event event = new Event(conversationId, userId, input);
+    Event event = EventBuilder.turn()
+        .conversationId(conversationId)
+        .userId(userId)
+        .text(input)
+        .build();
     AgentContext agentCtx = new AgentContext(conversationId, userId, store, keyed, tools, retriever);
 
     // === The engine seam: the portable router->path->verifier graph ===
