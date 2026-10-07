@@ -3,6 +3,7 @@ package org.agentic.flink.runtime;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.streaming.api.TimerService;
 
 /**
@@ -25,6 +26,7 @@ import org.apache.flink.streaming.api.TimerService;
  * such as a TaskManager of a real cluster, cannot see a manual clock and must not silently read
  * zero. Production jobs keep the default {@link ProcessingClock#flink()}.
  */
+@Public
 public final class ManualProcessingClock implements ProcessingClock {
   private static final long serialVersionUID = 1L;
 
