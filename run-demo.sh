@@ -1,4 +1,7 @@
 #!/bin/bash
+# Uses the Maven wrapper: it enforces JDK 21 and Maven 3.9+, and .mvn/jvm.config gives the
+# in-process exec:java run the --add-opens flags from examples-bin/jvm-opts.sh.
+cd "$(dirname "$0")" || exit 1
 
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -14,7 +17,7 @@ echo ""
 
 if [ ! -d "target/classes" ]; then
     echo -e "${YELLOW}Compiling project...${NC}"
-    mvn compile -q
+    ./mvnw compile -q
     if [ $? -ne 0 ]; then
         echo -e "${RED}Compilation failed. Please check errors above.${NC}"
         exit 1
@@ -25,4 +28,4 @@ fi
 
 echo -e "${GREEN}Starting tiered agent example...${NC}"
 echo ""
-mvn exec:java -Dexec.mainClass="org.agentic.flink.example.TieredAgentExample" -q
+./mvnw exec:java -Dexec.mainClass="org.agentic.flink.example.TieredAgentExample" -q

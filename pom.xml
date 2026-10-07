@@ -23,8 +23,7 @@
     <properties>
         <!-- flink.version, java.version, langchain4j.version and junit.version are inherited from
              the reactor parent. Flink 2.x supports 17/21; 25 is not yet viable (see the Lombok
-             note below). -->
-        <log4j.version>2.17.1</log4j.version>
+             note below). slf4j.version and log4j.version come from the reactor too. -->
         <!--
         A2A (Agent2Agent) Java SDK. groupId io.github.a2asdk. The 1.0 protocol line is
         currently published only as alphas on Maven Central (newest stable Final is 0.3.x);
@@ -34,7 +33,7 @@
         <a2a.version>1.0.0.Alpha3</a2a.version>
         <!-- 1.18.40 was the first release to support JDK 25; staying current here keeps a
              future baseline bump from being blocked by annotation processing. -->
-        <lombok.version>1.18.46</lombok.version>
+        <lombok.version>1.18.48</lombok.version>
         <jackson.version>2.18.10</jackson.version>
     </properties>
 
@@ -48,15 +47,8 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <!-- LangChain4J BOM — aligns langchain4j-core + every provider module (open-ai,
-                 ollama, anthropic, google-ai-gemini) to one version. -->
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-bom</artifactId>
-                <version>${langchain4j.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
+            <!-- The LangChain4J BOM, flink-cep, postgresql and HikariCP versions, and every
+                 org.jagentic module coordinate are managed in reactor/pom.xml. -->
             <!-- Pin commons-lang3 to the modern version Flink 2.x ships, so neither the uber-jar
                  nor downstream consumers pick up a stale Range/StringUtils from a transitive dep
                  (a pre-3.13 commons-lang3 lacks Range.of and breaks Flink's runtime). -->
@@ -84,11 +76,15 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Flink CEP for Complex Event Processing -->
+        <!-- Flink CEP. Deliberately compile scope, unlike the rest of Flink: the DSL's job path
+             (job/AgentJobGenerator, job/AgentExecutionFunction, statemachine/) and the pipeline
+             runner use it, and a Flink distribution does not ship flink-cep in lib/, so every
+             consumer job jar has to shade it. `provided` would fail those jobs at runtime with
+             NoClassDefFoundError; optional would make the default DSL path fail the same way.
+             It adds no transitive dependencies beyond the provided Flink runtime. -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-cep</artifactId>
-            <version>${flink.version}</version>
         </dependency>
 
         <!-- The Flink-free portable agent brain (RoutedGraph, GraphBuilder, PipelineLoader, tools,
@@ -99,7 +95,6 @@
         <dependency>
             <groupId>org.jagentic</groupId>
             <artifactId>jagentic-core</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!--
@@ -127,30 +122,31 @@
             <artifactId>langchain4j</artifactId>
         </dependency>
 
-        <!-- LangChain4J Ollama Integration -->
+        <!-- LangChain4J provider SDKs. All optional: LangChain4jChatConnection selects the provider
+             class in a switch at runtime, so a consumer adds only the SDK(s) it configures (see
+             the install section of README.md). The uber jar and banking-job carry all four. -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-ollama</artifactId>
+            <optional>true</optional>
         </dependency>
-
-        <!-- LangChain4J OpenAI Integration -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
+            <optional>true</optional>
         </dependency>
-
-        <!-- LangChain4J Anthropic (Claude) Integration -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-anthropic</artifactId>
+            <optional>true</optional>
         </dependency>
-
-        <!-- LangChain4J Google Gemini Integration (API-key auth; required by the A2A banking demo,
-             where the model is locked to gemini-3.5-flash). For Vertex project/location auth instead,
-             swap to langchain4j-vertex-ai-gemini. -->
+        <!-- Google Gemini (API-key auth; required by the A2A banking demo, where the model is locked
+             to gemini-3.5-flash). For Vertex project/location auth instead, swap to
+             langchain4j-vertex-ai-gemini. -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-google-ai-gemini</artifactId>
+            <optional>true</optional>
         </dependency>
 
         <!-- Apache Fluss streaming storage client (backs FlussVectorStore; optional) -->
@@ -185,26 +181,31 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Logging -->
+        <!-- Logging: the library logs through the SLF4J API only. The Log4j backend is test scope,
+             so consumers (and the thin jar's pom) choose their own binding; the uber jar excludes
+             both (a Flink cluster supplies them) and banking-job declares its own backend. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
             <version>${log4j.version}</version>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
-
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
             <version>${log4j.version}</version>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
-
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
             <version>${log4j.version}</version>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
 
         <!--
@@ -363,18 +364,18 @@
             <version>${jackson.version}</version>
         </dependency>
 
-        <!-- PostgreSQL JDBC Driver for Pluggable Storage -->
+        <!-- PostgreSQL JDBC driver and HikariCP pool behind the postgres stores (PostgresConversationStore,
+             PgVectorStore, PostgresA2ATaskStore). Optional: a consumer that selects the postgres
+             backend adds both; versions are managed in reactor/pom.xml. -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.13</version>
+            <optional>true</optional>
         </dependency>
-
-        <!-- HikariCP for JDBC Connection Pooling -->
         <dependency>
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>
-            <version>5.0.1</version>
+            <optional>true</optional>
         </dependency>
 
         <!--
@@ -522,6 +523,11 @@
                             -->
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <shadedClassifierName>uber</shadedClassifierName>
+                            <!-- The installed pom must be this pom, not shade's dependency-reduced
+                                 one: the reduced pom strips every dependency bundled into the
+                                 uber jar, which is exactly the compile-scope set (jagentic-core,
+                                 langchain4j, flink-cep, Jackson) a consumer of the thin jar needs. -->
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
                             <artifactSet>
                                 <excludes>
                                     <exclude>org.apache.flink:flink-shaded-force-shading</exclude>

@@ -39,7 +39,6 @@
         <dependency>
             <groupId>org.jagentic</groupId>
             <artifactId>agentic-flink</artifactId>
-            <version>${project.version}</version>
             <!-- Quarkus provides the logging backend (jboss-logmanager); drop core's log4j to
                  avoid a duplicate-SLF4J-binding / LoggerContext init clash. -->
             <exclusions>
@@ -84,6 +83,18 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-clients</artifactId>
             <version>${flink.version}</version>
+        </dependency>
+
+        <!-- Postgres task store (AGENTIC_FLINK_A2A_TASK_STORE=postgres; optional in core). -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Bridge transports (optional in core; required here at runtime). -->

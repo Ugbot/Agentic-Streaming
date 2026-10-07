@@ -5,11 +5,11 @@
 # joined by Redis. The entrypoint starts the job, waits for it to subscribe, then the gateway.
 #
 # Build the jars first (they land in the gitignored target/ dirs), then build the image:
-#   mvn -o clean install -DskipTests
-#   mvn -o -f a2a-gateway/pom.xml package -DskipTests
-#   mvn -o -f banking-job/pom.xml package -DskipTests
+#   ./mvnw -f reactor/pom.xml -DskipTests install
+#   ./mvnw -f a2a-gateway/pom.xml package -DskipTests
 #   podman build -f docker/banking.Dockerfile -t agentic-flink-banking .
-FROM eclipse-temurin:17-jre
+# The jars are compiled with --release 21, so the runtime image must be a 21 JRE.
+FROM eclipse-temurin:21-jre
 
 # The Redis A2A bridge is non-lossy (RPUSH/BLPOP), so the entrypoint just starts both processes —
 # no redis-cli readiness polling needed.

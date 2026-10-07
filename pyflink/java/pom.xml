@@ -25,13 +25,11 @@
         <dependency>
             <groupId>org.jagentic</groupId>
             <artifactId>agentic-flink</artifactId>
-            <version>${project.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.jagentic</groupId>
             <artifactId>jagentic-core</artifactId>
-            <version>${project.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>

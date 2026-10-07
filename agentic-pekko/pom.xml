@@ -53,7 +53,6 @@
     <dependency>
       <groupId>org.jagentic</groupId>
       <artifactId>jagentic-core</artifactId>
-      <version>${project.version}</version>
     </dependency>
 
     <!-- Typed actors + cluster sharding: one entity per conversationId (keyed, single-writer). -->
