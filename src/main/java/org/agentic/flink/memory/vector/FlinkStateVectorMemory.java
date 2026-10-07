@@ -1,11 +1,11 @@
 package org.agentic.flink.memory.vector;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -13,9 +13,9 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
 /**
  * Default {@link VectorMemory}: exact brute-force KNN backed by Flink {@code MapState}.
  *
- * <p>Why brute-force rather than HNSW? For the workload this framework targets (a few hundred to
- * a few thousand vectors per conversation), brute-force at d=768 is sub-millisecond and removes
- * three sources of complexity that HNSW carries: graph serialization, rebuild-on-restore, and
+ * <p>Why brute-force rather than HNSW? For the workload this framework targets (a few hundred to a
+ * few thousand vectors per conversation), brute-force at d=768 is sub-millisecond and removes three
+ * sources of complexity that HNSW carries: graph serialization, rebuild-on-restore, and
  * approximate-recall tuning. Users who outgrow it (10⁵+ vectors per key) plug a JVector- or
  * Lucene-HNSW-backed {@link VectorMemorySpec} in via {@code ServiceLoader}.
  *
@@ -92,7 +92,8 @@ public final class FlinkStateVectorMemory implements VectorMemory {
     }
 
     // Bounded top-k via a min-heap of size k (smallest score on top, ready to evict).
-    java.util.PriorityQueue<ScoredItem> heap = new java.util.PriorityQueue<>(k, (a, b) -> Double.compare(a.getScore(), b.getScore()));
+    java.util.PriorityQueue<ScoredItem> heap =
+        new java.util.PriorityQueue<>(k, (a, b) -> Double.compare(a.getScore(), b.getScore()));
     for (Map.Entry<String, VectorEntry> entry : state.entries()) {
       VectorEntry ve = entry.getValue();
       double score = similarityScore(query, ve.getEmbedding(), qNorm);
@@ -212,7 +213,10 @@ public final class FlinkStateVectorMemory implements VectorMemory {
       MapStateDescriptor<String, VectorEntry> descriptor =
           new MapStateDescriptor<>("vector.entries", String.class, VectorEntry.class);
       return new FlinkStateVectorMemory(
-          rc.getMapState(descriptor), dimension, similarity, maxItems);
+          KeyedVectorState.mapState(rc, descriptor, providerName()),
+          dimension,
+          similarity,
+          maxItems);
     }
 
     @Override

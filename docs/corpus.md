@@ -59,6 +59,28 @@ Every write is immediately visible to subsequent reads on the same operator
 , there's no replication lag. The constraint is that ingest and retrieve
 must share the same `keyBy` and the same operator chain.
 
+The shipped pipelines wire this for you. `IngestionPipeline...embed(...).embedded()`
+exposes the embedded chunks and `RetrievalPipeline...search(corpus, k, embeddedChunks)`
+keys both the chunks and the queries by the corpus name and runs them through one
+`KeyedCoProcessFunction`; the ingest acknowledgements come out of
+`ingestAcks()` on the returned stage:
+
+```java
+DataStream<IngestionPipeline.EmbeddedChunk> indexed =
+    IngestionPipeline.from(pages).chunk(new RecursiveTextChunker(512)).embed(embeddings).embedded();
+
+RetrievalPipeline.StageRerank searched =
+    RetrievalPipeline.from(queries).embed(embeddings).search(corpus, 6, indexed);
+searched.ingestAcks().print();
+searched.rerankSkip().answer(chat, chatSetup).print();
+```
+
+A Flink-state vector memory is keyed state, so binding it from an unkeyed
+operator (for example `IngestionPipeline...into(corpus)` or the two-argument
+`RetrievalPipeline...search(corpus, k)`) fails in `open()` with an
+`IllegalStateException` that points at the keyed wiring above. Use those
+unkeyed stages with `ExternalCorpus`.
+
 ## `BroadcastCorpus`
 
 Use this when ingest and retrieve should run independently, e.g. retrieve
@@ -113,7 +135,8 @@ right DB and let `initialize(...)` run.
 ## How the example uses it
 
 [`LiveResearchExample`](examples/live-research.md) uses
-`BroadcastCorpus.spec("research-kb", FlinkStateHnswVectorMemory.spec(384))`
-so the crawler operator and the query operator can scale independently.
+`SingleOperatorCorpus.spec("research-kb", FlinkStateHnswVectorMemory.spec(384))`
+through the keyed `search(corpus, k, indexed)` stage, so the crawled chunks and
+the queries meet on one keyed operator whose vectors checkpoint with the job.
 Production deployments would more typically use `ExternalCorpus` so the
 corpus survives job restarts and is shared across jobs.
