@@ -35,7 +35,6 @@ Configuration keys use dot-separated lowercase notation. The corresponding envir
 | `conversation.store.ttl.seconds` | `AGENTIC_FLINK_CONVERSATION_STORE_TTL_SECONDS` |
 | `conversation.store.max.messages` | `AGENTIC_FLINK_CONVERSATION_STORE_MAX_MESSAGES` |
 | `fluss.bootstrap.servers` | `AGENTIC_FLINK_FLUSS_BOOTSTRAP_SERVERS` |
-| `conversation.store.fluss.database` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_DATABASE` |
 | `conversation.store.fluss.table` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_TABLE` |
 | `conversation.store.fluss.buckets` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_BUCKETS` |
 | `postgres.url` | `AGENTIC_FLINK_POSTGRES_URL` |
