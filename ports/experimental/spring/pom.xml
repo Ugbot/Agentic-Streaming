@@ -97,35 +97,12 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[21,)</version>
+                  <version>[21,22)</version>
                   <message>This project requires JDK 21 or newer.</message>
                 </requireJavaVersion>
                 <requireMavenVersion>
                   <version>[3.9,)</version>
                   <message>Use the committed wrapper (./mvnw) or Maven 3.9+.</message>
-                </requireMavenVersion>
-              </rules>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-enforcer-plugin</artifactId>
-        <version>3.5.0</version>
-        <executions>
-          <execution>
-            <id>enforce-jdk-and-maven</id>
-            <goals>
-              <goal>enforce</goal>
-            </goals>
-            <configuration>
-              <rules>
-                <requireJavaVersion>
-                  <version>[21,22)</version>
-                </requireJavaVersion>
-                <requireMavenVersion>
-                  <version>[3.9,)</version>
                 </requireMavenVersion>
               </rules>
             </configuration>
