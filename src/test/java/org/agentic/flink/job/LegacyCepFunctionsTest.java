@@ -31,45 +31,66 @@ import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 import org.junit.jupiter.api.Test;
 
-/** F1/F2 at the CEP layer: the match handler only dispatches (with keyed dedup) and the supervisor tier cancels on timeout. */
+/**
+ * F1/F2 at the CEP layer: the match handler only dispatches (with keyed dedup) and the supervisor
+ * tier cancels on timeout.
+ */
 @SuppressWarnings("deprecation")
 class LegacyCepFunctionsTest {
 
-  /** Runs a {@link PatternProcessFunction} inside a keyed operator so it gets real keyed state. */
+  /** Runs the stateless CEP match function, then the keyed dedup operator it is followed by. */
   static final class Adapter extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
     private static final long serialVersionUID = 1L;
-    final AgentExecutionFunction delegate;
-    final List<AgentEvent> sideOutputs = new ArrayList<>();
+    final AgentExecutionFunction match;
+    final TurnDispatchDedupFunction dedup;
 
-    Adapter(AgentExecutionFunction delegate) {
-      this.delegate = delegate;
+    Adapter(AgentExecutionFunction match) {
+      this.match = match;
+      this.dedup = match.dedup();
     }
 
     @Override
     public void open(OpenContext openContext) throws Exception {
-      delegate.setRuntimeContext(getRuntimeContext());
-      delegate.open(openContext);
+      dedup.setRuntimeContext(getRuntimeContext());
+      dedup.open(openContext);
     }
 
     @Override
-    public void processElement(AgentEvent value, Context ctx, Collector<AgentEvent> out) throws Exception {
-      PatternProcessFunction.Context cepCtx = new PatternProcessFunction.Context() {
-        @Override
-        public <X> void output(OutputTag<X> outputTag, X value) {
-          ctx.output(outputTag, value);
-        }
+    public void processElement(AgentEvent value, Context ctx, Collector<AgentEvent> out)
+        throws Exception {
+      PatternProcessFunction.Context cepCtx =
+          new PatternProcessFunction.Context() {
+            @Override
+            public <X> void output(OutputTag<X> outputTag, X value) {
+              ctx.output(outputTag, value);
+            }
 
-        @Override
-        public long timestamp() {
-          return ctx.timestamp() == null ? 0L : ctx.timestamp();
-        }
+            @Override
+            public long timestamp() {
+              return ctx.timestamp() == null ? 0L : ctx.timestamp();
+            }
 
-        @Override
-        public long currentProcessingTime() {
-          return ctx.timerService().currentProcessingTime();
-        }
-      };
-      delegate.processMatch(Map.of("initial", List.of(value)), cepCtx, out);
+            @Override
+            public long currentProcessingTime() {
+              return ctx.timerService().currentProcessingTime();
+            }
+          };
+      List<AgentEvent> requests = new ArrayList<>();
+      match.processMatch(
+          Map.of("initial", List.of(value)),
+          cepCtx,
+          new Collector<>() {
+            @Override
+            public void collect(AgentEvent record) {
+              requests.add(record);
+            }
+
+            @Override
+            public void close() {}
+          });
+      for (AgentEvent request : requests) {
+        dedup.processElement(request, ctx, out);
+      }
     }
   }
 
@@ -80,7 +101,8 @@ class LegacyCepFunctionsTest {
     return e;
   }
 
-  private static List<AgentEvent> outputs(KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h) {
+  private static List<AgentEvent> outputs(
+      KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h) {
     List<AgentEvent> out = new ArrayList<>();
     for (Object o : h.getOutput()) {
       if (o instanceof StreamRecord<?> r) {
@@ -92,12 +114,21 @@ class LegacyCepFunctionsTest {
 
   @Test
   void matchHandlerDispatchesOncePerTurnAndDropsRedeliveries() throws Exception {
-    Agent agent = Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("s")
-        .withStateMachine(AgentExecutorTest.stateMachine()).build();
-    AgentExecutionFunction fn = new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ofMinutes(5));
+    Agent agent =
+        Agent.builder()
+            .withId("a-" + UUID.randomUUID())
+            .withSystemPrompt("s")
+            .withStateMachine(AgentExecutorTest.stateMachine())
+            .build();
+    AgentExecutionFunction fn =
+        new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ofMinutes(5));
     assertEquals(Duration.ofMinutes(5), fn.getDedupTtl());
-    assertThrows(IllegalArgumentException.class,
+    assertEquals(Duration.ofMinutes(5), fn.dedup().getDedupTtl());
+    assertThrows(
+        IllegalArgumentException.class,
         () -> new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ZERO));
+    assertThrows(
+        IllegalArgumentException.class, () -> new TurnDispatchDedupFunction(agent, Duration.ZERO));
 
     try (KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h =
         new KeyedOneInputStreamOperatorTestHarness<>(
@@ -125,10 +156,15 @@ class LegacyCepFunctionsTest {
 
   @Test
   void dispatchStateExpiresAfterTtl() throws Exception {
-    Agent agent = Agent.builder().withId("a-" + UUID.randomUUID()).withSystemPrompt("s")
-        .withStateMachine(AgentExecutorTest.stateMachine()).build();
+    Agent agent =
+        Agent.builder()
+            .withId("a-" + UUID.randomUUID())
+            .withSystemPrompt("s")
+            .withStateMachine(AgentExecutorTest.stateMachine())
+            .build();
     long ttl = ThreadLocalRandom.current().nextLong(1_000, 10_000);
-    AgentExecutionFunction fn = new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ofMillis(ttl));
+    AgentExecutionFunction fn =
+        new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ofMillis(ttl));
     try (KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h =
         new KeyedOneInputStreamOperatorTestHarness<>(
             new KeyedProcessOperator<>(new Adapter(fn)), AgentEvent::getFlowId, Types.STRING)) {
@@ -176,19 +212,39 @@ class LegacyCepFunctionsTest {
     long timeoutMs = ThreadLocalRandom.current().nextLong(100, 400);
     AgentExecutorTest.CountingTool slow = new AgentExecutorTest.CountingTool("slow");
     slow.block = new CountDownLatch(1);
-    Agent agent = Agent.builder().withId("sup-" + UUID.randomUUID()).withSystemPrompt("s").withTools("slow")
-        .withTimeout(Duration.ofMillis(timeoutMs)).withStateMachine(AgentExecutorTest.stateMachine()).build();
-    SupervisorChain chain = SupervisorChain.builder().withId("c").addSimpleTier("t0", agent).build();
-    LLMClient llm = LLMClient.builder().withModel("m").build(new AgentExecutorTest.ScriptedConnection(
-        List.of(AgentExecutorTest.toolCall("slow", Map.of()), AgentExecutorTest.text("never"))));
-    SupervisorTierFunction fn = new SupervisorTierFunction(
-        chain.getTiers().get(0), chain, ToolRegistry.builder().registerTool("slow", slow).build(), null, llm);
+    Agent agent =
+        Agent.builder()
+            .withId("sup-" + UUID.randomUUID())
+            .withSystemPrompt("s")
+            .withTools("slow")
+            .withTimeout(Duration.ofMillis(timeoutMs))
+            .withStateMachine(AgentExecutorTest.stateMachine())
+            .build();
+    SupervisorChain chain =
+        SupervisorChain.builder().withId("c").addSimpleTier("t0", agent).build();
+    LLMClient llm =
+        LLMClient.builder()
+            .withModel("m")
+            .build(
+                new AgentExecutorTest.ScriptedConnection(
+                    List.of(
+                        AgentExecutorTest.toolCall("slow", Map.of()),
+                        AgentExecutorTest.text("never"))));
+    SupervisorTierFunction fn =
+        new SupervisorTierFunction(
+            chain.getTiers().get(0),
+            chain,
+            ToolRegistry.builder().registerTool("slow", slow).build(),
+            null,
+            llm);
     assertEquals(Duration.ofMillis(timeoutMs), fn.getTimeout());
 
     CollectingContext ctx = new CollectingContext();
     List<AgentEvent> out = new ArrayList<>();
     long started = System.nanoTime();
-    fn.processMatch(Map.of("initial", List.of(start("flow-" + UUID.randomUUID(), "t"))), ctx,
+    fn.processMatch(
+        Map.of("initial", List.of(start("flow-" + UUID.randomUUID(), "t"))),
+        ctx,
         new Collector<>() {
           @Override
           public void collect(AgentEvent record) {
@@ -214,18 +270,33 @@ class LegacyCepFunctionsTest {
 
   @Test
   void supervisorTierRejectsNonPositiveTimeout() {
-    Agent zero = Agent.builder().withId("sup").withSystemPrompt("s").withTimeout(Duration.ZERO)
-        .withStateMachine(AgentExecutorTest.stateMachine()).build();
+    Agent zero =
+        Agent.builder()
+            .withId("sup")
+            .withSystemPrompt("s")
+            .withTimeout(Duration.ZERO)
+            .withStateMachine(AgentExecutorTest.stateMachine())
+            .build();
     SupervisorChain chain = SupervisorChain.builder().withId("c").addSimpleTier("t0", zero).build();
-    assertThrows(IllegalArgumentException.class, () -> new SupervisorTierFunction(
-        chain.getTiers().get(0), chain, ToolRegistry.empty()));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new SupervisorTierFunction(chain.getTiers().get(0), chain, ToolRegistry.empty()));
 
     Duration agentTimeout = Duration.ofSeconds(ThreadLocalRandom.current().nextInt(1, 120));
-    Agent timed = Agent.builder().withId("sup2").withSystemPrompt("s").withTimeout(agentTimeout)
-        .withStateMachine(AgentExecutorTest.stateMachine()).build();
-    SupervisorChain chain2 = SupervisorChain.builder().withId("c2").addSimpleTier("t0", timed).build();
-    assertEquals(agentTimeout, new SupervisorTierFunction(
-        chain2.getTiers().get(0), chain2, ToolRegistry.empty(), Duration.ofHours(1)).getTimeout(),
+    Agent timed =
+        Agent.builder()
+            .withId("sup2")
+            .withSystemPrompt("s")
+            .withTimeout(agentTimeout)
+            .withStateMachine(AgentExecutorTest.stateMachine())
+            .build();
+    SupervisorChain chain2 =
+        SupervisorChain.builder().withId("c2").addSimpleTier("t0", timed).build();
+    assertEquals(
+        agentTimeout,
+        new SupervisorTierFunction(
+                chain2.getTiers().get(0), chain2, ToolRegistry.empty(), Duration.ofHours(1))
+            .getTimeout(),
         "agent timeout wins over the tier default");
   }
 }

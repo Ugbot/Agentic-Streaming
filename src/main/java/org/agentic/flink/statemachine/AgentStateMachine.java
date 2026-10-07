@@ -1,24 +1,23 @@
 package org.agentic.flink.statemachine;
 
+import java.io.Serializable;
+import java.time.Duration;
+import java.util.*;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
-import java.io.Serializable;
-import java.util.*;
-import java.util.stream.Collectors;
-import java.time.Duration;
 import org.apache.flink.cep.pattern.Pattern;
-import org.apache.flink.cep.pattern.conditions.IterativeCondition;
 import org.apache.flink.cep.pattern.conditions.SimpleCondition;
 
 /**
  * Defines the complete agent state machine with all states and valid transitions.
  *
  * <p>This class serves as the central definition of agent lifecycle behavior. It:
+ *
  * <ul>
- *   <li>Defines all valid state transitions</li>
- *   <li>Provides state validation and transition checking</li>
- *   <li>Generates Apache Flink CEP patterns for state machine implementation</li>
- *   <li>Handles timeout conditions and terminal states</li>
+ *   <li>Defines all valid state transitions
+ *   <li>Provides state validation and transition checking
+ *   <li>Generates Apache Flink CEP patterns for state machine implementation
+ *   <li>Handles timeout conditions and terminal states
  * </ul>
  *
  * <p><b>Design Pattern:</b> This implements a declarative state machine where states and
@@ -26,6 +25,7 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * This approach borrows from the Saga kit's pattern-based orchestration.
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * // Create a state machine with standard transitions
  * AgentStateMachine stateMachine = AgentStateMachine.builder()
@@ -78,8 +78,9 @@ public class AgentStateMachine implements Serializable {
     }
 
     // Sort transitions by priority (descending)
-    transitionsByState.values().forEach(list -> list.sort((a, b) ->
-        Integer.compare(b.getPriority(), a.getPriority())));
+    transitionsByState
+        .values()
+        .forEach(list -> list.sort((a, b) -> Integer.compare(b.getPriority(), a.getPriority())));
   }
 
   public String getStateMachineId() {
@@ -147,9 +148,8 @@ public class AgentStateMachine implements Serializable {
   public boolean executeTransition(AgentState currentState, AgentEvent event) {
     List<AgentTransition> possibleTransitions = getTransitionsFrom(currentState);
 
-    Optional<AgentTransition> matchingTransition = possibleTransitions.stream()
-        .filter(t -> t.canTransition(event))
-        .findFirst();
+    Optional<AgentTransition> matchingTransition =
+        possibleTransitions.stream().filter(t -> t.canTransition(event)).findFirst();
 
     if (matchingTransition.isPresent()) {
       matchingTransition.get().executeAction(event);
@@ -165,6 +165,7 @@ public class AgentStateMachine implements Serializable {
    * transitions, similar to the saga kit's CEP pattern generation.
    *
    * <p><b>Pattern Structure:</b>
+   *
    * <pre>
    * INITIALIZED → VALIDATING → EXECUTING → SUPERVISOR_REVIEW → COMPLETED
    * (with optional loops back for corrections)
@@ -174,80 +175,91 @@ public class AgentStateMachine implements Serializable {
    */
   public Pattern<AgentEvent, ?> generateCepPattern() {
     // Start with the initial state
-    Pattern<AgentEvent, ?> pattern = Pattern.<AgentEvent>begin("initial")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) throws Exception {
-            return event.getEventType() == AgentEventType.FLOW_STARTED;
-          }
-        });
+    Pattern<AgentEvent, ?> pattern =
+        Pattern.<AgentEvent>begin("initial")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) throws Exception {
+                    return event.getEventType() == AgentEventType.FLOW_STARTED;
+                  }
+                });
 
     // Add validation step (optional)
-    pattern = pattern
-        .followedBy("validating")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) throws Exception {
-            return event.getEventType() == AgentEventType.VALIDATION_REQUESTED
-                || event.getEventType() == AgentEventType.VALIDATION_PASSED
-                || event.getEventType() == AgentEventType.VALIDATION_FAILED;
-          }
-        })
-        .optional();
+    pattern =
+        pattern
+            .followedBy("validating")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) throws Exception {
+                    return event.getEventType() == AgentEventType.VALIDATION_REQUESTED
+                        || event.getEventType() == AgentEventType.VALIDATION_PASSED
+                        || event.getEventType() == AgentEventType.VALIDATION_FAILED;
+                  }
+                })
+            .optional();
 
     // Add execution step (required)
-    pattern = pattern
-        .followedBy("executing")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) throws Exception {
-            return event.getEventType() == AgentEventType.LOOP_ITERATION_STARTED
-                || event.getEventType() == AgentEventType.TOOL_CALL_REQUESTED
-                || event.getEventType() == AgentEventType.TOOL_CALL_COMPLETED
-                || event.getEventType() == AgentEventType.TOOL_CALL_FAILED;
-          }
-        })
-        .oneOrMore()
-        .greedy();
+    pattern =
+        pattern
+            .followedBy("executing")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) throws Exception {
+                    return event.getEventType() == AgentEventType.LOOP_ITERATION_STARTED
+                        || event.getEventType() == AgentEventType.TOOL_CALL_REQUESTED
+                        || event.getEventType() == AgentEventType.TOOL_CALL_COMPLETED
+                        || event.getEventType() == AgentEventType.TOOL_CALL_FAILED;
+                  }
+                })
+            .oneOrMore();
 
     // Add correction step (optional, may repeat)
-    pattern = pattern
-        .followedBy("correcting")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) throws Exception {
-            return event.getEventType() == AgentEventType.CORRECTION_REQUESTED
-                || event.getEventType() == AgentEventType.CORRECTION_COMPLETED
-                || event.getEventType() == AgentEventType.CORRECTION_FAILED;
-          }
-        })
-        .optional()
-        .oneOrMore();
+    pattern =
+        pattern
+            .followedBy("correcting")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) throws Exception {
+                    return event.getEventType() == AgentEventType.CORRECTION_REQUESTED
+                        || event.getEventType() == AgentEventType.CORRECTION_COMPLETED
+                        || event.getEventType() == AgentEventType.CORRECTION_FAILED;
+                  }
+                })
+            .oneOrMore()
+            .optional();
 
     // Add supervisor review step (optional)
-    pattern = pattern
-        .followedBy("supervisor_review")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) throws Exception {
-            return event.getEventType() == AgentEventType.SUPERVISOR_REVIEW_REQUESTED
-                || event.getEventType() == AgentEventType.SUPERVISOR_APPROVED
-                || event.getEventType() == AgentEventType.SUPERVISOR_REJECTED;
-          }
-        })
-        .optional();
+    pattern =
+        pattern
+            .followedBy("supervisor_review")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) throws Exception {
+                    return event.getEventType() == AgentEventType.SUPERVISOR_REVIEW_REQUESTED
+                        || event.getEventType() == AgentEventType.SUPERVISOR_APPROVED
+                        || event.getEventType() == AgentEventType.SUPERVISOR_REJECTED;
+                  }
+                })
+            .optional();
 
     // Add terminal step (completion or failure)
-    pattern = pattern
-        .followedBy("terminal")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) throws Exception {
-            return event.getEventType() == AgentEventType.FLOW_COMPLETED
-                || event.getEventType() == AgentEventType.FLOW_FAILED
-                || event.getEventType() == AgentEventType.LOOP_MAX_ITERATIONS_REACHED;
-          }
-        });
+    pattern =
+        pattern
+            .followedBy("terminal")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) throws Exception {
+                    return event.getEventType() == AgentEventType.FLOW_COMPLETED
+                        || event.getEventType() == AgentEventType.FLOW_FAILED
+                        || event.getEventType() == AgentEventType.LOOP_MAX_ITERATIONS_REACHED;
+                  }
+                });
 
     // Apply global timeout if configured
     if (globalTimeoutSeconds > 0) {
@@ -269,66 +281,74 @@ public class AgentStateMachine implements Serializable {
    * @return Customized CEP pattern
    */
   public Pattern<AgentEvent, ?> generateCustomCepPattern(
-      boolean enableValidation,
-      boolean enableSupervisorReview,
-      boolean enableCompensation) {
+      boolean enableValidation, boolean enableSupervisorReview, boolean enableCompensation) {
 
     // Start pattern
-    Pattern<AgentEvent, ?> pattern = Pattern.<AgentEvent>begin("initial")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) {
-            return event.getEventType() == AgentEventType.FLOW_STARTED;
-          }
-        });
+    Pattern<AgentEvent, ?> pattern =
+        Pattern.<AgentEvent>begin("initial")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) {
+                    return event.getEventType() == AgentEventType.FLOW_STARTED;
+                  }
+                });
 
     // Conditional validation
     if (enableValidation) {
-      pattern = pattern
-          .followedBy("validation")
-          .where(new SimpleCondition<AgentEvent>() {
-            @Override
-            public boolean filter(AgentEvent event) {
-              return event.getEventType() == AgentEventType.VALIDATION_PASSED
-                  || event.getEventType() == AgentEventType.VALIDATION_FAILED;
-            }
-          });
+      pattern =
+          pattern
+              .followedBy("validation")
+              .where(
+                  new SimpleCondition<AgentEvent>() {
+                    @Override
+                    public boolean filter(AgentEvent event) {
+                      return event.getEventType() == AgentEventType.VALIDATION_PASSED
+                          || event.getEventType() == AgentEventType.VALIDATION_FAILED;
+                    }
+                  });
     }
 
     // Required execution
-    pattern = pattern
-        .followedBy("execution")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) {
-            return event.getEventType() == AgentEventType.TOOL_CALL_COMPLETED
-                || event.getEventType() == AgentEventType.TOOL_CALL_FAILED;
-          }
-        });
+    pattern =
+        pattern
+            .followedBy("execution")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) {
+                    return event.getEventType() == AgentEventType.TOOL_CALL_COMPLETED
+                        || event.getEventType() == AgentEventType.TOOL_CALL_FAILED;
+                  }
+                });
 
     // Conditional supervisor review
     if (enableSupervisorReview) {
-      pattern = pattern
-          .followedBy("supervisor")
-          .where(new SimpleCondition<AgentEvent>() {
-            @Override
-            public boolean filter(AgentEvent event) {
-              return event.getEventType() == AgentEventType.SUPERVISOR_APPROVED
-                  || event.getEventType() == AgentEventType.SUPERVISOR_REJECTED;
-            }
-          });
+      pattern =
+          pattern
+              .followedBy("supervisor")
+              .where(
+                  new SimpleCondition<AgentEvent>() {
+                    @Override
+                    public boolean filter(AgentEvent event) {
+                      return event.getEventType() == AgentEventType.SUPERVISOR_APPROVED
+                          || event.getEventType() == AgentEventType.SUPERVISOR_REJECTED;
+                    }
+                  });
     }
 
     // Terminal state
-    pattern = pattern
-        .followedBy("terminal")
-        .where(new SimpleCondition<AgentEvent>() {
-          @Override
-          public boolean filter(AgentEvent event) {
-            return event.getEventType() == AgentEventType.FLOW_COMPLETED
-                || event.getEventType() == AgentEventType.FLOW_FAILED;
-          }
-        });
+    pattern =
+        pattern
+            .followedBy("terminal")
+            .where(
+                new SimpleCondition<AgentEvent>() {
+                  @Override
+                  public boolean filter(AgentEvent event) {
+                    return event.getEventType() == AgentEventType.FLOW_COMPLETED
+                        || event.getEventType() == AgentEventType.FLOW_FAILED;
+                  }
+                });
 
     // Optional compensation on failure
     if (enableCompensation) {
@@ -357,14 +377,16 @@ public class AgentStateMachine implements Serializable {
     // Check that all non-terminal states have at least one outgoing transition
     for (AgentState state : AgentState.values()) {
       if (!state.isTerminal() && getTransitionsFrom(state).isEmpty()) {
-        throw new IllegalStateException("Non-terminal state " + state + " has no outgoing transitions");
+        throw new IllegalStateException(
+            "Non-terminal state " + state + " has no outgoing transitions");
       }
     }
 
     // Check that terminal states have no outgoing transitions
     for (AgentState terminalState : terminalStates) {
       if (!getTransitionsFrom(terminalState).isEmpty()) {
-        throw new IllegalStateException("Terminal state " + terminalState + " has outgoing transitions");
+        throw new IllegalStateException(
+            "Terminal state " + terminalState + " has outgoing transitions");
       }
     }
 
@@ -388,7 +410,8 @@ public class AgentStateMachine implements Serializable {
     // Warn about unreachable states (not an error, just informational)
     for (AgentState state : AgentState.values()) {
       if (!reachable.contains(state) && !state.isTerminal()) {
-        System.out.println("Warning: State " + state + " is not reachable in state machine " + stateMachineId);
+        System.out.println(
+            "Warning: State " + state + " is not reachable in state machine " + stateMachineId);
       }
     }
   }
@@ -401,8 +424,9 @@ public class AgentStateMachine implements Serializable {
   public static class Builder {
     private String stateMachineId = "default-state-machine";
     private AgentState initialState = AgentState.INITIALIZED;
-    private Set<AgentState> terminalStates = new HashSet<>(Arrays.asList(
-        AgentState.COMPLETED, AgentState.FAILED, AgentState.COMPENSATED));
+    private Set<AgentState> terminalStates =
+        new HashSet<>(
+            Arrays.asList(AgentState.COMPLETED, AgentState.FAILED, AgentState.COMPENSATED));
     private List<AgentTransition> transitions = new ArrayList<>();
     private int globalTimeoutSeconds = 300; // 5 minutes default
     private boolean enableCompensation = false;
@@ -453,12 +477,13 @@ public class AgentStateMachine implements Serializable {
      * Adds all standard transitions for a typical agent workflow.
      *
      * <p>Includes:
+     *
      * <ul>
-     *   <li>Validation pass/fail transitions</li>
-     *   <li>Correction transitions</li>
-     *   <li>Execution completion</li>
-     *   <li>Supervisor approval/rejection</li>
-     *   <li>Compensation (if enabled)</li>
+     *   <li>Validation pass/fail transitions
+     *   <li>Correction transitions
+     *   <li>Execution completion
+     *   <li>Supervisor approval/rejection
+     *   <li>Compensation (if enabled)
      * </ul>
      */
     public Builder withStandardTransitions() {
