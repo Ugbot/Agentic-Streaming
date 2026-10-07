@@ -3,6 +3,7 @@ package org.agentic.flink.embedding;
 import dev.langchain4j.model.googleai.GoogleAiEmbeddingModel;
 import java.time.Duration;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -15,6 +16,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * the output dimensionality (gemini-embedding-001 supports reduced dimensions — set it to match the
  * vector index).
  */
+@Public
 public final class GeminiEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;
 

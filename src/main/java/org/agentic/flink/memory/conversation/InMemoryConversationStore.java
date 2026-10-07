@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.llm.ChatMessage;
 
 /**
@@ -25,6 +26,7 @@ import org.agentic.flink.llm.ChatMessage;
  * the singleton on the task side (see {@link #readResolve()}). Construct an isolated instance with
  * {@link #InMemoryConversationStore(int)} when you want independent state (e.g. per-test).
  */
+@Public
 public final class InMemoryConversationStore implements ConversationStore {
   private static final long serialVersionUID = 1L;
 

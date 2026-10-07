@@ -2,6 +2,7 @@ package org.agentic.flink.memory;
 
 import java.io.Serializable;
 import java.time.Duration;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -17,6 +18,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * provide their own (Caffeine cache, Redis-as-HOT, etc.) by implementing this interface and
  * registering it via {@code ServiceLoader}.
  */
+@Public
 public interface ShortTermMemorySpec extends Serializable {
 
   /** Construct the operator-scoped memory instance for the running task. */

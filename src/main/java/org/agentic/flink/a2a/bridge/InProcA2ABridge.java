@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -23,6 +24,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * is global to the JVM (see {@link Hub}); use distinct endpoint names to isolate concurrent
  * bridges, or {@link Hub#reset()} between tests.
  */
+@Experimental
 public final class InProcA2ABridge implements A2ABridge {
   private static final long serialVersionUID = 1L;
 

@@ -220,8 +220,9 @@ exceptions. Reference impls: `LoggingAgentEventListener` (SLF4J),
 Two complementary models:
 
 - **CEP-driven**: Flink CEP patterns drive when the agent runs (validation,
-  escalation, anomaly confirmation). See `cep/CepPatternBuilder`. Pair with
-  the incident example.
+  escalation, anomaly confirmation). See `cep/CepSpecTranslator`, which turns
+  a declarative `cep:` rule into a native Flink `Pattern`. Pair with the
+  incident example.
 - **Workflow / ReAct**: `function.ReActProcessFunction` packages the
   canonical Thought / Action / Observation loop on the `ChatClient` SPI,
   bounded by `Agent.getMaxIterations()`. Pair with the RAG example.

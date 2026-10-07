@@ -3,6 +3,7 @@ package org.agentic.flink.listener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,6 +11,7 @@ import org.slf4j.LoggerFactory;
  * Fans out a single hook invocation to every registered listener. Exceptions in one listener never
  * block the others — they're logged and swallowed.
  */
+@Public
 public final class CompositeListener implements AgentEventListener {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(CompositeListener.class);

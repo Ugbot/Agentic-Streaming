@@ -3,6 +3,7 @@ package org.agentic.flink.python;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +17,7 @@ import org.slf4j.LoggerFactory;
  * operator chooses to expose (agent id, processing time, key, etc.). PEMJA marshals JVM collections
  * to native Python types automatically.
  */
+@Experimental
 public final class PythonAction implements Serializable {
 
   private static final long serialVersionUID = 1L;

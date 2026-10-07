@@ -3,6 +3,7 @@ package org.agentic.flink.a2a;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.memory.conversation.ConversationStore;
 import org.apache.flink.api.java.functions.KeySelector;
@@ -24,6 +25,7 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
  * the job graph. The default key selector groups by {@link AgentEvent} {@code correlationId} (then
  * {@code flowId}); override with {@link Builder#withKeySelector}.
  */
+@Experimental
 public final class A2AStep implements Serializable {
   private static final long serialVersionUID = 1L;
 

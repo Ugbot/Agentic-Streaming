@@ -2,6 +2,7 @@ package org.agentic.flink.runtime;
 
 import java.io.Serializable;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.jagentic.core.llm.ChatClient;
 import org.jagentic.core.llm.ScriptedChatClient;
 import org.jagentic.core.pipeline.GraphBuilder;
@@ -12,6 +13,7 @@ import org.jagentic.core.pipeline.GraphBuilder;
  * Serializable}; the {@link ChatClient} it creates is built inside {@code open()} and never
  * serialized.
  */
+@Internal
 public final class ChatClientFactories {
 
   private ChatClientFactories() {}

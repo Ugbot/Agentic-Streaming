@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Action-adherence guard for hand-rolled ReAct loops, shared by the core {@link
@@ -20,6 +21,7 @@ import java.util.Locale;
  * been nudged {@link #MAX_STALL_NUDGES} times, and {@link #looksLikeToolStall} matches, append
  * {@link #stallNudge} as a user turn and continue instead of finishing.
  */
+@Public
 public final class ReActGuard {
 
   /**

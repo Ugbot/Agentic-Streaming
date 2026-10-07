@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.agentic.flink.a2a.A2APushConfig;
 import org.agentic.flink.a2a.A2ATask;
 import org.agentic.flink.a2a.A2ATaskState;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Service-provider interface for persisting A2A task lifecycle state and push-notification configs
@@ -17,6 +18,7 @@ import org.agentic.flink.a2a.A2ATaskState;
  * {@code initialize(config)}-d and discovered via {@link java.util.ServiceLoader} / {@link
  * A2ATaskStoreFactory}. Built-ins: {@code memory}, {@code postgres}, {@code redis}.
  */
+@Experimental
 public interface A2ATaskStore extends AutoCloseable {
 
   /** Initialize the backend from string config (connection URLs, credentials, TTLs, …). */

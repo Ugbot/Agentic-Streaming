@@ -2,6 +2,7 @@ package org.agentic.flink.context.inverse;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.compaction.CompactionResult;
 import org.agentic.flink.context.core.ContextItem;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
  * <p>Instead of retrieving (RAG), we store (Inverse RAG) Takes high-relevancy compacted items and
  * pushes to vector store for future retrieval
  */
+@Experimental
 public class InverseRagFunction extends ProcessFunction<CompactionResult, InverseRagResult> {
 
   private static final Logger LOG = LoggerFactory.getLogger(InverseRagFunction.class);

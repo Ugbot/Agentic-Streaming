@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.tools.ToolExecutor;
 
 /**
@@ -13,6 +14,7 @@ import org.agentic.flink.tools.ToolExecutor;
  * dynamic, per-session env toolset to the LLM through two stable tools — no need to pre-register
  * every env tool on the agent.
  */
+@Internal
 public final class ListEnvToolsExecutor implements ToolExecutor {
   private static final long serialVersionUID = 1L;
 

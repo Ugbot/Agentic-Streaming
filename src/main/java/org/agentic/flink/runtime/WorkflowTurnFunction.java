@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.typeinfo.JsonTypeInfo;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ListState;
@@ -84,6 +85,7 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  * registry and retriever are rebuilt in {@link #open} on every (re)start. Tools declared as {@code
  * kind: failing} count attempts in-process, so their budget also restarts with the task.
  */
+@Public
 public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Event, TurnResult>
     implements ResultTypeQueryable<TurnResult> {
   private static final long serialVersionUID = 1L;

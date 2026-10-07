@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking;
 
 import java.util.Locale;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.embedding.EmbeddingConnection;
 import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.embedding.GeminiEmbeddingConnection;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code GOOGLE_API_KEY} (gemini), {@code OLLAMA_BASE_URL} (ollama).
  * </ul>
  */
+@Internal
 public final class BankingEmbeddings {
   private static final Logger LOG = LoggerFactory.getLogger(BankingEmbeddings.class);
 

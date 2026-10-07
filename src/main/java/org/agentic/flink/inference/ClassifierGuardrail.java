@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatRole;
@@ -18,6 +19,7 @@ import org.agentic.flink.llm.ChatRole;
  * <p>The {@link InferenceConnection} ships in the job graph; the live {@link InferenceClient} is
  * bound lazily on first use, like {@link InferenceToolAdapter}.
  */
+@Experimental
 public final class ClassifierGuardrail implements Guardrail {
   private static final long serialVersionUID = 1L;
 

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
@@ -18,6 +19,7 @@ import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
  * critique. Passes when the parsed score meets the threshold; the critique is fed back to the
  * generator. The critic {@link ChatClient} binds lazily and is {@code transient}.
  */
+@Public
 public final class LlmCriticQualityCheck implements QualityCheck {
   private static final long serialVersionUID = 1L;
 

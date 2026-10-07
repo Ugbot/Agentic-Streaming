@@ -3,6 +3,7 @@ package org.agentic.flink.tools.mcp;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * }
  * }</pre>
  */
+@Public
 public final class McpToolRegistry {
   private static final Logger LOG = LoggerFactory.getLogger(McpToolRegistry.class);
 

@@ -2,6 +2,7 @@ package org.agentic.flink.channel.sink;
 
 import java.io.IOException;
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.api.connector.sink2.SinkWriter;
 import org.apache.flink.api.connector.sink2.WriterInitContext;
@@ -18,6 +19,7 @@ import org.apache.flink.api.connector.sink2.WriterInitContext;
  *
  * @param <T> the element type
  */
+@Public
 public final class ForEachSink<T> implements Sink<T> {
   private static final long serialVersionUID = 1L;
 

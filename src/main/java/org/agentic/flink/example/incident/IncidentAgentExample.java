@@ -2,6 +2,7 @@ package org.agentic.flink.example.incident;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.inference.Classifier;
@@ -56,6 +57,7 @@ import org.apache.flink.util.Collector;
  *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.incident.IncidentAgentExample"
  * </pre>
  */
+@Internal
 public class IncidentAgentExample {
 
   public record MetricSample(String host, String metric, double value, long ts) {}

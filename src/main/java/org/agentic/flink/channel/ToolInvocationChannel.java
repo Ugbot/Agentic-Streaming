@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
  * KeyedProcessFunction.Context} via {@link #currentContext} before invoking the LLM, so the
  * side-output transport can find the context in its thread-local lookup.
  */
+@Public
 public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(ToolInvocationChannel.class);

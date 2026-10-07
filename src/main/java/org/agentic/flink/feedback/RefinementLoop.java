@@ -3,6 +3,7 @@ package org.agentic.flink.feedback;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * <p>This is the in-JVM, single-conversation form of the framework's {@code ValidationFunction} +
  * {@code CorrectionFunction} feedback loop.
  */
+@Public
 public final class RefinementLoop {
 
   private static final Logger LOG = LoggerFactory.getLogger(RefinementLoop.class);

@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
@@ -34,6 +35,7 @@ import redis.clients.jedis.JedisPool;
  * java.io.Serializable} (host/port config); the {@link JedisPool} + mapper are transient and built
  * lazily on the task side.
  */
+@Experimental
 public final class RedisHotVectorIndex implements HotVectorIndex {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(RedisHotVectorIndex.class);

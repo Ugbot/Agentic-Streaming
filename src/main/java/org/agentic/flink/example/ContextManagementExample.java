@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.context.compaction.*;
 import org.agentic.flink.context.core.*;
 import org.agentic.flink.context.inverse.InverseRagFunction;
@@ -17,6 +18,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * COULD, WONT) 3. Automatic compaction when limits exceeded 4. Relevancy-based pruning 5. Inverse
  * RAG (storing to long-term memory) 6. Memory hierarchy (short-term, long-term, steering)
  */
+@Internal
 public class ContextManagementExample {
 
   public static void main(String[] args) throws Exception {

@@ -7,6 +7,7 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.ToolDefinition;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class ToolAnnotationRegistry {
 
   private static final Logger LOG = LoggerFactory.getLogger(ToolAnnotationRegistry.class);

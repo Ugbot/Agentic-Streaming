@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * A typed contract for structured LLM output.
@@ -18,6 +19,7 @@ import java.util.Objects;
  * <p>The default {@link #of(Class)} constructs a schema by reflection on Jackson-deserializable
  * POJOs. Pass a hand-crafted {@code jsonSchema} string if you need finer control.
  */
+@Public
 public final class OutputSchema<T> implements Serializable {
   private static final long serialVersionUID = 1L;
 

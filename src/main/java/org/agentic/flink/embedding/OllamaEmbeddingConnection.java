@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.slf4j.Logger;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * URL; the {@link EmbeddingSetup} carries the model name (e.g. {@code nomic-embed-text:latest},
  * {@code mxbai-embed-large}).
  */
+@Public
 public final class OllamaEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;
 

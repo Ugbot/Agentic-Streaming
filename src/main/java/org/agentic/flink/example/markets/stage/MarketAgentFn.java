@@ -1,5 +1,6 @@
 package org.agentic.flink.example.markets.stage;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
 import org.agentic.flink.screening.BandPassDetector;
@@ -22,6 +23,7 @@ import org.apache.flink.util.Collector;
  * pipeline is built once per task in {@link #open}, then called per record. Key is {@code
  * instrumentId} so each instrument has its own per-key rolling history inside the pipeline.
  */
+@Internal
 public final class MarketAgentFn extends KeyedProcessFunction<String, MarketFeatures, AlertEvent> {
   private static final long serialVersionUID = 1L;
 

@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.InferenceConnection;
@@ -44,6 +45,7 @@ import org.slf4j.LoggerFactory;
  * It is <b>not thread-safe</b>; in a Flink job keep history in keyed state instead (see {@code
  * PaymentScreeningExample}).
  */
+@Public
 public final class ScreeningPipeline {
 
   private static final Logger LOG = LoggerFactory.getLogger(ScreeningPipeline.class);

@@ -3,6 +3,7 @@ package org.agentic.flink.tools.mcp;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.tools.ToolExecutor;
 
 /**
@@ -16,6 +17,7 @@ import org.agentic.flink.tools.ToolExecutor;
  * CompletableFuture#supplyAsync(java.util.function.Supplier)} to match the async contract of {@link
  * ToolExecutor#execute(Map)} without blocking the calling Flink task thread.
  */
+@Public
 public final class McpToolExecutor implements ToolExecutor {
   private static final long serialVersionUID = 1L;
 

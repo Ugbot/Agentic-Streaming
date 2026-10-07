@@ -3,11 +3,13 @@ package org.agentic.flink.tools;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Base interface for tool executors. Each tool implementation should provide a concrete executor
  * that can be invoked asynchronously.
  */
+@Public
 public interface ToolExecutor extends Serializable {
 
   /**

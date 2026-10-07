@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.cep.CepSpecTranslator;
 import org.agentic.flink.runtime.ChatClientFactories;
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
@@ -40,6 +41,7 @@ import org.jagentic.core.TurnResult;
  * emits normalized {@link TurnResult}s. {@link #assembleResults} exposes that stream; {@link
  * #assemble} keeps the pre-spec one-line summary per turn.
  */
+@Public
 public final class FlinkPipelineRunner {
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.MetricGroup;
@@ -18,6 +19,7 @@ import org.apache.flink.metrics.MetricGroup;
  * deserialization (Flink shipping the function to a task) they restart from zero and must be
  * registered again through {@code open()}, which every {@code RichFunction} restart does.
  */
+@Public
 public final class MetricsAgentEventListener implements AgentEventListener {
   private static final long serialVersionUID = 2L;
 

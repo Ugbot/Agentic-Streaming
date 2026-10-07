@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +47,7 @@ import org.slf4j.LoggerFactory;
  * via {@link SdkA2AClientFactory}. Only the JSON-RPC binding is wired here — gRPC/REST require
  * their own SDK transport modules and are reported as unsupported rather than silently downgraded.
  */
+@Experimental
 public final class SdkA2AClient implements A2AClient {
   private static final Logger LOG = LoggerFactory.getLogger(SdkA2AClient.class);
 

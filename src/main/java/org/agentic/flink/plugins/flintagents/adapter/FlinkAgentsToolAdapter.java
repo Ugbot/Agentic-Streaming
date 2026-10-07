@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.agents.api.Agent;
@@ -57,6 +58,7 @@ import org.apache.flink.agents.api.tools.ToolResponse;
  * @see ToolExecutor
  * @see ToolDefinition
  */
+@Experimental
 public class FlinkAgentsToolAdapter {
 
   /**

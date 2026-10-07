@@ -1,6 +1,7 @@
 package org.agentic.flink.operator.wiring;
 
 import java.util.Arrays;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.control.ControlMessage;
@@ -29,6 +30,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *       into a single {@link DataStream} that callers sink to whatever debug channel they like.
  * </ol>
  */
+@Public
 public final class AgenticPipeline {
   private AgenticPipeline() {}
 

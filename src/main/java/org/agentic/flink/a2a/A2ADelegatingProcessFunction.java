@@ -1,5 +1,6 @@
 package org.agentic.flink.a2a;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.api.common.functions.OpenContext;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
  * client and blocking are confined to the task side via a {@code transient} client rebuilt in
  * {@link #open(org.apache.flink.api.common.functions.OpenContext)}.
  */
+@Experimental
 public final class A2ADelegatingProcessFunction
     extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
   private static final long serialVersionUID = 1L;

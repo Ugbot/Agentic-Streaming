@@ -2,6 +2,7 @@ package org.agentic.flink.corpus;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.memory.vector.ScoredItem;
 
@@ -24,6 +25,7 @@ import org.agentic.flink.memory.vector.ScoredItem;
  * <p>All three implement the same {@link Corpus} contract so a user can swap the flavour without
  * changing the agent code that consumes the corpus.
  */
+@Experimental
 public interface Corpus {
 
   /** Upsert a vectorized item. */

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 
 /**
@@ -16,6 +17,7 @@ import org.agentic.flink.context.core.ContextItem;
  * per-key vector state inside a Flink job, use {@link FlinkStateHnswVectorMemory} instead — the SPI
  * is identical, so swapping is a config change.
  */
+@Public
 public final class InMemoryHnswVectorMemory implements VectorMemory {
 
   private final int dimension;

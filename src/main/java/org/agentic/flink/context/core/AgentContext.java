@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInfo;
 
@@ -16,6 +17,7 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
 @Data
 @NoArgsConstructor // Required for Jackson deserialization
 @TypeInfo(AgentContext.Factory.class)
+@Public
 public class AgentContext implements Serializable {
 
   /**

@@ -2,6 +2,7 @@ package org.agentic.flink.example.banking;
 
 import java.io.Serializable;
 import java.util.List;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatRole;
@@ -18,6 +19,7 @@ import org.agentic.flink.llm.ChatRole;
  * BankingTurnContext} boundary as a backstop.
  */
 @FunctionalInterface
+@Internal
 public interface TurnBrain extends Serializable {
 
   /** Produce the reply text for one user turn. Implementations may call {@code ctx} to act. */

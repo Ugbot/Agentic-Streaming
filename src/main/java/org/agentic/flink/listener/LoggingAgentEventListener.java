@@ -1,9 +1,11 @@
 package org.agentic.flink.listener;
 
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Reference listener that emits each lifecycle event as an SLF4J log line. */
+@Public
 public final class LoggingAgentEventListener implements AgentEventListener {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(LoggingAgentEventListener.class);

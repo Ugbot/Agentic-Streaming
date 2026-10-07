@@ -1,6 +1,7 @@
 package org.agentic.flink.memory.vector;
 
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Per-operator vector memory abstraction backed by Flink state.
@@ -17,6 +18,7 @@ import java.util.List;
  * provably correct. Users with larger graphs register an HNSW-backed spec via {@code
  * ServiceLoader}.
  */
+@Public
 public interface VectorMemory {
 
   /** Insert or replace a vector entry. */

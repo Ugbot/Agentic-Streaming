@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a;
 
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.skill.Skill;
 
 /**
@@ -16,6 +17,7 @@ import org.agentic.flink.skill.Skill;
  *       richer skill describing the peer's advertised skills/examples.
  * </ul>
  */
+@Experimental
 public final class A2ASkillMapper {
 
   private A2ASkillMapper() {}

@@ -3,6 +3,7 @@ package org.agentic.flink.web;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.tools.ToolExecutor;
 
 /**
@@ -14,6 +15,7 @@ import org.agentic.flink.tools.ToolExecutor;
  * org.agentic.flink.channel.ToolInvocationChannel} if you also want the invocation to feed a
  * downstream crawler operator.
  */
+@Experimental
 public final class WebFetchTool implements ToolExecutor {
   private static final long serialVersionUID = 1L;
 

@@ -7,6 +7,7 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
@@ -30,6 +31,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * <p>Migrated from the prior {@code KafkaMemoryFeed}; the wire format is unchanged.
  */
+@Public
 public final class KafkaContextChannel implements Channel<KeyedContextItem> {
   private static final long serialVersionUID = 1L;
 

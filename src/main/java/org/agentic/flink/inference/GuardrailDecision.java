@@ -2,6 +2,7 @@ package org.agentic.flink.inference;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * What a {@link Guardrail} wants to happen to an LLM interaction.
@@ -16,6 +17,7 @@ import java.util.Objects;
  *       continue.
  * </ul>
  */
+@Experimental
 public final class GuardrailDecision implements Serializable {
   private static final long serialVersionUID = 1L;
 

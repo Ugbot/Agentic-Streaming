@@ -1,12 +1,14 @@
 package org.agentic.flink.compensation;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Result of executing a single compensation action.
  *
  * @author Agentic Flink Team
  */
+@Public
 public class CompensationActionResult implements Serializable {
 
   private static final long serialVersionUID = 1L;

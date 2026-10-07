@@ -1,5 +1,6 @@
 package org.agentic.flink.operator;
 
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.control.DebugEvent;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -10,6 +11,7 @@ import org.apache.flink.util.OutputTag;
  * output every framework operator publishes to; the wiring helper unions all such side outputs into
  * one stream and sinks it to the configured debug channel.
  */
+@Public
 public final class OperatorDebug {
   private OperatorDebug() {}
 

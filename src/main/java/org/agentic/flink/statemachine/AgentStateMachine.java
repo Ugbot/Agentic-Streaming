@@ -3,6 +3,7 @@ package org.agentic.flink.statemachine;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.cep.pattern.Pattern;
@@ -49,6 +50,7 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * @see AgentState
  * @see AgentTransition
  */
+@Public
 public class AgentStateMachine implements Serializable {
 
   private static final long serialVersionUID = 1L;

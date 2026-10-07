@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 
 /**
  * In-process registry of {@link Skill}s addressable by name.
@@ -14,6 +15,7 @@ import java.util.Optional;
  * that need to look skills up at runtime — e.g. to surface a list to the model or to decide which
  * sub-state-machine to enter.
  */
+@Public
 public final class SkillRegistry implements Serializable {
   private static final long serialVersionUID = 1L;
 

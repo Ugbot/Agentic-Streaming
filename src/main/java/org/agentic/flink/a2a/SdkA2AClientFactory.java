@@ -1,5 +1,7 @@
 package org.agentic.flink.a2a;
 
+import org.agentic.flink.annotation.Experimental;
+
 /**
  * Production {@link A2AClientFactory}: builds {@link SdkA2AClient}s backed by the official {@code
  * a2a-java} SDK.
@@ -11,6 +13,7 @@ package org.agentic.flink.a2a;
  * dependency; without it, instantiation/use fails with a clear {@link NoClassDefFoundError}
  * surfaced through the discovering factory's error message.
  */
+@Experimental
 public final class SdkA2AClientFactory implements A2AClientFactory {
   private static final long serialVersionUID = 1L;
 

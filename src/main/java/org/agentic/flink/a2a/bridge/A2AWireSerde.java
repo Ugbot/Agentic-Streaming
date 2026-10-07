@@ -2,6 +2,7 @@ package org.agentic.flink.a2a.bridge;
 
 import java.io.IOException;
 import org.agentic.flink.a2a.A2AJson;
+import org.agentic.flink.annotation.Experimental;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -15,6 +16,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
  * getters — so all bridge transports must use these schemas (and the gateway connector the same
  * {@code A2AJson} mapper) to round-trip {@link A2ARequest}/{@link A2AResponse} consistently.
  */
+@Experimental
 public final class A2AWireSerde {
 
   private A2AWireSerde() {}

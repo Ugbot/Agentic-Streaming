@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
  * cached to disk keyed by {@code (model, dim, doc-set hash)} so restarts are instant: on a cache
  * hit only the HNSW graph is rebuilt (~ms), not the embeddings.
  */
+@Internal
 public final class VectorKbSearchTool implements ToolExecutor {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(VectorKbSearchTool.class);

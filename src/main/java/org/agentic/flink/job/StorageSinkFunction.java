@@ -3,6 +3,7 @@ package org.agentic.flink.job;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.ContextItem;
@@ -54,7 +55,8 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Internal
 public class StorageSinkFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final long serialVersionUID = 1L;

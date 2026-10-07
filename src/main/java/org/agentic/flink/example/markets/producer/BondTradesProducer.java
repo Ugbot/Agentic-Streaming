@@ -3,6 +3,7 @@ package org.agentic.flink.example.markets.producer;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Trade;
 
 /**
@@ -14,6 +15,7 @@ import org.agentic.flink.example.markets.model.MarketRecords.Trade;
  *     org.agentic.flink.example.markets.producer.BondTradesProducer --rate 200
  * </pre>
  */
+@Internal
 public final class BondTradesProducer {
 
   private static final List<String> FIRMS =

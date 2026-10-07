@@ -2,6 +2,7 @@ package org.agentic.flink.a2a;
 
 import java.time.Duration;
 import java.util.function.Consumer;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Service-provider interface for calling a remote A2A agent.
@@ -17,6 +18,7 @@ import java.util.function.Consumer;
  * java.io.Serializable}. Implementations need not be thread-safe; the caller scopes one client per
  * operator subtask.
  */
+@Experimental
 public interface A2AClient extends AutoCloseable {
 
   /** The spec this client was built from. */

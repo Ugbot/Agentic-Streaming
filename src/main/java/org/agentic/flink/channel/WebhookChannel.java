@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.source.PollingSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
  * webhooks from upstream systems (GitHub events, Slack, …), and any case where you want external
  * producers to push without a message broker in the loop.
  */
+@Public
 public final class WebhookChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 1L;
 

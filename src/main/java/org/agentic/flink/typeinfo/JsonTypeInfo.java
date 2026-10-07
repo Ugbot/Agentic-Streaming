@@ -3,6 +3,7 @@ package org.agentic.flink.typeinfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -27,6 +28,7 @@ import org.apache.flink.core.memory.DataOutputView;
  *
  * @param <T> the value type
  */
+@Public
 public final class JsonTypeInfo<T> extends TypeInformation<T> {
   private static final long serialVersionUID = 1L;
 

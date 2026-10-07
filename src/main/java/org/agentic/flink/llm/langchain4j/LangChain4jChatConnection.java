@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatConnection;
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -34,6 +35,7 @@ import org.slf4j.LoggerFactory;
  * the connection, so a single connection can serve many setups with different model parameters. We
  * cache a per-setup-signature client to avoid re-building on every event.
  */
+@Public
 public final class LangChain4jChatConnection implements ChatConnection {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(LangChain4jChatConnection.class);

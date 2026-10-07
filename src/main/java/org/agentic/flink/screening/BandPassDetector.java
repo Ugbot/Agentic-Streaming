@@ -1,5 +1,7 @@
 package org.agentic.flink.screening;
 
+import org.agentic.flink.annotation.Public;
+
 /**
  * Band-pass / band-reject screen on {@link ScreenItem#value()}.
  *
@@ -7,6 +9,7 @@ package org.agentic.flink.screening;
  * value should stay within the band, so out-of-band is suspicious. In {@code reject} mode it fires
  * when the value falls <b>inside</b> a forbidden band instead. Stateless.
  */
+@Public
 public final class BandPassDetector implements Detector {
   private static final long serialVersionUID = 1L;
 

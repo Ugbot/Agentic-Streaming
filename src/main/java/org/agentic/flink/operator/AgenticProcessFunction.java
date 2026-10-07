@@ -2,6 +2,7 @@ package org.agentic.flink.operator;
 
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.ControlState;
 import org.agentic.flink.control.DebugControl;
@@ -21,6 +22,7 @@ import org.apache.flink.util.Collector;
  * @param <IN> input element type
  * @param <OUT> output element type
  */
+@Public
 public abstract class AgenticProcessFunction<IN, OUT>
     extends BroadcastProcessFunction<IN, ControlMessage, OUT> {
   private static final long serialVersionUID = 1L;

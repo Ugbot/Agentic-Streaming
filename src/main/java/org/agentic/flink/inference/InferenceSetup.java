@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Per-call configuration for a model loaded by an {@link InferenceConnection}.
@@ -16,6 +17,7 @@ import java.util.Objects;
  * <p>This class carries no live state. Backends serialize it into the Flink job graph; the actual
  * model handle is built lazily inside the corresponding {@link InferenceClient}.
  */
+@Experimental
 public final class InferenceSetup implements Serializable {
   private static final long serialVersionUID = 1L;
 

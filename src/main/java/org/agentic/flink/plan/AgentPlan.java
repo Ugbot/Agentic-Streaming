@@ -11,6 +11,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Declarative description of an agent operator. Python builds this from decorated user classes;
@@ -20,6 +21,7 @@ import java.util.Map;
  * <p>Mirrors the upstream Apache Flink Agents plan shape but is keyed to this framework's SPIs.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Public
 public final class AgentPlan implements Serializable {
   private static final long serialVersionUID = 1L;
 

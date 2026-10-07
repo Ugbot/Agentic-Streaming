@@ -2,6 +2,7 @@ package org.agentic.flink.execution;
 
 import java.io.Serializable;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
@@ -23,7 +24,8 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class ToolExecutionEngine implements Serializable {
 
   private static final long serialVersionUID = 1L;

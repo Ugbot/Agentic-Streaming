@@ -1,6 +1,7 @@
 package org.agentic.flink.execution;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Result of a tool execution.
@@ -9,7 +10,8 @@ import java.io.Serializable;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class ToolCallResult implements Serializable {
 
   private static final long serialVersionUID = 1L;

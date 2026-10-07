@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.tools.ToolExecutor;
 
 /**
@@ -42,7 +43,8 @@ import org.agentic.flink.tools.ToolExecutor;
  *     arguments through {@code AgentContext.callTool}; this registry serves only the pre-spec
  *     {@link org.agentic.flink.dsl.Agent} DSL.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class ToolRegistry implements Serializable {
 
   private static final long serialVersionUID = 1L;

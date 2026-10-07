@@ -3,6 +3,7 @@ package org.agentic.flink.storage;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Base interface for all storage providers in the multi-tier storage architecture.
@@ -37,6 +38,7 @@ import java.util.Optional;
  * @param <V> Value type (AgentContext, ContextItem, etc.)
  * @author Agentic Flink Team
  */
+@Public
 public interface StorageProvider<K, V> extends Serializable {
 
   /**

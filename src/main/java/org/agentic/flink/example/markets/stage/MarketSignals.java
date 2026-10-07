@@ -1,8 +1,10 @@
 package org.agentic.flink.example.markets.stage;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
 
 /** Pure, side-effect-free math used by {@link FeatureAggregatorFn} — split out so it's testable. */
+@Internal
 public final class MarketSignals {
 
   private MarketSignals() {}

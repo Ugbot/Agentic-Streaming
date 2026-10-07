@@ -1,6 +1,7 @@
 package org.agentic.flink.runtime;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.streaming.api.TimerService;
 
 /**
@@ -13,6 +14,7 @@ import org.apache.flink.streaming.api.TimerService;
  * whole JVM shares.
  */
 @FunctionalInterface
+@Public
 public interface ProcessingClock extends Serializable {
 
   /** The current processing-time reading in milliseconds. */

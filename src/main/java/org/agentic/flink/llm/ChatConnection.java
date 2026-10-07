@@ -1,6 +1,7 @@
 package org.agentic.flink.llm;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -15,6 +16,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>Discovered via {@link java.util.ServiceLoader}. The default implementation is {@code
  * LangChain4jChatConnection}, which delegates to the existing LangChain4J integration.
  */
+@Public
 public interface ChatConnection extends Serializable {
 
   /** Construct the operator-scoped client. Called once per task in {@code RichFunction.open()}. */

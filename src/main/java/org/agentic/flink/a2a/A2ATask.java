@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * An A2A task — the unit of work a remote agent performs in response to a {@link A2AMessage}.
@@ -18,6 +19,7 @@ import java.util.Objects;
  * with*} mutators for lifecycle progression.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2ATask implements Serializable {
   private static final long serialVersionUID = 1L;
 

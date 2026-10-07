@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.compensation.CompensationAction;
 import org.agentic.flink.compensation.CompensationHandler;
 import org.agentic.flink.compensation.CompensationResult;
@@ -31,6 +32,7 @@ import org.agentic.flink.tools.ToolExecutor;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class CompensationExample {
 
   public static void main(String[] args) throws Exception {

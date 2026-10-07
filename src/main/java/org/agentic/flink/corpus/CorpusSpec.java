@@ -1,6 +1,7 @@
 package org.agentic.flink.corpus;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -9,6 +10,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>Mirrors the Connection/Client/Setup pattern used elsewhere in the framework: the spec is what
  * travels in the job graph; the live runtime view is constructed in {@code bind}.
  */
+@Experimental
 public interface CorpusSpec extends Serializable {
 
   /** Logical corpus name (used in logs + the stats snapshot). */

@@ -1,5 +1,7 @@
 package org.agentic.flink.config;
 
+import org.agentic.flink.annotation.Public;
+
 /**
  * Constants class defining all configuration keys and their default values for the Agentic Flink
  * framework.
@@ -11,6 +13,7 @@ package org.agentic.flink.config;
  * @author Agentic Flink Team
  * @see AgenticFlinkConfig
  */
+@Public
 public final class ConfigKeys {
 
   private ConfigKeys() {}

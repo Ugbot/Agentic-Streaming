@@ -7,12 +7,14 @@ import java.util.List;
 import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInfo;
 
 @Data
 @NoArgsConstructor
 @TypeInfo(AgentExecutionState.Factory.class)
+@Public
 public class AgentExecutionState implements Serializable {
 
   /**

@@ -9,6 +9,7 @@ import org.agentic.flink.a2a.bridge.A2ABridge;
 import org.agentic.flink.a2a.bridge.A2AJsonTypeInfo;
 import org.agentic.flink.a2a.bridge.A2ARequest;
 import org.agentic.flink.a2a.bridge.A2AResponse;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.BankingAgentSetup;
 import org.agentic.flink.example.banking.BankingTurnContext;
 import org.agentic.flink.example.banking.TurnBrain;
@@ -33,6 +34,7 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
  * isolated. Reserving the LLM for the path brains (router/verifier are rule-based) keeps the
  * model-call count per turn flat.
  */
+@Internal
 public final class BankingAgentGraph {
 
   /** Repeated-tool-call dedupe window per turn (matches the single-operator default). */

@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 
 /**
@@ -16,6 +17,7 @@ import org.agentic.flink.context.core.ContextItem;
  * LongTermMemoryStore#saveFacts}/{@link LongTermMemoryStore#loadFacts} buckets so a single store
  * can host any number of sets without schema changes.
  */
+@Public
 public final class MemorySet implements Serializable {
   private static final long serialVersionUID = 1L;
 

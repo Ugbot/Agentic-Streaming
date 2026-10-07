@@ -2,6 +2,7 @@ package org.agentic.flink.screening;
 
 import java.io.Serializable;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * One item flowing through a {@link ScreeningPipeline}.
@@ -12,6 +13,7 @@ import java.util.Map;
  * @param ts event timestamp in epoch millis (drives velocity windows; never wall-clock)
  * @param attrs extra context handed to the LLM tier
  */
+@Public
 public record ScreenItem(String key, double value, String label, long ts, Map<String, String> attrs)
     implements Serializable {
 

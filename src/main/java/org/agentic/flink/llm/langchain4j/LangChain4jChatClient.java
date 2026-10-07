@@ -1,6 +1,7 @@
 package org.agentic.flink.llm.langchain4j;
 
 import dev.langchain4j.model.chat.ChatModel;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.llm.ChatClient;
 
 /**
@@ -21,6 +22,7 @@ import org.agentic.flink.llm.ChatClient;
  * <p>Implementations of {@link ChatClient} may but are not required to provide this accessor. Code
  * that casts to this interface accepts the coupling.
  */
+@Internal
 public interface LangChain4jChatClient extends ChatClient {
 
   /** The underlying LangChain4J chat model for the most recently invoked setup. */

@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Base for stores that ship through Flink's job graph.
@@ -21,6 +22,7 @@ import java.util.Map;
  * {@code open}: there is no silent fallback here; degrading to memory is a workflow-level decision
  * ({@code on_unavailable: degrade}) made by the runtime that owns the store, not by the store.
  */
+@Public
 public abstract class ReopenableStore implements Serializable {
   private static final long serialVersionUID = 1L;
 

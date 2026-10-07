@@ -1,6 +1,7 @@
 package org.agentic.flink.inference;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -12,6 +13,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * InferenceClient.TaskKind}s they support; the client signals that per-call via {@link
  * InferenceClient#supports}.
  */
+@Experimental
 public interface InferenceConnection extends Serializable {
 
   /** Construct the operator-scoped client. Called once per task in {@code RichFunction.open()}. */

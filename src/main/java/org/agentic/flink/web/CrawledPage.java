@@ -5,12 +5,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Result of a successful fetch + extract. Carries enough to chunk and index downstream.
  *
  * <p>Held as a Serializable POJO so it rides through the Flink job graph.
  */
+@Experimental
 public final class CrawledPage implements Serializable {
   private static final long serialVersionUID = 1L;
 

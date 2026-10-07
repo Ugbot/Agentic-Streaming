@@ -4,6 +4,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
+import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
  * attempts keep this tightly contained, and the alternative (no retry on a pre-processing
  * connection blip) is worse.
  */
+@Experimental
 public final class ResilientA2AClient implements A2AClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResilientA2AClient.class);

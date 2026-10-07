@@ -2,6 +2,7 @@ package org.agentic.flink.execution;
 
 import java.io.Serializable;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Records completed turn results and individual tool results so that a redelivered turn returns the
@@ -22,7 +23,8 @@ import java.util.Optional;
  *     runtime ({@code org.agentic.flink.runtime.WorkflowTurnFunction} with {@code
  *     KeyedConversationLog}), which dedups turns through the keyed conversation log.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public interface TurnResultStore extends Serializable {
 
   Optional<ExecutionResult> getTurnResult(String turnId);

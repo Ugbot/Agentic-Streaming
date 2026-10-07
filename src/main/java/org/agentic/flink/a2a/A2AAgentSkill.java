@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * A skill advertised by an A2A agent in its {@link A2AAgentCard}.
@@ -16,6 +17,7 @@ import java.util.Objects;
  * org.agentic.flink.skill.Skill} so the local agent's LLM knows when to delegate to the peer.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2AAgentSkill implements Serializable {
   private static final long serialVersionUID = 1L;
 

@@ -3,6 +3,7 @@ package org.agentic.flink.embedding;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import java.time.Duration;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -14,6 +15,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * The {@link EmbeddingSetup} carries the model name and dimensionality — keep it at the model's
  * native size unless you also reduce it via the model's {@code dimensions}.
  */
+@Public
 public final class OpenAIEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;
 

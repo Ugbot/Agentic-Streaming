@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
  * Registry for tool executors Manages the mapping between tool IDs and their executor
  * implementations
  */
+@Public
 public class ToolExecutorRegistry implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(ToolExecutorRegistry.class);

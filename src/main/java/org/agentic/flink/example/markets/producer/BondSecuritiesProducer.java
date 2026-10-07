@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
 
 /**
@@ -16,6 +17,7 @@ import org.agentic.flink.example.markets.model.MarketRecords.Security;
  *     org.agentic.flink.example.markets.producer.BondSecuritiesProducer --count 50000 --rate 500
  * </pre>
  */
+@Internal
 public final class BondSecuritiesProducer {
 
   private static final List<String> SECTORS =

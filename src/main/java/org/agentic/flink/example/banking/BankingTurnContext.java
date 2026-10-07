@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
 
 /**
@@ -9,6 +10,7 @@ import org.agentic.flink.example.banking.safety.RoutingBudget;
  * logic tries to: {@link #askCustomerService} consumes a round-trip and refuses past the cap, and
  * {@link #budgetExhausted()} lets the brain bail early with a partial answer.
  */
+@Internal
 public final class BankingTurnContext implements Serializable {
   private static final long serialVersionUID = 1L;
 

@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Per-JVM cache of loaded model handles, keyed on {@code (modelUri, deviceType)}.
@@ -17,6 +18,7 @@ import java.util.function.Supplier;
  * (a DJL {@code Model}, an ONNX {@code OrtSession}, a TF saved-model handle, etc.). Type-safe
  * access is the caller's responsibility.
  */
+@Experimental
 public final class InferenceModelCache {
 
   private static final InferenceModelCache INSTANCE = new InferenceModelCache();

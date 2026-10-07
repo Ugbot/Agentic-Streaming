@@ -1,6 +1,7 @@
 package org.agentic.flink.channel;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -21,6 +22,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * @param <T> element type emitted by this channel
  */
+@Public
 public interface Channel<T> extends Serializable {
 
   /** Build the channel's source into the supplied execution environment. */

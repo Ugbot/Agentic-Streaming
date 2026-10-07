@@ -3,6 +3,7 @@ package org.agentic.flink.a2a;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * A webhook push-notification configuration registered against an A2A task ({@code
@@ -14,6 +15,7 @@ import java.util.Objects;
  * Serializable}; persisted by {@link org.agentic.flink.a2a.storage.A2ATaskStore}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2APushConfig implements Serializable {
   private static final long serialVersionUID = 1L;
 

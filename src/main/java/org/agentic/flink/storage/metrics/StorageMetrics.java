@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.storage.StorageTier;
 
 /**
@@ -62,6 +63,7 @@ import org.agentic.flink.storage.StorageTier;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class StorageMetrics implements Serializable {
 
   private final StorageTier tier;

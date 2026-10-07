@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.StorageTier;
 import org.agentic.flink.storage.VectorStore;
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "in-memory"}.
  */
+@Public
 public final class InMemoryVectorStore implements VectorStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryVectorStore.class);

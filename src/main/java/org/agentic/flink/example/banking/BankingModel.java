@@ -2,6 +2,7 @@ package org.agentic.flink.example.banking;
 
 import java.io.Serializable;
 import java.util.Locale;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
@@ -20,6 +21,7 @@ import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
  *   <li>{@code OLLAMA_BASE_URL} — for the local-LLM path.
  * </ul>
  */
+@Internal
 public final class BankingModel implements Serializable {
   private static final long serialVersionUID = 1L;
 

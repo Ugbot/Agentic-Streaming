@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -25,6 +26,7 @@ import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Internal
 public class CorrectionFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CorrectionFunction.class);

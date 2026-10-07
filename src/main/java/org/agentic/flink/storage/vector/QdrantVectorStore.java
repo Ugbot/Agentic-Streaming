@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageTier;
@@ -58,6 +59,7 @@ import org.slf4j.LoggerFactory;
  *       {@code dot_product})
  * </ul>
  */
+@Public
 public final class QdrantVectorStore extends ReopenableStore implements VectorStore {
   private static final long serialVersionUID = 1L;
 

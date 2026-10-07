@@ -6,10 +6,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 
 /** Context window with size limits and item management */
 @Data
 @NoArgsConstructor // Required for Jackson deserialization
+@Public
 public class ContextWindow implements Serializable {
 
   private int maxTokens;

@@ -4,11 +4,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Listener flavour for the agent operator: a Java {@code AgentEventListener} resolved via FQN, or a
  * Python listener whose callable rides in the plan as cloudpickle bytes.
  */
+@Public
 public final class ListenerSpec implements Serializable {
   private static final long serialVersionUID = 1L;
 

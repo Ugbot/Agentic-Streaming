@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -21,6 +22,7 @@ import org.agentic.flink.tools.AbstractToolExecutor;
  * <p>Migrated off the legacy {@code langchain/model} + {@code langchain/store} packages onto the
  * framework embedding/vector SPIs.
  */
+@Experimental
 public class SemanticSearchToolExecutor extends AbstractToolExecutor {
 
   private final EmbeddingConnection embeddingConnection;

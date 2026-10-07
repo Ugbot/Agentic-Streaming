@@ -1,5 +1,6 @@
 package org.agentic.flink.a2a.bridge;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 
@@ -19,6 +20,7 @@ import org.agentic.flink.config.ConfigKeys;
  * {@code redis} for the distributed path (the request side can alternatively be fed by the existing
  * {@code KafkaChannel} directly).
  */
+@Experimental
 public final class A2ABridgeFactory {
 
   private A2ABridgeFactory() {}

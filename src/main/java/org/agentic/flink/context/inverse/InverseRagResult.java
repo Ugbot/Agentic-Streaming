@@ -6,11 +6,13 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Experimental;
 
 /** Result of inverse RAG operation (storing context to long-term) */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Experimental
 public class InverseRagResult implements Serializable {
 
   private String requestId;

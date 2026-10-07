@@ -1,5 +1,7 @@
 package org.agentic.flink.storage;
 
+import org.agentic.flink.annotation.Public;
+
 /**
  * Storage tier classification based on latency and access patterns.
  *
@@ -18,6 +20,7 @@ package org.agentic.flink.storage;
  *
  * @author Agentic Flink Team
  */
+@Public
 public enum StorageTier {
   /**
    * Hot tier storage.

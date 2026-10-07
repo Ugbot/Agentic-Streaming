@@ -1,11 +1,13 @@
 package org.agentic.flink.inference;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.llm.ChatResponse;
 
 /**
  * Post-chat {@link Guardrail} for validator/judge agents: blocks the response unless the model
  * answered {@code VALID}. {@code INVALID} and responses with no verdict word are both blocked.
  */
+@Experimental
 public final class ValidationGuardrail implements Guardrail {
   private static final long serialVersionUID = 1L;
 

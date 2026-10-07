@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class LangChainToolAdapter implements ToolExecutor {
 
   private static final Logger LOG = LoggerFactory.getLogger(LangChainToolAdapter.class);

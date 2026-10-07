@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Parses LLM tool-call argument payloads into the {@code Map<String, Object>} that {@link
@@ -14,6 +15,7 @@ import java.util.Map;
  * <p>Nested objects become nested {@link Map}s and arrays become {@link List}s; numbers keep their
  * JSON numeric type. Values are never flattened or re-stringified.
  */
+@Experimental
 public final class ToolArguments {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final TypeReference<LinkedHashMap<String, Object>> MAP_TYPE =

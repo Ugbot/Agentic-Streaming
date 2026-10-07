@@ -2,6 +2,7 @@ package org.agentic.flink.example.banking.env;
 
 import java.util.Locale;
 import java.util.function.Supplier;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * Thread-scoped signals a path operator collects while its brain runs one turn — chiefly "did this
@@ -12,6 +13,7 @@ import java.util.function.Supplier;
  * operator after the brain returns. Scoped like {@link EnvSession} (the brain runs synchronously on
  * the operator thread), so the flag never leaks across turns.
  */
+@Internal
 public final class TurnSignals {
 
   private static final ThreadLocal<boolean[]> ACTION = new ThreadLocal<>();

@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Output of {@link Classifier#classify}.
@@ -12,6 +13,7 @@ import java.util.Objects;
  * through Jackson), its score, and the full probability distribution for callers that need to apply
  * their own thresholds.
  */
+@Experimental
 public final class ClassificationResult implements Serializable {
   private static final long serialVersionUID = 1L;
 

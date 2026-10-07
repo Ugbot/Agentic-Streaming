@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import org.agentic.flink.annotation.Public;
 
 /**
  * The canonical Jackson {@link ObjectMapper} used by {@link JsonTypeInfo} to serialize framework
@@ -27,6 +28,7 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
  *
  * <p>{@link org.agentic.flink.a2a.A2AJson} delegates to this so there is a single mapper config.
  */
+@Public
 public final class FlinkJson {
 
   private static final ObjectMapper MAPPER = create();

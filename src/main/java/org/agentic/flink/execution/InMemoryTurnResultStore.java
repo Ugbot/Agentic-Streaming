@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.LongSupplier;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Bounded, TTL-expiring in-memory {@link TurnResultStore}.
@@ -21,7 +22,8 @@ import java.util.function.LongSupplier;
  * @deprecated Part of the legacy Flink DSL execution path. See {@code
  *     org.agentic.flink.runtime.WorkflowTurnFunction} for the event-sourced runtime.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public final class InMemoryTurnResultStore implements TurnResultStore {
 
   private static final long serialVersionUID = 1L;

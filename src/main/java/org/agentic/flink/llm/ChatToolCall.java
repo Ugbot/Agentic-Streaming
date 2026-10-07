@@ -3,6 +3,7 @@ package org.agentic.flink.llm;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * A tool invocation requested by the model, in vendor-neutral form.
@@ -10,6 +11,7 @@ import java.util.Map;
  * <p>The runtime resolves {@link #getName()} against the agent's {@code ToolRegistry} and feeds the
  * resulting {@code ContextItem} back as a {@link ChatRole#TOOL} message.
  */
+@Public
 public final class ChatToolCall implements Serializable {
   private static final long serialVersionUID = 1L;
 

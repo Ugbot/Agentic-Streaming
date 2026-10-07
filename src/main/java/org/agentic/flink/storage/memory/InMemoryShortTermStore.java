@@ -2,6 +2,7 @@ package org.agentic.flink.storage.memory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.ShortTermMemoryStore;
@@ -48,7 +49,15 @@ import org.slf4j.LoggerFactory;
  * For production use with eviction policies, add the Caffeine dependency.
  *
  * @author Agentic Flink Team
+ * @deprecated the hot tier of the legacy Flink DSL path. Short-term memory is Flink keyed state:
+ *     build a {@link org.agentic.flink.memory.ShortTermMemorySpec} and open a {@link
+ *     org.agentic.flink.memory.FlinkStateShortTermMemory} in {@code RichFunction.open()}. This
+ *     class remains the only backend {@link
+ *     org.agentic.flink.storage.StorageFactory#createShortTermStore} accepts and is kept for one
+ *     minor release for jobs that still call it.
  */
+@Deprecated(since = "1.0.0")
+@Public
 public class InMemoryShortTermStore extends ReopenableStore implements ShortTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryShortTermStore.class);

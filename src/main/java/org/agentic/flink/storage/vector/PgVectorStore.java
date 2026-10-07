@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.VectorStore;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Requires the {@code postgres.dimension} configuration key on first initialize.
  */
+@Public
 public final class PgVectorStore extends ReopenableStore implements VectorStore {
   private static final long serialVersionUID = 1L;
 

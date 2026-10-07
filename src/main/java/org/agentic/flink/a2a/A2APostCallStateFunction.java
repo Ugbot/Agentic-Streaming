@@ -1,5 +1,6 @@
 package org.agentic.flink.a2a;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.memory.conversation.ConversationStore;
 import org.agentic.flink.memory.conversation.ConversationStores;
@@ -18,6 +19,7 @@ import org.apache.flink.util.Collector;
  * keyed split: the async operator stays state-free (so it cannot corrupt keyed state), and all
  * per-conversation continuity is mediated here in a keyed operator.
  */
+@Experimental
 public final class A2APostCallStateFunction
     extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
   private static final long serialVersionUID = 1L;

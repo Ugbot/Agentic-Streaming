@@ -2,6 +2,7 @@ package org.agentic.flink.example.cascade;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.cascade.EscalationPipeline;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.DebugControl;
@@ -39,6 +40,7 @@ import org.apache.flink.util.Collector;
  *                 -Dexec.classpathScope=test -Dexec.args="--debug"
  * </pre>
  */
+@Internal
 public final class SuspiciousActivityCascadeExample {
 
   private static final String[] SAMPLE_MESSAGES = {

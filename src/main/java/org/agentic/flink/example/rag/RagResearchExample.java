@@ -2,6 +2,7 @@ package org.agentic.flink.example.rag;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
@@ -65,6 +66,7 @@ import org.apache.flink.util.Collector;
  *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.rag.RagResearchExample"
  * </pre>
  */
+@Internal
 public class RagResearchExample {
   /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
   public static final String RERANKER_MODEL_URI =

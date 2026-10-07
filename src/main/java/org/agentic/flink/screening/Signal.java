@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * A detector firing: which detector, which {@link Phase}, how much it adds to combined risk, and
@@ -14,6 +15,7 @@ import java.util.Objects;
  * construct records with their final-field canonical ctor). Record-style accessors are preserved
  * for source-compat with existing callers.
  */
+@Public
 public final class Signal implements Serializable {
   private static final long serialVersionUID = 1L;
 

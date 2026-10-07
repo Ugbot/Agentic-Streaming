@@ -2,6 +2,7 @@ package org.agentic.flink.ingest;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * LangChain-style recursive text splitter: prefer paragraph boundaries, then sentence boundaries,
@@ -10,6 +11,7 @@ import java.util.List;
  *
  * <p>Token-count estimates use the conservative 4-char-per-token heuristic.
  */
+@Experimental
 public final class RecursiveTextChunker implements Chunker {
   private static final long serialVersionUID = 1L;
 

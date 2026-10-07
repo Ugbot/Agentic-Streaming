@@ -1,6 +1,7 @@
 package org.agentic.flink.example;
 
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -45,6 +46,7 @@ import org.agentic.flink.tool.ToolRegistry;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class QuickStartExample {
 
   public static void main(String[] args) throws Exception {

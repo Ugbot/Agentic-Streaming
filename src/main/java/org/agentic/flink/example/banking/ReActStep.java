@@ -4,6 +4,7 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * One step of a ReAct loop, the structured-output schema the model fills each iteration. A
@@ -14,6 +15,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Internal
 public class ReActStep {
   /** "thought" | "action" | "final". */
   private String type;

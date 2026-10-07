@@ -3,8 +3,10 @@ package org.agentic.flink.screening;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 
 /** Outcome of running one {@link ScreenItem} through a {@link ScreeningPipeline}. */
+@Public
 public final class ScreeningResult implements Serializable {
   private static final long serialVersionUID = 1L;
 

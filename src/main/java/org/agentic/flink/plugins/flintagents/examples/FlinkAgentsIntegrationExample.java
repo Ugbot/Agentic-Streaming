@@ -3,6 +3,7 @@ package org.agentic.flink.plugins.flintagents.examples;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
@@ -35,6 +36,7 @@ import org.apache.flink.agents.api.Event;
  *
  * @author Agentic Flink Team
  */
+@Experimental
 public class FlinkAgentsIntegrationExample {
 
   public static void main(String[] args) {

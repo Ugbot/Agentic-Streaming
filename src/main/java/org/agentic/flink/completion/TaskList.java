@@ -3,6 +3,7 @@ package org.agentic.flink.completion;
 import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Tracks a list of tasks to be completed, inspired by the Saga kit's completion tracking.
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
  * @author Agentic Flink Team
  * @see CompletionTracker
  */
+@Public
 public class TaskList implements Serializable {
 
   private static final long serialVersionUID = 1L;

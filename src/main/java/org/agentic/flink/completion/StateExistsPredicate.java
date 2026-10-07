@@ -3,6 +3,7 @@ package org.agentic.flink.completion;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 
 /**
@@ -14,6 +15,7 @@ import org.agentic.flink.core.AgentEvent;
  * @author Agentic Flink Team
  * @see GoalPredicate
  */
+@Public
 public class StateExistsPredicate implements GoalPredicate, Serializable {
 
   private static final long serialVersionUID = 1L;

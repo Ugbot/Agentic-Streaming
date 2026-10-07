@@ -2,6 +2,7 @@ package org.agentic.flink.memory.vector;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 
 /**
@@ -12,6 +13,7 @@ import org.agentic.flink.context.core.ContextItem;
  * (not as some shaded {@code VectorFloat<T>}) so the type works under both HashMap and RocksDB
  * state backends without needing custom serializers.
  */
+@Public
 public final class VectorEntry implements Serializable {
   private static final long serialVersionUID = 1L;
 

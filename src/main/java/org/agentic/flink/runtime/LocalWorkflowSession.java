@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.pipeline.FlinkPipelineRunner;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.RuntimeExecutionMode;
@@ -45,6 +46,7 @@ import org.jagentic.core.TurnResult;
  * WorkflowTurnFunction} rebuilds each conversation from its {@link KeyedConversationLog} on the
  * next turn, without running brains or tools for the turns already recorded.
  */
+@Public
 public final class LocalWorkflowSession implements AutoCloseable {
 
   static final String HEARTBEAT = "__heartbeat__";

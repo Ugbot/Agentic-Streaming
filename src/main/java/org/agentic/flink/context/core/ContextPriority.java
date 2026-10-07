@@ -1,11 +1,14 @@
 package org.agentic.flink.context.core;
 
+import org.agentic.flink.annotation.Public;
+
 /**
  * MoSCoW priority levels for context items
  *
  * <p>MUST: Hard facts, immutable, always retained SHOULD: Important context, compressed if needed
  * COULD: Nice to have, easily discarded WONT: Not needed, discarded immediately
  */
+@Public
 public enum ContextPriority {
   MUST(1.0, "Hard facts, never discard"),
   SHOULD(0.7, "Important, compress if needed"),

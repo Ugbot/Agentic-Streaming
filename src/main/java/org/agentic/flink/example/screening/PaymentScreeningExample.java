@@ -3,6 +3,7 @@ package org.agentic.flink.example.screening;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.DebugControl;
 import org.agentic.flink.control.DebugEvent;
@@ -37,6 +38,7 @@ import org.apache.flink.util.Collector;
  * <p>Keyed by account so the stateful detectors see each account's full history on one subtask. Set
  * {@code ANTHROPIC_API_KEY} to enable the LLM tier; otherwise flagged payments route to REVIEW.
  */
+@Internal
 public final class PaymentScreeningExample {
 
   /** account, amount, merchant, event-time millis. */

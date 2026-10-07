@@ -13,6 +13,7 @@ import org.agentic.flink.a2a.A2APart;
 import org.agentic.flink.a2a.A2ATask;
 import org.agentic.flink.a2a.A2ATransport;
 import org.agentic.flink.a2a.RemoteAgentSpec;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.env.EnvApiClient;
 import org.agentic.flink.example.banking.env.EnvApiToolExecutor;
 import org.agentic.flink.example.banking.env.ListEnvToolsExecutor;
@@ -32,6 +33,7 @@ import org.slf4j.LoggerFactory;
  * Built once at startup (not serialized); the bounded {@link ReActTurnBrain} it produces is what
  * actually drives the LLM.
  */
+@Internal
 public final class BankingAgentSetup {
 
   private static final Logger LOG = LoggerFactory.getLogger(BankingAgentSetup.class);

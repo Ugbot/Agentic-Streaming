@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -29,6 +30,7 @@ import org.apache.flink.api.common.state.ValueStateDescriptor;
  * StateTtlConfig.UpdateType#OnCreateAndWrite}. Cleanup runs inline with state-backend compaction
  * (RocksDB) or scan (HashMap), so it costs nothing extra beyond a per-entry timestamp.
  */
+@Public
 public final class FlinkStateShortTermMemory implements ShortTermMemory {
 
   private final ValueState<AgentContext> contextState;

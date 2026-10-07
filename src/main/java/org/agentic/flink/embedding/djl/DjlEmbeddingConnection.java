@@ -1,5 +1,6 @@
 package org.agentic.flink.embedding.djl;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
 import org.agentic.flink.inference.djl.DjlInferenceConnection;
@@ -13,6 +14,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * sentence-transformers/all-MiniLM-L6-v2}) directly into {@code
  * AgentBuilder.withEmbeddingConnection(...)} without thinking about the inference SPI.
  */
+@Experimental
 public final class DjlEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;
 

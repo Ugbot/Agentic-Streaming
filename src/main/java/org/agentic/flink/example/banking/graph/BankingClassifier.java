@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking.graph;
 
 import java.util.Locale;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * Rule-based router logic for the banking agents — pure, deterministic, and <b>LLM-free</b> so the
@@ -13,6 +14,7 @@ import java.util.Locale;
  * intent: dispute → {@code DISPUTE}, action → {@code ACTION}, else {@code KNOWLEDGE}. Either agent
  * escalates on explicit human/complaint requests.
  */
+@Internal
 public final class BankingClassifier {
 
   private BankingClassifier() {}

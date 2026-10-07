@@ -31,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageTier;
@@ -73,6 +74,7 @@ import org.slf4j.LoggerFactory;
  * <p>The Milvus client is {@code transient} and reconnected in {@link #initialize(Map)} so the
  * store can be serialized and distributed across the Flink cluster.
  */
+@Public
 public final class MilvusVectorStore extends ReopenableStore implements VectorStore {
   private static final long serialVersionUID = 1L;
 

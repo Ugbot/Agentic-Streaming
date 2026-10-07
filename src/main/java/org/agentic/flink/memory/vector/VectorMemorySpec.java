@@ -1,9 +1,11 @@
 package org.agentic.flink.memory.vector;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /** Serializable factory for {@link VectorMemory}. Built per-task in {@code open()}. */
+@Public
 public interface VectorMemorySpec extends Serializable {
 
   /** Construct the operator-scoped vector memory for the running task. */

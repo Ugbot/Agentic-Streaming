@@ -1,5 +1,6 @@
 package org.agentic.flink.example.markets.stage;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
@@ -15,6 +16,7 @@ import org.apache.flink.util.Collector;
  * 50_000)} and emits {@link EnrichedInventory}. Filters out {@code DELETE} actions and non-positive
  * prices.
  */
+@Internal
 public final class EnrichmentFn
     extends BroadcastProcessFunction<Inventory, Security, EnrichedInventory> {
   private static final long serialVersionUID = 1L;

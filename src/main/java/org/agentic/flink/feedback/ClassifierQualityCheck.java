@@ -1,6 +1,7 @@
 package org.agentic.flink.feedback;
 
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.InferenceConnection;
@@ -16,6 +17,7 @@ import org.agentic.flink.inference.InferenceSetup;
  * <p>Zero-infra with the default {@link org.agentic.flink.inference.LexiconInferenceConnection}.
  * The classifier binds lazily and is held {@code transient} for Flink serializability.
  */
+@Public
 public final class ClassifierQualityCheck implements QualityCheck {
   private static final long serialVersionUID = 1L;
 

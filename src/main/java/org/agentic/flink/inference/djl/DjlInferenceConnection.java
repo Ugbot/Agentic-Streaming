@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.inference.ClassificationResult;
@@ -47,6 +48,7 @@ import org.slf4j.LoggerFactory;
  * lazily inside {@link #bind} through {@link InferenceModelCache} so multiple operators in the same
  * task slot share weights.
  */
+@Experimental
 public final class DjlInferenceConnection implements InferenceConnection {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(DjlInferenceConnection.class);

@@ -2,6 +2,7 @@ package org.agentic.flink.storage.redis;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -58,6 +59,7 @@ import redis.clients.jedis.JedisPoolConfig;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class RedisConversationStore extends ReopenableStore implements LongTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(RedisConversationStore.class);

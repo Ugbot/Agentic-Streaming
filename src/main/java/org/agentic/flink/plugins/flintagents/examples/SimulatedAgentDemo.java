@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
@@ -41,6 +42,7 @@ import org.apache.flink.agents.api.Event;
  *
  * @author Agentic Flink Team
  */
+@Experimental
 public class SimulatedAgentDemo {
 
   private static final String ANSI_RESET = "\u001B[0m";

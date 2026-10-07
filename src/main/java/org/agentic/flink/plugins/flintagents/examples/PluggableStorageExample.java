@@ -1,6 +1,7 @@
 package org.agentic.flink.plugins.flintagents.examples;
 
 import java.util.*;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
@@ -22,6 +23,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * @author Agentic Flink Team
  */
+@Experimental
 public class PluggableStorageExample {
 
   public static void main(String[] args) throws Exception {

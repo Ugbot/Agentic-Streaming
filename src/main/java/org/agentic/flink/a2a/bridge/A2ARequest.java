@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.agentic.flink.a2a.A2AMessage;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Envelope carrying an inbound A2A request from the Quarkus gateway into the Flink job, across the
@@ -19,6 +20,7 @@ import org.agentic.flink.a2a.A2AMessage;
  * (Redis, Kafka) and Java serialization (ZeroMQ, in-JVM) alike.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2ARequest implements Serializable {
   private static final long serialVersionUID = 1L;
 

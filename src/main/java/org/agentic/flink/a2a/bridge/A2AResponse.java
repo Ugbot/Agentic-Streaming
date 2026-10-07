@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Objects;
 import org.agentic.flink.a2a.A2AArtifact;
 import org.agentic.flink.a2a.A2ATaskState;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Envelope carrying an A2A result (or streaming delta) from the Flink job back to the gateway.
@@ -18,6 +19,7 @@ import org.agentic.flink.a2a.A2ATaskState;
  * into A2A SSE events / push payloads and persists task state. Correlated by {@link #getTaskId()}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2AResponse implements Serializable {
   private static final long serialVersionUID = 1L;
 

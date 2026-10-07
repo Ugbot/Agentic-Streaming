@@ -1,8 +1,10 @@
 package org.agentic.flink.ingest;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 
 /** Emitted by an {@link IngestionPipeline} per successfully indexed chunk. */
+@Experimental
 public final class IngestAck implements Serializable {
   private static final long serialVersionUID = 1L;
 

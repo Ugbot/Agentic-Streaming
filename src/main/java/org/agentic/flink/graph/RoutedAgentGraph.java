@@ -2,6 +2,7 @@ package org.agentic.flink.graph;
 
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -28,6 +29,7 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
  * @param <MID> routed turn type carrying a path label
  * @param <OUT> response type
  */
+@Public
 public final class RoutedAgentGraph {
 
   private RoutedAgentGraph() {}

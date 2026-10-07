@@ -2,6 +2,7 @@ package org.agentic.flink.tools.builtin;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Example tool class demonstrating LangChain4j @Tool annotation usage.
@@ -13,6 +14,7 @@ import dev.langchain4j.agent.tool.Tool;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class CalculatorTools {
 
   /**

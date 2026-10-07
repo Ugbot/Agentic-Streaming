@@ -1,5 +1,6 @@
 package org.agentic.flink.compile;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.plan.AgentPlan;
 import org.agentic.flink.plan.AgentPlanProcessFunction;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
  * <p>Mirrors the role of upstream Apache Flink Agents' {@code CompileUtils.connectToAgent} for this
  * framework's plan format.
  */
+@Internal
 public final class CompileUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(CompileUtils.class);

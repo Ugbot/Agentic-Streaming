@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * One emission from an operator's debug side-output. Operators only push these when their debug
@@ -15,6 +16,7 @@ import java.util.Objects;
  * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters) so
  * the framework's debug stream avoids the Kryo fallback path.
  */
+@Public
 public final class DebugEvent implements Serializable {
   private static final long serialVersionUID = 1L;
 

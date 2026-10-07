@@ -2,6 +2,7 @@ package org.agentic.flink.ingest;
 
 import java.io.Serializable;
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Splits a source document into a list of {@link Chunk}s ready for embedding.
@@ -10,6 +11,7 @@ import java.util.List;
  * be idempotent: calling {@code chunk} twice on the same source must produce the same chunk ids and
  * ordering — downstream stages rely on this to avoid duplicates after restart.
  */
+@Experimental
 public interface Chunker extends Serializable {
 
   List<Chunk> chunk(String sourceId, String text);

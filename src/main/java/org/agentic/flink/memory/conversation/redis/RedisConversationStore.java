@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatMessage;
@@ -45,6 +46,7 @@ import redis.clients.jedis.JedisPoolConfig;
  * components. Per the SPI contract these methods degrade gracefully (log + empty/no-op) rather than
  * fail a turn.
  */
+@Public
 public final class RedisConversationStore implements ConversationStore {
   private static final long serialVersionUID = 1L;
 

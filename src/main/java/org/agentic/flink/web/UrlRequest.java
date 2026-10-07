@@ -2,11 +2,13 @@ package org.agentic.flink.web;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * A request to fetch a URL, addressable across the crawler's many input channels (seeds, sitemap
  * discovery, LLM-driven requests, external producers).
  */
+@Experimental
 public final class UrlRequest implements Serializable {
   private static final long serialVersionUID = 1L;
 

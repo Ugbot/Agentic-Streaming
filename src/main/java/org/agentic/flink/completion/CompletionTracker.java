@@ -3,6 +3,7 @@ package org.agentic.flink.completion;
 import java.io.Serializable;
 import java.util.*;
 import java.util.function.Predicate;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 
@@ -66,6 +67,7 @@ import org.agentic.flink.core.AgentEventType;
  * @see TaskList
  * @see GoalPredicate
  */
+@Public
 public class CompletionTracker implements Serializable {
 
   private static final long serialVersionUID = 1L;

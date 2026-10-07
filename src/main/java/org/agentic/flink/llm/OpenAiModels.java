@@ -1,6 +1,7 @@
 package org.agentic.flink.llm;
 
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Small shared helpers for OpenAI model quirks, so every place that builds an OpenAI chat model
@@ -12,6 +13,7 @@ import java.util.Locale;
  * a 400. Callers building an {@code OpenAiChatModel} must omit those params for reasoning models;
  * use {@link #isReasoning} to decide.
  */
+@Public
 public final class OpenAiModels {
 
   private OpenAiModels() {}

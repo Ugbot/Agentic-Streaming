@@ -3,6 +3,7 @@ package org.agentic.flink.plugins.flintagents.action;
 import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory;
  * <p>Sync to the long-term store is write-behind, triggered either by event-count interval or by a
  * successful MoSCoW compaction. Checkpoint barriers do not block on long-term writes.
  */
+@Experimental
 public class ContextManagementActionWithStorage extends KeyedProcessFunction<String, Event, Event> {
 
   private static final Logger LOG =

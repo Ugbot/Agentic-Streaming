@@ -5,6 +5,7 @@ import dev.langchain4j.model.input.PromptTemplate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class PromptTemplateManager {
 
   private static final Logger LOG = LoggerFactory.getLogger(PromptTemplateManager.class);

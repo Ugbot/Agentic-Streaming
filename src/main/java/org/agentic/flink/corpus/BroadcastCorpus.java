@@ -1,6 +1,7 @@
 package org.agentic.flink.corpus;
 
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
@@ -18,6 +19,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * triples; the operator calls {@link Corpus#upsert} on each replica's view. There is no shared
  * mutable state between subtasks beyond what Flink broadcast state replicates for you.
  */
+@Experimental
 public final class BroadcastCorpus {
 
   private BroadcastCorpus() {}

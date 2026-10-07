@@ -1,6 +1,7 @@
 package org.agentic.flink.pipeline;
 
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.runtime.WorkflowTurnFunction;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
@@ -19,7 +20,8 @@ import org.jagentic.core.TurnResult;
  *     WorkflowTurnFunction} so existing jobs gain durable state, and formats the same summary line;
  *     it will be removed with the DSL it served.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Internal
 public final class FlinkGraphFunction extends KeyedProcessFunction<String, Event, String> {
   private static final long serialVersionUID = 2L;
 

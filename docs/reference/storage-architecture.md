@@ -96,7 +96,6 @@ This codebase implements a multi-tier storage architecture where every storage l
 │                   Storage Interfaces                         │
 │  • ShortTermMemoryStore  (HOT tier)                         │
 │  • LongTermMemoryStore   (WARM tier)                        │
-│  • SteeringStateStore    (WARM tier)                        │
 │  • VectorStore           (VECTOR tier)                      │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -137,13 +136,12 @@ This codebase implements a multi-tier storage architecture where every storage l
 - `StorageTier` enum with tier classifications
 - `ShortTermMemoryStore` interface (HOT tier)
 - `LongTermMemoryStore` interface (WARM tier)
-- `SteeringStateStore` interface (WARM tier)
 - `VectorStore` interface (VECTOR tier)
 - `InMemoryShortTermStore` implementation (fully working)
 - `RedisShortTermStore` implementation (requires Jedis dependency)
 - `RedisConversationStore` implementation (requires Jedis dependency)
 - `StorageFactory` with tier-specific factory methods
-- `StorageConfiguration` with YAML support (requires Jackson dependency)
+- `StorageConfiguration` built programmatically through its builder
 
 ### In Progress
 - Integration with `ContextManagementAction`
@@ -152,7 +150,6 @@ This codebase implements a multi-tier storage architecture where every storage l
 ### Planned
 - Additional backend implementations (DynamoDB, Cassandra, MongoDB, PostgreSQL, S3, ClickHouse)
 - Vector store implementations (Qdrant, Pinecone, Weaviate, pgvector)
-- Steering store implementations
 - Migration utilities for moving data between backends
 - Performance benchmarking suite
 
@@ -186,40 +183,6 @@ AgentContext context = new AgentContext();
 warmStore.saveContext("flow-001", context);
 ```
 
-### YAML Configuration
-
-```yaml
-# storage-config.yaml
-storage:
-  hot:
-    backend: redis
-    config:
-      redis.host: localhost
-      redis.port: 6379
-      redis.ttl.seconds: 3600
-
-  warm:
-    backend: redis
-    config:
-      redis.host: localhost
-      redis.port: 6379
-      redis.database: 1
-      redis.ttl.seconds: 86400
-
-  vector:
-    backend: qdrant
-    config:
-      qdrant.host: localhost
-      qdrant.port: 6333
-      qdrant.collection: agent_vectors
-```
-
-Load configuration:
-```java
-StorageConfiguration config = StorageConfiguration.fromYamlFile("storage-config.yaml");
-ShortTermMemoryStore hotStore = config.createShortTermStore();
-```
-
 ### Factory Pattern Usage
 
 ```java
@@ -240,9 +203,11 @@ public class AgenticFlinkJob {
     StreamExecutionEnvironment env =
         StreamExecutionEnvironment.getExecutionEnvironment();
 
-    // Load storage configuration
+    // Build storage configuration
     StorageConfiguration storageConfig =
-        StorageConfiguration.fromResource("config/storage.yaml");
+        StorageConfiguration.builder()
+            .withWarmTier("postgres", postgresConfig)
+            .build();
 
     // Create data stream
     DataStream<Event> events = env.addSource(new KafkaSource(...));
@@ -302,15 +267,6 @@ public class AgenticFlinkJob {
     <groupId>redis.clients</groupId>
     <artifactId>jedis</artifactId>
     <version>5.1.0</version>
-</dependency>
-```
-
-#### YAML Configuration
-```xml
-<dependency>
-    <groupId>com.fasterxml.jackson.dataformat</groupId>
-    <artifactId>jackson-dataformat-yaml</artifactId>
-    <version>2.15.2</version>
 </dependency>
 ```
 
@@ -427,7 +383,6 @@ When moving from template ExternalStateStore to pluggable architecture:
 1. **Phase 1:** Replace ExternalStateStore usage with LongTermMemoryStore
 2. **Phase 2:** Add ShortTermMemoryStore for active context
 3. **Phase 3:** Integrate VectorStore for RAG functionality
-4. **Phase 4:** Add SteeringStateStore for system configuration
 
 ---
 

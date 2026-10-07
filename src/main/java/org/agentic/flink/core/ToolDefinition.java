@@ -6,6 +6,7 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Pre-spec tool descriptor of the Flink-only DSL.
@@ -15,10 +16,11 @@ import lombok.NoArgsConstructor;
  *     org.jagentic.core.ToolCall}s; kept for the deprecated {@link org.agentic.flink.dsl.Agent}
  *     DSL.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Public
 public class ToolDefinition implements Serializable {
 
   private String toolId;

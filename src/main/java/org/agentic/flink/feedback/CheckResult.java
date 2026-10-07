@@ -1,8 +1,10 @@
 package org.agentic.flink.feedback;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 
 /** Outcome of a {@link QualityCheck}: a 0–1 quality score, whether it passed, and a critique. */
+@Public
 public final class CheckResult implements Serializable {
   private static final long serialVersionUID = 1L;
 

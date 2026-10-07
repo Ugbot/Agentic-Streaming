@@ -1,6 +1,7 @@
 package org.agentic.flink.example.screening;
 
 import java.time.Duration;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.screening.BandPassDetector;
 import org.agentic.flink.screening.RepeatDetector;
 import org.agentic.flink.screening.ScreenItem;
@@ -26,6 +27,7 @@ import org.apache.flink.util.Collector;
  * <p>No ML/LLM tier here (numeric telemetry needs no language model) — it stops at the rules
  * verdict. Keyed by sensor id; runs via {@code flink run}.
  */
+@Internal
 public final class TelemetryScreeningExample {
 
   /** sensorId, reading value, event-time millis. */

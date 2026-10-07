@@ -1,6 +1,7 @@
 package org.agentic.flink.screening;
 
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Statistical "anomaly" screen: fires when the current item's value (or a named numeric attribute)
@@ -21,6 +22,7 @@ import java.util.List;
  *       several features carried in one item (e.g. spread, depth, volume).
  * </ul>
  */
+@Public
 public final class ZScoreDetector implements Detector {
   private static final long serialVersionUID = 1L;
 

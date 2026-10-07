@@ -3,6 +3,7 @@ package org.agentic.flink.example.triage;
 import dev.langchain4j.model.chat.ChatModel;
 import java.util.List;
 import java.util.Set;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -56,6 +57,7 @@ import org.agentic.flink.statemachine.AgentTransition;
  *
  * <p>See {@code docs/examples/support-triage.md} for the walkthrough.
  */
+@Internal
 public class SupportTriageExample {
   /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
   public static final String RERANKER_MODEL_URI =

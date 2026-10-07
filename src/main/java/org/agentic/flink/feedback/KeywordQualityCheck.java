@@ -3,12 +3,14 @@ package org.agentic.flink.feedback;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Deterministic, zero-infra {@link QualityCheck}: the output passes when it contains all required
  * terms (case-insensitive) and meets a minimum length. Score is the fraction of checks satisfied.
  * The workhorse for tests and offline demos.
  */
+@Public
 public final class KeywordQualityCheck implements QualityCheck {
   private static final long serialVersionUID = 1L;
 

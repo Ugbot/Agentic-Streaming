@@ -5,6 +5,7 @@ import java.util.*;
 import org.agentic.flink.a2a.A2AClientFactory;
 import org.agentic.flink.a2a.A2ASkillMapper;
 import org.agentic.flink.a2a.RemoteAgentSpec;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.KeyedContextItem;
 import org.agentic.flink.completion.TaskList;
@@ -76,7 +77,8 @@ import org.agentic.flink.tools.mcp.McpServerSpec;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class AgentBuilder {
 
   // Core identity

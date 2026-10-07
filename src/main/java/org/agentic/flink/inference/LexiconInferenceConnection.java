@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
@@ -20,6 +21,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "lexicon"}. The default
  * lexicon targets phishing/fraud signals.
  */
+@Experimental
 public final class LexiconInferenceConnection implements InferenceConnection {
   private static final long serialVersionUID = 1L;
 

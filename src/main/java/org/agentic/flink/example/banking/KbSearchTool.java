@@ -12,6 +12,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ import org.slf4j.LoggerFactory;
  * "swap" to the template's Redis + gemini-embedding vector index is a drop-in replacement behind
  * this same tool name. Documents are loaded once at construction.
  */
+@Internal
 public final class KbSearchTool implements ToolExecutor {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(KbSearchTool.class);

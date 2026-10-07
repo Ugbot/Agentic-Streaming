@@ -1,5 +1,7 @@
 package org.agentic.flink.statemachine;
 
+import org.agentic.flink.annotation.Public;
+
 /**
  * Agent execution states in the CEP-based state machine.
  *
@@ -38,6 +40,7 @@ package org.agentic.flink.statemachine;
  * @see AgentTransition
  * @see AgentStateMachine
  */
+@Public
 public enum AgentState {
   /**
    * Initial state when an agent flow is created.

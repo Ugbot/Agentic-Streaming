@@ -6,6 +6,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.api.common.functions.OpenContext;
@@ -32,6 +33,7 @@ import org.slf4j.LoggerFactory;
  * event annotated with a timeout error (or a {@code FLOW_FAILED} event when the step is
  * fail-on-error) instead of hanging.
  */
+@Experimental
 public final class A2AAsyncFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(A2AAsyncFunction.class);

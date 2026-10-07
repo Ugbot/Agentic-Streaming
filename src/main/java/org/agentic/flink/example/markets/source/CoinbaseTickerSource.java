@@ -14,6 +14,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import org.slf4j.Logger;
@@ -32,6 +33,7 @@ import org.slf4j.LoggerFactory;
  * <p>Single parallelism by design — Coinbase rate-limits per connection and we want a stable
  * monotonic per-product update stream.
  */
+@Internal
 public final class CoinbaseTickerSource implements PollingSource.PollFn<Inventory> {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(CoinbaseTickerSource.class);

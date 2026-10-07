@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 
 /**
@@ -21,6 +22,7 @@ import org.agentic.flink.core.AgentEvent;
  * @author Agentic Flink Team
  * @see GoalPredicate
  */
+@Public
 public class CompositeGoalPredicate implements GoalPredicate, Serializable {
 
   private static final long serialVersionUID = 1L;

@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * An A2A message exchanged between a client agent and a remote agent.
@@ -16,6 +17,7 @@ import java.util.Objects;
  * cleanly onto Flink keyed state. Immutable and {@link Serializable}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2AMessage implements Serializable {
   private static final long serialVersionUID = 1L;
 

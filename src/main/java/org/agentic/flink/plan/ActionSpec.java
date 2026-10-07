@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * An event-keyed Python action: when an event of one of {@link #getEvents()} types arrives at the
@@ -14,6 +15,7 @@ import java.util.List;
  * <p>Java-side actions are expressed indirectly through other plan fields (chat, listeners, tools);
  * this descriptor is specifically for Python callbacks that ride in the plan as cloudpickle bytes.
  */
+@Public
 public final class ActionSpec implements Serializable {
   private static final long serialVersionUID = 1L;
 

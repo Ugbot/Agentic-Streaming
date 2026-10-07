@@ -6,6 +6,7 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInfo;
 
@@ -13,6 +14,7 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
 @NoArgsConstructor
 @AllArgsConstructor
 @TypeInfo(AgentEvent.Factory.class)
+@Public
 public class AgentEvent implements Serializable {
 
   /**

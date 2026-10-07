@@ -2,8 +2,10 @@ package org.agentic.flink.ingest;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /** A piece of source text suitable for embedding. */
+@Experimental
 public final class Chunk implements Serializable {
   private static final long serialVersionUID = 1L;
 

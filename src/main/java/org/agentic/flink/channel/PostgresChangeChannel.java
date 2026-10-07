@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.ArrayDeque;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Migrated from {@code PostgresChangeFeed}; behaviour unchanged.
  */
+@Public
 public final class PostgresChangeChannel implements Channel<KeyedContextItem> {
   private static final long serialVersionUID = 1L;
 

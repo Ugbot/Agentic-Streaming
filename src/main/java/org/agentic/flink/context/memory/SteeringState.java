@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextPriority;
 
 /**
@@ -18,6 +19,7 @@ import org.agentic.flink.context.core.ContextPriority;
  * Explicitly avoid
  */
 @Data
+@Public
 public class SteeringState implements Serializable {
 
   private Map<String, SteeringRule> rules; // key = rule_id

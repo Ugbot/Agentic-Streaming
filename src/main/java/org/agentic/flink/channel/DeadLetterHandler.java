@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import org.agentic.flink.annotation.Public;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
  * Receives records a {@link KafkaChannel.JsonSchema} could not deserialize. Handlers are shipped
  * with the source, so they must be {@link Serializable} and create any connection lazily.
  */
+@Public
 public interface DeadLetterHandler extends Serializable {
 
   /** Header carrying the deserialization error message on dead-lettered records. */

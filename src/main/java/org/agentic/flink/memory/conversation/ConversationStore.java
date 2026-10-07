@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.llm.ChatMessage;
 
 /**
@@ -43,7 +44,8 @@ import org.agentic.flink.llm.ChatMessage;
  *     org.jagentic.core.ConversationStore} is the materialized-view SPI. This store remains the
  *     memory layer of the deprecated {@link org.agentic.flink.dsl.Agent} DSL.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public interface ConversationStore extends Serializable {
 
   /** Append one message to a conversation's transcript (in arrival order). No-op if id is null. */

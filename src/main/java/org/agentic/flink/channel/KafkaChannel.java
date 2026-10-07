@@ -6,6 +6,7 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Properties;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
  * {@link DeadLetterHandler} (by default logged and dropped; {@link #withDeadLetterTopic}
  * republishes them to a Kafka topic with the error in a header).
  */
+@Public
 public final class KafkaChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 2L;
 

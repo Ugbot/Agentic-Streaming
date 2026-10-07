@@ -1,5 +1,6 @@
 package org.agentic.flink.example.banking.graph;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.BankingTurnContext;
 import org.agentic.flink.example.banking.TurnBrain;
 import org.agentic.flink.example.banking.env.EnvSession;
@@ -21,6 +22,7 @@ import org.apache.flink.util.Collector;
  * <p>A null brain (the {@code REFUSE} path, where the router already set a safe reply) passes the
  * turn through untouched.
  */
+@Internal
 public final class BankingPathFunction
     extends KeyedProcessFunction<String, BankingTurn, BankingTurn> {
   private static final long serialVersionUID = 1L;

@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Parsed outcome of a validator/judge model response of the form {@code VALID|INVALID [score]
@@ -14,6 +15,7 @@ import java.util.regex.Pattern;
  * VALID}. The first verdict word in the response wins; a response with no verdict word is {@link
  * Outcome#UNDETERMINED} and must be treated as a failure by callers rather than as a pass.
  */
+@Experimental
 public final class ValidationVerdict implements Serializable {
   private static final long serialVersionUID = 1L;
 

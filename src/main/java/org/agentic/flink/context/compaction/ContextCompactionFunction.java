@@ -2,6 +2,7 @@ package org.agentic.flink.context.compaction;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * Summarize SHOULD items if needed 4. Always keep MUST items 5. Promote high-relevancy items to
  * long-term storage
  */
+@Internal
 public class ContextCompactionFunction
     extends ProcessFunction<CompactionRequest, CompactionResult> {
 

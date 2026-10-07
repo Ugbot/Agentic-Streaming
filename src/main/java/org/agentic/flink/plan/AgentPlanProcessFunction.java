@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.python.PythonAction;
 import org.agentic.flink.python.PythonExecutor;
 import org.agentic.flink.python.PythonToolExecutor;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
  * accessible to Python actions via the {@code ctx} dict; Phase 4+ will expand this into a richer
  * runner-context with corpus/embedder access.
  */
+@Internal
 public class AgentPlanProcessFunction<K> extends KeyedProcessFunction<K, Object, Object> {
 
   private static final long serialVersionUID = 1L;

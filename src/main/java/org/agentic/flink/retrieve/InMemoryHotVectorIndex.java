@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
@@ -23,6 +24,7 @@ import org.agentic.flink.memory.vector.ScoredItem;
  * a small moving window of fresh data, brute-forced exactly — accurate and fast while the window is
  * small.
  */
+@Experimental
 public final class InMemoryHotVectorIndex implements HotVectorIndex {
   private static final long serialVersionUID = 1L;
 

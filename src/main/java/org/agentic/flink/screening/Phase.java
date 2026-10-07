@@ -1,6 +1,9 @@
 package org.agentic.flink.screening;
 
+import org.agentic.flink.annotation.Public;
+
 /** Which screening phase a {@link Signal} came from. */
+@Public
 public enum Phase {
   BAND_PASS,
   REPEAT,

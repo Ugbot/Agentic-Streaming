@@ -2,6 +2,7 @@ package org.agentic.flink.a2a.storage;
 
 import java.util.Map;
 import java.util.ServiceLoader;
+import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
  * <p>Any other name is resolved via {@link ServiceLoader} of {@link A2ATaskStore}, matching by
  * provider name, simple class name, or FQN — so third-party backends drop in without code changes.
  */
+@Experimental
 public final class A2ATaskStoreFactory {
   private static final Logger LOG = LoggerFactory.getLogger(A2ATaskStoreFactory.class);
 

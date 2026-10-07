@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * A named bundle of agent capability — tools + system-prompt fragment + required facts — borrowed
@@ -15,6 +16,7 @@ import java.util.Objects;
  * prompt). {@link #getRequiredFacts()} are surfaced to the hydration layer as a hint about which
  * long-term facts to load eagerly.
  */
+@Public
 public final class Skill implements Serializable {
   private static final long serialVersionUID = 1L;
 

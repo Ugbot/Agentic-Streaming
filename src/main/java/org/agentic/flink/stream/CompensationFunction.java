@@ -2,6 +2,7 @@ package org.agentic.flink.stream;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.compensation.CompensationAction;
 import org.agentic.flink.compensation.CompensationHandler;
 import org.agentic.flink.compensation.CompensationResult;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class CompensationFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final long serialVersionUID = 1L;
