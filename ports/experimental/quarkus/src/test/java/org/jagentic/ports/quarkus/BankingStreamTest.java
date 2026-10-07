@@ -83,7 +83,7 @@ class BankingStreamTest {
   void repliesFollowRequestsPerConversation() {
     String conversationId = AgentResourceTest.randomId("c");
     String userId = AgentResourceTest.randomId("u");
-    int turns = ThreadLocalRandom.current().nextInt(2, 5);
+    int turns = ThreadLocalRandom.current().nextInt(8, 17);
     List<String> texts = new ArrayList<>();
     for (int i = 0; i < turns; i++) {
       String text = (i % 2 == 0 ? "raise my transfer limit " : "tell me about your cards ") + UUID.randomUUID();

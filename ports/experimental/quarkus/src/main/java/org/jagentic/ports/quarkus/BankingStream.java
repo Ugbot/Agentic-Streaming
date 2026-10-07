@@ -3,7 +3,7 @@ package org.jagentic.ports.quarkus;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
-import io.smallrye.common.annotation.RunOnVirtualThread;
+import io.smallrye.common.annotation.Blocking;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
 
@@ -32,7 +32,10 @@ import org.jagentic.ports.quarkus.AgentMessages.AgentRequest;
  * engine state primitive; the store is written inside {@code RoutedGraph.handle} before the
  * Kafka offset commits, so the store leads the offset (at-least-once + idempotent core).
  *
- * <p>The blocking core runs on a virtual thread (C4), keeping the event loop free.
+ * <p>The blocking core runs off the event loop on the ordered worker pool ({@code @Blocking},
+ * C4). Ordered execution matters: Quarkus runs {@code @RunOnVirtualThread} mediators
+ * unordered and concurrently, which would let two turns of one conversation interleave and
+ * break the single-writer guarantee above.
  */
 @ApplicationScoped
 public class BankingStream {
@@ -45,7 +48,7 @@ public class BankingStream {
 
   @Incoming("requests")
   @Outgoing("replies")
-  @RunOnVirtualThread
+  @Blocking
   public AgentReply onTurn(AgentRequest request) {
     String cid = request.conversationId();
     String userId = request.userId();

@@ -46,7 +46,11 @@ banking turns to `POST /agent` with RestAssured and checks the route, tool call 
 each turn appends exactly one user and one assistant message, and the `EventBuilder` field
 mapping. `BankingStreamTest` pushes requests into the `requests` channel and reads the replies
 from the `replies` channel; the `%test` profile in `application.properties` binds both channels
-to the SmallRye in-memory connector, so the same `BankingStream` bean runs without Kafka. Outside
+to the SmallRye in-memory connector, so the same `BankingStream` bean runs without Kafka. Its
+multi-turn case sends between eight and sixteen alternating turns to one conversation and checks
+that the replies come back in request order: `BankingStream.onTurn` is `@Blocking` (ordered
+worker pool) rather than `@RunOnVirtualThread`, because Quarkus runs virtual-thread mediators
+unordered and concurrently, which lets two turns of one conversation interleave. Outside
 the test profile the channels use the Kafka connector as configured below; the `requests` value
 deserializer is `AgentRequestDeserializer`, a concrete `ObjectMapperDeserializer<AgentRequest>`
 (the abstract class itself cannot be instantiated by the Kafka client), and
