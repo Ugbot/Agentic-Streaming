@@ -326,7 +326,7 @@ jobs:
           cli: latest
 
       - name: Cache clojure deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository
           key: clj-${{ runner.os }}-${{ hashFiles('agentic-clj/deps.edn') }}
