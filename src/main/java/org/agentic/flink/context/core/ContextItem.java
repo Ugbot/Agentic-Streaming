@@ -6,11 +6,13 @@ import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 
 /** Individual context item with content, metadata, and priority */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Public
 public class ContextItem implements Serializable {
 
   private String itemId;

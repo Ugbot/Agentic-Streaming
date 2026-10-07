@@ -2,6 +2,7 @@ package org.agentic.flink.memory.conversation;
 
 import java.util.Iterator;
 import java.util.ServiceLoader;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +17,7 @@ import org.slf4j.LoggerFactory;
  * back to the process-wide {@link InMemoryConversationStore#shared() in-JVM store}, which is the
  * correct default for the embedded single-JVM deployment.
  */
+@Public
 public final class ConversationStores {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConversationStores.class);

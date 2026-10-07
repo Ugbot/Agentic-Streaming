@@ -8,6 +8,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.*;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -74,6 +75,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class PostgresConversationStore extends ReopenableStore implements LongTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(PostgresConversationStore.class);

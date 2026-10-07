@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 
 /**
@@ -15,6 +16,7 @@ import org.agentic.flink.context.core.ContextItem;
  * BaseLongTermMemory.MemorySet} API, this class is the natural bridge — its public surface mirrors
  * the upstream concept vocabulary.
  */
+@Public
 public final class MemorySetAccessor {
 
   private final LongTermMemoryStore store;

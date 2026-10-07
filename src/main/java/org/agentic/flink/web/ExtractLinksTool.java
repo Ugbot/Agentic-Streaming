@@ -3,6 +3,7 @@ package org.agentic.flink.web;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.tools.ToolExecutor;
 
 /**
@@ -10,6 +11,7 @@ import org.agentic.flink.tools.ToolExecutor;
  * body text). Useful when the LLM is exploring a site's structure before deciding which pages are
  * worth a full fetch.
  */
+@Experimental
 public final class ExtractLinksTool implements ToolExecutor {
   private static final long serialVersionUID = 1L;
 

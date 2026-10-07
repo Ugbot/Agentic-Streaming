@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.env.EnvSession;
 import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import org.slf4j.LoggerFactory;
  * <p>Returns a tool-error result (not an exception) on refusal, so the agent can recover by asking
  * the user for the missing detail or completing verification first.
  */
+@Internal
 public final class AuthorizationToolGuard implements ToolExecutor {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(AuthorizationToolGuard.class);

@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.ToolDefinition;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * Enhanced Tool Call Async Function that uses actual tool executors Supports real tool
  * implementations instead of just LLM prompts
  */
+@Internal
 public class ToolCallAsyncFunctionV2 extends RichAsyncFunction<ToolCallRequest, ToolCallResponse> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ToolCallAsyncFunctionV2.class);

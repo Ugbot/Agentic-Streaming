@@ -2,6 +2,7 @@ package org.agentic.flink.a2a;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.tool.ToolRegistry;
 import org.slf4j.Logger;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * ToolRegistry registry = b.build();
  * }</pre>
  */
+@Experimental
 public final class A2AToolRegistry {
   private static final Logger LOG = LoggerFactory.getLogger(A2AToolRegistry.class);
 

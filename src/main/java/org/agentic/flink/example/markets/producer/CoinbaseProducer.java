@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
 import org.agentic.flink.example.markets.model.MarketRecords.Trade;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
  *     --products BTC-USD,ETH-USD,SOL-USD
  * </pre>
  */
+@Internal
 public final class CoinbaseProducer {
 
   private static final Logger LOG = LoggerFactory.getLogger(CoinbaseProducer.class);

@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -74,7 +75,8 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Internal
 public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, AgentEvent>
     implements TimedOutPartialMatchHandler<AgentEvent> {
 

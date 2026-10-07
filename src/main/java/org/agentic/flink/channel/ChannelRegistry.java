@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Named registry of {@link Channel}s. Lets job-graph builders refer to channels by stable name
@@ -13,6 +14,7 @@ import java.util.Optional;
  * <p>The registry is serializable and ships with the operator spec; the channels themselves are
  * built on demand by calling {@link Channel#open}.
  */
+@Public
 public final class ChannelRegistry implements Serializable {
   private static final long serialVersionUID = 1L;
 

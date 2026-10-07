@@ -1,6 +1,7 @@
 package org.agentic.flink.runtime;
 
 import java.io.IOException;
+import org.agentic.flink.annotation.Internal;
 import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.SimpleTypeSerializerSnapshot;
@@ -16,6 +17,7 @@ import org.jagentic.core.TurnResult;
  * TurnResultCodec}), never via Kryo. {@link TurnResult} is immutable in its spec fields, so values
  * are copied by reference.
  */
+@Internal
 public final class TurnResultTypeInfo extends TypeInformation<TurnResult> {
   private static final long serialVersionUID = 1L;
   public static final TurnResultTypeInfo INSTANCE = new TurnResultTypeInfo();

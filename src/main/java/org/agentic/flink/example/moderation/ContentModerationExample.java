@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.Classifier;
@@ -61,6 +62,7 @@ import org.apache.flink.util.OutputTag;
  * <p>For a real Kafka source, swap {@code env.fromElements(...)} for a {@code KafkaSource} — see
  * {@code docs/examples/moderation.md} for the snippet and the compose addition.
  */
+@Internal
 public class ContentModerationExample {
 
   /** A single user-generated post entering the pipeline. */

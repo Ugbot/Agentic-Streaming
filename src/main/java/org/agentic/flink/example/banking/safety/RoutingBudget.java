@@ -3,6 +3,7 @@ package org.agentic.flink.example.banking.safety;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInfo;
 
@@ -27,6 +28,7 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
  * deterministic and testable.
  */
 @TypeInfo(RoutingBudget.Factory.class)
+@Internal
 public final class RoutingBudget implements Serializable {
   private static final long serialVersionUID = 1L;
 

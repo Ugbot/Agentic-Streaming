@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Serializable configuration for a Model Context Protocol (MCP) server.
@@ -21,6 +22,7 @@ import java.util.Objects;
  * <p>Specs are immutable and Java-serializable so they can ship in the Flink job graph; the actual
  * {@link McpClient} is constructed on the task side from this spec.
  */
+@Public
 public final class McpServerSpec implements Serializable {
   private static final long serialVersionUID = 2L;
 

@@ -2,8 +2,10 @@ package org.agentic.flink.embedding;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /** Runtime handle for an embedding model, returned by {@link EmbeddingConnection#bind}. */
+@Public
 public interface EmbeddingClient extends AutoCloseable {
 
   /** Embed a single string under the given setup. */

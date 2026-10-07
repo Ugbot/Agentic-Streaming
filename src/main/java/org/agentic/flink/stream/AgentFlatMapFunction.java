@@ -1,5 +1,6 @@
 package org.agentic.flink.stream;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class AgentFlatMapFunction extends RichFlatMapFunction<AgentEvent, AgentEvent> {
 
   private static final long serialVersionUID = 1L;

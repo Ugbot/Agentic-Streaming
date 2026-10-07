@@ -3,6 +3,7 @@ package org.agentic.flink.tools.rag;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.rag.KnowledgeBase;
 import org.agentic.flink.tools.AbstractToolExecutor;
 
@@ -13,6 +14,7 @@ import org.agentic.flink.tools.AbstractToolExecutor;
  * base — e.g. "fetch this docs page so I can answer questions about it". Parameter: {@code url}
  * (required). Returns the title and number of chunks indexed.
  */
+@Experimental
 public final class ScrapeUrlTool extends AbstractToolExecutor {
 
   private final KnowledgeBase knowledgeBase;

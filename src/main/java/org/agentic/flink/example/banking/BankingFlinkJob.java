@@ -2,6 +2,7 @@ package org.agentic.flink.example.banking;
 
 import org.agentic.flink.a2a.bridge.A2ABridge;
 import org.agentic.flink.a2a.bridge.A2ABridgeFactory;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.example.banking.graph.BankingAgentGraph;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
  *   A2A_FLINK_PARALLELISM               (default 1 — a single MiniCluster instance)
  * </pre>
  */
+@Internal
 public final class BankingFlinkJob {
 
   private static final Logger LOG = LoggerFactory.getLogger(BankingFlinkJob.class);

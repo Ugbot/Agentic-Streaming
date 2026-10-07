@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.typeinfo.FlinkJson;
 import org.jagentic.core.LogEvent;
 import org.jagentic.core.ToolCall;
@@ -19,6 +20,7 @@ import org.jagentic.core.TurnStatus;
  * decodes it back. The wire form <em>is</em> the spec shape, so a Flink sink that writes these
  * bytes emits conformance-comparable results without a second mapping step.
  */
+@Internal
 public final class TurnResultCodec {
   private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 

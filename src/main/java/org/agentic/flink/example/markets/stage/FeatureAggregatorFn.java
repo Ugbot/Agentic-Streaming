@@ -1,5 +1,6 @@
 package org.agentic.flink.example.markets.stage;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
 import org.agentic.flink.example.markets.model.MarketRecords.RankedQuote;
@@ -20,6 +21,7 @@ import org.apache.flink.util.Collector;
  * window-end timer if not already pending. On timer: compute and emit {@link MarketFeatures}, then
  * clear state.
  */
+@Internal
 public final class FeatureAggregatorFn
     extends KeyedProcessFunction<String, RankedQuote, MarketFeatures> {
   private static final long serialVersionUID = 1L;

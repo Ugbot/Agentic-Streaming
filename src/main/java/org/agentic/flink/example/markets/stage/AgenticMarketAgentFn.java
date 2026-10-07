@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
 import org.agentic.flink.operator.AgenticKeyedProcessFunction;
@@ -27,6 +28,7 @@ import org.apache.flink.util.Collector;
  * place for the {@code flink run}-style bond/crypto examples whose Flink graphs predate the control
  * plane.
  */
+@Internal
 public final class AgenticMarketAgentFn
     extends AgenticKeyedProcessFunction<String, MarketFeatures, String> {
   private static final long serialVersionUID = 1L;

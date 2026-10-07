@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.Scorer;
@@ -12,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Scores context items for relevancy to current intent Uses semantic similarity via embeddings */
+@Public
 public class RelevancyScorer implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(RelevancyScorer.class);

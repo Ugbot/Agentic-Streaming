@@ -3,6 +3,7 @@ package org.agentic.flink.dsl;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.KeyedContextItem;
 import org.agentic.flink.completion.TaskList;
@@ -66,7 +67,8 @@ import org.agentic.flink.tools.mcp.McpServerSpec;
  *     org.agentic.flink.runtime.WorkflowTurnFunction}; this class is kept as the pre-spec
  *     Flink-only DSL and receives no new features.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class Agent implements Serializable {
 
   private static final long serialVersionUID = 1L;

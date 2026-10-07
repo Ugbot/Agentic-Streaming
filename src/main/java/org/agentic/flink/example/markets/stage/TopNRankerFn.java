@@ -2,6 +2,7 @@ package org.agentic.flink.example.markets.stage;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
 import org.agentic.flink.example.markets.model.MarketRecords.RankedQuote;
 import org.apache.flink.api.common.functions.OpenContext;
@@ -23,6 +24,7 @@ import org.apache.flink.util.Collector;
  *
  * <p>Key: {@code instrumentId + "|" + side}.
  */
+@Internal
 public final class TopNRankerFn
     extends KeyedProcessFunction<String, EnrichedInventory, RankedQuote> {
   private static final long serialVersionUID = 1L;

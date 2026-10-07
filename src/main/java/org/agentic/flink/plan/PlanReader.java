@@ -3,6 +3,7 @@ package org.agentic.flink.plan;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * <p>Reflection is used (rather than ServiceLoader) because the plan itself names a fully qualified
  * class — the user has already chosen which implementation they want.
  */
+@Public
 public final class PlanReader {
 
   private static final Logger LOG = LoggerFactory.getLogger(PlanReader.class);

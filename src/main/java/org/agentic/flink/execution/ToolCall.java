@@ -3,6 +3,7 @@ package org.agentic.flink.execution;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Represents a tool call request from the LLM.
@@ -11,7 +12,8 @@ import java.util.Map;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class ToolCall implements Serializable {
 
   private static final long serialVersionUID = 1L;

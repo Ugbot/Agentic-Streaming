@@ -2,6 +2,7 @@ package org.agentic.flink.operator;
 
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.ControlState;
 import org.agentic.flink.control.DebugControl;
@@ -33,6 +34,7 @@ import org.apache.flink.util.Collector;
  * @param <IN> keyed input element type
  * @param <OUT> output element type
  */
+@Public
 public abstract class AgenticKeyedProcessFunction<K, IN, OUT>
     extends KeyedBroadcastProcessFunction<K, IN, ControlMessage, OUT> {
   private static final long serialVersionUID = 1L;

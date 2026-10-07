@@ -2,6 +2,7 @@ package org.agentic.flink.llm;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Runtime handle for a chat-style LLM, returned by {@link ChatConnection#bind}.
@@ -13,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>Lives inside a Flink {@code RichFunction}: {@link ChatConnection} ships in the job graph,
  * {@code bind()} produces this client in {@code open()}.
  */
+@Public
 public interface ChatClient extends AutoCloseable {
 
   /** Blocking chat call. */

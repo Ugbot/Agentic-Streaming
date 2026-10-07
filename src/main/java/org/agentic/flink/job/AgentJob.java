@@ -2,6 +2,7 @@ package org.agentic.flink.job;
 
 import java.io.Serializable;
 import java.util.*;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.SupervisorChain;
@@ -69,7 +70,8 @@ import org.agentic.flink.tool.ToolRegistry;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class AgentJob implements Serializable {
 
   private static final long serialVersionUID = 1L;

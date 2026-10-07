@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.agentic.flink.a2a.A2APushConfig;
 import org.agentic.flink.a2a.A2ATask;
 import org.agentic.flink.a2a.A2ATaskState;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.storage.ReopenableStore;
 
 /**
@@ -19,6 +20,7 @@ import org.agentic.flink.storage.ReopenableStore;
  * <p>The maps are transient: like the other in-memory providers, an instance shipped through a
  * Flink job graph arrives empty and usable, it does not carry the client-side contents along.
  */
+@Experimental
 public final class InMemoryA2ATaskStore extends ReopenableStore implements A2ATaskStore {
   private static final long serialVersionUID = 1L;
 

@@ -1,5 +1,8 @@
 package org.agentic.flink.core;
 
+import org.agentic.flink.annotation.Public;
+
+@Public
 public enum AgentFlowState {
   ACTIVE, // Currently processing
   WAITING_USER_INPUT, // Waiting for user response

@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * An A2A artifact — a named, agent-generated output composed of {@link A2APart}s.
@@ -16,6 +17,7 @@ import java.util.Objects;
  * Immutable and {@link Serializable}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2AArtifact implements Serializable {
   private static final long serialVersionUID = 1L;
 

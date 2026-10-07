@@ -2,6 +2,7 @@ package org.agentic.flink.example;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.*;
 import org.agentic.flink.stream.AgentExecutionStream;
@@ -16,6 +17,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * Simple example demonstrating the agentic framework Usage: 1. Define tools 2. Configure agent 3.
  * Create event stream 4. Execute agent workflow
  */
+@Internal
 public class SimpleAgentExample {
 
   public static void main(String[] args) throws Exception {

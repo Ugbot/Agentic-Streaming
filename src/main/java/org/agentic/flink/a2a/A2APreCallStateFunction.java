@@ -1,5 +1,6 @@
 package org.agentic.flink.a2a;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.memory.conversation.ConversationStore;
 import org.agentic.flink.memory.conversation.ConversationStores;
@@ -19,6 +20,7 @@ import org.apache.flink.util.Collector;
  * (in-JVM singleton by default; Redis/Postgres in a cluster) is correct across operators, across
  * turns, and across checkpoint/restore.
  */
+@Experimental
 public final class A2APreCallStateFunction
     extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
   private static final long serialVersionUID = 1L;

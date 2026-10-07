@@ -4,6 +4,7 @@ import java.util.List;
 import org.agentic.flink.a2a.A2AArtifact;
 import org.agentic.flink.a2a.bridge.A2ARequest;
 import org.agentic.flink.a2a.bridge.A2AResponse;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.env.EnvSession;
 import org.agentic.flink.example.banking.safety.BankingScreening;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
  * rule) and lets the {@link RoutingBudget} bound the personal↔CS loop across turns — the
  * anti-explosion guarantee. The brain is pluggable (Gemini-backed in production, a stub in tests).
  */
+@Internal
 public final class BankingTurnFunction
     extends KeyedProcessFunction<String, A2ARequest, A2AResponse> {
   private static final long serialVersionUID = 1L;

@@ -2,12 +2,14 @@ package org.agentic.flink.a2a;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * The A2A transport bindings a peer can speak. The protocol defines three functionally-equivalent
  * bindings advertised in the {@link A2AAgentCard} via {@code preferredTransport} / {@code
  * additionalInterfaces}.
  */
+@Experimental
 public enum A2ATransport {
   /** JSON-RPC 2.0 over HTTP (the most widely deployed binding). */
   JSONRPC("JSONRPC"),

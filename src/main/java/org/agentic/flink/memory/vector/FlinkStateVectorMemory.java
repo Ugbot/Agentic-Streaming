@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
@@ -23,6 +24,7 @@ import org.apache.flink.api.common.state.MapStateDescriptor;
  * vector individually under the configured state backend. No graph is materialized in memory
  * outside of an active {@link #search(float[], int)} call.
  */
+@Public
 public final class FlinkStateVectorMemory implements VectorMemory {
 
   private final MapState<String, VectorEntry> state;

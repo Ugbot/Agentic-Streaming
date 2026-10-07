@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * goes through reflection so the framework compiles and the rest of the test suite passes without
  * the optional jar.
  */
+@Experimental
 public final class PythonExecutor implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(PythonExecutor.class);

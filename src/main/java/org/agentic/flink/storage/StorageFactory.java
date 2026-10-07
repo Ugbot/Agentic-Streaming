@@ -3,6 +3,7 @@ package org.agentic.flink.storage;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.storage.memory.InMemoryLongTermStore;
 import org.agentic.flink.storage.memory.InMemoryShortTermStore;
 import org.agentic.flink.storage.postgres.PostgresConversationStore;
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code "redis"} — optional, discovered via ServiceLoader if Jedis is on the classpath
  * </ul>
  */
+@Public
 public final class StorageFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(StorageFactory.class);

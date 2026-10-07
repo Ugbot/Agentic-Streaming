@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.rag.KnowledgeBase;
 import org.agentic.flink.tools.AbstractToolExecutor;
 
@@ -15,6 +16,7 @@ import org.agentic.flink.tools.AbstractToolExecutor;
  * <p>Parameters: {@code question} (required), {@code top_k} (optional int, default 4). Returns the
  * grounded answer plus the source passages it cited.
  */
+@Experimental
 public final class KnowledgeQueryTool extends AbstractToolExecutor {
 
   private final KnowledgeBase knowledgeBase;

@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
  * <p>Falls open (allows the fetch) if the robots.txt request fails — matches the behaviour of most
  * well-behaved crawlers including StormCrawler.
  */
+@Experimental
 public final class RobotsCache implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(RobotsCache.class);

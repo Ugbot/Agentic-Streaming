@@ -2,6 +2,7 @@ package org.agentic.flink.statemachine;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 
@@ -36,6 +37,7 @@ import org.agentic.flink.core.AgentEventType;
  * @see AgentState
  * @see AgentStateMachine
  */
+@Public
 public class AgentTransition implements Serializable {
 
   private static final long serialVersionUID = 1L;

@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Serializable authentication material for calling a remote A2A agent.
@@ -22,6 +23,7 @@ import java.util.Objects;
  * <p>The credential is typically supplied via config / env rather than hardcoded; treat it as a
  * secret and never log it.
  */
+@Experimental
 public final class AuthSpec implements Serializable {
   private static final long serialVersionUID = 1L;
 

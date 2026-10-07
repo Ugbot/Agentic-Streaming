@@ -3,6 +3,7 @@ package org.agentic.flink.completion;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 
@@ -15,6 +16,7 @@ import org.agentic.flink.core.AgentEventType;
  * @author Agentic Flink Team
  * @see GoalPredicate
  */
+@Public
 public class EventCountPredicate implements GoalPredicate, Serializable {
 
   private static final long serialVersionUID = 1L;

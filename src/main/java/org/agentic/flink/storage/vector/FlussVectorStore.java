@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageTier;
@@ -74,6 +75,7 @@ import org.slf4j.LoggerFactory;
  *       {@code dot_product})
  * </ul>
  */
+@Public
 public final class FlussVectorStore extends ReopenableStore implements VectorStore {
   private static final long serialVersionUID = 1L;
 

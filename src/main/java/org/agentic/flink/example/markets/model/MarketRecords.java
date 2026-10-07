@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.screening.ScreeningResult;
 
 /**
@@ -11,6 +12,7 @@ import org.agentic.flink.screening.ScreeningResult;
  * copy/invenory_rows_synthesiser} (anonymised firm/platform names in the producers) so the Java
  * DataStream stages map 1:1 onto the original SQL pipeline.
  */
+@Internal
 public final class MarketRecords {
 
   private MarketRecords() {}

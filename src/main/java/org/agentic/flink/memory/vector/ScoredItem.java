@@ -1,6 +1,7 @@
 package org.agentic.flink.memory.vector;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 
 /**
@@ -9,6 +10,7 @@ import org.agentic.flink.context.core.ContextItem;
  * <p>{@link #score} follows the convention "higher is more similar" regardless of which similarity
  * function the underlying implementation uses (cosine, dot, negative-L2).
  */
+@Public
 public final class ScoredItem implements Serializable, Comparable<ScoredItem> {
   private static final long serialVersionUID = 1L;
 

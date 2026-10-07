@@ -2,9 +2,11 @@ package org.agentic.flink.web;
 
 import java.io.Serializable;
 import java.time.Duration;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.net.OutboundUrlPolicy;
 
 /** Tunables for the framework's web toolkit. Defaults are conservative and well-behaved. */
+@Experimental
 public final class WebToolkitOptions implements Serializable {
   private static final long serialVersionUID = 1L;
 

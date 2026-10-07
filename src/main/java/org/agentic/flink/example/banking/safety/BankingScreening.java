@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking.safety;
 
 import java.util.Objects;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.screening.RepeatDetector;
 import org.agentic.flink.screening.ScreenItem;
 import org.agentic.flink.screening.ScreeningPipeline;
@@ -23,6 +24,7 @@ import org.agentic.flink.screening.VelocityDetector;
  * message never reaches the LLM (safe refusal); {@code REVIEW} → the escalation path. History is
  * per-{@code contextId}, so concurrent sessions stay isolated.
  */
+@Internal
 public final class BankingScreening {
 
   private final ScreeningPipeline pipeline;

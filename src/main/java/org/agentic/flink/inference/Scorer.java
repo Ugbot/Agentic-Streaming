@@ -1,6 +1,7 @@
 package org.agentic.flink.inference;
 
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Typed task view for regression / scoring models: input in, single numeric out.
@@ -9,6 +10,7 @@ import java.util.List;
  * estimator, or relevancy model into the framework — see {@link
  * org.agentic.flink.context.relevancy.RelevancyScorer}.
  */
+@Experimental
 public interface Scorer {
 
   /** Score a single input. Higher = better unless documented otherwise by the model. */

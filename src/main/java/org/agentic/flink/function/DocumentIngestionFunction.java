@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code chunk_overlap} (optional) - Chunk overlap for splitting, default 50
  * </ul>
  */
+@Internal
 public class DocumentIngestionFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final Logger LOG = LoggerFactory.getLogger(DocumentIngestionFunction.class);

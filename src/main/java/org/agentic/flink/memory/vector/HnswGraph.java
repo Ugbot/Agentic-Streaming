@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * Pure, Flink-free navigable-small-world (NSW) proximity graph — the graph-ANN core shared by
@@ -22,6 +23,7 @@ import java.util.Set;
  *
  * <p>Not thread-safe; callers serialize access (each operator subtask / agent owns one graph).
  */
+@Internal
 public final class HnswGraph {
 
   /** A graph hit: an id and its similarity score (higher = more similar). */

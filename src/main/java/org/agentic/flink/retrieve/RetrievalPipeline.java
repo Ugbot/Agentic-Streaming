@@ -3,6 +3,7 @@ package org.agentic.flink.retrieve;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.corpus.Corpus;
 import org.agentic.flink.corpus.CorpusSpec;
 import org.agentic.flink.embedding.EmbeddingClient;
@@ -43,6 +44,7 @@ import org.slf4j.LoggerFactory;
  * <p>The {@code rerank} stage is optional — calling {@code .answer} directly after {@code .search}
  * works fine; the top-k from the embedder is used as-is.
  */
+@Experimental
 public final class RetrievalPipeline {
 
   private RetrievalPipeline() {}

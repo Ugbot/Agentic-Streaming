@@ -2,6 +2,7 @@ package org.agentic.flink.storage.memory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.LongTermMemoryStore;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class InMemoryLongTermStore extends ReopenableStore implements LongTermMemoryStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryLongTermStore.class);

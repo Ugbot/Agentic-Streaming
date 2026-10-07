@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.typeinfo.TypeHint;
@@ -23,6 +24,7 @@ import org.apache.flink.util.Collector;
  * Fetcher} and a {@link DocumentExtractor} bound from the serializable {@link WebToolkitOptions}
  * spec.
  */
+@Experimental
 public final class CrawlerCore {
 
   private CrawlerCore() {}

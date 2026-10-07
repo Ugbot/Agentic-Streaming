@@ -2,6 +2,7 @@ package org.agentic.flink.ingest;
 
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
  *     .print();
  * }</pre>
  */
+@Experimental
 public final class IngestionPipeline {
 
   private IngestionPipeline() {}

@@ -6,10 +6,12 @@ import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Public
 public class ValidationResult implements Serializable {
 
   private String flowId;

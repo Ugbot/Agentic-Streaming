@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a.bridge;
 
 import java.util.function.Consumer;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Gateway-side handle on a bridge transport: publishes {@link A2ARequest}s into the Flink job and
@@ -10,6 +11,7 @@ import java.util.function.Consumer;
  * register a listener with {@link #onResponse(Consumer)} (the gateway routes each to the right SSE
  * stream / push webhook) or block for a final response with {@link #awaitFinal(String, long)}.
  */
+@Experimental
 public interface A2AGatewayConnector extends AutoCloseable {
 
   /** Publish a request to the Flink job. */

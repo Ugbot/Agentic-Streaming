@@ -1,5 +1,6 @@
 package org.agentic.flink.example.markets;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -29,6 +30,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *     org.agentic.flink.example.markets.BondMarketAgentExample
  * </pre>
  */
+@Internal
 public final class BondMarketAgentExample {
 
   public static void main(String[] args) throws Exception {

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.ReaderOutput;
 import org.apache.flink.api.connector.source.Source;
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> the produced element type
  */
+@Public
 public final class PollingSource<T> implements Source<T, PollingSource.PollingSplit, Integer> {
   private static final long serialVersionUID = 1L;
 

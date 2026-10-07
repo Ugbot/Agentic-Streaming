@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Serializable factory that builds a live {@link A2AClient} from a {@link RemoteAgentSpec} on the
@@ -13,6 +14,7 @@ import java.io.Serializable;
  * returning a fake; because this interface extends {@link Serializable}, such lambdas serialize.
  */
 @FunctionalInterface
+@Experimental
 public interface A2AClientFactory extends Serializable {
 
   /** Construct a client bound to the given peer spec. */

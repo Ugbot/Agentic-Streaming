@@ -1,8 +1,10 @@
 package org.agentic.flink.corpus;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 
 /** Lightweight snapshot of corpus health. */
+@Experimental
 public final class CorpusStats implements Serializable {
   private static final long serialVersionUID = 1L;
 

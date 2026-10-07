@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -45,7 +46,8 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction} with {@code KeyedConversationLog}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Internal
 public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, AgentEvent>
     implements TimedOutPartialMatchHandler<AgentEvent> {
 

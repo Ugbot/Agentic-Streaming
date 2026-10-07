@@ -2,6 +2,7 @@ package org.agentic.flink.control;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
@@ -12,6 +13,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
  * <p>The state stores compact directives rather than the raw {@link ControlMessage} so the
  * passive-expiry check on the hot path is one map lookup + two comparisons.
  */
+@Public
 public final class ControlState {
   private ControlState() {}
 

@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -31,6 +32,7 @@ import org.slf4j.LoggerFactory;
  * the abstraction here is identical. For a non-Flink (plain JVM) host, use {@link
  * InMemoryHnswVectorMemory}, which shares the same {@link HnswGraph}.
  */
+@Public
 public final class FlinkStateHnswVectorMemory implements VectorMemory {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlinkStateHnswVectorMemory.class);

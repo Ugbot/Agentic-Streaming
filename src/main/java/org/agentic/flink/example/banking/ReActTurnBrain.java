@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory;
  * chat model is provided via a {@link ChatConnection} (OpenAI in dev, Gemini for marked runs),
  * bound lazily on the task side.
  */
+@Internal
 public final class ReActTurnBrain implements TurnBrain {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(ReActTurnBrain.class);

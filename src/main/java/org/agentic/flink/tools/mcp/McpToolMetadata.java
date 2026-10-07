@@ -2,8 +2,10 @@ package org.agentic.flink.tools.mcp;
 
 import java.io.Serializable;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /** Metadata returned by {@code tools/list} on an MCP server. */
+@Public
 public final class McpToolMetadata implements Serializable {
   private static final long serialVersionUID = 1L;
 

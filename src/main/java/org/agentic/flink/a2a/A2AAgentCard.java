@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * The A2A discovery document served at {@code /.well-known/agent-card.json}.
@@ -19,6 +20,7 @@ import java.util.Optional;
  * AgentCard}; everything else uses this type. Immutable + {@link Serializable}.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2AAgentCard implements Serializable {
   private static final long serialVersionUID = 1L;
 

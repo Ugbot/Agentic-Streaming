@@ -3,8 +3,10 @@ package org.agentic.flink.retrieve;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 
 /** Final answer emitted by a {@link RetrievalPipeline}. */
+@Experimental
 public final class Answer implements Serializable {
   private static final long serialVersionUID = 1L;
 

@@ -1,5 +1,6 @@
 package org.agentic.flink.example.banking.graph;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.memory.conversation.ConversationStore;
 
 /**
@@ -11,6 +12,7 @@ import org.agentic.flink.memory.conversation.ConversationStore;
  * so the transcript and the workflow phase are co-located per session and swappable together
  * (in-JVM by default, Redis/Postgres-backed for a distributed cluster).
  */
+@Internal
 public final class PhaseStore {
 
   private static final String PHASE_ATTR = "banking.phase";

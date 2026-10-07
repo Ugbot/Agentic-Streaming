@@ -3,6 +3,7 @@ package org.agentic.flink.example.markets.producer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.util.Properties;
+import org.agentic.flink.annotation.Internal;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
  * are exactly the record component names. The Flink job's {@code KafkaChannel.JsonSchema} reads the
  * same shape on the other end.
  */
+@Internal
 public final class MarketProducerSupport implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(MarketProducerSupport.class);

@@ -3,6 +3,7 @@ package org.agentic.flink.a2a.bridge;
 import java.io.IOException;
 import java.util.Objects;
 import org.agentic.flink.a2a.A2AJson;
+import org.agentic.flink.annotation.Experimental;
 import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.SimpleTypeSerializerSnapshot;
@@ -21,6 +22,7 @@ import org.apache.flink.core.memory.DataOutputView;
  * first-class stream element types — used by the bridge {@link org.agentic.flink.channel.Channel}
  * sources and any operator that emits them.
  */
+@Experimental
 public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
   private static final long serialVersionUID = 1L;
 

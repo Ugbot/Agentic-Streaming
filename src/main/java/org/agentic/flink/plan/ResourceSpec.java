@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * One Java SPI implementation referenced by fully-qualified class name plus an init config.
@@ -16,6 +17,7 @@ import java.util.Map;
  *
  * <p>This is the JSON shape Python sends across the gateway as part of an {@link AgentPlan}.
  */
+@Public
 public final class ResourceSpec implements Serializable {
   private static final long serialVersionUID = 1L;
 

@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatClient;
@@ -46,6 +47,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code finishedState} — once {@code true}, additional events are passed through unchanged.
  * </ul>
  */
+@Internal
 public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, E, E> {
 
   private static final long serialVersionUID = 1L;

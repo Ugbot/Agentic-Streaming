@@ -1,6 +1,7 @@
 package org.agentic.flink.inference;
 
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Typed task view for classification models: text in, label + score out.
@@ -9,6 +10,7 @@ import java.util.List;
  * classification throw {@link UnsupportedOperationException} from that accessor; callers can check
  * {@link InferenceClient#supports} before asking.
  */
+@Experimental
 public interface Classifier {
 
   /** Classify a single input under the given setup. */

@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
  * InMemoryVectorStore}, recursive 800-char chunks with 100-char overlap, Claude {@code
  * claude-sonnet-4-6} for answers. Override any piece via {@link Builder}.
  */
+@Experimental
 public final class KnowledgeBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(KnowledgeBase.class);

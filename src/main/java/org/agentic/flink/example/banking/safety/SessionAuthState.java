@@ -3,6 +3,7 @@ package org.agentic.flink.example.banking.safety;
 import java.io.Serializable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * Tracks whether the customer's identity has been verified in a session, keyed by A2A {@code
@@ -12,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * deserialization, so verification is never carried across a restart (a verified flag must be
  * re-established each run) and sessions stay isolated by {@code contextId}.
  */
+@Internal
 public final class SessionAuthState implements Serializable {
   private static final long serialVersionUID = 1L;
 

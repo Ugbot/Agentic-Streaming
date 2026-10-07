@@ -3,6 +3,7 @@ package org.agentic.flink.retrieve;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.memory.vector.ScoredItem;
 
 /**
@@ -28,6 +29,7 @@ import org.agentic.flink.memory.vector.ScoredItem;
  * oldest entries so the hot tier stays small and fast — it is a moving window of fresh data, not a
  * second copy of the whole corpus.
  */
+@Experimental
 public interface HotVectorIndex extends Serializable {
 
   /**

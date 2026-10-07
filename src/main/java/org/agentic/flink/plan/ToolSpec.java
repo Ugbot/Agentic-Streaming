@@ -7,6 +7,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * One tool registered on an agent. Two flavours, distinguished by {@link #getKind()}:
@@ -18,6 +19,7 @@ import java.util.Map;
  *       PythonToolExecutor} that runs the callable through PEMJA.
  * </ul>
  */
+@Public
 public final class ToolSpec implements Serializable {
   private static final long serialVersionUID = 1L;
 

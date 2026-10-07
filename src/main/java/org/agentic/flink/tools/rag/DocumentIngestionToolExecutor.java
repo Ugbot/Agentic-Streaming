@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -32,6 +33,7 @@ import org.agentic.flink.tools.AbstractToolExecutor;
  * OllamaEmbeddingConnection} and a {@link VectorStore} selected by the {@code vector.backend}
  * config key (defaulting to the zero-infra {@link InMemoryVectorStore}).
  */
+@Experimental
 public class DocumentIngestionToolExecutor extends AbstractToolExecutor {
 
   private final EmbeddingConnection embeddingConnection;

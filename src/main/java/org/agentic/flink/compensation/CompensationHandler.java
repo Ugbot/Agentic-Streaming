@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.tool.ToolRegistry;
@@ -39,6 +40,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class CompensationHandler implements Serializable {
 
   private static final long serialVersionUID = 1L;

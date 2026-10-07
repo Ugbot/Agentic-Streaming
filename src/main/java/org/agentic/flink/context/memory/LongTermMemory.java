@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.Data;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 
@@ -15,6 +16,7 @@ import org.agentic.flink.context.core.ContextPriority;
  * about the world - User preferences - Domain knowledge - Historical context
  */
 @Data
+@Public
 public class LongTermMemory implements Serializable {
 
   private Map<String, ContextItem> facts; // key = fact_id

@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.typeinfo.FlinkJson;
 
 /**
@@ -14,6 +15,7 @@ import org.agentic.flink.typeinfo.FlinkJson;
  * all serialize identically, mirroring the {@code ParameterNamesModule} setup in {@code
  * PostgresConversationStore}.
  */
+@Experimental
 public final class A2AJson {
 
   private A2AJson() {}

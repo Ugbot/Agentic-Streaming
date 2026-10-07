@@ -2,6 +2,7 @@ package org.agentic.flink.context.manager;
 
 import java.io.Serializable;
 import lombok.Data;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.compaction.CompactionRequest;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
  * Manages context windows for agents Checks limits, triggers compaction, manages memory hierarchy
  */
 @Data
+@Public
 public class ContextWindowManager implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(ContextWindowManager.class);

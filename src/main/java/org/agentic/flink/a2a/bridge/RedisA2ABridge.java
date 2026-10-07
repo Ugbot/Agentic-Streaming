@@ -2,6 +2,7 @@ package org.agentic.flink.a2a.bridge;
 
 import java.util.List;
 import org.agentic.flink.a2a.A2AJson;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -25,6 +26,7 @@ import redis.clients.jedis.JedisPool;
  * survive a consumer restart. Assumes a single gateway connector per response list (the
  * one-agent-process deployment); BLPOP would otherwise load-balance responses across connectors.
  */
+@Experimental
 public final class RedisA2ABridge implements A2ABridge {
   private static final long serialVersionUID = 1L;
 

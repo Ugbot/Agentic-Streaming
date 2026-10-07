@@ -1,5 +1,6 @@
 package org.agentic.flink.example;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -42,6 +43,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class StreamingAgentExample {
 
   public static void main(String[] args) throws Exception {

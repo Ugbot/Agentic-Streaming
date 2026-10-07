@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 
 /**
@@ -18,6 +19,7 @@ import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
  *     org.agentic.flink.example.markets.producer.BondInventoryProducer --rate 500
  * </pre>
  */
+@Internal
 public final class BondInventoryProducer {
 
   private static final List<String> DEALER_POOL = buildDealerPool();

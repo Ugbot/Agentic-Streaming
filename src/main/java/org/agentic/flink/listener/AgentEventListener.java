@@ -2,6 +2,7 @@ package org.agentic.flink.listener;
 
 import java.io.Serializable;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Lifecycle hook interface for observability over agent operations.
@@ -13,6 +14,7 @@ import java.util.List;
  * <p>Implementations must be {@link Serializable} — they ride along with the agent operator in the
  * Flink job graph.
  */
+@Public
 public interface AgentEventListener extends Serializable {
 
   /** Called once per task when the agent operator starts. */

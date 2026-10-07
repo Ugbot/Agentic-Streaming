@@ -1,6 +1,7 @@
 package org.agentic.flink.inference;
 
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Untyped escape hatch for inference models whose I/O doesn't fit {@link Classifier} or {@link
@@ -10,6 +11,7 @@ import java.util.Map;
  * <p>Inputs and outputs are loosely-typed maps so the framework can hand off without forcing a
  * shared schema. The backend documents what keys it expects and produces.
  */
+@Experimental
 public interface GenericInferenceModel {
 
   /** Run inference. Backend-specific input/output shape. */

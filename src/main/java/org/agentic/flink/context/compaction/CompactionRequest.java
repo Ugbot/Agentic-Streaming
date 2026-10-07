@@ -4,12 +4,14 @@ import java.io.Serializable;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.AgentContext;
 
 /** Request to compact agent context Sent when context window exceeds threshold */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Public
 public class CompactionRequest implements Serializable {
 
   private String requestId;

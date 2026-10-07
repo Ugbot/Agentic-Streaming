@@ -1,5 +1,6 @@
 package org.agentic.flink.function;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -7,6 +8,7 @@ import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Internal
 public class SupervisorReviewFunction extends ProcessFunction<AgentEvent, AgentEvent> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SupervisorReviewFunction.class);

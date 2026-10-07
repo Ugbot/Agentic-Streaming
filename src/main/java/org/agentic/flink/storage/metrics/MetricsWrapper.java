@@ -2,6 +2,7 @@ package org.agentic.flink.storage.metrics;
 
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
 
@@ -34,6 +35,7 @@ import org.agentic.flink.storage.StorageTier;
  * @param <V> Value type
  * @author Agentic Flink Team
  */
+@Internal
 public class MetricsWrapper<K, V> implements StorageProvider<K, V> {
 
   private final StorageProvider<K, V> delegate;

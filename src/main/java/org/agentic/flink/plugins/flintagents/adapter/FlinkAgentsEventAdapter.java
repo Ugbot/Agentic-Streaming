@@ -2,6 +2,7 @@ package org.agentic.flink.plugins.flintagents.adapter;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.agents.api.Event;
@@ -42,6 +43,7 @@ import org.apache.flink.agents.api.OutputEvent;
  * @see AgentEvent
  * @see Event
  */
+@Experimental
 public class FlinkAgentsEventAdapter {
 
   private static final String ATTR_FLOW_ID = "flowId";

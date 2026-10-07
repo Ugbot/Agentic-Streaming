@@ -3,6 +3,7 @@ package org.agentic.flink.storage;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 
@@ -54,6 +55,7 @@ import org.agentic.flink.context.core.ContextItem;
  *
  * @author Agentic Flink Team
  */
+@Public
 public interface LongTermMemoryStore extends StorageProvider<String, AgentContext> {
 
   /**

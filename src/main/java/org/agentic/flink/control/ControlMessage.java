@@ -3,6 +3,7 @@ package org.agentic.flink.control;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Envelope for the agentic-flink runtime control plane. Carried on the broadcast input that every
@@ -27,6 +28,7 @@ import java.io.Serializable;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({@JsonSubTypes.Type(value = DebugControl.class, name = "debug")})
+@Public
 public sealed interface ControlMessage extends Serializable permits DebugControl {
 
   /** Stable operator name, or {@code "*"} to broadcast to every operator. */

@@ -243,14 +243,15 @@ ls -la /var/lib/docker/volumes/
    curl http://localhost:11434/api/version
    ```
 
-### PostgreSQL Schema Not Created
+### PostgreSQL Tables Not Created
+
+The Postgres stores create their own tables on first use (`PostgresConversationStore` creates
+`agent_contexts` and `agent_facts`, `PostgresA2ATaskStore` creates `a2a_tasks` and
+`a2a_push_configs`, `PgVectorStore` creates its configured table). There is no initdb script.
+If a table is missing, check that the job connected to the right database:
 
 ```bash
-# Check if schema file exists
-ls -la sql/schema.sql
-
-# Manually run schema
-docker compose exec postgres psql -U flink_user -d agentic_flink -f /docker-entrypoint-initdb.d/01-schema.sql
+podman compose exec postgres psql -U flink_user -d agentic_flink -c '\dt'
 ```
 
 ### Ollama Model Download Fails

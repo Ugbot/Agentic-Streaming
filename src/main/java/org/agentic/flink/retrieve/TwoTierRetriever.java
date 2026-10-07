@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.memory.vector.ScoredItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * tolerated — the other tier's results are still returned — so a transient store hiccup degrades
  * recall rather than failing the query.
  */
+@Experimental
 public final class TwoTierRetriever implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(TwoTierRetriever.class);

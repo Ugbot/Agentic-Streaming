@@ -4,6 +4,7 @@ import java.util.UUID;
 import org.agentic.flink.a2a.A2AStep;
 import org.agentic.flink.a2a.A2ATransport;
 import org.agentic.flink.a2a.RemoteAgentSpec;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -30,6 +31,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar org.agentic.flink.example.A2AAgentExample
  * }</pre>
  */
+@Internal
 public final class A2AAgentExample {
 
   private A2AAgentExample() {}

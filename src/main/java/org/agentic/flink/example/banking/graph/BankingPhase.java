@@ -1,5 +1,7 @@
 package org.agentic.flink.example.banking.graph;
 
+import org.agentic.flink.annotation.Internal;
+
 /**
  * The cross-turn workflow phase for a banking conversation, held in per-{@code contextId} keyed
  * state and advanced by {@link BankingVerifierFunction}. The router reads it to pick the next path;
@@ -7,6 +9,7 @@ package org.agentic.flink.example.banking.graph;
  * how "operators chain to meet the conditions" without a Flink cycle — the phase carries the
  * progress across A2A turns.
  */
+@Internal
 public enum BankingPhase {
   /** Fresh session — nothing gathered yet. */
   NEW,

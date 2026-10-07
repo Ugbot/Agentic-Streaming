@@ -1,11 +1,11 @@
 package org.agentic.flink.storage.config;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.KeyedContextItem;
 import org.agentic.flink.memory.ShortTermMemorySpec;
@@ -13,54 +13,19 @@ import org.agentic.flink.storage.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// import com.fasterxml.jackson.databind.ObjectMapper;
-// import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-
 /**
  * Configuration management for multi-tier storage architecture.
  *
- * <p>This class supports loading storage configuration from YAML files, environment variables, or
- * programmatic configuration. It provides typed access to tier-specific configurations.
- *
- * <p>Example YAML configuration:
- *
- * <pre>{@code
- * storage:
- *   hot:
- *     backend: redis
- *     config:
- *       redis.host: localhost
- *       redis.port: 6379
- *       redis.ttl.seconds: 3600
- *
- *   warm:
- *     backend: redis
- *     config:
- *       redis.host: localhost
- *       redis.port: 6379
- *       redis.database: 1
- *       redis.ttl.seconds: 86400
- *
- *   cold:
- *     backend: postgresql
- *     config:
- *       postgresql.jdbc.url: jdbc:postgresql://localhost:5432/agent_db
- *       postgresql.username: agent_user
- *       postgresql.password: ${POSTGRES_PASSWORD}
- *
- *   vector:
- *     backend: qdrant
- *     config:
- *       qdrant.host: localhost
- *       qdrant.port: 6333
- *       qdrant.collection: agent_vectors
- * }</pre>
+ * <p>Configuration is built programmatically through {@link #builder()} and provides typed access
+ * to tier-specific configurations.
  *
  * <p>Usage example:
  *
  * <pre>{@code
- * // Load from YAML file
- * StorageConfiguration config = StorageConfiguration.fromYamlFile("storage-config.yaml");
+ * StorageConfiguration config = StorageConfiguration.builder()
+ *     .withWarmTier("postgres", postgresConfig)
+ *     .withVectorTier("qdrant", qdrantConfig)
+ *     .build();
  *
  * // Create storage providers
  * ShortTermMemoryStore hotStore = config.createShortTermStore();
@@ -70,11 +35,9 @@ import org.slf4j.LoggerFactory;
  * TierConfiguration hotConfig = config.getTierConfig(StorageTier.HOT);
  * }</pre>
  *
- * <p>Status: Interface defined. YAML parsing requires Jackson dependencies. Uncomment Jackson
- * imports after adding dependencies.
- *
  * @author Agentic Flink Team
  */
+@Public
 public class StorageConfiguration implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(StorageConfiguration.class);
@@ -94,58 +57,6 @@ public class StorageConfiguration implements Serializable {
 
   public List<Channel<KeyedContextItem>> getMemoryChannels() {
     return memoryChannels == null ? new ArrayList<>() : memoryChannels;
-  }
-
-  /**
-   * Load configuration from a YAML file.
-   *
-   * <p>Dependency required:
-   *
-   * <pre>{@code
-   * <dependency>
-   *     <groupId>com.fasterxml.jackson.dataformat</groupId>
-   *     <artifactId>jackson-dataformat-yaml</artifactId>
-   *     <version>2.15.2</version>
-   * </dependency>
-   * }</pre>
-   *
-   * @param filePath Path to YAML configuration file
-   * @return Loaded configuration
-   * @throws IOException if file reading or parsing fails
-   */
-  public static StorageConfiguration fromYamlFile(String filePath) throws IOException {
-    LOG.info("Loading storage configuration from YAML file: {}", filePath);
-
-    // Uncomment when Jackson YAML dependency is added:
-    // ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    // File file = new File(filePath);
-    // return mapper.readValue(file, StorageConfiguration.class);
-
-    LOG.warn("YAML loading not implemented - Jackson dependency required");
-    return new StorageConfiguration();
-  }
-
-  /**
-   * Load configuration from classpath resource.
-   *
-   * @param resourcePath Classpath resource path (e.g., "config/storage.yaml")
-   * @return Loaded configuration
-   * @throws IOException if resource reading or parsing fails
-   */
-  public static StorageConfiguration fromResource(String resourcePath) throws IOException {
-    LOG.info("Loading storage configuration from resource: {}", resourcePath);
-
-    // Uncomment when Jackson YAML dependency is added:
-    // ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-    // InputStream is = StorageConfiguration.class.getClassLoader()
-    //     .getResourceAsStream(resourcePath);
-    // if (is == null) {
-    //   throw new IOException("Resource not found: " + resourcePath);
-    // }
-    // return mapper.readValue(is, StorageConfiguration.class);
-
-    LOG.warn("YAML loading not implemented - Jackson dependency required");
-    return new StorageConfiguration();
   }
 
   /**

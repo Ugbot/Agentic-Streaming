@@ -2,6 +2,7 @@ package org.agentic.flink.typeinfo;
 
 import java.lang.reflect.Type;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.typeinfo.TypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 
@@ -22,6 +23,7 @@ import org.apache.flink.api.common.typeinfo.TypeInformation;
  *
  * @param <T> the annotated value type
  */
+@Public
 public abstract class JsonTypeInfoFactory<T> extends TypeInfoFactory<T> {
 
   private final Class<T> type;

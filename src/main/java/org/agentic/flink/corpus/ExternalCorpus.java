@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.memory.vector.ScoredItem;
 import org.agentic.flink.storage.StorageFactory;
@@ -22,6 +23,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * round-trip to the configured store. This is the right flavour for large corpora that don't fit in
  * keyed state or that must be shared across multiple Flink jobs.
  */
+@Experimental
 public final class ExternalCorpus implements Corpus {
 
   private final String name;

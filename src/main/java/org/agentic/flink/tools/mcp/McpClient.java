@@ -19,6 +19,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,6 +34,7 @@ import org.slf4j.LoggerFactory;
  * <p>Not thread-safe: each operator task should hold its own client instance, constructed once in
  * {@code RichFunction.open()}.
  */
+@Public
 public final class McpClient implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(McpClient.class);

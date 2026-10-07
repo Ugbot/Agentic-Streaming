@@ -2,6 +2,7 @@ package org.agentic.flink.inference;
 
 import java.io.Serializable;
 import java.util.List;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 
@@ -17,6 +18,7 @@ import org.agentic.flink.llm.ChatResponse;
  * <p>The canonical implementation, {@link ClassifierGuardrail}, runs a {@link Classifier} over the
  * messages and blocks based on the predicted label.
  */
+@Experimental
 public interface Guardrail extends Serializable {
 
   /** Apply before the chat call. */

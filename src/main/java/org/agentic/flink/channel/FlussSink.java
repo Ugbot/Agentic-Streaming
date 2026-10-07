@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.sink.ForEachSink;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.slf4j.Logger;
@@ -43,6 +44,7 @@ import org.slf4j.LoggerFactory;
  *   ) DISTRIBUTED BY (key) INTO {buckets} BUCKETS;
  * </pre>
  */
+@Public
 public final class FlussSink<T> {
   private static final Logger LOG = LoggerFactory.getLogger(FlussSink.class);
 

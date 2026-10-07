@@ -5,6 +5,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * A single content part of an A2A {@link A2AMessage} or {@link A2AArtifact}.
@@ -24,6 +25,7 @@ import java.util.Objects;
  * types. Immutable and {@link Serializable} so it can ride in Flink state and bridge envelopes.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Experimental
 public final class A2APart implements Serializable {
   private static final long serialVersionUID = 1L;
 

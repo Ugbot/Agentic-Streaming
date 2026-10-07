@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
@@ -71,6 +72,7 @@ import org.slf4j.LoggerFactory;
  * @see ContextItem
  * @see ContextPriority
  */
+@Experimental
 public class ContextManagementAction extends KeyedProcessFunction<String, Event, Event> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ContextManagementAction.class);

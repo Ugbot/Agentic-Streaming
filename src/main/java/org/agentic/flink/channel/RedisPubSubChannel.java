@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.source.PollingSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeHint;
@@ -30,6 +31,7 @@ import redis.clients.jedis.JedisPubSub;
  *
  * <p>Migrated from {@code RedisPubSubFeed}; behaviour unchanged.
  */
+@Public
 public final class RedisPubSubChannel implements Channel<KeyedContextItem> {
   private static final long serialVersionUID = 1L;
 

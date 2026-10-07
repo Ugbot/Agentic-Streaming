@@ -3,6 +3,7 @@ package org.agentic.flink.a2a;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.Objects;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Serializable configuration for a remote A2A agent ("peer") this job can call as a workflow step.
@@ -23,6 +24,7 @@ import java.util.Objects;
  * credentials; {@link #streaming()} requests {@code message/stream} (SSE) where the peer supports
  * it, otherwise the client falls back to {@code message/send} + {@code tasks/get} polling.
  */
+@Experimental
 public final class RemoteAgentSpec implements Serializable {
   private static final long serialVersionUID = 1L;
 

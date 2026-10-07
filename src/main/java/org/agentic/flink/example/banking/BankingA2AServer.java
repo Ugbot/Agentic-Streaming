@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.env.EnvSession;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
 import org.agentic.flink.screening.ScreeningResult;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
  *   A2A_BANKING_ROLE=personal PORT=9001 CS_AGENT_URL=... java ... BankingA2AServer
  * </pre>
  */
+@Internal
 public final class BankingA2AServer {
   private static final Logger LOG = LoggerFactory.getLogger(BankingA2AServer.class);
   private static final ObjectMapper JSON = new ObjectMapper();

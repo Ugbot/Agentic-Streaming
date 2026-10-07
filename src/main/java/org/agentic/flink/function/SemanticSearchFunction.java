@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -34,6 +35,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code min_score} (optional) - Minimum similarity score threshold, default 0.7
  * </ul>
  */
+@Internal
 public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SemanticSearchFunction.class);

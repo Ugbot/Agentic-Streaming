@@ -1,5 +1,8 @@
 package org.agentic.flink.core;
 
+import org.agentic.flink.annotation.Public;
+
+@Public
 public enum AgentEventType {
   // Workflow lifecycle
   FLOW_STARTED,

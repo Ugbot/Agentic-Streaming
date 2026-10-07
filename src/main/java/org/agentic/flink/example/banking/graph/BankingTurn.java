@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking.graph;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * The envelope that flows between the banking graph operators (router → path → verifier), carrying
@@ -8,6 +9,7 @@ import java.io.Serializable;
  * no-arg constructor + getters/setters, POJO-typed fields) so it rides the stream on the POJO
  * serializer without Kryo.
  */
+@Internal
 public final class BankingTurn implements Serializable {
   private static final long serialVersionUID = 1L;
 

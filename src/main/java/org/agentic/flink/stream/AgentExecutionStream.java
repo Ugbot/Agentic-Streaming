@@ -3,6 +3,7 @@ package org.agentic.flink.stream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -21,6 +22,7 @@ import org.apache.flink.streaming.util.retryable.RetryPredicates;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Public
 public class AgentExecutionStream {
 
   private static final Logger LOG = LoggerFactory.getLogger(AgentExecutionStream.class);

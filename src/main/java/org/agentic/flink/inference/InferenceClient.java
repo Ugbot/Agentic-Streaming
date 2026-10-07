@@ -1,5 +1,6 @@
 package org.agentic.flink.inference;
 
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.embedding.EmbeddingClient;
 
 /**
@@ -11,6 +12,7 @@ import org.agentic.flink.embedding.EmbeddingClient;
  * accessors; backends that don't support a given task throw {@link UnsupportedOperationException}
  * from the corresponding view. Callers can probe with {@link #supports(TaskKind)} first.
  */
+@Experimental
 public interface InferenceClient extends AutoCloseable {
 
   /** The task surfaces a backend may implement. */

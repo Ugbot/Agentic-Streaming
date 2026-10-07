@@ -1,6 +1,7 @@
 package org.agentic.flink.example;
 
 import java.util.*;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
@@ -52,6 +53,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class StorageIntegratedFlinkJob {
 
   private static final Logger LOG = LoggerFactory.getLogger(StorageIntegratedFlinkJob.class);

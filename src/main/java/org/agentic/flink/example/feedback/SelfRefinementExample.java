@@ -3,6 +3,7 @@ package org.agentic.flink.example.feedback;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.DebugControl;
 import org.agentic.flink.control.DebugEvent;
@@ -31,6 +32,7 @@ import org.apache.flink.util.Collector;
  * ANTHROPIC_API_KEY} (the loop's offline behaviour is covered by {@code RefinementLoopTest} with a
  * scripted generator).
  */
+@Internal
 public final class SelfRefinementExample {
 
   /** task prompt + the terms a good answer must mention (drives the deterministic check). */

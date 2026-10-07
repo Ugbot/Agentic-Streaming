@@ -1,5 +1,6 @@
 package org.agentic.flink.example.markets.stage;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.BestQuoteWithTrade;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
 import org.agentic.flink.example.markets.model.MarketRecords.RankedQuote;
@@ -19,6 +20,7 @@ import org.apache.flink.util.Collector;
  * Emits a fresh {@link BestQuoteWithTrade} on either side update or trade arrival once both sides
  * are present.
  */
+@Internal
 public final class BestQuoteFn
     extends KeyedCoProcessFunction<String, RankedQuote, Trade, BestQuoteWithTrade> {
   private static final long serialVersionUID = 1L;

@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.tools.rag.DocumentIngestionToolExecutor;
@@ -44,6 +45,7 @@ import org.slf4j.LoggerFactory;
  * @see InverseRagResult
  * @see DocumentIngestionToolExecutor
  */
+@Experimental
 public class QdrantAsyncFunction extends RichAsyncFunction<ContextItem, InverseRagResult> {
 
   private static final Logger LOG = LoggerFactory.getLogger(QdrantAsyncFunction.class);

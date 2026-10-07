@@ -2,9 +2,11 @@ package org.agentic.flink.channel;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.ContextItem;
 
 /** A {@link ContextItem} carrying its target flow-id, as emitted by memory-feed channels. */
+@Public
 public final class KeyedContextItem implements Serializable {
   private static final long serialVersionUID = 1L;
 

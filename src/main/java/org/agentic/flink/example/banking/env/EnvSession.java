@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking.env;
 
 import java.util.function.Supplier;
+import org.agentic.flink.annotation.Internal;
 
 /**
  * Thread-scoped holder for the current A2A {@code contextId} while an agent turn runs.
@@ -12,6 +13,7 @@ import java.util.function.Supplier;
  * {@link EnvApiToolExecutor} reads it back — the {@code contextId} is never invented or passed
  * through the LLM. Mirrors the {@code ToolInvocationChannel.CURRENT_CONTEXT} ThreadLocal pattern.
  */
+@Internal
 public final class EnvSession {
 
   private static final ThreadLocal<String> CONTEXT_ID = new ThreadLocal<>();

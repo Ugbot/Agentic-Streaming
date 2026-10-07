@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
@@ -18,6 +19,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>The {@link InferenceConnection} ships in the job graph; the live {@link InferenceClient} is
  * built lazily on the task side via {@link InferenceConnection#bind(RuntimeContext)}.
  */
+@Experimental
 public final class InferenceToolAdapter implements ToolExecutor {
   private static final long serialVersionUID = 1L;
 

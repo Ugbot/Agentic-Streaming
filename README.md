@@ -634,6 +634,7 @@ For shorter recipes, see [docs/cookbook.md](docs/cookbook.md).
 | [docs/portability/stream-stateful-core.md](docs/portability/stream-stateful-core.md) | the stream-stateful core: CEP, timers, windows, replay, suspend/resume, tracing |
 | [docs/concepts.md](docs/concepts.md) | core concepts: agents, events, tools, memory, the routed graph |
 | [docs/configuration.md](docs/configuration.md) | configuration reference (env vars, resolution order) |
+| [docs/api-stability.md](docs/api-stability.md) | the `@Public`, `@Experimental` and `@Internal` markers on the Flink framework and the deprecation policy |
 | [docs/a2a.md](docs/a2a.md) | the Agent-to-Agent protocol: peer-as-tool, gateway, bridges |
 | [docs/memory.md](docs/memory.md) | Flink-state-first memory model, vector memory, feeds |
 | [docs/inference.md](docs/inference.md) | DL models as tools, guardrails, scorers, embedders |

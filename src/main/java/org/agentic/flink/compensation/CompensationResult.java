@@ -3,6 +3,7 @@ package org.agentic.flink.compensation;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 
 /**
@@ -13,6 +14,7 @@ import org.agentic.flink.core.AgentEvent;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class CompensationResult implements Serializable {
 
   private static final long serialVersionUID = 1L;

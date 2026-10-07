@@ -2,6 +2,7 @@ package org.agentic.flink.plugins.flintagents.examples;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.plugins.flintagents.action.ContextManagementAction;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsEventAdapter;
@@ -61,6 +62,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * @author Agentic Flink Team
  */
+@Experimental
 public class ProductionFlinkAgentsJob {
 
   public static void main(String[] args) throws Exception {

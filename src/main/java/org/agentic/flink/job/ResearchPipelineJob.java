@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
@@ -69,7 +70,8 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class ResearchPipelineJob implements Serializable {
 
   private static final long serialVersionUID = 1L;

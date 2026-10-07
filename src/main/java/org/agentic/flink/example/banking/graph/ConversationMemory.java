@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking.graph;
 
 import java.util.List;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.memory.conversation.ConversationStore;
 import org.agentic.flink.memory.conversation.ConversationStores;
@@ -18,6 +19,7 @@ import org.agentic.flink.memory.conversation.ConversationStores;
  * (via {@code ServiceLoader}) to make the same transcript shared across a distributed cluster, with
  * no change here.
  */
+@Internal
 public final class ConversationMemory {
 
   private static final ConversationStore STORE = ConversationStores.discover();

@@ -2,6 +2,7 @@ package org.agentic.flink.dsl;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.dsl.SupervisorChain.EscalationPolicy;
 import org.agentic.flink.dsl.SupervisorChain.SupervisorTier;
 
@@ -32,7 +33,8 @@ import org.agentic.flink.dsl.SupervisorChain.SupervisorTier;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class SupervisorChainBuilder {
 
   String chainId;

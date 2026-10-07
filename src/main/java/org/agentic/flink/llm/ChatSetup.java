@@ -3,6 +3,7 @@ package org.agentic.flink.llm;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Per-agent chat configuration, decoupled from any vendor transport.
@@ -11,6 +12,7 @@ import java.util.List;
  * ChatConnection}: model name, temperature, response shape. One {@link ChatConnection} (one Ollama
  * service) can feed many agents with different {@link ChatSetup}s.
  */
+@Public
 public final class ChatSetup implements Serializable {
   private static final long serialVersionUID = 1L;
 

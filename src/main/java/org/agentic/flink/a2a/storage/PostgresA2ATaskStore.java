@@ -15,6 +15,7 @@ import org.agentic.flink.a2a.A2AJson;
 import org.agentic.flink.a2a.A2APushConfig;
 import org.agentic.flink.a2a.A2ATask;
 import org.agentic.flink.a2a.A2ATaskState;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.storage.ReopenableStore;
 import org.slf4j.Logger;
@@ -34,6 +35,7 @@ import org.slf4j.LoggerFactory;
  *   PRIMARY KEY (task_id, config_id));
  * </pre>
  */
+@Experimental
 public final class PostgresA2ATaskStore extends ReopenableStore implements A2ATaskStore {
   private static final Logger LOG = LoggerFactory.getLogger(PostgresA2ATaskStore.class);
   private static final long serialVersionUID = 1L;

@@ -2,6 +2,7 @@ package org.agentic.flink.a2a;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import org.agentic.flink.annotation.Experimental;
 
 /**
  * Lifecycle states of an A2A {@link A2ATask}, matching the A2A protocol v1.0 {@code TaskState}
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * {@link #wire()} / {@link #fromWire(String)} translate between those and the Java enum so our
  * bridge envelopes and the SDK adapter agree on a single representation.
  */
+@Experimental
 public enum A2ATaskState {
   SUBMITTED("submitted", false, false),
   WORKING("working", false, false),

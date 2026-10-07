@@ -8,6 +8,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Objects;
 import java.util.Optional;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.net.OutboundUrlPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * OutboundUrlPolicy} before a connection is opened; redirects are followed manually so the check
  * runs per hop and the hop count is capped by the policy.
  */
+@Experimental
 public final class Fetcher implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(Fetcher.class);

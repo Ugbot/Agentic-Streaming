@@ -3,6 +3,7 @@ package org.agentic.flink.example.banking.graph;
 import java.util.List;
 import org.agentic.flink.a2a.A2AArtifact;
 import org.agentic.flink.a2a.bridge.A2AResponse;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.llm.ChatMessage;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * multi-turn task <em>chain</em> forward: e.g. {@code NEW →(DELEGATE)→ NEED_INFO →(GATHER)→
  * READY_TO_ACT →(ACTION+actionPerformed)→ ACTED → DONE}.
  */
+@Internal
 public final class BankingVerifierFunction
     extends KeyedProcessFunction<String, BankingTurn, A2AResponse> {
   private static final long serialVersionUID = 1L;

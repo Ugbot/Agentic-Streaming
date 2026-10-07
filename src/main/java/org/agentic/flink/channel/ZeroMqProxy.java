@@ -1,5 +1,6 @@
 package org.agentic.flink.channel;
 
+import org.agentic.flink.annotation.Internal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
@@ -24,6 +25,7 @@ import org.zeromq.ZMQ;
  * is intended for the notebook control plane / dev loop; for production stand up a dedicated
  * broker.
  */
+@Internal
 public final class ZeroMqProxy implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(ZeroMqProxy.class);
 

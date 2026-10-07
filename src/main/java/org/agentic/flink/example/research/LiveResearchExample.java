@@ -1,6 +1,7 @@
 package org.agentic.flink.example.research;
 
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.StaticSeedChannel;
 import org.agentic.flink.channel.ToolInvocationChannel;
@@ -62,6 +63,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.research.LiveResearchExample"
  * </pre>
  */
+@Internal
 public class LiveResearchExample {
   /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
   public static final String RERANKER_MODEL_URI =

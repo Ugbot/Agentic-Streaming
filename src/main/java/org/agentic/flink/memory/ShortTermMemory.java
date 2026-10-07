@@ -2,6 +2,7 @@ package org.agentic.flink.memory;
 
 import java.util.List;
 import java.util.Optional;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 
@@ -20,6 +21,7 @@ import org.agentic.flink.context.core.ContextItem;
  *
  * <p>Default implementation: {@link FlinkStateShortTermMemory}.
  */
+@Public
 public interface ShortTermMemory {
 
   /** Returns the agent context for the current key, or empty if none has been hydrated. */

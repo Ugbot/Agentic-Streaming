@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
  * {@code parameters} map in declared order and passes them positionally; remaining parameters are
  * passed as kwargs. When {@code paramNames} is empty, the entire map is passed as kwargs.
  */
+@Experimental
 public final class PythonToolExecutor implements ToolExecutor {
 
   private static final long serialVersionUID = 1L;

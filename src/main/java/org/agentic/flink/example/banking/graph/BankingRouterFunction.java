@@ -1,6 +1,7 @@
 package org.agentic.flink.example.banking.graph;
 
 import org.agentic.flink.a2a.bridge.A2ARequest;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.banking.safety.BankingScreening;
 import org.agentic.flink.screening.ScreeningResult;
 import org.apache.flink.api.common.functions.OpenContext;
@@ -20,6 +21,7 @@ import org.slf4j.LoggerFactory;
  * threat never reaches a path brain. The router does not advance the phase (that's the verifier's
  * job); it only reads it from the {@link PhaseStore} the verifier writes.
  */
+@Internal
 public final class BankingRouterFunction
     extends KeyedProcessFunction<String, A2ARequest, BankingTurn> {
   private static final long serialVersionUID = 1L;

@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Unified configuration for the Agentic Flink framework.
@@ -41,6 +42,7 @@ import java.util.Map;
  * @author Agentic Flink Team
  * @see ConfigKeys
  */
+@Public
 public class AgenticFlinkConfig implements Serializable {
 
   private static final long serialVersionUID = 1L;

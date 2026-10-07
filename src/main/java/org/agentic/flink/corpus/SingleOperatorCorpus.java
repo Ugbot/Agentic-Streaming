@@ -3,6 +3,7 @@ package org.agentic.flink.corpus;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.memory.vector.ScoredItem;
 import org.agentic.flink.memory.vector.VectorMemory;
@@ -18,6 +19,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * KeyedProcessFunction} or {@code KeyedCoProcessFunction} that binds the corpus in {@code open()}
  * and uses it from {@code processElement}/{@code processElement1}/ {@code processElement2}.
  */
+@Experimental
 public final class SingleOperatorCorpus implements Corpus {
 
   private final String name;

@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.source.PollingSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -42,6 +43,7 @@ import org.slf4j.LoggerFactory;
  * upsert order. For higher throughput, scale up Fluss buckets and shard the consuming operator
  * downstream.
  */
+@Public
 public final class FlussChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 1L;
 

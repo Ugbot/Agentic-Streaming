@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a.bridge;
 
 import org.agentic.flink.a2a.A2AJson;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.ZeroMqChannel;
 import org.agentic.flink.channel.ZeroMqSink;
@@ -18,6 +19,7 @@ import org.zeromq.ZMQ;
  * responses ({@link ZeroMqSink#push}); the gateway connects a {@code PUSH} for requests and binds a
  * {@code PULL} for responses. Envelopes are JSON via {@link A2AWireSerde}/{@link A2AJson}.
  */
+@Experimental
 public final class ZeroMqA2ABridge implements A2ABridge {
   private static final long serialVersionUID = 1L;
 

@@ -2,11 +2,13 @@ package org.agentic.flink.screening;
 
 import java.time.Duration;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Velocity / rate screen: fires when at least {@code n} items for a key occur within a sliding
  * {@code window} (by event timestamp) — e.g. five charges on one account inside a minute.
  */
+@Public
 public final class VelocityDetector implements Detector {
   private static final long serialVersionUID = 1L;
 

@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Internal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
  * <p>Authenticated with a bearer token. Ships in the Flink job graph (Serializable); the JDK {@link
  * HttpClient} and mapper are {@code transient} and rebuilt lazily on the task side.
  */
+@Internal
 public final class EnvApiClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(EnvApiClient.class);

@@ -2,6 +2,7 @@ package org.agentic.flink.screening;
 
 import java.util.List;
 import java.util.function.BiPredicate;
+import org.agentic.flink.annotation.Public;
 
 /**
  * "Repeated screen": fires when the last {@code n} items for a key are equal under a configurable
@@ -11,6 +12,7 @@ import java.util.function.BiPredicate;
  * construction), so the default effectively means "n consecutive items on this key". Pass a
  * stricter {@link BiPredicate} (e.g. same value AND same merchant) to detect true duplicates.
  */
+@Public
 public final class RepeatDetector implements Detector {
   private static final long serialVersionUID = 1L;
 

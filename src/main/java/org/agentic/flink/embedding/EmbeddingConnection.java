@@ -1,6 +1,7 @@
 package org.agentic.flink.embedding;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -9,6 +10,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>Discovered via {@link java.util.ServiceLoader}. Default implementation is {@code
  * OllamaEmbeddingConnection} pointing at the local Ollama service.
  */
+@Public
 public interface EmbeddingConnection extends Serializable {
 
   /** Construct the operator-scoped client. Called once per task in {@code RichFunction.open()}. */

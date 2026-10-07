@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.screening.Detector;
 import org.agentic.flink.screening.Phase;
 import org.agentic.flink.screening.ScreenContext;
@@ -20,6 +21,7 @@ import org.agentic.flink.screening.Signal;
  * risk; the pipeline's review/block thresholds then turn one-vs-many matches into ALLOW / REVIEW /
  * BLOCK. Cheap, deterministic, and runs before the message ever reaches the LLM.
  */
+@Internal
 public final class InjectionDetector implements Detector {
   private static final long serialVersionUID = 1L;
 

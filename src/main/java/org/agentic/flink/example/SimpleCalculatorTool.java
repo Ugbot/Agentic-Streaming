@@ -2,6 +2,7 @@ package org.agentic.flink.example;
 
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class SimpleCalculatorTool implements ToolExecutor {
 
   private static final long serialVersionUID = 1L;

@@ -2,6 +2,7 @@ package org.agentic.flink.llm;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.typeinfo.JsonTypeInfoFactory;
 import org.apache.flink.api.common.typeinfo.TypeInfo;
 
@@ -12,6 +13,7 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
  * — they identify which tool call this message reports the result of.
  */
 @TypeInfo(ChatMessage.Factory.class)
+@Public
 public final class ChatMessage implements Serializable {
   private static final long serialVersionUID = 1L;
 

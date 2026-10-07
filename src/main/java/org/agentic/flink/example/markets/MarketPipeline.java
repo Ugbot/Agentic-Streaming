@@ -1,6 +1,7 @@
 package org.agentic.flink.example.markets;
 
 import java.time.Duration;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.channel.KafkaChannel;
 import org.agentic.flink.example.markets.model.MarketRecords.AlertEvent;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
@@ -31,6 +32,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * env.fromElements} in a test) and {@link #wireFromKafka} when you want stock {@link KafkaSource}s
  * reading newline-delimited JSON.
  */
+@Internal
 public final class MarketPipeline {
 
   private MarketPipeline() {}

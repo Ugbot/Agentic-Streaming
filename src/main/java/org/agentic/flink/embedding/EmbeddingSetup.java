@@ -2,6 +2,7 @@ package org.agentic.flink.embedding;
 
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Per-use embedding configuration.
@@ -10,6 +11,7 @@ import java.util.Objects;
  * long-lived {@link EmbeddingConnection} (Ollama service, OpenAI account) serves many call sites
  * with different model names and dimensions.
  */
+@Public
 public final class EmbeddingSetup implements Serializable {
   private static final long serialVersionUID = 1L;
 

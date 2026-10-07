@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.agentic.flink.annotation.Experimental;
 import org.apache.tika.Tika;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
@@ -26,6 +27,7 @@ import org.jsoup.select.Elements;
  * else (PDF / DOC / PPT / EPUB / RTF / plain text / …) is routed through Tika's auto-detect parser.
  * Either way the result is the same {@link ExtractedDocument} shape.
  */
+@Experimental
 public final class DocumentExtractor implements Serializable {
   private static final long serialVersionUID = 1L;
 

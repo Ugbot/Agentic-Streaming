@@ -1,5 +1,6 @@
 package org.agentic.flink.screening;
 
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.InferenceConnection;
@@ -13,6 +14,7 @@ import org.agentic.flink.inference.InferenceSetup;
  * <p>The {@link Classifier} is bound lazily and held {@code transient} so the detector stays
  * Serializable for Flink distribution; it rebinds per task.
  */
+@Public
 public final class ClassifierDetector implements Detector {
   private static final long serialVersionUID = 1L;
 

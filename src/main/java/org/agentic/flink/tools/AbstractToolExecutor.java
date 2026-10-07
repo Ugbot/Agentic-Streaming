@@ -1,9 +1,11 @@
 package org.agentic.flink.tools;
 
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Public
 public abstract class AbstractToolExecutor implements ToolExecutor {
 
   protected static final Logger LOG = LoggerFactory.getLogger(AbstractToolExecutor.class);

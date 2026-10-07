@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.typeinfo.JsonTypeInfo;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ListState;
@@ -63,15 +64,6 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *       registers a Flink timer (processing or event time), appends {@code timer_scheduled}, and on
  *       firing appends {@code timer_fired} and resumes the turn with a {@code {kind: "timer"}}
  *       signal. Pending timers live in keyed state so they survive restore.
- *   <li><b>Workflow timers.</b> The document's {@code timers} (spec section 8) are handled by the
- *       core graph over the keyed log: {@code timer_scheduled} on a conversation's first turn,
- *       {@code timer_fired} plus the timer's tool call at the head of the first later turn whose
- *       clock reads at or past the deadline. Processing time comes from {@link
- *       FlinkRuntimeOptions#processingClock()} (the operator's processing time by default); event
- *       time is the conversation watermark folded from {@code metadata.event_time_ms}. The spec
- *       makes both clocks observable only through turns, so no Flink timer is registered for them;
- *       the log in keyed state is the timer registry, and a savepoint or checkpoint carries pending
- *       timers across a restore without re-scheduling or double-firing.
  *   <li><b>TTL.</b> {@link FlinkRuntimeOptions#stateTtl()} applies Flink state TTL to the log,
  *       counter and timer registry.
  *   <li><b>Serialization.</b> Log entries use {@link JsonTypeInfo}; results use {@link
@@ -84,6 +76,7 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  * registry and retriever are rebuilt in {@link #open} on every (re)start. Tools declared as {@code
  * kind: failing} count attempts in-process, so their budget also restarts with the task.
  */
+@Public
 public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Event, TurnResult>
     implements ResultTypeQueryable<TurnResult> {
   private static final long serialVersionUID = 1L;
@@ -285,8 +278,6 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
             built.retriever(),
             keyedLog,
             built.graph().policies());
-    ProcessingClock clock = options.processingClock();
-    agentCtx.clock = () -> clock.nowMs(timerService);
     return built.graph().handle(event, agentCtx);
   }
 

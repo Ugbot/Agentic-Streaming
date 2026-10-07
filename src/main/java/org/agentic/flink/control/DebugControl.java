@@ -3,6 +3,7 @@ package org.agentic.flink.control;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Flips an operator's debug side-output on or off. The receiver applies passive TTL expiry — no
@@ -16,6 +17,7 @@ import java.util.Objects;
  * {@link #toString}, {@link #equals}, {@link #hashCode} mirror the record semantics this type
  * replaced.
  */
+@Public
 public final class DebugControl implements ControlMessage {
   private static final long serialVersionUID = 1L;
 

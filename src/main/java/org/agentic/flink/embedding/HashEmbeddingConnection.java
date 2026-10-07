@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
@@ -18,6 +19,7 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "hash"}. The vector
  * dimension comes from the {@link EmbeddingSetup} at each call.
  */
+@Public
 public final class HashEmbeddingConnection implements EmbeddingConnection {
   private static final long serialVersionUID = 1L;
 

@@ -1,6 +1,7 @@
 package org.agentic.flink.memory.vector;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Graph-construction parameters for an HNSW-backed {@link VectorMemory}.
@@ -8,6 +9,7 @@ import java.io.Serializable;
  * <p>Defaults mirror the values JVector and Lucene's HNSW use in published benchmarks for
  * embedding-style workloads at d≈384.
  */
+@Public
 public final class HnswBuildConfig implements Serializable {
   private static final long serialVersionUID = 1L;
 

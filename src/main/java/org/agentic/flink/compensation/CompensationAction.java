@@ -3,6 +3,7 @@ package org.agentic.flink.compensation;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 
 /**
@@ -20,6 +21,7 @@ import org.agentic.flink.core.AgentEvent;
  *
  * @author Agentic Flink Team
  */
+@Public
 public class CompensationAction implements Serializable {
 
   private static final long serialVersionUID = 1L;

@@ -1,8 +1,10 @@
 package org.agentic.flink.retrieve;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 
 /** A passage retrieved from a corpus, with its score. */
+@Experimental
 public final class RetrievedPassage implements Serializable {
   private static final long serialVersionUID = 1L;
 

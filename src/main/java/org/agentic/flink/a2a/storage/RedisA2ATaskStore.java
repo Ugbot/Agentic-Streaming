@@ -10,6 +10,7 @@ import org.agentic.flink.a2a.A2AJson;
 import org.agentic.flink.a2a.A2APushConfig;
 import org.agentic.flink.a2a.A2ATask;
 import org.agentic.flink.a2a.A2ATaskState;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.storage.ReopenableStore;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import redis.clients.jedis.JedisPoolConfig;
  * of configId → config JSON). Mirrors {@link
  * org.agentic.flink.storage.redis.RedisConversationStore}.
  */
+@Experimental
 public final class RedisA2ATaskStore extends ReopenableStore implements A2ATaskStore {
   private static final Logger LOG = LoggerFactory.getLogger(RedisA2ATaskStore.class);
   private static final long serialVersionUID = 1L;

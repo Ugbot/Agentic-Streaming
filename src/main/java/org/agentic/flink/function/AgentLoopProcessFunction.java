@@ -1,5 +1,6 @@
 package org.agentic.flink.function;
 
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.core.AgentExecutionState;
@@ -12,6 +13,7 @@ import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Internal
 public class AgentLoopProcessFunction extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
 
   private static final Logger LOG = LoggerFactory.getLogger(AgentLoopProcessFunction.class);

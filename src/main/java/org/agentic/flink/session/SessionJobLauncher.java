@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.FlussChannel;
 import org.agentic.flink.channel.FlussSink;
@@ -55,6 +56,7 @@ import org.slf4j.LoggerFactory;
  *                     --control tcp://localhost:5559 --anthropic-key sk-ant-...
  * </pre>
  */
+@Internal
 public final class SessionJobLauncher {
   private static final Logger LOG = LoggerFactory.getLogger(SessionJobLauncher.class);
 

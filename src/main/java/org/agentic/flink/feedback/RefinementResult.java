@@ -3,10 +3,12 @@ package org.agentic.flink.feedback;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Locale;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Outcome of a {@link RefinementLoop}: the chosen output, whether it was accepted, and the trace.
  */
+@Public
 public final class RefinementResult implements Serializable {
   private static final long serialVersionUID = 1L;
 

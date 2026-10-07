@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.sink.ForEachSink;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -40,6 +41,7 @@ import org.zeromq.ZMQ;
  * opens/sends/closes it on a single subtask thread; keep parallelism at 1 ({@code
  * setParallelism(1)}) since N>1 ZMQ sockets round-robin/duplicate in surprising ways.
  */
+@Public
 public final class ZeroMqSink<T> {
   private static final Logger LOG = LoggerFactory.getLogger(ZeroMqSink.class);
 

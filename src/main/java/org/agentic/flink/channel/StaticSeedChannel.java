@@ -3,6 +3,7 @@ package org.agentic.flink.channel;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -15,6 +16,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * so the source preserves the supplied {@link TypeInformation} for downstream keyBy / state
  * operations.
  */
+@Public
 public final class StaticSeedChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 1L;
 

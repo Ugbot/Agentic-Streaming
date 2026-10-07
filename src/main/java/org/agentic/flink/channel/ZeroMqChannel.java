@@ -1,6 +1,7 @@
 package org.agentic.flink.channel;
 
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.source.PollingSource;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
@@ -40,6 +41,7 @@ import org.zeromq.ZMQ;
  * <p>Single-parallelism by design: a ZMQ socket per Flink subtask would round-robin (PULL) or
  * duplicate (SUB) the stream in ways the caller almost certainly doesn't expect.
  */
+@Public
 public final class ZeroMqChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 1L;
 

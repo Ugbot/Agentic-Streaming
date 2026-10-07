@@ -1,6 +1,7 @@
 package org.agentic.flink.a2a.bridge;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Experimental;
 import org.agentic.flink.channel.Channel;
 import org.apache.flink.api.connector.sink2.Sink;
 
@@ -19,6 +20,7 @@ import org.apache.flink.api.connector.sink2.Sink;
  * #responseSink()}) is {@link Serializable} so it ships in the job graph; the live transport is
  * built on the task side, per the {@link Channel} convention.
  */
+@Experimental
 public interface A2ABridge extends Serializable {
 
   /** Transport name (e.g. {@code "inproc"}, {@code "zeromq"}, {@code "redis"}). */

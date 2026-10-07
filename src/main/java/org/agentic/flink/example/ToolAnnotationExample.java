@@ -3,6 +3,7 @@ package org.agentic.flink.example;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.ToolDefinition;
 import org.agentic.flink.langchain.LangChainToolAdapter;
 import org.agentic.flink.langchain.ToolAnnotationRegistry;
@@ -22,6 +23,7 @@ import org.agentic.flink.langchain.ToolAnnotationRegistry;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class ToolAnnotationExample {
 
   public static void main(String[] args) throws Exception {

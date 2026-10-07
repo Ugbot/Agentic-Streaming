@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.streaming.api.TimeDomain;
 
 /**
@@ -32,11 +33,8 @@ import org.apache.flink.streaming.api.TimeDomain;
  *     processing time unless a {@link ManualProcessingClock} is selected with {@link
  *     #withManualClock(String)} or {@link #withProcessingClock} (not settable from the document)
  */
-public record FlinkRuntimeOptions(
-    Duration stateTtl,
-    Duration resumeAfter,
-    TimeDomain timerDomain,
-    ProcessingClock processingClock)
+@Public
+public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain)
     implements Serializable {
 
   public static final String RUNTIME_KEY = "runtime";

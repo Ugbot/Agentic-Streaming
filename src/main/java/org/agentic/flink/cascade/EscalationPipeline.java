@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.inference.ClassificationResult;
 import org.agentic.flink.inference.Classifier;
@@ -37,6 +38,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>In-JVM and synchronous so it is easy to drive from a notebook or wrap in a Flink operator.
  */
+@Public
 public final class EscalationPipeline {
 
   private static final Logger LOG = LoggerFactory.getLogger(EscalationPipeline.class);

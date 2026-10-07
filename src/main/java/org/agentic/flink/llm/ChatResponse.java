@@ -3,6 +3,7 @@ package org.agentic.flink.llm;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import org.agentic.flink.annotation.Public;
 
 /**
  * Result of a {@link ChatClient#chat(java.util.List, ChatSetup)} call.
@@ -11,6 +12,7 @@ import java.util.List;
  * it. A typed view of the response is available through {@link #as(OutputSchema)} when the
  * originating {@link ChatSetup} declared an output schema.
  */
+@Public
 public final class ChatResponse implements Serializable {
   private static final long serialVersionUID = 1L;
 
