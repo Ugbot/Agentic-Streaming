@@ -12,7 +12,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.agentic.flink.annotation.Experimental;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,8 +20,12 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Falls open (allows the fetch) if the robots.txt request fails — matches the behaviour of most
  * well-behaved crawlers including StormCrawler.
+ *
+ * <p>The cache, HTTP client and parser are transient and rebuilt lazily, so a copy that Flink
+ * deserialized inside an operator or a {@code ToolExecutor} (Java serialization, {@code
+ * InstantiationUtil} or Kryo, none of which run field initializers) still fetches and enforces
+ * robots.txt instead of failing open on a null map.
  */
-@Experimental
 public final class RobotsCache implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(RobotsCache.class);
@@ -31,7 +34,7 @@ public final class RobotsCache implements Serializable {
 
   private final String userAgent;
   private final Duration fetchTimeout;
-  private final transient ConcurrentMap<String, Entry> cache = new ConcurrentHashMap<>();
+  private transient volatile ConcurrentMap<String, Entry> cache;
   private transient HttpClient http;
   private transient SimpleRobotRulesParser parser;
 
@@ -42,21 +45,41 @@ public final class RobotsCache implements Serializable {
 
   /** Returns true if the user-agent is allowed to fetch {@code url} per its host's robots.txt. */
   public boolean isAllowed(String url) {
+    String host;
     try {
       URL u = URI.create(url).toURL();
-      String host =
-          u.getProtocol() + "://" + u.getHost() + (u.getPort() == -1 ? "" : ":" + u.getPort());
-      Entry e = cache.get(host);
-      Instant now = Instant.now();
-      if (e == null || e.fetchedAt.plus(TTL).isBefore(now)) {
-        e = fetch(host);
-        cache.put(host, e);
-      }
-      return e.rules.isAllowed(url);
+      host = u.getProtocol() + "://" + u.getHost() + (u.getPort() == -1 ? "" : ":" + u.getPort());
     } catch (Exception ex) {
-      LOG.debug("RobotsCache fall-open for {}: {}", url, ex.getMessage());
+      LOG.debug("RobotsCache fall-open for unparseable url {}: {}", url, ex.getMessage());
       return true;
     }
+    ConcurrentMap<String, Entry> c = cache();
+    Entry e = c.get(host);
+    Instant now = Instant.now();
+    if (e == null || e.fetchedAt.plus(TTL).isBefore(now)) {
+      e = fetch(host);
+      c.put(host, e);
+    }
+    return e.rules.isAllowed(url);
+  }
+
+  /** Number of hosts with cached rules on this instance; a deserialized copy starts at zero. */
+  int cachedHosts() {
+    return cache().size();
+  }
+
+  private ConcurrentMap<String, Entry> cache() {
+    ConcurrentMap<String, Entry> c = cache;
+    if (c == null) {
+      synchronized (this) {
+        c = cache;
+        if (c == null) {
+          c = new ConcurrentHashMap<>();
+          cache = c;
+        }
+      }
+    }
+    return c;
   }
 
   private Entry fetch(String hostBase) {

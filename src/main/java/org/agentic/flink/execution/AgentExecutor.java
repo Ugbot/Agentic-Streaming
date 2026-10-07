@@ -18,10 +18,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongUnaryOperator;
-import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.tool.ToolRegistry;
 import org.slf4j.Logger;
@@ -86,8 +86,7 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@code org.agentic.flink.runtime.WorkflowTurnFunction} with {@code KeyedConversationLog}.
  */
-@Deprecated(since = "1.0.0")
-@Public
+@Deprecated
 public class AgentExecutor implements Serializable, AutoCloseable {
 
   private static final long serialVersionUID = 1L;
@@ -683,6 +682,13 @@ public class AgentExecutor implements Serializable, AutoCloseable {
       if (llmClient == null) {
         // Create default LLM client
         llmClient = LLMClient.createDefault(agent.getLlmModel(), agent.getTemperature());
+      }
+      if (agent.hasGuardrails() && !llmClient.hasGuardrails()) {
+        List<AgentEventListener> listeners = agent.getListeners();
+        llmClient.withGuardrails(
+            agent.getGuardrails(),
+            agent.getAgentId(),
+            listeners == null || listeners.isEmpty() ? null : AgentEventListener.fanOut(listeners));
       }
       if (turnResultStore == null) {
         turnResultStore = new InMemoryTurnResultStore();

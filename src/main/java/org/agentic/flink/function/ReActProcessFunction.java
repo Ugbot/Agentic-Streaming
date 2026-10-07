@@ -4,13 +4,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.concurrent.TimeUnit;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.inference.Guardrail;
+import org.agentic.flink.inference.Guardrails;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
@@ -46,8 +46,11 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code transcriptState} — append-only list of chat messages, used to feed each turn.
  *   <li>{@code finishedState} — once {@code true}, additional events are passed through unchanged.
  * </ul>
+ *
+ * <p>The agent's {@link Guardrail}s run around every chat call. A blocked prompt or reply ends the
+ * loop and the transcript records only the guardrail's redacted text, never the raw model output,
+ * so a replay or the next prompt built from the transcript cannot leak it.
  */
-@Internal
 public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, E, E> {
 
   private static final long serialVersionUID = 1L;
@@ -93,11 +96,9 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
   public void open(OpenContext openContext) throws Exception {
     ChatConnection connection = agent.getChatConnection();
     if (connection == null) {
-      // Fall back to the ServiceLoader-discovered default; never null because the
-      // LangChain4j default is registered in META-INF/services.
-      ServiceLoader<ChatConnection> loader = ServiceLoader.load(ChatConnection.class);
-      java.util.Iterator<ChatConnection> it = loader.iterator();
-      if (it.hasNext()) connection = it.next();
+      // Fall back to the ServiceLoader-discovered default (the LangChain4j default is
+      // registered in META-INF/services).
+      connection = ChatConnections.discover();
     }
     if (connection == null) {
       throw new IllegalStateException(
@@ -151,19 +152,39 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
 
       ChatSetup setup = withSchema(agent.getChatSetup(), stepSchema);
 
+      List<Guardrail> guardrails = agent.getGuardrails();
+      Guardrails.PreChat pre =
+          Guardrails.beforeChat(guardrails, agent.getAgentId(), messages, listener);
+      if (pre.isBlocked()) {
+        messages.add(ChatMessage.assistant(pre.blockedText()));
+        markFinished(iteration, messages);
+        out.collect(event);
+        return;
+      }
+      messages = pre.messages();
+
       listener.onChatRequest(agent.getAgentId(), setup.getModelName(), messages.size());
-      ChatResponse response;
+      Guardrails.PostChat post;
       try {
-        response = chatClient.chat(messages, setup);
+        post =
+            Guardrails.afterChat(
+                guardrails, agent.getAgentId(), chatClient.chat(messages, setup), listener);
       } catch (Exception e) {
         listener.onError(agent.getAgentId(), "chat", e);
         throw e;
       }
+      ChatResponse response = post.response();
       listener.onChatResponse(
           agent.getAgentId(),
           setup.getModelName(),
           response.getText() == null ? 0 : response.getText().length(),
           response.getTokensUsed());
+      if (post.isBlocked()) {
+        messages.add(ChatMessage.assistant(response.getText()));
+        markFinished(iteration, messages);
+        out.collect(event);
+        return;
+      }
 
       ReActStep step;
       try {
@@ -257,7 +278,8 @@ public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, 
 
   // ---- helpers ----
 
-  private List<ChatMessage> currentTranscript() throws Exception {
+  /** Transcript persisted for the current key; package-private for harness tests. */
+  List<ChatMessage> currentTranscript() throws Exception {
     List<ChatMessage> out = new ArrayList<>();
     for (ChatMessage m : transcriptState.get()) {
       out.add(m);

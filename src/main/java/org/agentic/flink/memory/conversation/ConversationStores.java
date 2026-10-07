@@ -1,8 +1,8 @@
 package org.agentic.flink.memory.conversation;
 
 import java.util.Iterator;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
-import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,8 +16,12 @@ import org.slf4j.LoggerFactory;
  * Redis-backed store on the classpath for a distributed cluster); if none is registered it falls
  * back to the process-wide {@link InMemoryConversationStore#shared() in-JVM store}, which is the
  * correct default for the embedded single-JVM deployment.
+ *
+ * <p>A registered provider whose class fails to load or link (optional backend without its driver)
+ * is logged and skipped; discovery continues with the next provider. {@link ServiceLoader} raises a
+ * {@link LinkageError} from {@code hasNext()} and a {@link ServiceConfigurationError} from {@code
+ * next()}, so both calls are guarded.
  */
-@Public
 public final class ConversationStores {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConversationStores.class);
@@ -28,8 +32,11 @@ public final class ConversationStores {
   public static ConversationStore discover() {
     ServiceLoader<ConversationStore> loader = ServiceLoader.load(ConversationStore.class);
     Iterator<ConversationStore> it = loader.iterator();
-    while (it.hasNext()) {
+    while (true) {
       try {
+        if (!it.hasNext()) {
+          break;
+        }
         ConversationStore store = it.next();
         // Don't let an explicit in-memory registration shadow the shared singleton.
         if (store instanceof InMemoryConversationStore) {
@@ -37,7 +44,7 @@ public final class ConversationStores {
         }
         LOG.info("Using ConversationStore from ServiceLoader: {}", store.getClass().getName());
         return store;
-      } catch (Throwable t) {
+      } catch (ServiceConfigurationError | LinkageError t) {
         LOG.warn("Skipping a ConversationStore provider that failed to load: {}", t.toString());
       }
     }

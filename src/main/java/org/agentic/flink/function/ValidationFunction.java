@@ -3,14 +3,12 @@ package org.agentic.flink.function;
 import dev.langchain4j.model.input.Prompt;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
-import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.inference.ValidationVerdict;
 import org.agentic.flink.langchain.PromptTemplateManager;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
@@ -24,7 +22,6 @@ import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Internal
 public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ValidationFunction.class);
@@ -38,6 +35,7 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   private transient PromptTemplateManager promptManager;
   private transient ChatSetup chatSetup;
   private final String customTemplateId;
+  private final ChatConnection chatConnection;
 
   /** Creates a ValidationFunction using the default validation template. */
   public ValidationFunction() {
@@ -50,19 +48,28 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
    * @param customTemplateId Custom template ID (null to use default "validation" template)
    */
   public ValidationFunction(String customTemplateId) {
+    this(customTemplateId, null);
+  }
+
+  /**
+   * Creates a ValidationFunction bound to an explicit chat provider.
+   *
+   * @param customTemplateId Custom template ID (null to use default "validation" template)
+   * @param chatConnection provider to validate with; {@code null} discovers one via ServiceLoader
+   */
+  public ValidationFunction(String customTemplateId, ChatConnection chatConnection) {
     this.customTemplateId = customTemplateId;
+    this.chatConnection = chatConnection;
   }
 
   @Override
   public void open(OpenContext openContext) throws Exception {
     super.open(openContext);
-    ServiceLoader<ChatConnection> loader = ServiceLoader.load(ChatConnection.class);
-    Iterator<ChatConnection> it = loader.iterator();
-    if (!it.hasNext()) {
-      throw new IllegalStateException(
-          "ValidationFunction requires a ChatConnection registered via ServiceLoader");
+    ChatConnection connection = chatConnection;
+    if (connection == null) {
+      connection = ChatConnections.require("ValidationFunction");
     }
-    this.chatClient = it.next().bind(getRuntimeContext());
+    this.chatClient = connection.bind(getRuntimeContext());
     this.promptManager = PromptTemplateManager.getInstance();
     // Validation should be deterministic.
     this.chatSetup =
@@ -122,17 +129,27 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
             return;
           }
 
-          // Parse validation result
-          String validationResponse = result.getText();
-          boolean isValid = validationResponse.toUpperCase().contains("VALID");
-          double score = isValid ? 1.0 : 0.0;
+          String validationResponse = result == null ? null : result.getText();
+          ValidationVerdict verdict = ValidationVerdict.parse(validationResponse);
+          boolean isValid = verdict.isValid();
 
-          LOG.info("Validation completed for flow: {}, isValid: {}", event.getFlowId(), isValid);
+          LOG.info("Validation completed for flow: {}, verdict: {}", event.getFlowId(), verdict);
 
           AgentEvent validationEvent =
-              createValidationEvent(event, isValid, score, isValid ? null : validationResponse);
+              createValidationEvent(
+                  event,
+                  isValid,
+                  isValid ? verdict.getScore() : 0.0,
+                  isValid ? null : errorMessage(verdict));
           resultFuture.complete(Collections.singleton(validationEvent));
         });
+  }
+
+  private static String errorMessage(ValidationVerdict verdict) {
+    if (verdict.getOutcome() == ValidationVerdict.Outcome.UNDETERMINED) {
+      return "Validator returned no VALID/INVALID verdict: " + verdict.getRawResponse();
+    }
+    return verdict.getRawResponse();
   }
 
   private AgentEvent createValidationEvent(

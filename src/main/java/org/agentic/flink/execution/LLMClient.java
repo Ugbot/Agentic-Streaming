@@ -13,16 +13,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.inference.Guardrail;
-import org.agentic.flink.inference.GuardrailDecision;
+import org.agentic.flink.inference.Guardrails;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
-import org.agentic.flink.llm.ChatRole;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.ChatToolCall;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
@@ -61,8 +59,7 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated(since = "1.0.0")
-@Public
+@Deprecated
 public class LLMClient implements Serializable {
 
   private static final long serialVersionUID = 2L;
@@ -162,52 +159,20 @@ public class LLMClient implements Serializable {
     LOG.debug("Sending chat request with {} messages to model: {}", messages.size(), modelName);
 
     try {
-      List<ChatMessage> chatMessages = convertMessages(messages);
-
-      // Pre-LLM guardrails.
-      for (Guardrail g : guardrails) {
-        GuardrailDecision d = g.beforeChat(agentId, chatMessages);
-        if (d.isBlock()) {
-          listener.onGuardrailBlock(agentId, d.getModelName(), d.getReason());
-          LLMResponse blocked = new LLMResponse();
-          blocked.setText(d.getReason() == null ? "Blocked by guardrail" : d.getReason());
-          blocked.setModel(modelName);
-          blocked.setToolCalls(new ArrayList<>());
-          return blocked;
-        }
-        if (d.isRewrite() && d.getRewrittenPayload() != null) {
-          listener.onGuardrailRewrite(agentId, d.getModelName(), d.getReason());
-          chatMessages = replaceLastUserMessage(chatMessages, d.getRewrittenPayload());
-        }
+      Guardrails.PreChat pre =
+          Guardrails.beforeChat(guardrails, agentId, convertMessages(messages), listener);
+      if (pre.isBlocked()) {
+        LLMResponse blocked = new LLMResponse();
+        blocked.setText(pre.blockedText());
+        blocked.setModel(modelName);
+        blocked.setToolCalls(new ArrayList<>());
+        return blocked;
       }
 
-      ChatResponse response = client().chat(chatMessages, setup());
-
-      // Post-LLM guardrails.
-      for (Guardrail g : guardrails) {
-        GuardrailDecision d = g.afterChat(agentId, response);
-        if (d.isBlock()) {
-          listener.onGuardrailBlock(agentId, d.getModelName(), d.getReason());
-          response =
-              new ChatResponse(
-                  d.getReason() == null ? "Blocked by guardrail" : d.getReason(),
-                  response.getModelName(),
-                  java.util.Collections.emptyList(),
-                  response.getTokensUsed(),
-                  response.getFinishReason());
-          break;
-        }
-        if (d.isRewrite() && d.getRewrittenPayload() != null) {
-          listener.onGuardrailRewrite(agentId, d.getModelName(), d.getReason());
-          response =
-              new ChatResponse(
-                  d.getRewrittenPayload(),
-                  response.getModelName(),
-                  response.getToolCalls(),
-                  response.getTokensUsed(),
-                  response.getFinishReason());
-        }
-      }
+      ChatResponse response =
+          Guardrails.afterChat(
+                  guardrails, agentId, client().chat(pre.messages(), setup()), listener)
+              .response();
 
       LLMResponse llmResponse = new LLMResponse();
       String responseText = response.getText();
@@ -247,21 +212,14 @@ public class LLMClient implements Serializable {
     return chat(messages).getText();
   }
 
-  /**
-   * Replaces the most recent user message with the guardrail's rewritten payload, keeping the rest
-   * of the conversation (system prompt, earlier turns, tool results) intact. When the conversation
-   * has no user message the rewrite is appended as one.
-   */
+  /** See {@link Guardrails#replaceLastUserMessage}. */
   static List<ChatMessage> replaceLastUserMessage(List<ChatMessage> messages, String rewritten) {
-    List<ChatMessage> out = new ArrayList<>(messages);
-    for (int i = out.size() - 1; i >= 0; i--) {
-      if (out.get(i).getRole() == ChatRole.USER) {
-        out.set(i, ChatMessage.user(rewritten));
-        return out;
-      }
-    }
-    out.add(ChatMessage.user(rewritten));
-    return out;
+    return Guardrails.replaceLastUserMessage(messages, rewritten);
+  }
+
+  /** Whether any guardrails are attached to this client. */
+  public boolean hasGuardrails() {
+    return !guardrails.isEmpty();
   }
 
   /** Maps the provider's structured tool requests onto the executor's {@link ToolCall}. */
