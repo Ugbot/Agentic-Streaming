@@ -91,7 +91,7 @@ jobs:
         run: RUNNER=venv DIST=dist tools/release_dry_run.sh
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: python-dist-test
           path: dist/*
