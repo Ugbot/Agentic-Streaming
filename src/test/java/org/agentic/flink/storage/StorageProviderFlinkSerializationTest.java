@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
  * Every in-process storage provider must survive the serialization Flink applies when it ships an
  * operator to a task: transient resources are rebuilt on first use after deserialization and the
  * copy is fully usable. The external providers get the same treatment against real backends in the
- * integration group (PostgresConversationStoreTest, PostgresA2ATaskStoreTest).
+ * integration group (PostgresConversationStoreIT, PostgresA2ATaskStoreIT).
  */
 class StorageProviderFlinkSerializationTest {
 

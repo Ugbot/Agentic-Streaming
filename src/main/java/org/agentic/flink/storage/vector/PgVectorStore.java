@@ -88,13 +88,13 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
               + dimension
               + ") NOT NULL, metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
               + " created_at TIMESTAMP NOT NULL DEFAULT now())");
-      // ivfflat index is the standard pgvector choice for cosine.
+      // HNSW builds incrementally, so it is valid on an empty table (ivfflat needs training rows).
       st.execute(
           "CREATE INDEX IF NOT EXISTS "
               + tableName
               + "_embedding_cos_idx ON "
               + tableName
-              + " USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)");
+              + " USING hnsw (embedding vector_cosine_ops)");
     }
   }
 

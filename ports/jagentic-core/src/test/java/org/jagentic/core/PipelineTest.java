@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import org.jagentic.core.pipeline.PipelineLoader;
@@ -17,9 +15,7 @@ import org.jagentic.core.pipeline.PipelineLoader;
 class PipelineTest {
 
   private PipelineLoader.PipelineSystem banking() {
-    Path yaml = Path.of("../../examples/pipelines/banking.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "shared banking.yaml not found from " + yaml.toAbsolutePath());
-    return PipelineLoader.load(yaml, "local");
+    return PipelineLoader.load(RepoFixtures.examplePipeline("banking.yaml"), "local");
   }
 
   @Test
@@ -43,8 +39,7 @@ class PipelineTest {
 
   @Test
   void llmYamlRunsReactViaStub() {
-    Path yaml = Path.of("../../examples/pipelines/banking-llm.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml));
+    Path yaml = RepoFixtures.examplePipeline("banking-llm.yaml");
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "local");
     TurnResult res = sys.submit(new Event("c1", "demo", "what is my balance?"));
     assertEquals("payments", res.path);

@@ -44,7 +44,7 @@ import org.junit.jupiter.api.Test;
  * conversation, and use of the store after Flink-style serialization.
  */
 @Tag("integration")
-class PostgresConversationStoreTest {
+class PostgresConversationStoreIT {
 
   private static PostgresTestDatabase database;
 

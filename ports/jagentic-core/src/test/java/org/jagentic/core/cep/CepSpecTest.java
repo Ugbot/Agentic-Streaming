@@ -4,16 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import org.jagentic.core.Event;
+import org.jagentic.core.RepoFixtures;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.ToolRegistry;
 import org.jagentic.core.TurnResult;
@@ -113,8 +112,7 @@ class CepSpecTest {
 
   @Test
   void incidentYamlEscalatesThroughTheLoadedPipeline() {
-    Path yaml = Path.of("../../examples/pipelines/incident.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "incident.yaml not found");
+    Path yaml = RepoFixtures.examplePipeline("incident.yaml");
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "local");
 
     for (long ts : new long[] {0, 60_000, 120_000}) {

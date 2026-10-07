@@ -238,7 +238,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
 
   private Points.RetrievedPoint retrieve(String id, boolean withVectors) throws Exception {
     List<Points.RetrievedPoint> points =
-        client
+        client()
             .retrieveAsync(
                 collection,
                 List.of(pointId(id)),

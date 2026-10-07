@@ -20,7 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * Backend-agnostic contract for {@link A2ATaskStore}, run against the in-memory backend. The
  * Postgres backend runs the same contract against a real PostgreSQL in {@link
- * PostgresA2ATaskStoreTest} (integration group); Redis in {@link A2ARedisTaskStoreIT}.
+ * PostgresA2ATaskStoreIT} (integration group); Redis in {@link A2ARedisTaskStoreIT}.
  */
 class A2ATaskStoreTest {
 

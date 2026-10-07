@@ -24,6 +24,24 @@
         <!-- flink.version, java.version, langchain4j.version and junit.version are inherited from
              the reactor parent. Flink 2.x supports 17/21; 25 is not yet viable (see the Lombok
              note below). slf4j.version and log4j.version come from the reactor too. -->
+        <!-- JVM flags for the surefire and failsafe forks. Flink on Java 17+: Kryo / Twitter Chill
+             reflective access into JDK internals is blocked by the module system without these
+             opens. Mirrors Flink's own recommended JVM args. -->
+        <agentic.test.jvmArgs>
+            --add-opens=java.base/java.util=ALL-UNNAMED
+            --add-opens=java.base/java.lang=ALL-UNNAMED
+            --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
+            --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
+            --add-opens=java.base/java.io=ALL-UNNAMED
+            --add-opens=java.base/java.net=ALL-UNNAMED
+            --add-opens=java.base/java.nio=ALL-UNNAMED
+            --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
+            --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
+            --add-opens=java.base/sun.security.action=ALL-UNNAMED
+            --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+            --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
+            --add-opens=java.base/java.text=ALL-UNNAMED
+        </agentic.test.jvmArgs>
         <!--
         A2A (Agent2Agent) Java SDK. groupId io.github.a2asdk. The 1.0 protocol line is
         currently published only as alphas on Maven Central (newest stable Final is 0.3.x);
@@ -450,12 +468,28 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- H2 Database for PostgreSQL tests (in-memory) -->
+        <!-- @SetEnvironmentVariable for AgenticFlinkConfig env resolution tests. Its own JUnit
+             artifacts are excluded so the reactor's junit.version stays authoritative; the
+             surefire argLine already opens java.util and java.lang for the env map access. -->
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>2.2.224</version>
+            <groupId>org.junit-pioneer</groupId>
+            <artifactId>junit-pioneer</artifactId>
+            <version>2.3.0</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.junit.jupiter</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.junit.platform</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Testcontainers for integration tests -->
@@ -571,26 +605,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <excludedGroups>integration,djl</excludedGroups>
-                    <!--
-                    Flink on Java 17: Kryo / Twitter Chill reflective access into JDK
-                    internals is blocked by the module system without these opens. Mirrors
-                    Flink's own recommended JVM args.
-                    -->
-                    <argLine>
-                        --add-opens=java.base/java.util=ALL-UNNAMED
-                        --add-opens=java.base/java.lang=ALL-UNNAMED
-                        --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
-                        --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                        --add-opens=java.base/java.io=ALL-UNNAMED
-                        --add-opens=java.base/java.net=ALL-UNNAMED
-                        --add-opens=java.base/java.nio=ALL-UNNAMED
-                        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
-                        --add-opens=java.base/sun.nio.cs=ALL-UNNAMED
-                        --add-opens=java.base/sun.security.action=ALL-UNNAMED
-                        --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
-                        --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
-                        --add-opens=java.base/java.text=ALL-UNNAMED
-                    </argLine>
+                    <argLine>${agentic.test.jvmArgs}</argLine>
                 </configuration>
             </plugin>
 
@@ -645,11 +660,15 @@
     </repositories>
 
     <profiles>
-        <!-- Profile for running the unit suite plus the integration tests in one surefire run.
-             The integration tests need a container runtime for Testcontainers (Podman socket
-             exported as DOCKER_HOST locally, Docker on GitHub-hosted runners); the *IT classes
-             are not matched by surefire's default includes, so they are listed here. The djl
-             group stays excluded (it downloads a native PyTorch runtime; see djl-native). -->
+        <!-- Unit suite plus the integration tests. The *IT.java classes are run by
+             maven-failsafe-plugin (integration-test and verify phases, configured in the reactor
+             parent) and never by surefire, whose default include pattern does not match them:
+                 ./mvnw verify -P integration-tests
+             They need a container runtime for Testcontainers (Podman socket exported as
+             DOCKER_HOST locally, Docker on GitHub-hosted runners) and fail with an explicit
+             message when none is reachable. The surefire override below only lifts the
+             "integration" tag exclusion for tagged *Test classes; the djl group stays excluded
+             (it downloads a native PyTorch runtime; see djl-native). -->
         <profile>
             <id>integration-tests</id>
             <build>
@@ -659,13 +678,14 @@
                         <artifactId>maven-surefire-plugin</artifactId>
                         <configuration>
                             <excludedGroups>djl</excludedGroups>
-                            <includes>
-                                <include>**/Test*.java</include>
-                                <include>**/*Test.java</include>
-                                <include>**/*Tests.java</include>
-                                <include>**/*TestCase.java</include>
-                                <include>**/*IT.java</include>
-                            </includes>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <configuration>
+                            <excludedGroups>djl</excludedGroups>
+                            <argLine>${agentic.test.jvmArgs}</argLine>
                         </configuration>
                     </plugin>
                 </plugins>

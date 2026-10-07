@@ -6,11 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import org.jagentic.core.embedding.HashingEmbedder;
@@ -25,9 +22,7 @@ import org.jagentic.core.pipeline.PipelineLoader;
 class PipelineRagTest {
 
   private PipelineLoader.PipelineSystem rag() {
-    Path yaml = Path.of("../../examples/pipelines/banking-rag.yaml");
-    Assumptions.assumeTrue(Files.exists(yaml), "shared banking-rag.yaml not found from " + yaml.toAbsolutePath());
-    return PipelineLoader.load(yaml, "local");
+    return PipelineLoader.load(RepoFixtures.examplePipeline("banking-rag.yaml"), "local");
   }
 
   @Test

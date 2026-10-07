@@ -220,6 +220,29 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.plugin.surefire.version}</version>
                 </plugin>
+                <!-- Integration tests live in *IT.java classes and run through failsafe only, so
+                     the default surefire run (whose include pattern does not match *IT.java)
+                     never discovers them and the integration-tests profile below never runs
+                     them twice. Failsafe shares surefire's version line. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${maven.plugin.surefire.version}</version>
+                    <configuration>
+                        <includes>
+                            <include>**/*IT.java</include>
+                        </includes>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>integration-tests</id>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-enforcer-plugin</artifactId>
@@ -368,6 +391,27 @@
             <properties>
                 <javadoc.sourceFileExclude>NOTHING_TO_EXCLUDE</javadoc.sourceFileExclude>
             </properties>
+        </profile>
+
+        <!-- Runs the *IT.java classes of every module through maven-failsafe-plugin in the
+             integration-test and verify phases, on top of the unit suite:
+                 ./mvnw -f reactor/pom.xml verify -P integration-tests
+             The classes start the services they need (PostgreSQL, pgvector, Redis, Qdrant,
+             Fluss) through Testcontainers and fail with an explicit message when no container
+             runtime is reachable; they never skip themselves. Locally that runtime is Podman:
+                 export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+                 export TESTCONTAINERS_RYUK_DISABLED=true
+             See docs/testing.md. -->
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
 
         <!-- The Quarkus A2A gateway is part of the reactor but opt-in: it is the slowest module

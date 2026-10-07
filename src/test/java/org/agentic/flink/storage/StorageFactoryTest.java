@@ -3,7 +3,9 @@ package org.agentic.flink.storage;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.agentic.flink.storage.memory.InMemoryShortTermStore;
 import org.junit.jupiter.api.*;
 
@@ -106,37 +108,22 @@ class StorageFactoryTest {
   }
 
   @Test
-  @DisplayName("Should create PostgreSQL long-term store when configured")
-  void testCreatePostgresLongTermStore() throws Exception {
-    config.put("postgres.url", "jdbc:h2:mem:testdb;MODE=PostgreSQL");
-    config.put("postgres.user", "sa");
-    config.put("postgres.password", "");
-    config.put("postgres.auto.create.tables", "true");
+  @DisplayName("A configured but unreachable PostgreSQL long-term store fails loudly, not silently")
+  void testUnreachablePostgresLongTermStoreFailsLoudly() throws Exception {
+    int closedPort;
+    try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+      closedPort = socket.getLocalPort();
+    }
+    config.put("postgres.url", "jdbc:postgresql://127.0.0.1:" + closedPort + "/agentic");
+    config.put("postgres.user", "agentic");
+    config.put("postgres.password", UUID.randomUUID().toString());
 
-    LongTermMemoryStore store = StorageFactory.createLongTermStore("postgresql", config);
-
-    assertNotNull(store);
-    assertEquals(StorageTier.WARM, store.getTier());
-    assertEquals(10, store.getExpectedLatencyMs());
-    assertTrue(store.getProviderName().contains("Postgres"));
-
-    store.close();
-  }
-
-  @Test
-  @DisplayName("Should create PostgreSQL store with 'postgres' alias")
-  void testCreatePostgresLongTermStoreAlias() throws Exception {
-    config.put("postgres.url", "jdbc:h2:mem:testdb2;MODE=PostgreSQL");
-    config.put("postgres.user", "sa");
-    config.put("postgres.password", "");
-
-    // Both "postgresql" and "postgres" should work
-    LongTermMemoryStore store = StorageFactory.createLongTermStore("postgres", config);
-
-    assertNotNull(store);
-    assertEquals(StorageTier.WARM, store.getTier());
-
-    store.close();
+    for (String backend : List.of("postgres", "postgresql")) {
+      assertThrows(
+          Exception.class,
+          () -> StorageFactory.createLongTermStore(backend, config),
+          backend + " must not return a store that cannot reach its database");
+    }
   }
 
   // ==================== Error Handling Tests ====================

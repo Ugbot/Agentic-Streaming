@@ -240,7 +240,7 @@ CorpusSpec corpus = ExternalCorpus.spec(
 ```
 
 `pgvector` registers via `META-INF/services`. The schema (`agent_vectors`
-table + ivfflat index) is created on first use.
+table + HNSW cosine index) is created on first use.
 
 ### 13. Web fetch as an LLM tool
 

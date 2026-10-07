@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -15,20 +14,17 @@ import org.jagentic.core.Runtime;
 import org.jagentic.core.pipeline.Backends;
 import org.jagentic.core.pipeline.GraphBuilder;
 import org.jagentic.core.pipeline.PipelineLoader;
+import org.jagentic.pekko.testing.RepoFixtures;
 
 /** Proves {@code backend: pekko} resolves through the core's ServiceLoader fallback (our
  * {@link PekkoBackendProvider}) and that the shared banking.yaml routes identically on the Pekko
- * actor runtime as it would on LocalRuntime. */
+ * actor runtime as it would on LocalRuntime. Fixtures come from the repository root via
+ * {@link RepoFixtures}, so a missing YAML fails regardless of the working directory. */
 class PekkoBackendPipelineTest {
-
-  // examples/pipelines/*.yaml, relative to the agentic-pekko module dir
-  private static final Path PIPELINES = Path.of("..", "examples", "pipelines");
-  private static final Path BANKING = PIPELINES.resolve("banking.yaml");
 
   @Test
   void backendPekkoRunsDeclarativeCepFromIncidentYaml() {
-    Path yaml = PIPELINES.resolve("incident.yaml");
-    assertTrue(Files.exists(yaml), () -> "incident.yaml not found at " + yaml.toAbsolutePath());
+    Path yaml = RepoFixtures.examplePipeline("incident.yaml");
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       assertEquals("pekko", sys.backendName);
@@ -49,8 +45,8 @@ class PekkoBackendPipelineTest {
 
   @Test
   void backendPekkoRunsTheSharedBankingYaml() {
-    assertTrue(Files.exists(BANKING), () -> "banking.yaml not found at " + BANKING.toAbsolutePath());
-    PipelineLoader.PipelineSystem sys = PipelineLoader.load(BANKING, "pekko");
+    Path yaml = RepoFixtures.examplePipeline("banking.yaml");
+    PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       assertEquals("pekko", sys.backendName);
       assertTrue(sys.runtime instanceof PekkoRuntime, "expected a PekkoRuntime via the SPI");
@@ -64,8 +60,7 @@ class PekkoBackendPipelineTest {
 
   @Test
   void backendPekkoRunsTheLlmYaml() {
-    Path yaml = PIPELINES.resolve("banking-llm.yaml");
-    assertTrue(Files.exists(yaml), () -> "banking-llm.yaml not found at " + yaml.toAbsolutePath());
+    Path yaml = RepoFixtures.examplePipeline("banking-llm.yaml");
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       Event e = new Event("c1", "demo", "what is my balance?");
@@ -80,8 +75,7 @@ class PekkoBackendPipelineTest {
 
   @Test
   void backendPekkoRunsTheRagYamlWithColdTierRecall() {
-    Path yaml = PIPELINES.resolve("banking-rag.yaml");
-    assertTrue(Files.exists(yaml), () -> "banking-rag.yaml not found at " + yaml.toAbsolutePath());
+    Path yaml = RepoFixtures.examplePipeline("banking-rag.yaml");
     PipelineLoader.PipelineSystem sys = PipelineLoader.load(yaml, "pekko");
     try {
       // skills + HNSW cold tier + context-window + classifier guardrail, all on the actor runtime.

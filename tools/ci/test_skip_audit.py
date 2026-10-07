@@ -62,8 +62,6 @@ def test_allowlist_file_parses_and_every_block_starts_with_a_reason():
     f"requires ['{_word()}'], declared unsupported",
     "Ollama not reachable / model not pulled: connect refused",
     "Requires running Ollama instance with qwen2.5:latest",
-    f"Fluss not reachable at localhost:{random.randint(1024, 65535)} — skipping",
-    "Assumption failed: Fluss not reachable at localhost:9123 — skipping",
     "could not import 'litellm': No module named 'litellm'",
     "Environment variable [AGENTIC_PEKKO_INTEGRATION] does not exist",
 ])
@@ -76,6 +74,7 @@ def test_declared_capability_and_documented_skips_are_allowed(tmp_path: Path, me
 
 @pytest.mark.parametrize("message", [
     f"Postgres not reachable: Connection to localhost:{random.randint(1024, 65535)} refused",
+    f"Fluss not reachable at localhost:{random.randint(1024, 65535)} — skipping",
     "Redis/Valkey not reachable: Failed to connect",
     "Qdrant not reachable: java.net.ConnectException",
     "no Redis on localhost:6379 — skipping",
