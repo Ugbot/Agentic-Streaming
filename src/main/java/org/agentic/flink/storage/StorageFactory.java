@@ -6,6 +6,7 @@ import java.util.NoSuchElementException;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.storage.memory.InMemoryLongTermStore;
 import org.agentic.flink.storage.memory.InMemoryShortTermStore;
 import org.agentic.flink.storage.postgres.PostgresConversationStore;
@@ -35,6 +36,7 @@ import org.slf4j.LoggerFactory;
  * skips a provider whose class fails to load, link or construct (optional backend on the classpath
  * without its driver) and keeps iterating, so one broken optional backend never hides the others.
  */
+@Public
 public final class StorageFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(StorageFactory.class);

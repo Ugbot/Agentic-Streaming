@@ -3,6 +3,7 @@ package org.agentic.flink.channel;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import org.agentic.flink.annotation.Internal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
@@ -32,6 +33,7 @@ import org.zeromq.ZMQ;
  * <p>The proxy is intended for the notebook control plane / dev loop; for production stand up a
  * dedicated broker.
  */
+@Internal
 public final class ZeroMqProxy implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(ZeroMqProxy.class);
   private static final AtomicLong IDS = new AtomicLong();

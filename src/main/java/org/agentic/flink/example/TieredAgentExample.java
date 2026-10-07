@@ -7,6 +7,7 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import java.time.Duration;
 import java.util.*;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -45,6 +46,7 @@ import org.apache.flink.util.Collector;
  *
  * @author Agentic Flink Team
  */
+@Internal
 public class TieredAgentExample {
 
   public static void main(String[] args) throws Exception {

@@ -3,6 +3,7 @@ package org.agentic.flink.memory.conversation;
 import java.util.Iterator;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+import org.agentic.flink.annotation.Public;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
  * {@link LinkageError} from {@code hasNext()} and a {@link ServiceConfigurationError} from {@code
  * next()}, so both calls are guarded.
  */
+@Public
 public final class ConversationStores {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConversationStores.class);

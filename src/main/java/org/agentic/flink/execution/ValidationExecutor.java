@@ -1,6 +1,7 @@
 package org.agentic.flink.execution;
 
 import java.io.Serializable;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.inference.ValidationVerdict;
 import org.slf4j.Logger;
@@ -32,7 +33,8 @@ import org.slf4j.LoggerFactory;
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
-@Deprecated
+@Deprecated(since = "1.0.0")
+@Public
 public class ValidationExecutor implements Serializable {
 
   private static final long serialVersionUID = 1L;

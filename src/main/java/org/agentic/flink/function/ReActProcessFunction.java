@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.inference.Guardrail;
 import org.agentic.flink.inference.Guardrails;
@@ -51,6 +52,7 @@ import org.slf4j.LoggerFactory;
  * loop and the transcript records only the guardrail's redacted text, never the raw model output,
  * so a replay or the next prompt built from the transcript cannot leak it.
  */
+@Internal
 public final class ReActProcessFunction<E> extends KeyedProcessFunction<String, E, E> {
 
   private static final long serialVersionUID = 1L;
