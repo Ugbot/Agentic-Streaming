@@ -14,7 +14,7 @@ import org.apache.flink.util.Collector;
  * field written by {@link org.agentic.flink.stream.AgentExecutionFunction}: {@code timeout} goes to
  * {@link AgentJobGenerator#TIMEOUT_TAG}, everything else to {@link
  * AgentJobGenerator#VALIDATION_FAILURES_TAG}. CEP pattern timeouts and compensation requests
- * emitted by {@link AgentExecutionFunction} are forwarded to their tags unchanged.
+ * emitted by {@link AgentTurnDispatcher} are forwarded to their tags unchanged.
  *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.

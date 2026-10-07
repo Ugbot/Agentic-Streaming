@@ -41,10 +41,10 @@ class LegacyCepFunctionsTest {
   /** Runs a {@link PatternProcessFunction} inside a keyed operator so it gets real keyed state. */
   static final class Adapter extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
     private static final long serialVersionUID = 1L;
-    final AgentExecutionFunction delegate;
+    final AgentTurnDispatcher delegate;
     final List<AgentEvent> sideOutputs = new ArrayList<>();
 
-    Adapter(AgentExecutionFunction delegate) {
+    Adapter(AgentTurnDispatcher delegate) {
       this.delegate = delegate;
     }
 
@@ -104,12 +104,12 @@ class LegacyCepFunctionsTest {
             .withSystemPrompt("s")
             .withStateMachine(AgentExecutorTest.stateMachine())
             .build();
-    AgentExecutionFunction fn =
-        new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ofMinutes(5));
+    AgentTurnDispatcher fn =
+        new AgentTurnDispatcher(agent, ToolRegistry.empty(), Duration.ofMinutes(5));
     assertEquals(Duration.ofMinutes(5), fn.getDedupTtl());
     assertThrows(
         IllegalArgumentException.class,
-        () -> new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ZERO));
+        () -> new AgentTurnDispatcher(agent, ToolRegistry.empty(), Duration.ZERO));
 
     try (KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h =
         new KeyedOneInputStreamOperatorTestHarness<>(
@@ -129,7 +129,7 @@ class LegacyCepFunctionsTest {
       for (AgentEvent e : out) {
         assertEquals(AgentEventType.FLOW_STARTED, e.getEventType());
         assertEquals(agent.getAgentId(), e.getAgentId());
-        assertEquals(turn, e.getData(AgentExecutionFunction.REQUEST_TURN_ID));
+        assertEquals(turn, e.getData(AgentTurnDispatcher.REQUEST_TURN_ID));
         assertEquals(AgentState.EXECUTING.name(), e.getMetadata("state"));
       }
     }
@@ -144,8 +144,8 @@ class LegacyCepFunctionsTest {
             .withStateMachine(AgentExecutorTest.stateMachine())
             .build();
     long ttl = ThreadLocalRandom.current().nextLong(1_000, 10_000);
-    AgentExecutionFunction fn =
-        new AgentExecutionFunction(agent, ToolRegistry.empty(), Duration.ofMillis(ttl));
+    AgentTurnDispatcher fn =
+        new AgentTurnDispatcher(agent, ToolRegistry.empty(), Duration.ofMillis(ttl));
     try (KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h =
         new KeyedOneInputStreamOperatorTestHarness<>(
             new KeyedProcessOperator<>(new Adapter(fn)), AgentEvent::getFlowId, Types.STRING)) {

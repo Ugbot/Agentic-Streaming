@@ -84,7 +84,6 @@ public class DeclarativeAgentExample {
             .withTools("web-search", "document-analysis", "synthesis")
             .withMaxIterations(10)
             .withTimeout(Duration.ofMinutes(5))
-            .withValidationEnabled(true)
             .withMaxValidationAttempts(3)
             .build();
 

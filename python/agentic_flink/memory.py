@@ -1,9 +1,10 @@
 """Memory specs — short-term and vector.
 
 Thin factory functions that return live Java
-:class:`ShortTermMemorySpec` / :class:`VectorMemorySpec` instances. Pass
-them straight to :meth:`AgentBuilder.with_short_term_memory` /
-:meth:`AgentBuilder.with_vector_memory`.
+:class:`ShortTermMemorySpec` / :class:`VectorMemorySpec` instances for the
+memory operators (``FlinkStateShortTermMemory``, ``FlinkStateVectorMemory``).
+The legacy ``AgentBuilder`` does not consume these specs; wire them into
+your own ``RichFunction.open()``.
 """
 
 from __future__ import annotations

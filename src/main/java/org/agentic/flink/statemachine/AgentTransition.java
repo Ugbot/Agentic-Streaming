@@ -425,15 +425,16 @@ public class AgentTransition implements Serializable {
   /**
    * Creates a failure with compensation transition.
    *
-   * <p>FAILED → COMPENSATING on any event (when compensation is enabled)
+   * <p>EXECUTING → COMPENSATING on FLOW_FAILED (added by the standard transitions when compensation
+   * is enabled)
    */
   public static AgentTransition failureWithCompensation() {
     return builder()
-        .from(AgentState.FAILED)
+        .from(AgentState.EXECUTING)
         .to(AgentState.COMPENSATING)
         .on(AgentEventType.FLOW_FAILED)
-        .when(event -> Boolean.TRUE.equals(event.getData().get("enable_compensation")))
         .withDescription("Failure detected, starting compensation")
+        .withPriority(10)
         .build();
   }
 
@@ -446,8 +447,121 @@ public class AgentTransition implements Serializable {
     return builder()
         .from(AgentState.COMPENSATING)
         .to(AgentState.COMPENSATED)
-        .on(AgentEventType.FLOW_COMPLETED) // Reuse event type
+        .on(AgentEventType.COMPENSATION_COMPLETED)
         .withDescription("Compensation completed successfully")
+        .build();
+  }
+
+  /**
+   * Creates the transition taken when the compensation operator reports a rolled back flow.
+   *
+   * <p>COMPENSATING → COMPENSATED on FLOW_COMPENSATED
+   */
+  public static AgentTransition flowCompensated() {
+    return builder()
+        .from(AgentState.COMPENSATING)
+        .to(AgentState.COMPENSATED)
+        .on(AgentEventType.FLOW_COMPENSATED)
+        .withDescription("Compensation operator rolled the flow back")
+        .build();
+  }
+
+  /**
+   * Creates the start transition of a flow.
+   *
+   * <p>INITIALIZED → EXECUTING on FLOW_STARTED
+   */
+  public static AgentTransition flowStarted() {
+    return builder()
+        .from(AgentState.INITIALIZED)
+        .to(AgentState.EXECUTING)
+        .on(AgentEventType.FLOW_STARTED)
+        .withDescription("Flow started, executing")
+        .build();
+  }
+
+  /**
+   * Creates the transition into validation.
+   *
+   * <p>EXECUTING → VALIDATING on VALIDATION_REQUESTED
+   */
+  public static AgentTransition validationRequested() {
+    return builder()
+        .from(AgentState.EXECUTING)
+        .to(AgentState.VALIDATING)
+        .on(AgentEventType.VALIDATION_REQUESTED)
+        .withDescription("Execution produced output, validating")
+        .build();
+  }
+
+  /**
+   * Creates the terminal failure transition used when compensation is disabled.
+   *
+   * <p>EXECUTING → FAILED on FLOW_FAILED
+   */
+  public static AgentTransition executionFailed() {
+    return builder()
+        .from(AgentState.EXECUTING)
+        .to(AgentState.FAILED)
+        .on(AgentEventType.FLOW_FAILED)
+        .withDescription("Execution failed, no compensation configured")
+        .withPriority(5)
+        .build();
+  }
+
+  /**
+   * Creates the pause transition.
+   *
+   * <p>EXECUTING → PAUSED on FLOW_PAUSED
+   */
+  public static AgentTransition flowPaused() {
+    return builder()
+        .from(AgentState.EXECUTING)
+        .to(AgentState.PAUSED)
+        .on(AgentEventType.FLOW_PAUSED)
+        .withDescription("Execution paused, waiting for an external event")
+        .build();
+  }
+
+  /**
+   * Creates the resume transition.
+   *
+   * <p>PAUSED → EXECUTING on FLOW_RESUMED
+   */
+  public static AgentTransition flowResumed() {
+    return builder()
+        .from(AgentState.PAUSED)
+        .to(AgentState.EXECUTING)
+        .on(AgentEventType.FLOW_RESUMED)
+        .withDescription("Execution resumed")
+        .build();
+  }
+
+  /**
+   * Creates the transition into state offloading.
+   *
+   * <p>EXECUTING → OFFLOADING on STATE_OFFLOAD_TRIGGERED
+   */
+  public static AgentTransition offloadTriggered() {
+    return builder()
+        .from(AgentState.EXECUTING)
+        .to(AgentState.OFFLOADING)
+        .on(AgentEventType.STATE_OFFLOAD_TRIGGERED)
+        .withDescription("Offloading state to long-term storage")
+        .build();
+  }
+
+  /**
+   * Creates the transition back from state offloading.
+   *
+   * <p>OFFLOADING → EXECUTING on STATE_OFFLOADED
+   */
+  public static AgentTransition offloadCompleted() {
+    return builder()
+        .from(AgentState.OFFLOADING)
+        .to(AgentState.EXECUTING)
+        .on(AgentEventType.STATE_OFFLOADED)
+        .withDescription("State offloaded, resuming execution")
         .build();
   }
 }

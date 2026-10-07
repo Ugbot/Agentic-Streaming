@@ -77,8 +77,8 @@ public class SupportTriageExample {
   /**
    * Single-shot triage flow: INITIALIZED starts execution, execution either completes or goes
    * through supervisor review, and every non-terminal state has a way out so the machine validates.
-   * {@code AgentStateMachine.Builder#withStandardTransitions()} has no transition out of
-   * INITIALIZED, PAUSED or OFFLOADING, so the builder default cannot be used here.
+   * The builder default ({@code AgentStateMachine.Builder#withStandardTransitions()}) would also
+   * work; this machine is narrower because triage never offloads or compensates.
    */
   static AgentStateMachine triageStateMachine() {
     return AgentStateMachine.builder()
@@ -199,7 +199,6 @@ public class SupportTriageExample {
             .withChatConnection(chatConn)
             .withChatSetup(chatSetup)
             .withInferenceTool(intentTool)
-            .withInferenceConnection("reranker", reranker)
             .withGuardrail(abuseFilter)
             .withListener(logger, metrics)
             .withMaxIterations(2)

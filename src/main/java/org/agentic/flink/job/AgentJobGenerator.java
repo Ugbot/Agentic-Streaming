@@ -8,6 +8,7 @@ import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.SupervisorChain;
+import org.agentic.flink.stream.CompensationFunction;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.cep.CEP;
 import org.apache.flink.cep.PatternStream;
@@ -210,7 +211,7 @@ public class AgentJobGenerator implements Serializable {
     // Pattern matches → execution requests (keyed, non-blocking, dedups redelivered turns)
     SingleOutputStreamOperator<AgentEvent> requests =
         patternStream
-            .process(new AgentExecutionFunction(agent, job.getToolRegistry()))
+            .process(new AgentTurnDispatcher(agent, job.getToolRegistry()))
             .name("dispatch-" + agent.getAgentId());
 
     // Execution requests → LLM/tool loop on the async operator with a cancelling timeout
@@ -225,12 +226,28 @@ public class AgentJobGenerator implements Serializable {
                 asyncCapacity)
             .name("execute-" + agent.getAgentId());
 
-    // Results plus CEP pattern timeouts and compensations → side output tags
+    // Results plus CEP pattern timeouts and compensations
+    DataStream<AgentEvent> merged =
+        results.union(
+            requests.getSideOutput(TIMEOUT_TAG), requests.getSideOutput(COMPENSATION_TAG));
+
+    // Compensation requests → registered compensating tools, executed in reverse call order.
+    // Non-compensation events pass through the operator unchanged.
+    if (agent.isCompensationEnabled()) {
+      CompensationFunction compensation = new CompensationFunction(job.getToolRegistry());
+      merged =
+          AsyncDataStream.unorderedWait(
+                  merged,
+                  compensation,
+                  asyncExecution.getTimeout().toMillis(),
+                  TimeUnit.MILLISECONDS,
+                  asyncCapacity)
+              .name("compensate-" + agent.getAgentId());
+    }
+
+    // → side output tags
     SingleOutputStreamOperator<AgentEvent> processedEvents =
-        results
-            .union(requests.getSideOutput(TIMEOUT_TAG), requests.getSideOutput(COMPENSATION_TAG))
-            .process(new AgentResultRouter())
-            .name("route-" + agent.getAgentId());
+        merged.process(new AgentResultRouter()).name("route-" + agent.getAgentId());
 
     // Wire storage if configured
     if (job.getStorageConfig() != null) {

@@ -47,7 +47,7 @@ Enable it with `-P flink-agents` after building Flink Agents from source.
 
 ## Key Patterns
 
-- **AgentBuilder DSL**: `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`
+- **AgentBuilder DSL** (legacy, supported pure-Flink API): `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`. Every public `withX` method is consumed by `AgentTurnDispatcher`, `stream.AgentExecutionFunction` or `stream.CompensationFunction`, and `src/test/java/org/agentic/flink/dsl/AgentBuilderTest` asserts each one; a builder method without a read site is a bug, not a feature.
 - **StorageFactory**: `StorageFactory.createLongTermStore("postgres", config)` -- factory for long-term backends (`memory`, `postgres`, `postgresql`). `createShortTermStore` accepts only `"memory"` and throws for anything else; short-term memory is Flink state (`FlinkStateShortTermMemory`)
 - **ToolExecutor interface**: Async tool execution via `CompletableFuture<Object> execute(Map<String, Object>)`
 - **@Tool annotations**: LangChain4J annotation-based tool discovery via ToolAnnotationRegistry
