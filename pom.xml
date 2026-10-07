@@ -588,7 +588,8 @@
                 </configuration>
             </plugin>
 
-            <!-- Google Java Format Plugin -->
+            <!-- Google Java Format. The default lifecycle only verifies formatting; run
+                 `./mvnw spotless:apply` to rewrite sources (CONTRIBUTING.md). -->
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
@@ -602,8 +603,10 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
                         <goals>
-                            <goal>apply</goal>
+                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>

@@ -684,15 +684,73 @@ In development:
   `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests` (see [docs/getting-started.md](docs/getting-started.md))
 - Clojure CLI (tools.deps) for Agentic Clojure under `agentic-clj/`
 - Go 1.24+ for the experimental Go core, gateway, and engines under `ports/experimental/go/`
-- Python 3.11+ for the pure-Python cores, ports, and the FastAPI gateway
+- Python 3.11+ for the pure-Python cores, ports, and the FastAPI gateway (the packages
+  themselves declare `>=3.9` or `>=3.10`; see [docs/versioning.md](docs/versioning.md))
 - Podman (with `podman compose`) for the optional Postgres, Redis, Ollama, and NATS services
 - Ollama for the local LLM examples
 
+## Install
+
+Nothing is published yet: there are no releases on Maven Central, PyPI or Clojars and no git
+tags. Every artifact is built from a checkout. The version of every JVM module is
+`1.0.0-SNAPSHOT`; the Python and Clojure artifacts build as development versions until a tag
+exists ([docs/release.md](docs/release.md)).
+
+**Java, any JVM module.** Install the reactor into your local Maven repository once, then
+depend on the module you need. The Flink framework is `org.jagentic:agentic-flink`; the
+portable core is `org.jagentic:jagentic-core`; the actor runtime is `org.jagentic:agentic-pekko`.
+
+```bash
+git clone https://github.com/Ugbot/Agentic-Streaming.git
+cd Agentic-Streaming
+./mvnw -f reactor/pom.xml -DskipTests install
+```
+
+```xml
+<dependency>
+  <groupId>org.jagentic</groupId>
+  <artifactId>agentic-flink</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+The same command installs a `-sources.jar` and a `-javadoc.jar` next to each module jar
+(`banking-job` has no Java sources and gets only the former). For
+`flink run`, the shaded jar is `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar` (it excludes the
+Flink runtime a cluster provides).
+
+**Python, from the checkout.** Four distributions; the two Flink facades need the uber jar
+from the Maven build above.
+
+```bash
+python -m pip install -e ports/pyagentic          # pyagentic: the pure Python core (spec runtime)
+python -m pip install -e ports/agentic-pipeline   # agentic-pipeline: the pipeline.yaml CLI (needs pyagentic)
+python -m pip install -e python                   # agentic-flink: JPype facade over the Flink framework
+python -m pip install -e pyflink                  # agentic-pyflink: the PyFlink binding
+```
+
+**Clojure, as a git dependency.** `agentic-clj` lives in a subdirectory, so the coordinate
+needs `:deps/root`; pin the commit you want with `:git/sha`.
+
+```clojure
+{:deps {io.github.ugbot/agentic-clj
+        {:git/url "https://github.com/Ugbot/Agentic-Streaming.git"
+         :git/sha "<commit sha>"
+         :deps/root "agentic-clj"}}}
+```
+
+A local jar with the same `io.github.ugbot/agentic-clj` coordinate comes from
+`clojure -T:build install` inside `agentic-clj/` ([agentic-clj/README.md](agentic-clj/README.md)).
+
 ## Contributing
 
-Contributions are welcome; open an issue or a PR. Additional `ChatConnection`,
-`EmbeddingConnection`, `LongTermMemoryStore`, `VectorStore`, `InferenceConnection`, and
-`Channel<T>` implementations are especially useful.
+Contributions are welcome; open an issue or a PR. [CONTRIBUTING.md](CONTRIBUTING.md) describes
+the toolchain, every local check and what a pull request needs; the versioning and deprecation
+rules are in [docs/versioning.md](docs/versioning.md), the changes so far in
+[CHANGELOG.md](CHANGELOG.md), and vulnerability reporting in [SECURITY.md](SECURITY.md).
+Participation is subject to the [code of conduct](CODE_OF_CONDUCT.md). Additional
+`ChatConnection`, `EmbeddingConnection`, `LongTermMemoryStore`, `VectorStore`,
+`InferenceConnection`, and `Channel<T>` implementations are especially useful.
 
 ## License
 

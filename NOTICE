@@ -1,0 +1,88 @@
+Agentic Streaming
+Copyright 2026 Ben Gamble and the Agentic Streaming contributors
+
+This product is licensed under the Apache License, Version 2.0 (see the LICENSE file at the
+root of the repository and the `licenses` element of reactor/pom.xml).
+
+The source repository contains only code written for this project. The binary artifacts
+below bundle third-party components, and this file names them so that a consumer of a
+shaded jar can see what it contains.
+
+Shaded artifacts
+----------------
+
+1. target/agentic-flink-1.0.0-SNAPSHOT-uber.jar (the root pom.xml, maven-shade-plugin,
+   classifier `uber`). The main artifact agentic-flink-1.0.0-SNAPSHOT.jar is thin and
+   bundles nothing. The uber jar packs every compile-scope dependency of the Flink
+   framework module, including the optional ones, together with their transitive closure.
+   The shade configuration excludes org.apache.flink:flink-shaded-force-shading,
+   com.google.code.findbugs:jsr305, org.slf4j:* and org.apache.logging.log4j:* (logging
+   is provided by the Flink distribution at run time) and strips signature files.
+
+2. banking-job/target/banking-job.jar (banking-job/pom.xml, maven-shade-plugin). Packs the
+   thin agentic-flink jar, org.apache.flink:flink-streaming-java,
+   org.apache.flink:flink-clients, redis.clients:jedis, Log4j 2 and their transitive
+   closure into one runnable jar.
+
+Direct third-party components bundled by the uber jar
+-----------------------------------------------------
+
+The list below is the set of direct compile-scope dependencies of the root pom.xml at the
+versions resolved by `./mvnw dependency:list -DexcludeTransitive=true -DincludeScope=runtime`,
+with the license each project declares in its published POM. Components marked (optional)
+are optional dependencies of the framework that the shade plugin nevertheless bundles.
+
+Apache License, Version 2.0:
+- Apache Flink CEP (org.apache.flink:flink-cep 2.2.1)
+- Apache Flink Kafka connector (org.apache.flink:flink-connector-kafka 5.0.0-2.2) (optional)
+- LangChain4j and its Ollama, OpenAI, Anthropic and Google AI Gemini modules
+  (dev.langchain4j:* 1.16.3)
+- Jackson databind, YAML dataformat and parameter-names module
+  (com.fasterxml.jackson.*:* 2.18.10)
+- HikariCP (com.zaxxer:HikariCP 5.0.1)
+- Apache Commons IO (commons-io:commons-io 2.16.1) (optional)
+- Apache Tika core and standard parsers (org.apache.tika:* 2.9.2) (optional)
+- crawler-commons (com.github.crawler-commons:crawler-commons 1.4) (optional)
+- Deep Java Library API, HuggingFace tokenizers and PyTorch engine (ai.djl*:* 0.30.0)
+  (optional)
+- Qdrant Java client (io.qdrant:client 1.11.0) (optional)
+- Milvus Java SDK (io.milvus:milvus-sdk-java 2.4.8) (optional)
+- Apache Fluss client (com.alibaba.fluss:fluss-client 0.7.0) (optional)
+- PEMJA (com.alibaba:pemja 0.4.1) (optional)
+- A2A Java SDK spec, client and JSON-RPC, gRPC and REST client transports
+  (io.github.a2asdk:* 1.0.0.Alpha3) (optional)
+
+MIT License:
+- Jedis (redis.clients:jedis 5.1.0) (optional)
+- jsoup (org.jsoup:jsoup 1.18.1) (optional)
+- Pickle (net.razorvine:pickle 1.5) (optional)
+
+BSD 2-Clause License:
+- PostgreSQL JDBC Driver (org.postgresql:postgresql 42.7.13)
+
+Mozilla Public License 2.0:
+- JeroMQ (org.zeromq:jeromq 0.6.0) (optional)
+
+WTFPL and Apache License, Version 2.0 (dual licensed):
+- Reflections (org.reflections:reflections 0.10.2)
+
+Transitive components
+---------------------
+
+The transitive closure of the components above (Netty, Guava, Protocol Buffers, gRPC,
+Apache Hadoop and Parquet client libraries pulled in by Tika and Flink, Jetty, PDFBox, and
+others) is also bundled. Their license texts and notices are carried inside the jar under
+META-INF/ (META-INF/LICENSE*, META-INF/NOTICE*, META-INF/licenses/ and
+META-INF/license/) because the shade plugin keeps those resources. Run
+`unzip -l target/agentic-flink-1.0.0-SNAPSHOT-uber.jar | grep META-INF/maven/` for the
+complete list of bundled Maven coordinates in a given build.
+
+The other modules of the reactor (ports/jagentic-core, agentic-pekko, pyflink/java,
+tool-services-packs) build thin jars and bundle no third-party code. The Quarkus modules
+(tool-services/tool-services-app, and a2a-gateway behind the a2a-gateway profile) build a
+target/quarkus-app/ directory whose lib/ folder holds the dependency jars unchanged, each
+with its own license files.
+
+The Python distributions (pyagentic, agentic-flink, agentic-pyflink, agentic-pipeline)
+bundle no third-party code except that the agentic-flink wheel carries the uber jar
+described above as package data (python/setup.py).

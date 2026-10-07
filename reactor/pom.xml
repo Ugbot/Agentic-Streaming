@@ -13,6 +13,36 @@
         `./mvnw -f reactor/pom.xml verify` from the repository root builds the whole tree in
         dependency order; each module still builds on its own with `./mvnw -f MODULE/pom.xml`
         once its upstream modules are installed.</description>
+    <url>https://github.com/Ugbot/Agentic-Streaming</url>
+    <inceptionYear>2026</inceptionYear>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>Ugbot</id>
+            <name>Ben Gamble</name>
+            <url>https://github.com/Ugbot</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/Ugbot/Agentic-Streaming.git</connection>
+        <developerConnection>scm:git:git@github.com:Ugbot/Agentic-Streaming.git</developerConnection>
+        <url>https://github.com/Ugbot/Agentic-Streaming</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/Ugbot/Agentic-Streaming/issues</url>
+    </issueManagement>
 
     <!--
     Layout decision (C1). The root pom.xml stays the Flink framework module (its sources live at
@@ -64,6 +94,19 @@
         <maven.plugin.shade.version>3.6.0</maven.plugin.shade.version>
         <maven.plugin.exec.version>3.2.0</maven.plugin.exec.version>
         <maven.plugin.install.version>3.1.4</maven.plugin.install.version>
+        <maven.plugin.source.version>3.3.1</maven.plugin.source.version>
+        <maven.plugin.javadoc.version>3.11.2</maven.plugin.javadoc.version>
+
+        <!-- Javadoc lint level for the -javadoc.jar built with every module. The default keeps
+             the jar building on modules whose comments still have lint errors; the strict-javadoc
+             profile below turns those into build failures. -->
+        <javadoc.doclint>none</javadoc.doclint>
+        <javadoc.failOnError>false</javadoc.failOnError>
+        <javadoc.failOnWarnings>false</javadoc.failOnWarnings>
+        <!-- The optional Flink Agents plugin under the root module is excluded from compilation
+             unless the flink-agents profile is active (root pom.xml, maven-compiler-plugin); the
+             Javadoc run must skip the same sources or it fails on their unresolved imports. -->
+        <javadoc.sourceFileExclude>**/plugins/flintagents/**</javadoc.sourceFileExclude>
     </properties>
 
     <build>
@@ -103,6 +146,16 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-install-plugin</artifactId>
                     <version>${maven.plugin.install.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>${maven.plugin.source.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>${maven.plugin.javadoc.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -157,10 +210,68 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Every jar module also produces MODULE-VERSION-sources.jar and MODULE-VERSION-javadoc.jar
+                 at package time (both goals skip pom packaging). Doclint is controlled by the
+                 javadoc.* properties above; `-P strict-javadoc` fails the build on Javadoc errors. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <doclint>${javadoc.doclint}</doclint>
+                    <failOnError>${javadoc.failOnError}</failOnError>
+                    <failOnWarnings>${javadoc.failOnWarnings}</failOnWarnings>
+                    <sourceFileExcludes>
+                        <sourceFileExclude>${javadoc.sourceFileExclude}</sourceFileExclude>
+                    </sourceFileExcludes>
+                    <quiet>true</quiet>
+                    <notimestamp>true</notimestamp>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
     <profiles>
+        <!-- Javadoc as a gate: every doclint group except `missing` (undocumented members are not
+             an error here), and any error fails the build.
+                 ./mvnw -f reactor/pom.xml -DskipTests -P strict-javadoc package -pl ../ports/jagentic-core -->
+        <profile>
+            <id>strict-javadoc</id>
+            <properties>
+                <javadoc.doclint>all,-missing</javadoc.doclint>
+                <javadoc.failOnError>true</javadoc.failOnError>
+                <javadoc.failOnWarnings>true</javadoc.failOnWarnings>
+            </properties>
+        </profile>
+
+        <!-- Companion of the root module's flink-agents profile (same id, activated by the same
+             -P flag): when the plugin sources are compiled they are documented as well. -->
+        <profile>
+            <id>flink-agents</id>
+            <properties>
+                <javadoc.sourceFileExclude>NOTHING_TO_EXCLUDE</javadoc.sourceFileExclude>
+            </properties>
+        </profile>
+
         <!-- The Quarkus A2A gateway is part of the reactor but opt-in: it is the slowest module
              (Quarkus augmentation plus its own Flink stack) and nothing else depends on it.
                  ./mvnw -f reactor/pom.xml -P a2a-gateway verify -->
