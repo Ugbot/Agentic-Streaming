@@ -62,6 +62,13 @@ Configuration keys use dot-separated lowercase notation. The corresponding envir
 | `a2a.bridge.request.endpoint` | `AGENTIC_FLINK_A2A_BRIDGE_REQUEST_ENDPOINT` |
 | `a2a.bridge.response.endpoint` | `AGENTIC_FLINK_A2A_BRIDGE_RESPONSE_ENDPOINT` |
 | `a2a.task.store` | `AGENTIC_FLINK_A2A_TASK_STORE` |
+| `checkpoint.enabled` | `AGENTIC_FLINK_CHECKPOINT_ENABLED` |
+| `checkpoint.interval.ms` | `AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS` |
+| `checkpoint.min.pause.ms` | `AGENTIC_FLINK_CHECKPOINT_MIN_PAUSE_MS` |
+| `checkpoint.timeout.ms` | `AGENTIC_FLINK_CHECKPOINT_TIMEOUT_MS` |
+| `checkpoint.retention` | `AGENTIC_FLINK_CHECKPOINT_RETENTION` |
+| `checkpoint.storage.dir` | `AGENTIC_FLINK_CHECKPOINT_STORAGE_DIR` |
+| `checkpoint.state.backend` | `AGENTIC_FLINK_CHECKPOINT_STATE_BACKEND` |
 <!-- /env-vars -->
 
 System properties use the prefix `agentic.flink.` followed by the key verbatim (e.g., `-Dagentic.flink.ollama.base.url=http://my-ollama:11434`).
@@ -104,6 +111,54 @@ System properties use the prefix `agentic.flink.` followed by the key verbatim (
 |---|---|---|
 | `openai.api.key` | _(none)_ | OpenAI API key. No default; required only if using OpenAI models |
 | `openai.model` | `gpt-5.4-mini` | OpenAI model name (current options: `gpt-5.5`, `gpt-5.4`/`-mini`/`-nano`) |
+
+### Checkpointing and State Backend (Fault Tolerance)
+
+Every job entry point in the framework applies `org.agentic.flink.job.FlinkJobDefaults` to its
+`StreamExecutionEnvironment`: `AgentJobGenerator` (legacy `AgentJob` builder DSL),
+`ResearchPipelineJob`, `LocalWorkflowSession` and the `FlinkPipelineRunner` main (agentic/v1),
+`SessionJobLauncher`, and the banking job main. The defaults configure exactly-once checkpointing
+with the values below. `AgentJob.builder().withJobDefaults(...)` overrides them per job; otherwise
+they are read from the job's `AgenticFlinkConfig` or, when none is set, from the process
+environment.
+
+| Key | Default | Description |
+|---|---|---|
+| `checkpoint.enabled` | `true` | Set to `false` to run without checkpoints. This is the only way to disable them, it is logged at WARN level on every job start, and any value other than `true` or `false` is rejected |
+| `checkpoint.interval.ms` | `10000` | Time between checkpoints in milliseconds. Must be positive |
+| `checkpoint.min.pause.ms` | `1000` | Minimum pause between the end of one checkpoint and the start of the next. Must not be negative |
+| `checkpoint.timeout.ms` | `600000` | A checkpoint that takes longer is aborted. Must be positive |
+| `checkpoint.retention` | `retain` | Externalized checkpoint retention: `retain` keeps the last checkpoint when the job is cancelled, `delete` removes it on cancellation, `none` writes no externalized checkpoints |
+| `checkpoint.storage.dir` | _(none)_ | Checkpoint directory URI (`file:///...`, `s3://...`, `hdfs://...`). Without it the framework uses `${java.io.tmpdir}/agentic-flink/checkpoints` and logs the location; that is only adequate for recovery on the same host, so production deployments set a shared durable location |
+| `checkpoint.state.backend` | `hashmap` | `hashmap` (heap), `rocksdb` or `forst`. The non-default backends need their Flink artifact on the job classpath, see below |
+| `checkpoint.state.backend.incremental` | `true` | Incremental checkpoints for backends that support them (`rocksdb`, `forst`). Ignored by `hashmap` |
+
+Malformed numbers, negative or zero durations, unknown retention or backend names, and a
+missing backend artifact make `FlinkJobDefaults.fromConfig` throw at job construction time.
+Nothing falls back to running without checkpoints or to a different backend without saying so.
+
+State backend artifacts (the framework does not ship them, add the one you select to the job
+classpath at the Flink version in use, 2.2.1):
+
+```xml
+<dependency>
+  <groupId>org.apache.flink</groupId>
+  <artifactId>flink-statebackend-rocksdb</artifactId>
+  <version>2.2.1</version>
+</dependency>
+```
+
+```xml
+<dependency>
+  <groupId>org.apache.flink</groupId>
+  <artifactId>flink-statebackend-forst</artifactId>
+  <version>2.2.1</version>
+</dependency>
+```
+
+When `checkpoint.state.backend=rocksdb` (or `forst`) is set and the artifact is missing, job
+construction fails with a message that names the artifact. The `hashmap` backend keeps state on
+the JVM heap and needs no extra dependency.
 
 ## Creating a Configuration Instance
 
@@ -179,6 +234,8 @@ The returned map contains every key that has a resolved non-null value, combinin
 | `get(key)` | `String` | Returns resolved value or `null` |
 | `get(key, defaultValue)` | `String` | Returns resolved value or the provided default |
 | `getInt(key, defaultValue)` | `int` | Parses as integer; returns default on missing or unparseable values |
+| `getLong(key, defaultValue)` | `long` | Parses as long; returns default when missing, throws `IllegalArgumentException` when unparseable |
+| `getBoolean(key, defaultValue)` | `boolean` | Accepts `true` or `false` (case insensitive); returns default when missing, throws `IllegalArgumentException` for any other value |
 | `toMap()` | `Map<String, String>` | Exports all resolved key-value pairs as an unmodifiable map |
 
 ## Example .env File
@@ -207,6 +264,12 @@ AGENTIC_FLINK_QDRANT_PORT=6333
 # OpenAI (optional -- only if using OpenAI models)
 # AGENTIC_FLINK_OPENAI_API_KEY=sk-...
 # AGENTIC_FLINK_OPENAI_MODEL=gpt-5.4-mini
+
+# Checkpointing (exactly-once, enabled by default)
+AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS=10000
+AGENTIC_FLINK_CHECKPOINT_STORAGE_DIR=file:///var/lib/agentic-flink/checkpoints
+# AGENTIC_FLINK_CHECKPOINT_STATE_BACKEND=rocksdb   # needs flink-statebackend-rocksdb on the classpath
+# AGENTIC_FLINK_CHECKPOINT_ENABLED=false           # explicit opt-out, logged at WARN
 ```
 
 ## File Locations

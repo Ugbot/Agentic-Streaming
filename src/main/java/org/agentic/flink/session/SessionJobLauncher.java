@@ -22,6 +22,7 @@ import org.agentic.flink.example.markets.stage.AgenticMarketAgentFn;
 import org.agentic.flink.example.markets.stage.EnrichmentFn;
 import org.agentic.flink.example.markets.stage.FeatureAggregatorFn;
 import org.agentic.flink.example.markets.stage.TopNRankerFn;
+import org.agentic.flink.job.FlinkJobDefaults;
 import org.agentic.flink.operator.wiring.AgenticPipeline;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
@@ -65,6 +66,7 @@ public final class SessionJobLauncher {
   public static void main(String[] args) throws Exception {
     Args a = Args.parse(args);
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    FlinkJobDefaults.fromEnvironment().apply(env);
     String level = a.require("level");
     String jobName = a.opt("name").orElse("agentic-" + level);
     LOG.info("SessionJobLauncher level={} args={}", level, a);

@@ -116,6 +116,7 @@ public class ResearchPipelineJob implements Serializable {
 
     LOG.info("Starting Research Pipeline (direct search) for collection: {}", collectionName);
 
+    FlinkJobDefaults.fromConfig(config).apply(env);
     Map<String, String> toolConfig = buildToolConfig();
 
     // Stream 1: Document ingestion -- unordered for maximum throughput
@@ -167,6 +168,7 @@ public class ResearchPipelineJob implements Serializable {
 
     LOG.info("Starting Research Pipeline (agent-based recall) for collection: {}", collectionName);
 
+    FlinkJobDefaults.fromConfig(config).apply(env);
     Map<String, String> toolConfig = buildToolConfig();
 
     // Stream 1: Document ingestion (same as direct mode)
