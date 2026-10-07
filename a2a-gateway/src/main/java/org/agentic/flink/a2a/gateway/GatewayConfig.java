@@ -1,6 +1,8 @@
 package org.agentic.flink.a2a.gateway;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.ArrayList;
+import java.util.List;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 
@@ -10,9 +12,23 @@ import org.agentic.flink.config.ConfigKeys;
  *
  * <p>Covers the published Agent Card identity, the {@code a2a.bridge.*} transport, and the request
  * timeout. Quarkus HTTP ports are configured separately in {@code application.properties}.
+ *
+ * <p>JSON-RPC (with SSE for {@code message/stream}) is the only inbound transport this gateway
+ * serves. Construction rejects the legacy {@code a2a.gateway.grpc.url} and {@code a2a.gateway.rest.url}
+ * keys ({@link #UNSUPPORTED_TRANSPORT_KEYS}) instead of advertising an endpoint nothing listens on.
  */
 @ApplicationScoped
 public class GatewayConfig {
+
+  /** Config keys for transports this module does not implement; setting one is a startup error. */
+  public static final List<String> UNSUPPORTED_TRANSPORT_KEYS =
+      List.of("a2a.gateway.grpc.url", "a2a.gateway.rest.url");
+
+  /** One Agent Card skill, parsed from {@code a2a.gateway.agent.skills}. */
+  public record Skill(String id, String name, String description) {}
+
+  private static final Skill GENERIC_SKILL = new Skill(
+      "agent", "Agent", "Send a message to the agent and receive its reply.");
 
   private final AgenticFlinkConfig config;
 
@@ -22,6 +38,13 @@ public class GatewayConfig {
 
   public GatewayConfig(AgenticFlinkConfig config) {
     this.config = config;
+    for (String key : UNSUPPORTED_TRANSPORT_KEYS) {
+      String v = config.get(key, "");
+      if (!v.isBlank()) {
+        throw new IllegalStateException(key + " is set to '" + v + "' but this gateway serves only JSON-RPC"
+            + " (with SSE); it has no gRPC or REST binding to advertise. Unset it.");
+      }
+    }
   }
 
   public AgenticFlinkConfig raw() {
@@ -51,16 +74,6 @@ public class GatewayConfig {
         ConfigKeys.A2A_GATEWAY_PUBLIC_URL, "http://localhost:9999");
   }
 
-  /** Public gRPC endpoint to advertise on the Agent Card; empty = not advertised. */
-  public String grpcUrl() {
-    return config.get("a2a.gateway.grpc.url", "");
-  }
-
-  /** Public HTTP+JSON (REST) endpoint to advertise on the Agent Card; empty = not advertised. */
-  public String restUrl() {
-    return config.get("a2a.gateway.rest.url", "");
-  }
-
   public String protocolVersion() {
     return config.get(ConfigKeys.A2A_PROTOCOL_VERSION, ConfigKeys.DEFAULT_A2A_PROTOCOL_VERSION);
   }
@@ -72,6 +85,30 @@ public class GatewayConfig {
   /** Comma-separated skill descriptors {@code id:name:description}; empty -> one generic skill. */
   public String skillsSpec() {
     return config.get("a2a.gateway.agent.skills", "");
+  }
+
+  /**
+   * The skills the Agent Card lists, parsed from {@link #skillsSpec()}. A descriptor with fewer than
+   * three colon-separated fields is rejected so a typo cannot silently publish an empty skill.
+   */
+  public List<Skill> skills() {
+    String spec = skillsSpec();
+    if (spec == null || spec.isBlank()) {
+      return List.of(GENERIC_SKILL);
+    }
+    List<Skill> out = new ArrayList<>();
+    for (String item : spec.split(",")) {
+      if (item.isBlank()) {
+        continue;
+      }
+      String[] parts = item.trim().split(":", 3);
+      if (parts.length < 3 || parts[0].isBlank() || parts[1].isBlank()) {
+        throw new IllegalStateException("a2a.gateway.agent.skills entry '" + item.trim()
+            + "' must be id:name:description");
+      }
+      out.add(new Skill(parts[0].trim(), parts[1].trim(), parts[2].trim()));
+    }
+    return out.isEmpty() ? List.of(GENERIC_SKILL) : List.copyOf(out);
   }
 
   /** Task-store backend for gateway-side lifecycle persistence: {@code memory|redis|postgres}. */

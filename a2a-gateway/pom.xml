@@ -22,10 +22,6 @@
         ./mvnw install -DskipTests && ./mvnw -f a2a-gateway/pom.xml package
     See README.
     -->
-    <properties>
-        <a2a.version>1.0.0.Alpha3</a2a.version>
-    </properties>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -73,11 +69,12 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
-        <!-- Flink runtime: the gateway image also hosts the embedded MiniCluster job
-             (BankingFlinkJob, launched as a second process from this app's classpath), so the full
-             local-execution stack must be bundled. flink-clients provides the LocalExecutor that
-             StreamExecutionEnvironment.createLocalEnvironment().execute() needs; flink-streaming-java
-             pulls in flink-runtime. (Core marks Flink 'provided' for cluster deploys.) -->
+        <!-- Flink runtime: the core artifact marks Flink 'provided' (cluster deploys), but the
+             A2ABridge SPI it exposes to this gateway (requestChannel(), responseSink()) is typed on
+             Flink stream classes, and the module's tests run an in-process echo job through
+             StreamExecutionEnvironment.createLocalEnvironment(). flink-clients provides that
+             LocalExecutor; flink-streaming-java pulls in flink-runtime. The banking demo's Flink job
+             ships as its own uber-jar (banking-job), not from this classpath. -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-streaming-java</artifactId>

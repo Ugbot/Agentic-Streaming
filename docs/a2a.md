@@ -95,7 +95,10 @@ Outbound uses the official SDK via `SdkA2AClient` (JSON-RPC binding), discovered
 A standalone module under `a2a-gateway/` (built separately, see its `README.md`). It serves the
 Agent Card at `/.well-known/agent-card.json` and the JSON-RPC methods (`message/send`,
 `message/stream` as SSE, `tasks/get`, `tasks/cancel`, and the push notification config methods),
-bridging each request into the Flink job and driving SSE + push from the job's responses.
+bridging each request into the Flink job and driving SSE + push from the job's responses. The
+Agent Card names only that transport (`preferredTransport: JSONRPC`, one `additionalInterfaces`
+entry at `a2a.gateway.public.url`, SSE as `capabilities.streaming`); `a2a.gateway.grpc.url` and
+`a2a.gateway.rest.url` are rejected at startup because nothing serves them.
 
 ```bash
 ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests   # install jagentic-core
@@ -149,7 +152,8 @@ default). See `config/ConfigKeys.java`.
 |---|---|---|
 | `a2a.protocol.version` | `1.0` | advertised protocol version |
 | `a2a.client.default.transport` | `JSONRPC` | outbound default binding |
-| `a2a.gateway.public.url` | `http://localhost:9999` | Agent Card `url` |
+| `a2a.gateway.public.url` | `http://localhost:9999` | Agent Card `url` and its only interface (JSON-RPC) |
+| `a2a.gateway.agent.skills` | one generic skill | Agent Card `skills`, `id:name:description,...` |
 | `a2a.bridge.transport` | `zeromq` | `inproc` / `zeromq` / `redis` |
 | `a2a.bridge.request.endpoint` | `tcp://127.0.0.1:5760` | gateway → job |
 | `a2a.bridge.response.endpoint` | `tcp://127.0.0.1:5761` | job → gateway |
