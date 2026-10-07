@@ -1,0 +1,12 @@
+# Model identifiers that ConfigKeys may ship as defaults.
+# DefaultModelIdsTest fails when a DEFAULT_*_MODEL constant is not listed here, so changing a
+# default means editing this file on purpose. Each entry was checked against the vendor's own
+# model catalogue on 2026-10-07:
+#   ollama    https://ollama.com/library/<name>  (tags page lists the exact tag)
+#   anthropic https://platform.claude.com/docs/en/about-claude/model-deprecations  (status Active)
+#   openai    https://platform.openai.com/docs/models/<id>  (snapshots section lists the alias)
+# Format: <provider> <model id>, one per line. Blank lines and # comments are ignored.
+ollama qwen2.5:3b
+ollama nomic-embed-text
+anthropic claude-sonnet-4-6
+openai gpt-5.4-mini
