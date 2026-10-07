@@ -3,6 +3,7 @@ package org.agentic.flink.inference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
@@ -18,6 +19,7 @@ import org.agentic.flink.llm.ChatRole;
  * stored as its redacted text ({@code reason} or {@value #DEFAULT_BLOCK_TEXT}) and the raw model
  * output never reaches the transcript or the next prompt.
  */
+@Internal
 public final class Guardrails {
 
   public static final String DEFAULT_BLOCK_TEXT = "Blocked by guardrail";
