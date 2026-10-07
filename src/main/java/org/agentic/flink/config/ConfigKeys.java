@@ -1,12 +1,12 @@
 package org.agentic.flink.config;
 
 /**
- * Constants class defining all configuration keys and their default values
- * for the Agentic Flink framework.
+ * Constants class defining all configuration keys and their default values for the Agentic Flink
+ * framework.
  *
  * <p>Configuration keys follow a dot-separated naming convention (e.g., {@code ollama.base.url}).
- * When resolved via environment variables, keys are transformed by uppercasing, replacing dots
- * with underscores, and prepending {@code AGENTIC_FLINK_} (e.g., {@code AGENTIC_FLINK_OLLAMA_BASE_URL}).
+ * When resolved via environment variables, keys are transformed by uppercasing, replacing dots with
+ * underscores, and prepending {@code AGENTIC_FLINK_} (e.g., {@code AGENTIC_FLINK_OLLAMA_BASE_URL}).
  *
  * @author Agentic Flink Team
  * @see AgenticFlinkConfig
@@ -48,7 +48,8 @@ public final class ConfigKeys {
   // Fluss conversation store (PK table). bootstrap servers + database/table to upsert into.
   public static final String FLUSS_BOOTSTRAP_SERVERS = "fluss.bootstrap.servers";
   public static final String DEFAULT_FLUSS_BOOTSTRAP_SERVERS = "localhost:9123";
-  public static final String CONVERSATION_STORE_FLUSS_DATABASE = "conversation.store.fluss.database";
+  public static final String CONVERSATION_STORE_FLUSS_DATABASE =
+      "conversation.store.fluss.database";
   public static final String DEFAULT_CONVERSATION_STORE_FLUSS_DATABASE = "agentic";
   public static final String CONVERSATION_STORE_FLUSS_TABLE = "conversation.store.fluss.table";
   public static final String DEFAULT_CONVERSATION_STORE_FLUSS_TABLE = "conversations";
@@ -59,7 +60,8 @@ public final class ConfigKeys {
   public static final String POSTGRES_URL = "postgres.url";
   public static final String POSTGRES_USER = "postgres.user";
   public static final String POSTGRES_PASSWORD = "postgres.password";
-  public static final String DEFAULT_POSTGRES_URL = "jdbc:postgresql://localhost:5432/agentic_flink";
+  public static final String DEFAULT_POSTGRES_URL =
+      "jdbc:postgresql://localhost:5432/agentic_flink";
   public static final String DEFAULT_POSTGRES_USER = "flink_user";
   public static final String DEFAULT_POSTGRES_PASSWORD = "flink_password";
 
@@ -134,9 +136,14 @@ public final class ConfigKeys {
   public static final String DEFAULT_CHECKPOINT_INTERVAL_MS = "10000";
   public static final String DEFAULT_CHECKPOINT_MIN_PAUSE_MS = "1000";
   public static final String DEFAULT_CHECKPOINT_TIMEOUT_MS = "600000";
+
   /** {@code retain} keeps externalized checkpoints on cancellation, {@code delete} removes them. */
   public static final String DEFAULT_CHECKPOINT_RETENTION = "retain";
-  /** {@code hashmap} (heap) or {@code rocksdb} (needs flink-statebackend-rocksdb on the classpath). */
+
+  /**
+   * {@code hashmap} (heap) or {@code rocksdb} (needs flink-statebackend-rocksdb on the classpath).
+   */
   public static final String DEFAULT_CHECKPOINT_STATE_BACKEND = "hashmap";
+
   public static final String DEFAULT_CHECKPOINT_STATE_BACKEND_INCREMENTAL = "true";
 }

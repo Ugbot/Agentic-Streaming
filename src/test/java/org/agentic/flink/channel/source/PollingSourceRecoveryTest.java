@@ -39,8 +39,8 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * {@link PollingSource} recovery: the split position survives a savepoint and restore, and the
  * resumed reader neither re-emits nor skips records. The poll target is an in-JVM counter with a
- * monotonic cursor; the sink is an in-JVM list. Both are static maps keyed by a per-test id
- * because MiniCluster tasks run in the test JVM.
+ * monotonic cursor; the sink is an in-JVM list. Both are static maps keyed by a per-test id because
+ * MiniCluster tasks run in the test JVM.
  */
 final class PollingSourceRecoveryTest {
 
@@ -79,7 +79,8 @@ final class PollingSourceRecoveryTest {
   }
 
   @Test
-  @DisplayName("stop-with-savepoint then restore resumes after the last emitted record: no gaps, no repeats")
+  @DisplayName(
+      "stop-with-savepoint then restore resumes after the last emitted record: no gaps, no repeats")
   void savepointRestoreResumesWithoutRedeliveryOrSkips(@TempDir Path dir) throws Exception {
     String id = UUID.randomUUID().toString();
     SINK.put(id, new CopyOnWriteArrayList<>());
@@ -90,7 +91,8 @@ final class PollingSourceRecoveryTest {
     job = start(id, dir, null);
     awaitSinkSize(id, firstBatch);
     String savepoint =
-        job.stopWithSavepoint(false, dir.resolve("sp").toUri().toString(), SavepointFormatType.CANONICAL)
+        job.stopWithSavepoint(
+                false, dir.resolve("sp").toUri().toString(), SavepointFormatType.CANONICAL)
             .get(60, TimeUnit.SECONDS);
     job = null;
 
@@ -121,8 +123,7 @@ final class PollingSourceRecoveryTest {
     byte[] bytes = PollingSource.PollingSplit.SERIALIZER.serialize(split);
     assertEquals(2, PollingSource.PollingSplit.SERIALIZER.getVersion());
     assertEquals(split, PollingSource.PollingSplit.SERIALIZER.deserialize(2, bytes));
-    assertEquals(
-        position, PollingSource.PollingSplit.SERIALIZER.deserialize(2, bytes).position());
+    assertEquals(position, PollingSource.PollingSplit.SERIALIZER.deserialize(2, bytes).position());
 
     PollingSource.PollingSplit none = new PollingSource.PollingSplit(null);
     assertNull(
@@ -146,7 +147,9 @@ final class PollingSourceRecoveryTest {
 
     PollingSource.EnumeratorState assigned =
         PollingSource.EnumeratorState.SERIALIZER.deserialize(
-            2, PollingSource.EnumeratorState.SERIALIZER.serialize(PollingSource.EnumeratorState.ASSIGNED));
+            2,
+            PollingSource.EnumeratorState.SERIALIZER.serialize(
+                PollingSource.EnumeratorState.ASSIGNED));
     assertTrue(assigned.assigned());
 
     assertTrue(PollingSource.EnumeratorState.SERIALIZER.deserialize(1, new byte[] {0}).assigned());
@@ -163,7 +166,8 @@ final class PollingSourceRecoveryTest {
     if (savepoint != null) {
       conf.set(StateRecoveryOptions.SAVEPOINT_PATH, savepoint);
     }
-    StreamExecutionEnvironment env = new TestStreamEnvironment(cluster, conf, 1, List.of(), List.of());
+    StreamExecutionEnvironment env =
+        new TestStreamEnvironment(cluster, conf, 1, List.of(), List.of());
     env.setParallelism(1);
     env.fromSource(
             new PollingSource<>(new CounterPollFn(id), 8),

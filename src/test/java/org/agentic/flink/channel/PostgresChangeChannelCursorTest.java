@@ -43,12 +43,12 @@ final class PostgresChangeChannelCursorTest {
   }
 
   @Test
-  @DisplayName("malformed positions are rejected rather than silently restarting from the beginning")
+  @DisplayName(
+      "malformed positions are rejected rather than silently restarting from the beginning")
   void malformedRejected() {
     assertThrows(
         IllegalArgumentException.class,
         () -> PostgresChangeChannel.Cursor.decode("not-a-cursor-" + UUID.randomUUID()));
-    assertThrows(
-        NumberFormatException.class, () -> PostgresChangeChannel.Cursor.decode("x:0:a:b"));
+    assertThrows(NumberFormatException.class, () -> PostgresChangeChannel.Cursor.decode("x:0:a:b"));
   }
 }

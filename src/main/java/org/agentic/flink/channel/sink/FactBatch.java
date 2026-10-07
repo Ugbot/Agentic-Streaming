@@ -98,7 +98,11 @@ public final class FactBatch {
         in.readFully(json);
         long createdAt = in.readLong();
         facts.add(
-            new Fact(flowId, factId, new String(json, java.nio.charset.StandardCharsets.UTF_8), createdAt));
+            new Fact(
+                flowId,
+                factId,
+                new String(json, java.nio.charset.StandardCharsets.UTF_8),
+                createdAt));
       }
       return new FactBatch(commitId, facts);
     }

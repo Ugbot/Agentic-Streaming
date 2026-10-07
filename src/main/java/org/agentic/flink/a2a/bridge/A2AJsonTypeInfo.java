@@ -5,8 +5,8 @@ import java.util.Objects;
 import org.agentic.flink.a2a.A2AJson;
 import org.apache.flink.api.common.serialization.SerializerConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.api.common.typeutils.SimpleTypeSerializerSnapshot;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.TypeSerializerSchemaCompatibility;
 import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
 import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
@@ -17,9 +17,9 @@ import org.apache.flink.core.memory.DataOutputView;
  *
  * <p>{@link A2ARequest}/{@link A2AResponse} are immutable value types (no no-arg constructor,
  * {@code unmodifiable} collections), which Flink can neither treat as POJOs nor reliably Kryo-copy
- * between operators. Routing them through the same JSON codec used on the wire makes them first-class
- * stream element types — used by the bridge {@link org.agentic.flink.channel.Channel} sources and
- * any operator that emits them.
+ * between operators. Routing them through the same JSON codec used on the wire makes them
+ * first-class stream element types — used by the bridge {@link org.agentic.flink.channel.Channel}
+ * sources and any operator that emits them.
  */
 public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
   private static final long serialVersionUID = 1L;
@@ -95,7 +95,7 @@ public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
     private final Class<T> type;
 
     public A2AJsonSerializer(Class<T> type) {
-      this.type = type;
+      this.type = Objects.requireNonNull(type, "type");
     }
 
     @Override
@@ -173,16 +173,67 @@ public final class A2AJsonTypeInfo<T> extends TypeInformation<T> {
     }
   }
 
-  /** State-compatibility snapshot; carries the element class so the serializer can be restored. */
-  public static final class A2AJsonSerializerSnapshot<T>
-      extends SimpleTypeSerializerSnapshot<T> {
-    public A2AJsonSerializerSnapshot() {
-      // Required public no-arg constructor for restore; type is read from the snapshot.
-      super(() -> new A2AJsonSerializer<>(null));
-    }
+  /**
+   * State-compatibility snapshot. Writes the element class name so a serializer restored from a
+   * savepoint deserializes into the right type; the restored serializer is compatible as is when
+   * the element class matches and incompatible otherwise.
+   */
+  public static final class A2AJsonSerializerSnapshot<T> implements TypeSerializerSnapshot<T> {
+    private static final int CURRENT_VERSION = 4;
+
+    private Class<T> type;
+
+    /** Required public no-arg constructor for restore; the type is read from the snapshot. */
+    public A2AJsonSerializerSnapshot() {}
 
     A2AJsonSerializerSnapshot(Class<T> type) {
-      super(() -> new A2AJsonSerializer<>(type));
+      this.type = Objects.requireNonNull(type, "type");
+    }
+
+    @Override
+    public int getCurrentVersion() {
+      return CURRENT_VERSION;
+    }
+
+    @Override
+    public void writeSnapshot(DataOutputView out) throws IOException {
+      out.writeUTF(type.getName());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void readSnapshot(int readVersion, DataInputView in, ClassLoader classLoader)
+        throws IOException {
+      if (readVersion < CURRENT_VERSION) {
+        throw new IOException(
+            "A2AJsonSerializerSnapshot version "
+                + readVersion
+                + " carries no element class and cannot be restored; the state was written by a"
+                + " release whose snapshot restored a serializer with a null type");
+      }
+      String className = in.readUTF();
+      try {
+        type = (Class<T>) Class.forName(className, false, classLoader);
+      } catch (ClassNotFoundException e) {
+        throw new IOException("A2A element class " + className + " not found on restore", e);
+      }
+    }
+
+    @Override
+    public TypeSerializer<T> restoreSerializer() {
+      return new A2AJsonSerializer<>(type);
+    }
+
+    @Override
+    public TypeSerializerSchemaCompatibility<T> resolveSchemaCompatibility(
+        TypeSerializerSnapshot<T> oldSerializerSnapshot) {
+      if (!(oldSerializerSnapshot instanceof A2AJsonSerializerSnapshot)) {
+        return TypeSerializerSchemaCompatibility.incompatible();
+      }
+      Class<?> oldType = ((A2AJsonSerializerSnapshot<?>) oldSerializerSnapshot).type;
+      return type.equals(oldType)
+          ? TypeSerializerSchemaCompatibility.compatibleAsIs()
+          : TypeSerializerSchemaCompatibility.incompatible();
     }
   }
 }

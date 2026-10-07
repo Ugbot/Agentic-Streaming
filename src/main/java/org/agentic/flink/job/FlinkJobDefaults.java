@@ -18,28 +18,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Fault tolerance defaults applied to every {@link StreamExecutionEnvironment} the framework
- * builds a job on: exactly-once checkpointing with a configurable interval, minimum pause,
- * timeout and externalized checkpoint retention, plus the state backend and checkpoint storage
- * location.
+ * Fault tolerance defaults applied to every {@link StreamExecutionEnvironment} the framework builds
+ * a job on: exactly-once checkpointing with a configurable interval, minimum pause, timeout and
+ * externalized checkpoint retention, plus the state backend and checkpoint storage location.
  *
- * <p>Values come from {@link AgenticFlinkConfig} under the {@code checkpoint.*} keys
- * ({@code AGENTIC_FLINK_CHECKPOINT_*} in the environment). Checkpointing is enabled by default;
- * the only way to run without it is the explicit opt-out {@code checkpoint.enabled=false}, which
- * is logged at WARN level so a job never runs unprotected by accident.
+ * <p>Values come from {@link AgenticFlinkConfig} under the {@code checkpoint.*} keys ({@code
+ * AGENTIC_FLINK_CHECKPOINT_*} in the environment). Checkpointing is enabled by default; the only
+ * way to run without it is the explicit opt-out {@code checkpoint.enabled=false}, which is logged
+ * at WARN level so a job never runs unprotected by accident.
  *
- * <p>State backends: {@code hashmap} (default, heap) works out of the box. {@code rocksdb}
- * requires {@code org.apache.flink:flink-statebackend-rocksdb:2.2.1} on the job classpath and
- * {@code forst} requires {@code org.apache.flink:flink-statebackend-forst:2.2.1}; when the
- * artifact is missing {@link #fromConfig} fails with a message naming it rather than silently
- * falling back to the heap backend.
+ * <p>State backends: {@code hashmap} (default, heap) works out of the box. {@code rocksdb} requires
+ * {@code org.apache.flink:flink-statebackend-rocksdb:2.2.1} on the job classpath and {@code forst}
+ * requires {@code org.apache.flink:flink-statebackend-forst:2.2.1}; when the artifact is missing
+ * {@link #fromConfig} fails with a message naming it rather than silently falling back to the heap
+ * backend.
  *
- * <p>Checkpoint storage: {@code checkpoint.storage.dir} sets the externalized checkpoint
- * directory. When it is not configured and the environment does not already carry
- * {@code execution.checkpointing.dir}, {@link #apply} uses {@code
- * ${java.io.tmpdir}/agentic-flink/checkpoints} and logs the location, which is enough for
- * local runs and recovery on the same host. Production deployments should point it at durable
- * shared storage.
+ * <p>Checkpoint storage: {@code checkpoint.storage.dir} sets the externalized checkpoint directory.
+ * When it is not configured and the environment does not already carry {@code
+ * execution.checkpointing.dir}, {@link #apply} uses {@code
+ * ${java.io.tmpdir}/agentic-flink/checkpoints} and logs the location, which is enough for local
+ * runs and recovery on the same host. Production deployments should point it at durable shared
+ * storage.
  */
 public final class FlinkJobDefaults implements Serializable {
 
@@ -53,7 +52,8 @@ public final class FlinkJobDefaults implements Serializable {
   public static final String RETENTION_DELETE = "delete";
   public static final String RETENTION_NONE = "none";
 
-  static final String ROCKSDB_FACTORY = "org.apache.flink.state.rocksdb.EmbeddedRocksDBStateBackendFactory";
+  static final String ROCKSDB_FACTORY =
+      "org.apache.flink.state.rocksdb.EmbeddedRocksDBStateBackendFactory";
   static final String ROCKSDB_ARTIFACT = "org.apache.flink:flink-statebackend-rocksdb:2.2.1";
   static final String FORST_FACTORY = "org.apache.flink.state.forst.ForStStateBackendFactory";
   static final String FORST_ARTIFACT = "org.apache.flink:flink-statebackend-forst:2.2.1";
@@ -86,7 +86,9 @@ public final class FlinkJobDefaults implements Serializable {
     this.storageDir = storageDir;
   }
 
-  /** Defaults resolved from the process environment ({@link AgenticFlinkConfig#fromEnvironment}). */
+  /**
+   * Defaults resolved from the process environment ({@link AgenticFlinkConfig#fromEnvironment}).
+   */
   public static FlinkJobDefaults fromEnvironment() {
     return fromConfig(AgenticFlinkConfig.fromEnvironment());
   }
@@ -95,8 +97,7 @@ public final class FlinkJobDefaults implements Serializable {
    * Resolves and validates the checkpoint settings in {@code config}.
    *
    * @throws IllegalArgumentException when a value is malformed or out of range
-   * @throws IllegalStateException when the selected state backend artifact is not on the
-   *     classpath
+   * @throws IllegalStateException when the selected state backend artifact is not on the classpath
    */
   public static FlinkJobDefaults fromConfig(AgenticFlinkConfig config) {
     Objects.requireNonNull(config, "config");
@@ -154,8 +155,8 @@ public final class FlinkJobDefaults implements Serializable {
   }
 
   /**
-   * Applies these defaults to {@code env}. Explicit settings already present on the environment
-   * for the checkpoint directory are kept; everything else is set from this instance.
+   * Applies these defaults to {@code env}. Explicit settings already present on the environment for
+   * the checkpoint directory are kept; everything else is set from this instance.
    *
    * @return {@code env} for chaining
    */
@@ -174,7 +175,10 @@ public final class FlinkJobDefaults implements Serializable {
     }
     String dir = storageDir;
     if (dir == null) {
-      dir = env.getConfiguration().getOptional(CheckpointingOptions.CHECKPOINTS_DIRECTORY).orElse(null);
+      dir =
+          env.getConfiguration()
+              .getOptional(CheckpointingOptions.CHECKPOINTS_DIRECTORY)
+              .orElse(null);
     }
     if (dir == null) {
       dir = defaultStorageDir();

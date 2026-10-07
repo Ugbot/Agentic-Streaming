@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
-import org.agentic.flink.context.core.ContextItem;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +16,7 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Objects;
 import org.agentic.flink.channel.source.PollingSource;
+import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -86,12 +86,13 @@ public final class PostgresChangeChannel implements Channel<KeyedContextItem> {
 
   /**
    * Native FLIP-27 {@link PollingSource.PositionedPollFn}: each query (throttled to {@code
-   * pollIntervalMs}) fetches rows strictly after the cursor, ordered by {@code (created_at, flow_id,
-   * fact_id)}, into a buffer; {@link #poll} returns them one at a time and advances the cursor to the
-   * row it returned. The cursor is the split position {@link PollingSource} checkpoints, so a
-   * restored job resumes after the last emitted row rather than re-scanning from epoch zero. Rows
-   * sharing a {@code created_at} are totally ordered by the primary key, so a checkpoint taken
-   * between two rows with the same timestamp neither skips nor repeats either of them.
+   * pollIntervalMs}) fetches rows strictly after the cursor, ordered by {@code (created_at,
+   * flow_id, fact_id)}, into a buffer; {@link #poll} returns them one at a time and advances the
+   * cursor to the row it returned. The cursor is the split position {@link PollingSource}
+   * checkpoints, so a restored job resumes after the last emitted row rather than re-scanning from
+   * epoch zero. Rows sharing a {@code created_at} are totally ordered by the primary key, so a
+   * checkpoint taken between two rows with the same timestamp neither skips nor repeats either of
+   * them.
    */
   static final class PostgresPollFn implements PollingSource.PositionedPollFn<KeyedContextItem> {
     private static final long serialVersionUID = 2L;

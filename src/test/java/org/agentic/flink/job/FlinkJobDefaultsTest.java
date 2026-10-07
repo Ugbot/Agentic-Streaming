@@ -192,7 +192,8 @@ class FlinkJobDefaultsTest {
     props.put(ConfigKeys.CHECKPOINT_STATE_BACKEND, "forst");
     if (present) {
       assertEquals(
-          FlinkJobDefaults.BACKEND_FORST, FlinkJobDefaults.fromConfig(config(props)).getStateBackend());
+          FlinkJobDefaults.BACKEND_FORST,
+          FlinkJobDefaults.fromConfig(config(props)).getStateBackend());
     } else {
       IllegalStateException e =
           assertThrows(
@@ -229,8 +230,7 @@ class FlinkJobDefaultsTest {
                 org.agentic.flink.dsl.Agent.builder()
                     .withId("a")
                     .withSystemPrompt("s")
-                    .withStateMachine(
-                        org.agentic.flink.execution.AgentExecutorTest.stateMachine())
+                    .withStateMachine(org.agentic.flink.execution.AgentExecutorTest.stateMachine())
                     .build())
             .withAgenticFlinkConfig(config(props))
             .build();

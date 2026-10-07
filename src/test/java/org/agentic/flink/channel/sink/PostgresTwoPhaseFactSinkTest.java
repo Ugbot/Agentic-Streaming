@@ -100,7 +100,8 @@ final class PostgresTwoPhaseFactSinkTest {
   }
 
   @Test
-  @DisplayName("a failed checkpoint writes nothing; the next completed checkpoint commits every fact exactly once")
+  @DisplayName(
+      "a failed checkpoint writes nothing; the next completed checkpoint commits every fact exactly once")
   void failedCheckpointLeavesNoPartialWrite(@TempDir Path dir) throws Exception {
     String id = UUID.randomUUID().toString();
     String flow = "flow-" + id;
@@ -115,7 +116,8 @@ final class PostgresTwoPhaseFactSinkTest {
     conf.set(RestartStrategyOptions.RESTART_STRATEGY, "fixed-delay");
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_ATTEMPTS, 3);
     conf.set(RestartStrategyOptions.RESTART_STRATEGY_FIXED_DELAY_DELAY, Duration.ofMillis(100));
-    StreamExecutionEnvironment env = new TestStreamEnvironment(cluster, conf, 1, List.of(), List.of());
+    StreamExecutionEnvironment env =
+        new TestStreamEnvironment(cluster, conf, 1, List.of(), List.of());
     env.setParallelism(1);
     env.fromSource(
             new PollingSource<>(new CounterPollFn(), 16),
@@ -173,7 +175,9 @@ final class PostgresTwoPhaseFactSinkTest {
     List<FactBatch.Fact> facts = new ArrayList<>();
     int n = 2 + ThreadLocalRandom.current().nextInt(10);
     for (int i = 0; i < n; i++) {
-      facts.add(new FactBatch.Fact(flow, "fact-" + i, "{\"content\":\"" + UUID.randomUUID() + "\"}", 1000L * i));
+      facts.add(
+          new FactBatch.Fact(
+              flow, "fact-" + i, "{\"content\":\"" + UUID.randomUUID() + "\"}", 1000L * i));
     }
     FactBatch batch = new FactBatch(UUID.randomUUID().toString(), facts);
 
@@ -224,13 +228,15 @@ final class PostgresTwoPhaseFactSinkTest {
     List<Long> sorted = new ArrayList<>(values);
     sorted.sort(Long::compareTo);
     for (int i = 0; i < sorted.size(); i++) {
-      assertEquals((long) i, sorted.get(i), "visible values must be 0..n-1 without gaps: " + sorted);
+      assertEquals(
+          (long) i, sorted.get(i), "visible values must be 0..n-1 without gaps: " + sorted);
     }
   }
 
   private static int countFacts(String flow) throws Exception {
     try (Connection c = connect();
-        PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM agent_facts WHERE flow_id = ?")) {
+        PreparedStatement ps =
+            c.prepareStatement("SELECT COUNT(*) FROM agent_facts WHERE flow_id = ?")) {
       ps.setString(1, flow);
       try (ResultSet rs = ps.executeQuery()) {
         rs.next();
@@ -268,7 +274,8 @@ final class PostgresTwoPhaseFactSinkTest {
     try (Connection c = connect();
         PreparedStatement ps =
             c.prepareStatement(
-                "SELECT COALESCE(SUM(fact_count), 0) FROM " + PostgresTwoPhaseFactSink.COMMITS_TABLE);
+                "SELECT COALESCE(SUM(fact_count), 0) FROM "
+                    + PostgresTwoPhaseFactSink.COMMITS_TABLE);
         ResultSet rs = ps.executeQuery()) {
       rs.next();
       return rs.getInt(1);
@@ -336,7 +343,8 @@ final class PostgresTwoPhaseFactSinkTest {
     @Override
     public void snapshotState(FunctionSnapshotContext context) {
       if (FAIL_SNAPSHOT.get(id).get()) {
-        throw new IllegalStateException("injected snapshot failure for checkpoint " + context.getCheckpointId());
+        throw new IllegalStateException(
+            "injected snapshot failure for checkpoint " + context.getCheckpointId());
       }
     }
 

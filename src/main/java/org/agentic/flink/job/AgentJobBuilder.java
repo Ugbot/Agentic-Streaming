@@ -1,12 +1,12 @@
 package org.agentic.flink.job;
 
+import java.util.*;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.SupervisorChain;
 import org.agentic.flink.job.AgentJob.MonitoringConfig;
 import org.agentic.flink.job.AgentJob.RoutingConfig;
 import org.agentic.flink.tool.ToolRegistry;
-import java.util.*;
 
 /**
  * Fluent builder for creating AgentJob instances.
@@ -14,6 +14,7 @@ import java.util.*;
  * <p>Provides a declarative API for assembling agent jobs with all required configuration.
  *
  * <p><b>Basic Usage:</b>
+ *
  * <pre>{@code
  * AgentJob job = AgentJob.builder()
  *     .withId("my-job")
@@ -23,6 +24,7 @@ import java.util.*;
  * }</pre>
  *
  * <p><b>Full Configuration:</b>
+ *
  * <pre>{@code
  * AgentJob job = AgentJob.builder()
  *     .withId("production-job")
@@ -42,7 +44,6 @@ import java.util.*;
  *
  * @author Agentic Flink Team
  * @see AgentJob
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -56,8 +57,8 @@ public class AgentJobBuilder {
   ToolRegistry toolRegistry;
   AgenticFlinkConfig storageConfig;
   FlinkJobDefaults jobDefaults;
-  RoutingConfig routingConfig = RoutingConfig.internal();  // Default to internal routing
-  MonitoringConfig monitoringConfig = MonitoringConfig.defaults();  // Default monitoring
+  RoutingConfig routingConfig = RoutingConfig.internal(); // Default to internal routing
+  MonitoringConfig monitoringConfig = MonitoringConfig.defaults(); // Default monitoring
   Map<String, Object> jobProperties = new HashMap<>();
   List<org.agentic.flink.a2a.A2AStep> a2aSteps = new ArrayList<>();
 
@@ -117,8 +118,8 @@ public class AgentJobBuilder {
   /**
    * Sets a supervisor chain (replaces any previously added agents).
    *
-   * <p>When a supervisor chain is used, individual agents are ignored - the chain
-   * contains all agents in its tiers.
+   * <p>When a supervisor chain is used, individual agents are ignored - the chain contains all
+   * agents in its tiers.
    *
    * @param supervisorChain The supervisor chain
    * @return this builder
@@ -155,8 +156,7 @@ public class AgentJobBuilder {
   }
 
   /**
-   * Sets the checkpointing and state backend defaults applied when the job is generated
-   * (optional).
+   * Sets the checkpointing and state backend defaults applied when the job is generated (optional).
    *
    * <p>If not set, {@link #build()} resolves them from the storage config when one is present,
    * otherwise from the process environment ({@link FlinkJobDefaults#fromEnvironment()}).
@@ -196,8 +196,9 @@ public class AgentJobBuilder {
   /**
    * Add one or more explicit {@link org.agentic.flink.a2a.A2AStep}s — deterministic remote-agent
    * delegations spliced into the stream graph (as opposed to LLM-selected {@code a2a:} tools added
-   * via {@code AgentBuilder.withRemoteAgent}). Recorded on the job; wire them into the topology with
-   * {@link org.agentic.flink.a2a.A2AStep#applyTo(org.apache.flink.streaming.api.datastream.DataStream)}.
+   * via {@code AgentBuilder.withRemoteAgent}). Recorded on the job; wire them into the topology
+   * with {@link
+   * org.agentic.flink.a2a.A2AStep#applyTo(org.apache.flink.streaming.api.datastream.DataStream)}.
    */
   public AgentJobBuilder withA2AStep(org.agentic.flink.a2a.A2AStep... steps) {
     if (steps != null) {
@@ -256,8 +257,7 @@ public class AgentJobBuilder {
 
     // Must have either agents or a supervisor chain
     if (agents.isEmpty() && supervisorChain == null) {
-      throw new IllegalStateException(
-          "Job must have at least one agent or a supervisor chain");
+      throw new IllegalStateException("Job must have at least one agent or a supervisor chain");
     }
 
     // If using supervisor chain, agents list should be empty (chain contains the agents)
@@ -269,17 +269,17 @@ public class AgentJobBuilder {
 
     // Tool registry required if any agent uses tools
     if (toolRegistry == null) {
-      boolean anyAgentUsesTools = agents.stream()
-          .anyMatch(agent -> !agent.getAllowedTools().isEmpty());
+      boolean anyAgentUsesTools =
+          agents.stream().anyMatch(agent -> !agent.getAllowedTools().isEmpty());
 
       if (supervisorChain != null) {
-        anyAgentUsesTools = supervisorChain.getTiers().stream()
-            .anyMatch(tier -> !tier.getAgent().getAllowedTools().isEmpty());
+        anyAgentUsesTools =
+            supervisorChain.getTiers().stream()
+                .anyMatch(tier -> !tier.getAgent().getAllowedTools().isEmpty());
       }
 
       if (anyAgentUsesTools) {
-        throw new IllegalStateException(
-            "Tool registry is required when agents use tools");
+        throw new IllegalStateException("Tool registry is required when agents use tools");
       }
     }
   }
@@ -313,13 +313,8 @@ public class AgentJobBuilder {
    * @param toolRegistry The tool registry
    * @return configured job
    */
-  public static AgentJob simpleSingleAgent(
-      String jobId, Agent agent, ToolRegistry toolRegistry) {
-    return AgentJob.builder()
-        .withId(jobId)
-        .withAgent(agent)
-        .withToolRegistry(toolRegistry)
-        .build();
+  public static AgentJob simpleSingleAgent(String jobId, Agent agent, ToolRegistry toolRegistry) {
+    return AgentJob.builder().withId(jobId).withAgent(agent).withToolRegistry(toolRegistry).build();
   }
 
   /**
@@ -349,10 +344,7 @@ public class AgentJobBuilder {
    * @return configured job with production settings
    */
   public static AgentJob productionJob(
-      String jobId,
-      Agent agent,
-      ToolRegistry toolRegistry,
-      AgenticFlinkConfig storageConfig) {
+      String jobId, Agent agent, ToolRegistry toolRegistry, AgenticFlinkConfig storageConfig) {
     return AgentJob.builder()
         .withId(jobId)
         .withAgent(agent)

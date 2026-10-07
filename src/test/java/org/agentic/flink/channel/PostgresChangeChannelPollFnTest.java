@@ -67,7 +67,8 @@ final class PostgresChangeChannelPollFnTest {
   }
 
   @Test
-  @DisplayName("seek to a checkpointed cursor resumes after the emitted row, including same-timestamp ties")
+  @DisplayName(
+      "seek to a checkpointed cursor resumes after the emitted row, including same-timestamp ties")
   void seekResumesAfterEmittedRow() throws Exception {
     String flow = "flow-" + UUID.randomUUID();
     long base = System.currentTimeMillis() - 60_000;
@@ -81,13 +82,13 @@ final class PostgresChangeChannelPollFnTest {
     // ... then rows with increasing timestamps.
     for (int i = 0; i < later; i++) {
       expected.add(
-          insert(flow, String.format("fact-%03d", sameTs + i), new Timestamp(base + 1000L * (i + 1))));
+          insert(
+              flow, String.format("fact-%03d", sameTs + i), new Timestamp(base + 1000L * (i + 1))));
     }
     expected.sort(String::compareTo); // fact ids were chosen so pk order == insertion order
 
     PostgresChangeChannel.PostgresPollFn first =
-        new PostgresChangeChannel.PostgresPollFn(
-            database.jdbcUrl(), user(), password(), 0L);
+        new PostgresChangeChannel.PostgresPollFn(database.jdbcUrl(), user(), password(), 0L);
     first.open(0);
     first.seek(null);
     assertNull(first.position());
@@ -102,8 +103,7 @@ final class PostgresChangeChannelPollFnTest {
     first.close();
 
     PostgresChangeChannel.PostgresPollFn restored =
-        new PostgresChangeChannel.PostgresPollFn(
-            database.jdbcUrl(), user(), password(), 0L);
+        new PostgresChangeChannel.PostgresPollFn(database.jdbcUrl(), user(), password(), 0L);
     restored.open(0);
     restored.seek(checkpointed);
     assertEquals(checkpointed, PostgresChangeChannel.Cursor.decode(checkpointed).encode());

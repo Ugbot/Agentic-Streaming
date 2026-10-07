@@ -35,8 +35,8 @@ import org.slf4j.LoggerFactory;
  * underlying transports are point-to-point pulls, not partitioned logs, so fan-in happens at the
  * transport, not via Flink split assignment. A background thread runs {@code pollFn.poll(timeout)}
  * and feeds a bounded queue; {@link SourceReader#pollNext} drains it, and availability is signalled
- * through a {@link CompletableFuture} so the runtime never busy-waits. Use it via
- * {@code env.fromSource(new PollingSource<>(fn), WatermarkStrategy.noWatermarks(), name, typeInfo)}.
+ * through a {@link CompletableFuture} so the runtime never busy-waits. Use it via {@code
+ * env.fromSource(new PollingSource<>(fn), WatermarkStrategy.noWatermarks(), name, typeInfo)}.
  *
  * <p>Fault tolerance: the split carries the {@linkplain PositionedPollFn#position() position} of
  * the last record the reader <em>emitted</em> (not merely polled into the queue). On restore the
@@ -137,8 +137,8 @@ public final class PollingSource<T>
   // ==================== split ====================
 
   /**
-   * The single split owned by reader 0. Immutable; {@link #position()} is the last emitted
-   * position ({@code null} before the first record or for a {@link PollFn} without positions).
+   * The single split owned by reader 0. Immutable; {@link #position()} is the last emitted position
+   * ({@code null} before the first record or for a {@link PollFn} without positions).
    */
   public static final class PollingSplit implements SourceSplit {
     static final String ID = "polling-split-0";
@@ -503,7 +503,8 @@ public final class PollingSource<T>
         try {
           pollFn.close();
         } catch (Exception e) {
-          LOG.warn("PollingSource pollFn.close failed on subtask {}: {}", subtaskIndex, e.toString());
+          LOG.warn(
+              "PollingSource pollFn.close failed on subtask {}: {}", subtaskIndex, e.toString());
         }
       }
     }

@@ -48,9 +48,9 @@ import org.slf4j.LoggerFactory;
  *       fresh commit id. Nothing has touched the database yet.
  *   <li>The committer receives the batch only after the checkpoint that contains it completed. It
  *       writes the batch in a single JDBC transaction together with a row in {@code
- *       agent_fact_commits} keyed by the commit id, so a batch is either fully visible or not at all.
- *       If the commit id already exists the batch was committed before the failure and is skipped
- *       ({@link Committer.CommitRequest#signalAlreadyCommitted()}), which makes replaying
+ *       agent_fact_commits} keyed by the commit id, so a batch is either fully visible or not at
+ *       all. If the commit id already exists the batch was committed before the failure and is
+ *       skipped ({@link Committer.CommitRequest#signalAlreadyCommitted()}), which makes replaying
  *       committables after a restore idempotent.
  * </ol>
  *
@@ -93,7 +93,9 @@ public final class PostgresTwoPhaseFactSink<T> implements Sink<T>, SupportsCommi
     this.mapper = Objects.requireNonNull(mapper, "mapper");
   }
 
-  /** Builds the sink from {@code postgres.url}, {@code postgres.user} and {@code postgres.password}. */
+  /**
+   * Builds the sink from {@code postgres.url}, {@code postgres.user} and {@code postgres.password}.
+   */
   public static <T> PostgresTwoPhaseFactSink<T> fromConfig(
       AgenticFlinkConfig config, FactMapper<T> mapper) {
     Objects.requireNonNull(config, "config");
@@ -106,8 +108,8 @@ public final class PostgresTwoPhaseFactSink<T> implements Sink<T>, SupportsCommi
 
   /**
    * The mapping the legacy {@link org.agentic.flink.job.StorageSinkFunction} applies for its
-   * long-term tier: terminal events ({@code FLOW_COMPLETED}, {@code FLOW_FAILED}) become MUST facts,
-   * every other event is skipped.
+   * long-term tier: terminal events ({@code FLOW_COMPLETED}, {@code FLOW_FAILED}) become MUST
+   * facts, every other event is skipped.
    */
   public static FactMapper<AgentEvent> terminalAgentEvents() {
     return new TerminalAgentEventMapper();
