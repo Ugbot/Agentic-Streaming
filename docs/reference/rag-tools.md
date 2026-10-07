@@ -423,16 +423,19 @@ ollama serve
 ollama pull nomic-embed-text:latest
 ollama pull llama3.1:latest
 
-# 3. Start Qdrant
-docker run -p 6333:6333 qdrant/qdrant
+# 3. Start Qdrant (HTTP 6333 for the application-level client, gRPC 6334 for QdrantVectorStore)
+podman run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 
-# 4. Build project
-mvn clean install
-
-# 5. Run example
-java -cp target/agentic-flink-0.0.1-SNAPSHOT.jar \
-  org.agentic.flink.example.RagAgentExample
+# 4. Build the core module once, then run the example through the `examples` profile.
+#    Flink is a provided dependency, so `java -cp target/...jar` and a plain `mvn exec:java` fail
+#    with NoClassDefFoundError; the profile forks a JVM with the test-scope classpath.
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.RagAgentExample
 ```
+
+The example fails at the first tool call when Ollama or Qdrant is not reachable; it was not re-run against
+live services for this page.
 
 ## Future Enhancements
 

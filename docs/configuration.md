@@ -8,7 +8,7 @@ When you request a configuration key (e.g., `ollama.base.url`), the value is res
 
 1. **Explicit properties** -- values passed via `AgenticFlinkConfig.fromMap(props)` or the constructor.
 2. **Environment variables** -- the key is transformed to the form `AGENTIC_FLINK_OLLAMA_BASE_URL` (uppercased, dots replaced with underscores, prefixed with `AGENTIC_FLINK_`).
-3. **System properties** -- the key is prefixed with `agentic.flink. ` (e.g., `agentic.flink.ollama.base.url`).
+3. **System properties** -- the key is prefixed with `agentic.flink.` (e.g., `agentic.flink.ollama.base.url`).
 4. **Default values** -- hard-coded in `ConfigKeys`.
 
 The `forTesting()` factory skips steps 2 and 3, returning only defaults and explicit properties. This isolates tests from host environment variables.
@@ -21,22 +21,50 @@ Configuration keys use dot-separated lowercase notation. The corresponding envir
 2. Replacing dots with underscores
 3. Prepending `AGENTIC_FLINK_`
 
+<!-- env-vars: ConfigKeys -->
 | Config Key | Environment Variable |
 |---|---|
 | `ollama.base.url` | `AGENTIC_FLINK_OLLAMA_BASE_URL` |
 | `ollama.model` | `AGENTIC_FLINK_OLLAMA_MODEL` |
+| `anthropic.api.key` | `AGENTIC_FLINK_ANTHROPIC_API_KEY` |
+| `anthropic.model` | `AGENTIC_FLINK_ANTHROPIC_MODEL` |
 | `redis.host` | `AGENTIC_FLINK_REDIS_HOST` |
 | `redis.port` | `AGENTIC_FLINK_REDIS_PORT` |
 | `redis.password` | `AGENTIC_FLINK_REDIS_PASSWORD` |
+| `conversation.store` | `AGENTIC_FLINK_CONVERSATION_STORE` |
+| `conversation.store.ttl.seconds` | `AGENTIC_FLINK_CONVERSATION_STORE_TTL_SECONDS` |
+| `conversation.store.max.messages` | `AGENTIC_FLINK_CONVERSATION_STORE_MAX_MESSAGES` |
+| `fluss.bootstrap.servers` | `AGENTIC_FLINK_FLUSS_BOOTSTRAP_SERVERS` |
+| `conversation.store.fluss.table` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_TABLE` |
+| `conversation.store.fluss.buckets` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_BUCKETS` |
 | `postgres.url` | `AGENTIC_FLINK_POSTGRES_URL` |
 | `postgres.user` | `AGENTIC_FLINK_POSTGRES_USER` |
 | `postgres.password` | `AGENTIC_FLINK_POSTGRES_PASSWORD` |
 | `qdrant.host` | `AGENTIC_FLINK_QDRANT_HOST` |
 | `qdrant.port` | `AGENTIC_FLINK_QDRANT_PORT` |
+| `memory.shortterm.ttl.seconds` | `AGENTIC_FLINK_MEMORY_SHORTTERM_TTL_SECONDS` |
+| `memory.shortterm.max.items` | `AGENTIC_FLINK_MEMORY_SHORTTERM_MAX_ITEMS` |
+| `memory.vector.dimension` | `AGENTIC_FLINK_MEMORY_VECTOR_DIMENSION` |
+| `memory.vector.max.items` | `AGENTIC_FLINK_MEMORY_VECTOR_MAX_ITEMS` |
+| `memory.vector.m` | `AGENTIC_FLINK_MEMORY_VECTOR_M` |
+| `memory.vector.beam.width` | `AGENTIC_FLINK_MEMORY_VECTOR_BEAM_WIDTH` |
 | `openai.api.key` | `AGENTIC_FLINK_OPENAI_API_KEY` |
 | `openai.model` | `AGENTIC_FLINK_OPENAI_MODEL` |
+| `a2a.protocol.version` | `AGENTIC_FLINK_A2A_PROTOCOL_VERSION` |
+| `a2a.client.default.transport` | `AGENTIC_FLINK_A2A_CLIENT_DEFAULT_TRANSPORT` |
+| `a2a.gateway.enabled` | `AGENTIC_FLINK_A2A_GATEWAY_ENABLED` |
+| `a2a.gateway.host` | `AGENTIC_FLINK_A2A_GATEWAY_HOST` |
+| `a2a.gateway.jsonrpc.port` | `AGENTIC_FLINK_A2A_GATEWAY_JSONRPC_PORT` |
+| `a2a.gateway.grpc.port` | `AGENTIC_FLINK_A2A_GATEWAY_GRPC_PORT` |
+| `a2a.gateway.rest.port` | `AGENTIC_FLINK_A2A_GATEWAY_REST_PORT` |
+| `a2a.gateway.public.url` | `AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL` |
+| `a2a.bridge.transport` | `AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT` |
+| `a2a.bridge.request.endpoint` | `AGENTIC_FLINK_A2A_BRIDGE_REQUEST_ENDPOINT` |
+| `a2a.bridge.response.endpoint` | `AGENTIC_FLINK_A2A_BRIDGE_RESPONSE_ENDPOINT` |
+| `a2a.task.store` | `AGENTIC_FLINK_A2A_TASK_STORE` |
+<!-- /env-vars -->
 
-System properties use the prefix `agentic.flink. ` followed by the key verbatim (e.g., `-Dagentic.flink.ollama.base.url=http://my-ollama:11434`).
+System properties use the prefix `agentic.flink.` followed by the key verbatim (e.g., `-Dagentic.flink.ollama.base.url=http://my-ollama:11434`).
 
 ## Configuration Keys
 
@@ -68,7 +96,7 @@ System properties use the prefix `agentic.flink. ` followed by the key verbatim 
 | Key | Default | Description |
 |---|---|---|
 | `qdrant.host` | `localhost` | Qdrant server hostname |
-| `qdrant.port` | `6333` | Qdrant gRPC port |
+| `qdrant.port` | `6333` | Qdrant REST port, as resolved by `AgenticFlinkConfig`. `QdrantVectorStore` connects over gRPC and reads `qdrant.port` from the map passed to `initialize`, defaulting to `6334` when the key is absent; pass the gRPC port when you forward this value to the store. See [Storage Architecture](reference/storage-architecture.md). |
 
 ### OpenAI (Optional)
 

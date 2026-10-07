@@ -41,7 +41,7 @@ gives durability without a separate database.
 
 ## 3. The core abstractions on NATS JetStream
 
-- **Durable keyed state (C1) = JetStream KV.** [`NatsRuntime`](../../ports/experimental/nats/agentic_nats.py)
+- **Durable keyed state (C1) = JetStream KV.** [`NatsRuntime`](../../ports/experimental/nats/agentic_nats/__init__.py)
   stores the per-conversation envelope (transcript + attributes + owner) as one KV value
   under `conv_<cid>`, loaded before the turn and saved after:
 
@@ -69,7 +69,7 @@ gives durability without a separate database.
 
 ## 4. Worked example: banking router→path→verifier
 
-[`agentic_nats.py`](../../ports/experimental/nats/agentic_nats.py) runs the full round-trip against a
+[`agentic_nats`](../../ports/experimental/nats/agentic_nats/__init__.py) runs the full round-trip against a
 live JetStream server (`podman run -p 4222:4222 nats:latest -js`):
 
 ```

@@ -414,18 +414,24 @@ LOG.info("Compaction complete: {}", result);
 ```bash
 # 1. Start dependencies
 ollama serve
-docker run -p 6333:6333 qdrant/qdrant
+podman run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 
 # 2. Pull models
 ollama pull nomic-embed-text:latest
 
-# 3. Build project
-mvn clean install
+# 3. Build the core module once (Flink is provided, so java -cp target/...jar does not work)
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
 
-# 4. Run example
-java -cp target/agentic-flink-0.0.1-SNAPSHOT.jar \
-  org.agentic.flink.example.ContextManagementExample
+# 4. Run the example through the `examples` profile (forked JVM, test-scope classpath)
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.ContextManagementExample
 ```
+
+Known failure: the command above compiles and submits the job but `ContextManagementExample` currently stops
+at job graph construction with `IllegalStateException: Auto generated UIDs have been disabled but no UID or
+hash has been assigned to operator compaction-requests` (the example disables
+`PipelineOptions.AUTO_GENERATE_UIDS` and omits a `uid` on one source). The failure is tracked in
+[`docs/audit-backlog.md`](../audit-backlog.md) under AGS-40.
 
 ## Best Practices
 

@@ -19,11 +19,11 @@ This document explains how **Agentic-Flink** integrates with the official **Apac
 
 | Aspect | Agentic-Flink | Apache Flink Agents |
 |--------|---------------|---------------------|
-| **Status** | Early-stage (112 tests passing) | Preview (0.1.0, not production-recommended) |
+| **Status** | Early-stage; the root module test suite runs with `./mvnw test` | Preview (0.1.0, not production-recommended) |
 | **Focus** | LangChain4J integration, context management, storage | ReAct/Workflow patterns, MCP protocol, observability |
 | **Origin** | Independent research project | Official Apache sub-project |
 | **LLM Integration** | LangChain4J (Ollama, OpenAI, extensible) | Native LLM support (various providers) |
-| **Storage** | Two-tier (Redis + PostgreSQL, 107 tests) | Not specified in core framework |
+| **Storage** | Flink keyed state for short-term memory; PostgreSQL, Redis, Qdrant, pgvector and others as ServiceLoader providers | Not specified in core framework |
 | **Context Management** | MoSCoW prioritization, 5-phase compaction | Event-based orchestration |
 | **Unique Features** | Validation/correction patterns, tiered agents, RAG tools | MCP protocol, exactly-once action consistency |
 
@@ -54,17 +54,17 @@ This document explains how **Agentic-Flink** integrates with the official **Apac
 #### Core Capabilities
 - **LangChain4J Integration**: Seamless connection to Ollama, OpenAI, and other LLM providers
 - **Context Management**: MoSCoW prioritization (MUST/SHOULD/COULD/WONT) with automatic compaction
-- **Two-Tier Storage**: Redis (hot, sub-millisecond) + PostgreSQL (warm, durable) with 107 passing tests
+- **Storage**: short-term memory in Flink keyed state (`FlinkStateShortTermMemory`), long-term and vector stores as ServiceLoader providers (see [storage-architecture.md](../reference/storage-architecture.md))
 - **Tool Framework**: @Tool annotation support with automatic discovery and retry logic
 - **Flink CEP Orchestration**: Pattern-based event processing for multi-agent workflows
 - **Validation & Correction**: Multi-attempt validation with supervisor escalation
 - **RAG Capabilities**: Document ingestion, semantic search, and embedding support
 
 #### Status
-- **Build**: SUCCESS (112 tests, 0 failures)
+- **Build**: `./mvnw -f reactor/pom.xml -DskipTests install`, then `./mvnw test` in the root module
 - **Well-Tested Components**: Storage, context management, tool framework
 - **Working Examples**: 14 real examples including TieredAgentExample with live LLM calls
-- **Infrastructure**: One-command Docker setup (PostgreSQL + Redis + Ollama)
+- **Infrastructure**: `podman compose up -d` with the checked-in `docker-compose.yml` (PostgreSQL + Redis + Ollama)
 - **Maturity**: Early-stage software - well-tested but still new, not battle-tested at scale
 
 #### Philosophy
@@ -128,7 +128,7 @@ Understanding how these projects evolved helps explain their relationship:
 │  • Two-tier storage architecture (Redis + PostgreSQL)
 │  • Tool framework with LangChain4J @Tool annotations
 │  • Validation/correction patterns with supervisor escalation
-│  • 112 tests written, well-tested components emerge
+│  • Unit tests written, well-tested components emerge
 │  • 14 working examples including TieredAgentExample
 │
 2025 May-August
@@ -317,7 +317,7 @@ Agentic-Flink's MoSCoW context management can be used as a Flink Agents Action:
 ```java
 public class ContextManagementAction extends Action {
     private final MoSCoWContextManager contextManager;
-    private final RedisShortTermStore redisStore;
+    private final ShortTermMemory shortTermMemory;   // bound from FlinkStateShortTermMemory.spec() in open()
     private final PostgresConversationStore postgresStore;
 
     @Override
@@ -368,8 +368,8 @@ public class ContextManagementAction extends Action {
 | Token Budget Management | yes, Automatic | partial, Manual | Agentic-Flink automation |
 | Temporal Relevancy | yes, Implemented | no, Not specified | Agentic-Flink feature |
 | **Storage & Persistence** |
-| Redis (Hot Tier) | yes, 5 tests, working | partial, Custom integration | Agentic-Flink ready |
-| PostgreSQL (Warm Tier) | yes, 31 tests, working | partial, Custom integration | Agentic-Flink ready |
+| Redis (long-term provider) | yes, ServiceLoader-registered | partial, Custom integration | Agentic-Flink ready |
+| PostgreSQL (long-term provider) | yes, ServiceLoader-registered | partial, Custom integration | Agentic-Flink ready |
 | Exactly-Once Persistence | yes, Via Flink checkpoints | yes, With write-ahead log | Both support |
 | Storage Abstraction | yes, Multi-backend | partial, Implementation-dependent | Agentic-Flink flexible |
 | **Tool Framework** |
@@ -391,7 +391,7 @@ public class ContextManagementAction extends Action {
 | MCP Protocol | partial, Via adapters | yes, Native support | Use Flink Agents |
 | Agent-to-Agent (A2A) | planned, Custom patterns | partial, Emerging standard | Both evolving |
 | **Production Features** |
-| Testing | yes, 112 tests | partial, Preview (unstable APIs) | Agentic-Flink mature |
+| Testing | yes, JUnit 5 suite under src/test | partial, Preview (unstable APIs) | Agentic-Flink mature |
 | Docker Setup | yes, One-command | partial, Custom setup | Agentic-Flink ready |
 | Monitoring | planned, In development | yes, Event logs | Use Flink Agents |
 | Production Documentation | yes, Comprehensive | yes, Official docs | Both have docs |
@@ -435,7 +435,7 @@ public class ContextManagementAction extends Action {
    - Supervisor escalation for edge cases
 
 5. **Rapid Development is Priority**
-   - 112 tests passing, actively developed codebase
+   - Tested, actively developed codebase
    - One-command Docker setup
    - 14 working examples to learn from
 
@@ -582,34 +582,42 @@ public class ContextManagementAction extends Action {
 
 ### Prerequisites
 
-1. **Build Apache Flink Agents** (currently 0.1.0-SNAPSHOT):
+1. **Build Apache Flink Agents** (the `flink-agents` profile in `pom.xml` depends on `0.2-SNAPSHOT`):
    ```bash
    git clone https://github.com/apache/flink-agents.git
    cd flink-agents
-   mvn clean install -DskipTests
+   ./mvnw clean install -DskipTests
    ```
 
-2. **Clone Agentic-Flink**:
+2. **Clone Agentic-Streaming**:
    ```bash
-   git clone <agentic-flink-repo>
-   cd Agentic-Flink
+   git clone https://github.com/Ugbot/Agentic-Streaming.git
+   cd Agentic-Streaming
    ```
 
 3. **Start Infrastructure**:
    ```bash
-   docker compose up -d
-   docker compose exec ollama ollama pull qwen2.5:3b
+   podman compose up -d
+   podman compose exec ollama ollama pull qwen2.5:3b
    ```
 
 ### Option 1: Standalone Agentic-Flink (No Flink Agents)
 
 ```bash
-# Build without Flink Agents plugin
-mvn clean compile
+# Build without the Flink Agents plugin (the default build excludes plugins/flintagents)
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -q compile
 
-# Run example
-mvn exec:java -Dexec.mainClass="org.agentic.flink.example.TieredAgentExample"
+# Run the example. Flink is a provided dependency, so a plain `mvn exec:java` has no Flink on
+# its classpath; the `examples` profile forks a JVM with the test-scope classpath.
+# Needs Ollama at http://localhost:11434 with qwen2.5:3b pulled.
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.TieredAgentExample
 ```
+
+The `examples` profile was exercised with `org.agentic.flink.pipeline.FlinkPipelineRunner` and
+`org.agentic.flink.example.StorageIntegratedFlinkJob`; `TieredAgentExample` itself was not run for this
+page because it needs a live Ollama.
 
 **What You Get:**
 - Full Agentic-Flink capabilities
@@ -621,12 +629,16 @@ mvn exec:java -Dexec.mainClass="org.agentic.flink.example.TieredAgentExample"
 ### Option 2: Hybrid with Flink Agents Plugin
 
 ```bash
-# Build WITH Flink Agents support
-mvn clean compile -P flink-agents
+# Build WITH Flink Agents support (needs the 0.2-SNAPSHOT artifacts from step 1 in ~/.m2)
+./mvnw -q -P flink-agents compile
 
-# Run hybrid example
-mvn exec:java -Dexec.mainClass="org.agentic.flink.plugins.flintagents.examples.FlinkAgentsIntegrationExample"
+# Run the hybrid example
+./mvnw -q -P flink-agents,examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.plugins.flintagents.examples.FlinkAgentsIntegrationExample
 ```
+
+Not executed for this page: Flink Agents is not on Maven Central, so the `flink-agents` profile does not
+resolve on a clean checkout.
 
 **What You Get:**
 - Flink Agents ReAct/Workflow patterns
@@ -637,7 +649,12 @@ mvn exec:java -Dexec.mainClass="org.agentic.flink.plugins.flintagents.examples.F
 
 ### Code Example: Hybrid Integration
 
-```java
+This listing is a sketch of the intended shape, not a compilable unit: `ReActAgent`, `mcpServer`,
+`kafkaSource`, `PostgresSink` and `ValidationAgent` stand for classes the reader supplies, and the plugin
+classes only compile under the `flink-agents` profile. It is marked `fragment` so
+`docs/tools/check_java_snippets.py` does not compile it.
+
+```java fragment
 import org.agentic.flink.plugins.flintagents.adapter.*;
 import org.apache.flink.agents.*;
 
@@ -653,12 +670,11 @@ public class HybridAgentJob {
             .build();
 
         // 2. Wrap with Agentic-Flink context management
-        ContextManagementAction contextAction =
-            new ContextManagementAction(
-                new MoSCoWContextManager(),
-                new RedisShortTermStore(),
-                new PostgresConversationStore()
-            );
+        // The real constructor is ContextManagementAction(String agentId[, maxTokens, ...]);
+        // it builds its MoSCoWContextManager internally. Short-term memory lives in Flink
+        // keyed state (FlinkStateShortTermMemory.spec()), long-term memory in a ServiceLoader
+        // provider such as PostgresConversationStore.
+        ContextManagementAction contextAction = new ContextManagementAction("hybrid-agent");
 
         // 3. Create event stream
         DataStream<Event> events = env
@@ -766,7 +782,7 @@ Priority-based context window management (MUST/SHOULD/COULD/WONT) with automatic
 Hot (Redis) + Warm (PostgreSQL) storage abstraction with automatic hydration.
 
 **Why Contribute:**
-- Production-proven (107 tests)
+- Covered by the root module test suite
 - Solves distributed agent state management
 - Extensible to other backends
 
@@ -826,7 +842,7 @@ Multi-attempt validation with LLM review, automatic correction, and supervisor e
 Both are early-stage software. Use appropriate caution for deployments.
 
 If choosing one:
-- **Agentic-Flink standalone** for Java-focused development (112 tests)
+- **Agentic-Flink standalone** for Java-focused development
 - **Flink Agents standalone** for Python/MCP support when v1.0 releases
 
 ---
@@ -854,7 +870,7 @@ If choosing one:
 ### Q: Is the hybrid approach ready for use?
 
 **A:** For development and testing, yes. For production, not yet:
-- **Agentic-Flink components**: 112 tests, early-stage
+- **Agentic-Flink components**: tested, early-stage
 - **Flink Agents**: Preview only (v0.1.0, not production-recommended)
 - **Integration layer**: Adapters complete and tested
 - **Recommendation**: Both are early-stage software - suitable for development/testing, not yet recommended for production
@@ -920,12 +936,12 @@ Benchmarks will be published when Flink Agents v1.0 releases.
 1. **Different Origins, Shared Goals**: Both projects aim to make scalable, reliable AI agents a reality on Flink
 
 2. **Complementary Strengths**:
-   - Agentic-Flink: Storage, context management, validation patterns (112 tests)
+   - Agentic-Flink: Storage, context management, validation patterns
    - Flink Agents: Official patterns, MCP protocol, Python APIs, Apache governance
 
 3. **Integration is Key**: Use the plugin architecture to combine capabilities
 
-4. **Maturity**: Both are early-stage - Agentic-Flink has 112 tests; Flink Agents is preview (0.1.0). Neither recommended for production yet.
+4. **Maturity**: Both are early-stage; Flink Agents is preview (0.1.0). Neither recommended for production yet.
 
 5. **Evolution Path**: Projects will converge over time with features flowing both directions
 

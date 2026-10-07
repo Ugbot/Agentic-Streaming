@@ -11,6 +11,18 @@ This guide walks through each example in detail, explaining what happens at each
 
 ---
 
+## How the examples are run
+
+Flink is a `provided` dependency of the root module, so `java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar ...`
+fails with `NoClassDefFoundError: org/apache/flink/configuration/ReadableConfig`. The supported way to run a
+class from `src/main/java/org/agentic/flink/example/` is the `examples` Maven profile, which forks a JVM with the
+test-scope classpath (Flink included):
+
+```bash
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests   # once per clone
+./mvnw -q -P examples compile exec:exec -Dexec.mainClass=<fully qualified class>
+```
+
 ## 1. Simple Agent Example
 
 **What it demonstrates:** Basic agent workflow with tools, validation, and completion.
@@ -20,9 +32,17 @@ This guide walks through each example in detail, explaining what happens at each
 ### Running It
 
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.SimpleAgentExample
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample
 ```
+
+**Status:** this command compiles and submits the job but currently fails before any event is processed with
+`InvalidProgramException: Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable`
+(`AgentExecutionStream` registers a lambda that captures the non-serializable stream builder). The walk-through
+below describes the intended flow of the legacy `AgentExecutionStream` DSL; the failure is tracked in
+[`docs/audit-backlog.md`](../audit-backlog.md) under AGS-40. For an example that runs end to end see
+[Building Your Own](#4-building-your-own) or the storage job in
+[`docs/guides/storage-quickstart.md`](../guides/storage-quickstart.md).
 
 ### What Happens (Step-by-Step)
 
@@ -189,13 +209,16 @@ When you run this, you'll see:
 
 **File:** `RagAgentExample.java`
 
-**Prerequisites:** Qdrant must be running (`docker run -p 6333:6333 qdrant/qdrant`)
+**Prerequisites:** Ollama at `http://localhost:11434` with `nomic-embed-text:latest` pulled, and Qdrant
+(`podman run -p 6333:6333 -p 6334:6334 qdrant/qdrant`). The tool executors read `ConfigKeys.DEFAULT_OLLAMA_BASE_URL`
+and `ConfigKeys.DEFAULT_QDRANT_HOST`/`DEFAULT_QDRANT_PORT`. Without both services the job fails at the first tool call;
+the walk-through below was not re-run against live services.
 
 ### Running It
 
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.RagAgentExample
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.RagAgentExample
 ```
 
 ### What Happens (Step-by-Step)
@@ -379,9 +402,15 @@ AgentEvent embeddingEvent = createEmbeddingEvent(
 ### Running It
 
 ```bash
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.ContextManagementExample
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.ContextManagementExample
 ```
+
+**Status:** this command compiles and submits the job but currently fails at job graph construction with
+`IllegalStateException: Auto generated UIDs have been disabled but no UID or hash has been assigned to operator
+compaction-requests` (the example disables `PipelineOptions.AUTO_GENERATE_UIDS` and then omits a `uid` on one
+source). The walk-through below describes the intended flow; the failure is tracked in
+[`docs/audit-backlog.md`](../audit-backlog.md) under AGS-40.
 
 ### What Happens (Step-by-Step)
 
@@ -583,33 +612,27 @@ Let's build a complete example from scratch: A weather assistant agent!
 
 ### Step 1: Create the Tool
 
-Create `WeatherTool.java`:
+Create `src/main/java/org/agentic/flink/tools/WeatherTool.java`. `AbstractToolExecutor` takes the tool id and
+description in its constructor and provides a typed `getRequiredParameter(params, key, type)`:
 
-```java
+```java complete
 package org.agentic.flink.tools;
 
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class WeatherTool extends AbstractToolExecutor {
 
-    @Override
-    public String getToolId() {
-        return "weather";
-    }
-
-    @Override
-    public String getDescription() {
-        return "Gets current weather for a location";
+    public WeatherTool() {
+        super("weather", "Gets current weather for a location");
     }
 
     @Override
     public CompletableFuture<Object> execute(Map<String, Object> params) {
-        String location = getRequiredParameter(params, "location");
+        String location = getRequiredParameter(params, "location", String.class);
 
-        // In real app, call weather API
-        // For demo, return mock data
+        // In a real application this would call a weather API.
         Map<String, Object> weather = new HashMap<>();
         weather.put("location", location);
         weather.put("temperature", 72);
@@ -628,129 +651,137 @@ public class WeatherTool extends AbstractToolExecutor {
 
 ### Step 2: Create the Example
 
-Create `WeatherAgentExample.java`:
+Create `src/main/java/org/agentic/flink/example/WeatherAgentExample.java`. `AgentConfig`, `AgentEvent` and
+`ToolCallRequest` are Lombok `@Data` classes: construct them with the constructors shown and use the generated
+setters (`setMaxIterations`, `setEnableValidation`, `setCurrentStage`); there is no `AgentConfig.addTool` or
+`ToolCallRequest.addParameter`. The requested tool and its parameters travel in the event's data map, which is how
+`SimpleAgentExample` encodes tool calls as well:
 
-```java
+```java complete
 package org.agentic.flink.example;
 
-import org.agentic.flink.core.*;
-import org.agentic.flink.serde.*;
-import org.agentic.flink.tools.*;
+import java.util.Map;
+import java.util.Optional;
+import org.agentic.flink.core.AgentConfig;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.tools.ToolExecutor;
+import org.agentic.flink.tools.ToolExecutorRegistry;
+import org.agentic.flink.tools.WeatherTool;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import java.util.Map;
 
 public class WeatherAgentExample {
 
     public static void main(String[] args) throws Exception {
-        // 1. Setup Flink
-        StreamExecutionEnvironment env =
-            StreamExecutionEnvironment.getExecutionEnvironment();
+        // 1. Set up Flink
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
 
-        // 2. Register tool
+        // 2. Register the tool executor
         ToolExecutorRegistry registry = new ToolExecutorRegistry();
         registry.register(new WeatherTool());
 
-        // 3. Configure agent
-        AgentConfig config = new AgentConfig();
-        config.setAgentId("weather-agent");
+        // 3. Configure the agent; only allowed tools may be called
+        AgentConfig config = new AgentConfig("weather-agent", "Weather Agent");
+        config.addAllowedTool("weather");
         config.setMaxIterations(3);
-        config.setValidationEnabled(true);
+        config.setEnableValidation(true);
 
-        // 4. Define tool for agent
-        ToolDefinition weatherTool = new ToolDefinition();
-        weatherTool.setToolId("weather");
-        weatherTool.setName("Weather Service");
-        weatherTool.setDescription("Gets current weather");
-        weatherTool.addInputParameter("location", "string", "City name");
-        config.addTool(weatherTool);
+        // 4. Create one TOOL_CALL_REQUESTED event per city
+        DataStream<AgentEvent> events =
+            env.fromElements(
+                createWeatherEvent("New York"),
+                createWeatherEvent("London"),
+                createWeatherEvent("Tokyo"));
 
-        // 5. Create events
-        AgentEvent event1 = createWeatherEvent("New York");
-        AgentEvent event2 = createWeatherEvent("London");
-        AgentEvent event3 = createWeatherEvent("Tokyo");
+        // 5. Execute the requested tool for each event and print the result
+        events.map(new ToolCallFunction(registry, config)).print();
 
-        // 6. Create stream
-        DataStream<AgentEvent> events = env.fromElements(
-            event1, event2, event3
-        );
-
-        // 7. Print results
-        events.print();
-
-        // 8. Execute
         env.execute("Weather Agent Example");
     }
 
     private static AgentEvent createWeatherEvent(String city) {
-        AgentEvent event = new AgentEvent();
-        event.setFlowId("flow-" + city);
-        event.setUserId("user-001");
-        event.setAgentId("weather-agent");
-        event.setEventType(AgentEventType.TOOL_CALL_REQUESTED);
-
-        ToolCallRequest request = new ToolCallRequest(
-            "req-" + city, event.getFlowId(),
-            event.getUserId(), event.getAgentId()
-        );
-        request.setToolId("weather");
-        request.addParameter("location", city);
-
-        event.putData("toolCallRequest", request);
+        AgentEvent event =
+            new AgentEvent("flow-" + city, "user-001", "weather-agent", AgentEventType.TOOL_CALL_REQUESTED);
+        event.setCurrentStage("TOOL_CALL");
+        event.putData("toolId", "weather");
+        event.putData("parameters", Map.of("location", city));
         return event;
+    }
+
+    /** Runs the tool named by the event; ToolExecutorRegistry and AgentConfig are Serializable. */
+    public static class ToolCallFunction implements MapFunction<AgentEvent, String> {
+        private final ToolExecutorRegistry registry;
+        private final AgentConfig config;
+
+        public ToolCallFunction(ToolExecutorRegistry registry, AgentConfig config) {
+            this.registry = registry;
+            this.config = config;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public String map(AgentEvent event) throws Exception {
+            String toolId = event.getData("toolId", String.class);
+            if (!config.isToolAllowed(toolId)) {
+                return event.getFlowId() + ": tool " + toolId + " is not allowed";
+            }
+            Optional<ToolExecutor> executor = registry.getExecutor(toolId);
+            if (executor.isEmpty()) {
+                return event.getFlowId() + ": no executor registered for " + toolId;
+            }
+            Map<String, Object> parameters = (Map<String, Object>) event.getData("parameters");
+            Object result = executor.get().execute(parameters).get();
+            return event.getFlowId() + ": " + result;
+        }
     }
 }
 ```
 
+Both listings are compiled by `python docs/tools/check_java_snippets.py` against the root module classpath.
+
 ### Step 3: Build and Run
 
 ```bash
-mvn clean package
-
-java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
-  org.agentic.flink.example.WeatherAgentExample
+./mvnw -q -P examples compile exec:exec \
+  -Dexec.mainClass=org.agentic.flink.example.WeatherAgentExample
 ```
 
 ### Expected Output
 
+The job runs to completion with exit code 0 and prints one line per event (SLF4J warnings about a missing
+provider precede them):
+
 ```
-[INFO] Agent weather-agent: Executing tool=weather, location=New York
-[INFO] Weather result: {temperature=72, condition=Sunny}
-[INFO] Agent weather-agent: Executing tool=weather, location=London
-[INFO] Weather result: {temperature=68, condition=Cloudy}
-[INFO] Agent weather-agent: Executing tool=weather, location=Tokyo
-[INFO] Weather result: {temperature=75, condition=Clear}
+flow-New York: {condition=Sunny, temperature=72, humidity=45, location=New York}
+flow-London: {condition=Sunny, temperature=72, humidity=45, location=London}
+flow-Tokyo: {condition=Sunny, temperature=72, humidity=45, location=Tokyo}
 ```
 
 ### Enhance It!
 
 **Add validation:**
 
-```java
-public class WeatherValidator implements Validator {
-    @Override
-    public ValidationResult validate(Object result) {
-        Map<String, Object> weather = (Map<String, Object>) result;
-        int temp = (int) weather.get("temperature");
+```java fragment
+// Inside ToolCallFunction.map, after the tool has returned: org.agentic.flink.serde.ValidationResult
+// carries the flow/user/agent ids plus error and warning lists.
+Map<String, Object> weather = (Map<String, Object>) result;
+int temp = (int) weather.get("temperature");
 
-        ValidationResult validation = new ValidationResult();
-
-        if (temp < -100 || temp > 150) {
-            validation.setValid(false);
-            validation.addError("Temperature out of realistic range!");
-        } else {
-            validation.setValid(true);
-        }
-
-        return validation;
-    }
+ValidationResult validation =
+    new ValidationResult(event.getFlowId(), event.getUserId(), event.getAgentId());
+if (temp < -100 || temp > 150) {
+    validation.addError("Temperature out of realistic range");
+} else {
+    validation.setValid(true);
 }
 ```
 
 **Add memory:**
 
-```java
+```java fragment
 // Remember previously queried locations
 AgentContext context = new AgentContext(/* ... */);
 context.addContext(new ContextItem(

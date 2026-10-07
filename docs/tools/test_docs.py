@@ -135,3 +135,33 @@ def test_no_dashes_in_new_prose() -> None:
             if "\u2013" in line or "\u2014" in line:
                 offenders.append(f"{page.relative_to(REPO)}:{number}")
     assert offenders == []
+
+
+def test_env_var_names_match_config_keys() -> None:
+    """Every AGENTIC_FLINK_* name in docs/ derives from a real config key (docs/tools/check_env_vars.py)."""
+    from check_env_vars import drift, generated_block_matches
+
+    assert drift() == [], "run python docs/tools/check_env_vars.py for the derivation rules"
+    assert generated_block_matches() is None, "run python docs/tools/check_env_vars.py --write"
+
+
+def test_complete_java_snippets_compile() -> None:
+    """Every ```java complete block (and every block shaped like a compilation unit) compiles
+    against the root module classpath (docs/tools/check_java_snippets.py)."""
+    import shutil
+
+    from check_java_snippets import DEFAULT_CLASSPATH_FILE, compile_page, ensure_classpath, selected
+
+    javac = shutil.which("javac")
+    assert javac is not None, "javac (JDK 21) is required to compile the documented Java snippets"
+    classpath = ensure_classpath(DEFAULT_CLASSPATH_FILE)
+    by_page: dict = {}
+    for snippet in selected():
+        by_page.setdefault(snippet.page, []).append(snippet)
+    assert by_page, "no complete java snippets were selected under docs/"
+    failures = {
+        str(page.relative_to(REPO)): error
+        for page, page_snippets in by_page.items()
+        if (error := compile_page(page_snippets, classpath, javac))
+    }
+    assert failures == {}
