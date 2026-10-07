@@ -32,8 +32,10 @@ The portable router→path→verifier graph + tools + retrieval are reused verba
 ## Run
 
 ```bash
+pip install -e ports/pyagentic -e 'ports/experimental/celery[celery]'
+
 # live, in-process (eager mode, no broker) - what the test uses:
-python ports/experimental/celery/agentic_celery.py
+python -m agentic_celery
 # ->
 # [c1] queue=agentic.conv.0 path=cards    ok=True reply=...
 # [c2] queue=agentic.conv.0 path=payments ok=True reply=[payments] Your balance is 1234.56. tools=['get_balance']
@@ -46,5 +48,10 @@ AGENTIC_CELERY_BACKEND=redis://localhost:6379/1 \
     celery -A agentic_celery:app worker -Q agentic.conv.0,agentic.conv.1 -l info
 ```
 
-Covered by the adapter suite (`ports/experimental/tests/test_adapters.py`), including a check that
+`conversation_queue` hashes the conversation id with `zlib.crc32`, so every producer and
+worker process maps the same conversation to the same queue (Python's `hash()` is salted
+per process and must not be used for routing).
+
+Covered by `ports/experimental/tests/test_celery.py` (run `pytest ports/experimental` from the
+repository root): deterministic cross-process routing, eager turns with memory, and a check that
 an **extended** core graph (a new path + tool) flows through the real Celery task seam.

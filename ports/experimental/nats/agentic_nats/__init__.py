@@ -1,25 +1,26 @@
-"""Agentic-Flink on **NATS JetStream** — pure Python.
+"""Agentic Streaming on **NATS JetStream**, pure Python.
 
 See ../../../docs/portability/nats.md. NATS JetStream is a persistent streaming + KV
 layer on NATS. The essence maps cleanly:
 
   - **JetStream KV** = durable keyed state (C1). A per-conversation envelope
-    (transcript + attributes + owner) lives under one KV key ``conv.<cid>`` in a
-    JetStream KV bucket — file-backed and revisioned, so it survives restarts and the
+    (transcript + attributes + owner) lives under one KV key ``conv_<cid>`` in a
+    JetStream KV bucket, file-backed and revisioned, so it survives restarts and the
     revision enables compare-and-set single-writer (C2 backstop).
   - **A JetStream stream + consumer** is the transport. Turns are published to
     ``agentic.turn.<cid>`` on a persistent stream; a consumer delivers them in publish
-    order and the worker acks after processing — at-least-once with redelivery (C3).
+    order and the worker acks after processing: at-least-once with redelivery (C3).
     The KV envelope makes a redelivered turn idempotent.
   - **asyncio** is native, giving the async stage (C4) for free.
 
 The turn itself runs the portable router->path->verifier graph from ``pyagentic``,
-hydrated from KV before and flushed to KV after — so the durable state is JetStream
+hydrated from KV before and flushed to KV after, so the durable state is JetStream
 KV while the agent logic is the shared, model-free core (the load/run/save bracket,
 exactly like the Pulsar Function's state-store access).
 
-Run (needs a JetStream server, e.g. `podman run -p 4222:4222 nats:latest -js`):
-    python agentic_nats.py
+Run (needs a JetStream server, e.g. ``podman run -p 4222:4222 nats:latest -js``):
+    pip install 'agentic-nats[nats]'
+    python -m agentic_nats
 """
 
 from __future__ import annotations
@@ -27,39 +28,51 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
-# Make the pure-Python core at ports/pyagentic importable (or `pip install -e ../../pyagentic`).
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pyagentic"))
-
-from pyagentic.banking import build_banking_graph, default_tools, seed_kb  # noqa: E402
-from pyagentic.core import AgentContext, Event, RoutedGraph, TurnResult  # noqa: E402
-from pyagentic.memory import (  # noqa: E402
+from pyagentic.banking import build_banking_graph, default_tools, seed_kb
+from pyagentic.core import AgentContext, Event, RoutedGraph, TurnResult
+from pyagentic.memory import (
     ChatMessage,
     ConversationStore,
     InMemoryConversationStore,
     InMemoryKeyedStateStore,
 )
-from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever  # noqa: E402
-from pyagentic.tools import ToolRegistry  # noqa: E402
+from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever
+from pyagentic.tools import ToolRegistry
 
 try:
-    import nats
-    from nats.js.errors import BucketNotFoundError
-    if not hasattr(nats, "connect"):  # guard against a namespace-package shadow
-        nats = None
-except ImportError:  # keep importable without the engine installed
-    nats = None
-    BucketNotFoundError = Exception  # type: ignore
+    from nats.errors import TimeoutError as NatsTimeoutError
+    from nats.js.errors import BadRequestError, BucketNotFoundError, KeyNotFoundError
 
+    import nats
+except ImportError as exc:
+    raise ImportError(
+        "agentic-nats needs the optional 'nats' extra: pip install 'agentic-nats[nats]'"
+    ) from exc
+
+__all__ = [
+    "DEFAULT_URL",
+    "KV_BUCKET",
+    "NatsRuntime",
+    "REPLY_SUBJECT_PREFIX",
+    "STREAM",
+    "TURN_SUBJECT_PREFIX",
+    "conversation_key",
+]
 
 DEFAULT_URL = os.environ.get("AGENTIC_NATS_URL", "nats://127.0.0.1:4222")
 STREAM = "AGENTIC_TURNS"
 TURN_SUBJECT_PREFIX = "agentic.turn."
 REPLY_SUBJECT_PREFIX = "agentic.reply."
 KV_BUCKET = "agentic_conversations"
+
+
+def conversation_key(conversation_id: str) -> str:
+    """KV key / subject token for a conversation. ``.`` is a subject separator in NATS,
+    so it is mapped to ``_``; the mapping is a pure function of the id, so every
+    producer and worker agrees on it."""
+    return "conv_" + conversation_id.replace(".", "_")
 
 
 # ---- durable per-conversation state on JetStream KV (C1) ------------------------
@@ -76,7 +89,7 @@ def _hydrate(envelope: Optional[bytes], cid: str) -> Tuple[InMemoryConversationS
         return store, None
     data = json.loads(envelope.decode())
     for role, content, tool_name, tool_call_id in data.get("messages", []):
-        store.append(cid, ChatMessage(role, content, tool_name, tool_call_id))
+        store.append(cid, ChatMessage(role=role, content=content, tool_name=tool_name, tool_call_id=tool_call_id))
     for k, v in data.get("attrs", {}).items():
         store.put_attribute(cid, k, v)
     owner = data.get("owner")
@@ -89,10 +102,18 @@ class NatsRuntime:
     """``pyagentic.Runtime`` over NATS JetStream. State is durable in a KV bucket; the
     turn transport is a persistent stream. Stateless graph deps are built once."""
 
-    def __init__(self, url: str = DEFAULT_URL, graph=None, tools=None, retriever=None):
-        if nats is None:
-            raise RuntimeError("nats-py not installed: pip install nats-py")
+    def __init__(
+        self,
+        url: str = DEFAULT_URL,
+        graph: Optional[RoutedGraph] = None,
+        tools: Optional[ToolRegistry] = None,
+        retriever: Optional[TwoTierRetriever] = None,
+        bucket: str = KV_BUCKET,
+        stream: str = STREAM,
+    ):
         self.url = url
+        self.bucket = bucket
+        self.stream = stream
         # Defaults to the shared banking essence; injectable so a new tool/path added to
         # the core (or an extended graph) flows through this engine with no other change.
         self.graph: RoutedGraph = graph if graph is not None else build_banking_graph()
@@ -111,36 +132,41 @@ class NatsRuntime:
     async def connect(self) -> None:
         self._nc = await nats.connect(self.url)
         self._js = self._nc.jetstream()
-        # Idempotent stream + KV bucket creation.
+        # Idempotent stream + KV bucket creation: CREATE on an existing stream with the
+        # same subjects succeeds; a differing definition is a 400 we treat as "exists".
         try:
-            await self._js.add_stream(name=STREAM, subjects=[TURN_SUBJECT_PREFIX + "*"])
-        except Exception:
-            pass  # already exists
+            await self._js.add_stream(name=self.stream, subjects=[TURN_SUBJECT_PREFIX + "*"])
+        except BadRequestError:
+            await self._js.stream_info(self.stream)
         try:
-            self._kv = await self._js.key_value(bucket=KV_BUCKET)
+            self._kv = await self._js.key_value(bucket=self.bucket)
         except BucketNotFoundError:
-            self._kv = await self._js.create_key_value(bucket=KV_BUCKET)
+            self._kv = await self._js.create_key_value(bucket=self.bucket)
 
     async def close(self) -> None:
         if self._nc is not None:
             await self._nc.drain()
+            self._nc = None
 
-    def _kv_key(self, cid: str) -> str:
-        # KV keys can't contain '.' as a literal segment we want; map cid -> safe key.
-        return "conv_" + cid.replace(".", "_")
+    async def __aenter__(self) -> "NatsRuntime":
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        await self.close()
 
     async def _load(self, cid: str) -> Tuple[InMemoryConversationStore, Optional[str], Optional[int]]:
         try:
-            entry = await self._kv.get(self._kv_key(cid))
-            store, owner = _hydrate(entry.value, cid)
-            return store, owner, entry.revision
-        except Exception:
+            entry = await self._kv.get(conversation_key(cid))
+        except KeyNotFoundError:
             store, owner = _hydrate(None, cid)
             return store, owner, None
+        store, owner = _hydrate(entry.value, cid)
+        return store, owner, entry.revision
 
     async def _save(self, cid: str, store: ConversationStore, owner: Optional[str], revision: Optional[int]) -> None:
         payload = _dump_envelope(store, cid, owner)
-        key = self._kv_key(cid)
+        key = conversation_key(cid)
         if revision is None or revision == 0:
             await self._kv.put(key, payload)
         else:
@@ -150,42 +176,61 @@ class NatsRuntime:
     async def handle_turn(self, cid: str, text: str, user_id: str) -> dict:
         """Load KV envelope -> run the portable graph -> persist envelope."""
         store, _owner, revision = await self._load(cid)
-        ctx = AgentContext(cid, user_id, store, self._state, self.tools, self.retriever)
-        result: TurnResult = self.graph.handle(Event(cid, text, user_id), ctx)
+        ctx = AgentContext(
+            conversation_id=cid,
+            user_id=user_id,
+            store=store,
+            state=self._state,
+            tools=self.tools,
+            retriever=self.retriever,
+        )
+        result: TurnResult = self.graph.handle(Event(conversation_id=cid, text=text, user_id=user_id), ctx)
         await self._save(cid, store, user_id, revision)
         return {
             "conversation_id": result.conversation_id,
             "reply": result.reply,
             "path": result.path,
             "ok": result.ok,
-            "tool_calls": result.tool_calls,
+            "tool_calls": list(result.tool_calls),
         }
 
     async def submit(self, event: Event) -> TurnResult:
-        """Direct (non-streamed) submit — load/run/save against KV. Used by the runtime
-        Protocol; the streamed path is :meth:`worker` + :meth:`publish_turn`."""
+        """Direct (non-streamed) submit: load/run/save against KV. Used by the runtime
+        Protocol; the streamed path is :meth:`run_worker` + :meth:`publish_turn`."""
         d = await self.handle_turn(event.conversation_id, event.text, event.user_id)
-        return TurnResult(d["conversation_id"], d["reply"], d["path"], d["ok"], d["tool_calls"])
+        return TurnResult(
+            conversation_id=d["conversation_id"],
+            reply=d["reply"],
+            path=d["path"],
+            ok=d["ok"],
+            tool_calls=d["tool_calls"],
+        )
+
+    async def message_count(self, cid: str) -> int:
+        store, _owner, _revision = await self._load(cid)
+        return store.message_count(cid)
 
     # ---- streamed transport: publish a turn, a worker consumes + replies ----
 
     async def publish_turn(self, cid: str, text: str, user_id: str) -> None:
         payload = json.dumps({"conversation_id": cid, "text": text, "user_id": user_id}).encode()
-        await self._js.publish(TURN_SUBJECT_PREFIX + self._kv_key(cid), payload)
+        await self._js.publish(TURN_SUBJECT_PREFIX + conversation_key(cid), payload)
 
-    async def run_worker(self, stop: asyncio.Event) -> None:
+    async def run_worker(self, stop: asyncio.Event, durable: str = "agentic-worker") -> None:
         """A durable JetStream consumer: process turns in publish order, reply, ack."""
-        sub = await self._js.subscribe(TURN_SUBJECT_PREFIX + "*", durable="agentic-worker")
+        sub = await self._js.subscribe(TURN_SUBJECT_PREFIX + "*", durable=durable, stream=self.stream)
         try:
             while not stop.is_set():
                 try:
                     msg = await sub.next_msg(timeout=0.5)
-                except Exception:
+                except NatsTimeoutError:
                     continue
                 req = json.loads(msg.data.decode())
                 d = await self.handle_turn(req["conversation_id"], req["text"], req["user_id"])
-                await self._nc.publish(REPLY_SUBJECT_PREFIX + self._kv_key(req["conversation_id"]),
-                                       json.dumps(d).encode())
+                await self._nc.publish(
+                    REPLY_SUBJECT_PREFIX + conversation_key(req["conversation_id"]),
+                    json.dumps(d).encode(),
+                )
                 await msg.ack()
         finally:
             await sub.unsubscribe()
@@ -227,14 +272,6 @@ async def _demo() -> None:
         print(f"[{r['conversation_id']}] path={r['path']} ok={r['ok']} "
               f"reply={r['reply']!r} tools={r['tool_calls']}")
     # Prove C1: c1's two turns persisted to the same KV envelope.
-    store, _o, _rev = await rt._load("c1")
-    print(f"\nc1 persisted message count = {store.message_count('c1')} (state durable in JetStream KV)")
+    count = await rt.message_count("c1")
+    print(f"\nc1 persisted message count = {count} (state durable in JetStream KV)")
     await rt.close()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    if nats is None:
-        print("nats-py not installed. `pip install nats-py` and run a JetStream server,")
-        print("e.g. `podman run -p 4222:4222 nats:latest -js`, then: python agentic_nats.py")
-    else:
-        asyncio.run(_demo())

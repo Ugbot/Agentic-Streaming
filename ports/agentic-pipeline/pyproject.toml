@@ -7,13 +7,13 @@ name = "agentic-pipeline"
 # The version is the release tag (v<PEP 440>) of the repository, read by setuptools-scm.
 # The four Python packages of this repository share one tag; see docs/release.md.
 dynamic = ["version"]
-description = "Declarative pipeline.yaml loader for the pure Python agentic core: build once, run on the local, Celery or NATS backend"
+description = "Declarative pipeline.yaml loader for the pure Python agentic core: build once, run on the local, Celery, NATS or Ray backend"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Agentic Streaming contributors" }]
-keywords = ["agentic", "agents", "pipeline", "yaml", "celery", "nats"]
+keywords = ["agentic", "agents", "pipeline", "yaml", "celery", "nats", "ray"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
@@ -34,11 +34,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Engine packages for the non-local backends. The adapter modules themselves
-# (agentic_celery in ports/experimental/celery, agentic_nats in ports/experimental/nats) are
-# experimental single-file modules that must be importable as well; see README "Backends".
+# Engine packages for the non-local backends. The adapter packages themselves
+# (agentic-celery, agentic-nats, agentic-ray under ports/experimental) are experimental and
+# installed from the checkout, `pip install -e ports/experimental/<engine>`; see README "Backends".
 celery = ["celery>=5,<6"]
 nats = ["nats-py>=2,<3"]
+ray = ["ray>=2.9"]
 redis = ["redis>=5,<7"]
 test = ["pytest>=7,<9"]
 

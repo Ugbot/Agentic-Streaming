@@ -1,4 +1,4 @@
-"""Agentic-Flink on **Dask** — pure Python, the BATCH DATA PLANE.
+"""Agentic Streaming on **Dask**, pure Python, the BATCH DATA PLANE.
 
 See ../../../docs/portability/dask.md. Dask is the wrong home for the live keyed agent
 loop, but the right one for the heavy offline work the project also needs:
@@ -6,46 +6,54 @@ parallel RAG ingestion (chunk -> embed -> build the cold index) and offline eval
 sweeps (recall@k, or replaying the routed graph over many transcripts). Those reuse
 the pure ``pyagentic`` retrieval/graph logic; Dask only parallelizes the map.
 
-Falls back to a sequential map when Dask isn't installed, so the pipeline logic
-runs and is verifiable either way.
+Dask is an optional extra (``pip install 'agentic-dask[dask]'``). Without it the maps
+run sequentially in-process and produce the same results; :func:`parallel_backend`
+reports which one is active.
 
-Run (`pip install "dask[distributed]"`):  python agentic_dask.py
+Run:  python -m agentic_dask
 """
 
 from __future__ import annotations
 
-import sys
+from collections import OrderedDict
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "pyagentic"))
-
-from pyagentic.banking import KB, build_banking_graph, default_tools, seed_kb  # noqa: E402
-from pyagentic.core import AgentContext, Event  # noqa: E402
-from pyagentic.memory import InMemoryConversationStore, InMemoryKeyedStateStore  # noqa: E402
-from pyagentic.retrieval import (  # noqa: E402
-    InMemoryHotVectorIndex,
-    Scored,
-    TwoTierRetriever,
-    hashing_embedder,
-)
+from pyagentic.banking import KB, build_banking_graph, default_tools, seed_kb
+from pyagentic.core import AgentContext, Event
+from pyagentic.memory import InMemoryConversationStore, InMemoryKeyedStateStore
+from pyagentic.retrieval import InMemoryHotVectorIndex, TwoTierRetriever, hashing_embedder
 
 try:
     import dask.bag as db
 except ImportError:
     db = None
 
+__all__ = [
+    "EvalCase",
+    "eval_recall",
+    "ingest_corpus",
+    "parallel_backend",
+    "replay_graph",
+]
+
 _EMBED = hashing_embedder(64)
 
 
+def parallel_backend() -> str:
+    """``"dask"`` when the optional extra is installed, else ``"sequential"``."""
+    return "dask" if db is not None else "sequential"
+
+
 def _pmap(fn: Callable, items: List, npartitions: int = 4) -> List:
-    """Parallel map via Dask bag when available, else sequential — same result.
+    """Parallel map via Dask bag when available, else sequential; same result.
 
     Uses the **threads** scheduler so closures may share an in-memory index
     (the demo's stand-in cold store) without pickling. A true distributed run
-    points the cold tier at an external store (pgvector/Qdrant/Fluss) — which is
-    picklable/remote — and can then use the process/distributed scheduler."""
+    points the cold tier at an external store (pgvector/Qdrant/Fluss), which is
+    picklable/remote, and can then use the process/distributed scheduler."""
+    if not items:
+        return []
     if db is not None:
         return db.from_sequence(items, npartitions=npartitions).map(fn).compute(scheduler="threads")
     return [fn(x) for x in items]
@@ -83,26 +91,48 @@ def eval_recall(index: InMemoryHotVectorIndex, cases: List[EvalCase], k: int = 1
 # ---- 3. Replay the routed graph over many transcripts in parallel (eval/backtest) ----
 
 def replay_graph(transcripts: List[Tuple[str, str]]) -> List[dict]:
-    """transcripts: list of (conversation_id, text). Each conversation is
-    independent -> embarrassingly parallel. Returns the per-turn routing result."""
+    """transcripts: list of (conversation_id, text) in submit order.
+
+    Conversations are independent, so the map is embarrassingly parallel *across*
+    conversations; the turns *within* one conversation run in order on one task with
+    one ConversationStore, so multi-turn memory holds (single writer per conversation).
+    Returns the per-turn routing result in the original transcript order."""
     graph = build_banking_graph()
     tools = default_tools()
     hot = InMemoryHotVectorIndex()
     seed_kb(hot)
     retriever = TwoTierRetriever(hot, None, 4, 4)
 
-    def run(item: Tuple[str, str]) -> dict:
-        cid, text = item
-        ctx = AgentContext(cid, "batch", InMemoryConversationStore(), InMemoryKeyedStateStore(), tools, retriever)
-        res = graph.handle(Event(cid, text, "batch"), ctx)
-        return {"conversation_id": cid, "path": res.path, "ok": res.ok}
+    by_conversation: "OrderedDict[str, List[Tuple[int, str]]]" = OrderedDict()
+    for position, (cid, text) in enumerate(transcripts):
+        by_conversation.setdefault(cid, []).append((position, text))
 
-    return _pmap(run, transcripts)
+    def run(item: Tuple[str, List[Tuple[int, str]]]) -> List[Tuple[int, dict]]:
+        cid, turns = item
+        store = InMemoryConversationStore()
+        state = InMemoryKeyedStateStore()
+        out: List[Tuple[int, dict]] = []
+        for position, text in turns:
+            ctx = AgentContext(
+                conversation_id=cid,
+                user_id="batch",
+                store=store,
+                state=state,
+                tools=tools,
+                retriever=retriever,
+            )
+            res = graph.handle(Event(conversation_id=cid, text=text, user_id="batch"), ctx)
+            out.append((position, {"conversation_id": cid, "path": res.path, "ok": res.ok}))
+        return out
+
+    per_conversation = _pmap(run, list(by_conversation.items()))
+    flat = [entry for chunk in per_conversation for entry in chunk]
+    flat.sort(key=lambda entry: entry[0])
+    return [result for _, result in flat]
 
 
-def _demo():
-    backend = "Dask" if db is not None else "sequential (dask not installed)"
-    print(f"RAG batch pipeline backend: {backend}")
+def _demo() -> float:
+    print(f"RAG batch pipeline backend: {parallel_backend()}")
 
     index = ingest_corpus(KB)
     print(f"ingested {index.size()} docs into the cold index")
@@ -122,7 +152,3 @@ def _demo():
     paths = {r["conversation_id"]: r["path"] for r in results}
     print(f"routed-graph replay paths: {paths}")
     return recall
-
-
-if __name__ == "__main__":  # pragma: no cover
-    _demo()

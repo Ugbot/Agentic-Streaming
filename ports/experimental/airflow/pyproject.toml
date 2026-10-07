@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-airflow"
+version = "0.1.0"
+description = "Experimental Agentic Streaming adapter: the router/path/verifier graph as an Airflow 3 branching DAG on the pyagentic core"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = ["pyagentic"]
+
+[project.optional-dependencies]
+airflow = ["apache-airflow>=3.0", "apache-airflow-providers-standard>=1.0"]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/Ugbot/Agentic-Streaming"
+Source = "https://github.com/Ugbot/Agentic-Streaming/tree/main/ports/experimental/airflow"
+
+[tool.setuptools.packages.find]
+include = ["agentic_airflow*"]
+
+[tool.uv.sources]
+pyagentic = { path = "../../pyagentic", editable = true }

@@ -103,8 +103,10 @@ def create_app(backend: Optional[Backend] = None, auth: Optional[BearerAuth] = N
     async def agent_card() -> dict:
         return AGENT_CARD
 
+    authenticated = Depends(auth)
+
     @app.post("/agent", response_model=TurnResponse)
-    async def agent(req: TurnRequest, principal: Principal = Depends(auth)) -> TurnResponse:
+    async def agent(req: TurnRequest, principal: Principal = authenticated) -> TurnResponse:
         if req.user_id is not None and req.user_id != principal.subject:
             raise HTTPException(status_code=403, detail="user_id does not match the authenticated principal")
         result = app.state.backend.submit(
@@ -115,7 +117,7 @@ def create_app(backend: Optional[Backend] = None, auth: Optional[BearerAuth] = N
         return TurnResponse(**result)
 
     @app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-    async def conversation(conversation_id: str, principal: Principal = Depends(auth)) -> ConversationResponse:
+    async def conversation(conversation_id: str, principal: Principal = authenticated) -> ConversationResponse:
         if "/" in conversation_id:
             raise HTTPException(status_code=422, detail="conversation_id must not contain '/'")
         messages = app.state.backend.history(scoped_conversation_id(principal, conversation_id))

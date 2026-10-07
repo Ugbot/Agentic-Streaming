@@ -12,7 +12,6 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-
 from gateway_fastapi.app import create_app
 from gateway_fastapi.auth import DEV_SUBJECT, BearerAuth, parse_tokens
 from gateway_fastapi.backends import LocalBackend
@@ -176,9 +175,11 @@ def test_missing_or_wrong_token_is_401() -> None:
 def test_client_supplied_user_id_cannot_impersonate() -> None:
     c = _bare_client(_auth())
     other = "u-" + uuid.uuid4().hex[:8]
-    resp = c.post("/agent", json={"conversation_id": _cid(), "text": random.choice(BALANCE_TEXTS), "user_id": other}, headers=ALICE)
+    body = {"conversation_id": _cid(), "text": random.choice(BALANCE_TEXTS), "user_id": other}
+    resp = c.post("/agent", json=body, headers=ALICE)
     assert resp.status_code == 403
-    ok = c.post("/agent", json={"conversation_id": _cid(), "text": random.choice(BALANCE_TEXTS), "user_id": "alice"}, headers=ALICE)
+    body = {"conversation_id": _cid(), "text": random.choice(BALANCE_TEXTS), "user_id": "alice"}
+    ok = c.post("/agent", json=body, headers=ALICE)
     assert ok.status_code == 200
 
 
@@ -187,7 +188,8 @@ def test_cross_user_conversation_access_is_isolated() -> None:
     cid = _cid()
     turns = random.randint(1, 3)
     for _ in range(turns):
-        assert c.post("/agent", json={"conversation_id": cid, "text": random.choice(CARD_TEXTS)}, headers=ALICE).status_code == 200
+        body = {"conversation_id": cid, "text": random.choice(CARD_TEXTS)}
+        assert c.post("/agent", json=body, headers=ALICE).status_code == 200
     mine = c.get(f"/conversations/{cid}", headers=ALICE).json()
     assert mine["message_count"] == 2 * turns
     # Bob knows the id but gets his own empty scope, never alice's transcript.
@@ -195,7 +197,8 @@ def test_cross_user_conversation_access_is_isolated() -> None:
     assert theirs["conversation_id"] == cid
     assert theirs["message_count"] == 0
     # Bob continuing "the same" id starts a separate conversation.
-    assert c.post("/agent", json={"conversation_id": cid, "text": random.choice(GENERAL_TEXTS)}, headers=BOB).status_code == 200
+    body = {"conversation_id": cid, "text": random.choice(GENERAL_TEXTS)}
+    assert c.post("/agent", json=body, headers=BOB).status_code == 200
     assert c.get(f"/conversations/{cid}", headers=ALICE).json()["message_count"] == 2 * turns
     assert c.get(f"/conversations/{cid}", headers=BOB).json()["message_count"] == 2
 
@@ -211,7 +214,8 @@ def test_conversation_id_cannot_escape_scope() -> None:
 
 def test_no_token_configured_fails_closed_unless_dev_mode() -> None:
     closed = _bare_client(BearerAuth({}))
-    resp = closed.post("/agent", json={"conversation_id": _cid(), "text": random.choice(CARD_TEXTS)}, headers={"Authorization": "Bearer " + uuid.uuid4().hex})
+    body = {"conversation_id": _cid(), "text": random.choice(CARD_TEXTS)}
+    resp = closed.post("/agent", json=body, headers={"Authorization": "Bearer " + uuid.uuid4().hex})
     assert resp.status_code == 401
     assert closed.get(f"/conversations/{_cid()}").status_code == 401
 

@@ -21,8 +21,8 @@ sibling A2A gateway, but pure Python. The agent logic, tools, and retrieval are 
 |--------|------|
 | `create_app(backend=None)` | builds the FastAPI app; backend defaults to the env-selected one |
 | `LocalBackend` | default, `LocalRuntime` over the banking graph + a shared `InMemoryConversationStore`. Zero third-party deps |
-| `CeleryBackend` | wraps the Celery adapter (`ports/experimental/celery`) in eager (in-process) mode; needs `celery` |
-| `NatsBackend` | wraps the NATS adapter (`ports/experimental/nats`); one persistent asyncio loop in a background thread (a NATS connection is loop-bound). Needs a JetStream server |
+| `CeleryBackend` | wraps the `agentic-celery` package in eager (in-process) mode; needs the `celery` extra |
+| `NatsBackend` | wraps the `agentic-nats` package; one persistent asyncio loop in a background thread (a NATS connection is loop-bound). Needs the `nats` extra and a JetStream server |
 | `make_backend(name)` | factory: `local` (default) \| `celery` \| `nats`, selected by `AGENTIC_GATEWAY_BACKEND` |
 
 ## Endpoints
@@ -40,6 +40,10 @@ Internal errors are sanitized to clean JSON (`{"error", "detail"}`), never a sta
 ## Run
 
 ```bash
+pip install -e ports/pyagentic -e ports/experimental/gateway-fastapi
+# with the optional backends (installs agentic-celery / agentic-nats and their engines):
+pip install -e 'ports/experimental/gateway-fastapi[celery,nats]'
+
 # default (LocalBackend, no external services):
 python -m gateway_fastapi
 # or via uvicorn:
@@ -53,8 +57,7 @@ AGENTIC_GATEWAY_BACKEND=nats   python -m gateway_fastapi          # needs a JetS
 ```
 
 Host/port are configurable via `AGENTIC_GATEWAY_HOST` / `AGENTIC_GATEWAY_PORT`
-(defaults `127.0.0.1:8000`). Run from `ports/experimental/gateway-fastapi/` (the package dir is on
-the path), or add it to `PYTHONPATH`.
+(defaults `127.0.0.1:8000`). The package is installed, so the commands run from any directory.
 
 ### curl example
 
@@ -79,10 +82,13 @@ curl -s localhost:8000/conversations/c1
 ## Tests
 
 ```bash
-/tmp/af-venv/bin/python -m pytest ports/experimental/gateway-fastapi/tests -q
+pip install -e 'ports/experimental/gateway-fastapi[test]'
+python -m pytest ports/experimental/gateway-fastapi/tests -q
+# the backend factory over the installed adapters (celery eager, nats live or skipped):
+python -m pytest ports/experimental/tests/test_gateway_fastapi.py -q
 ```
 
-The suite drives the app through `fastapi.testclient.TestClient` (no running server) with
+Both run as part of `pytest ports/experimental` from the repository root. The suite drives the app through `fastapi.testclient.TestClient` (no running server) with
 randomized inputs (uuid4 conversation ids, random texts per path): healthz, agent-card
 shape, card/payment/general routing (balance turn calls `get_balance` and replies with
 `1234.56`), multi-turn transcript accumulation, conversation isolation, and `422` on bad
@@ -96,7 +102,7 @@ input. The `local` backend runs without `celery`/`nats` installed.
   `InMemoryConversationStore` is injected via the adapter's `configure(...)` so history
   works. For distributed Celery the store would be Redis-backed (see `ports/experimental/celery`).
 - **nats**: requires a reachable JetStream server (`AGENTIC_NATS_URL`, default
-  `nats://127.0.0.1:4222`); construction raises a clear `RuntimeError` if the server is
-  unreachable or `nats-py` is missing. History is read back from the durable JetStream
+  `nats://127.0.0.1:4222`); construction raises a clear `RuntimeError` naming the install
+  step or the server it could not reach if `agentic-nats` is missing or the server is down. History is read back from the durable JetStream
   KV envelope. All `connect`/`submit` calls share one event loop (a NATS connection is
   bound to its creating loop), driven from a background thread.

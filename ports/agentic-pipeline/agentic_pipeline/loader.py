@@ -9,6 +9,7 @@ with ``submit(Event) -> TurnResult`` on the chosen backend.
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -44,6 +45,13 @@ def _chat_client_factory(llm_spec: Dict[str, Any]):
         ]
         return StubChatClient(script)
     raise ValueError(f"unknown llm provider {provider!r}; supported providers: {', '.join(LLM_PROVIDERS)}")
+
+
+def compile_deps(spec: Dict[str, Any]):
+    """Compile a spec dict to ``(graph, tools, retriever)``. ``functools.partial(compile_deps, spec)``
+    pickles as plain data, so a backend whose workers live in other processes (ray) can
+    rebuild the same system there instead of shipping the built objects."""
+    return builder.build(spec, chat_client_factory=_chat_client_factory)
 
 
 class PipelineSystem:
@@ -93,13 +101,14 @@ def build_system(spec: Dict[str, Any], backend: Optional[str] = None) -> Pipelin
     from pyagentic.longterm import make_long_term_store
     from pyagentic.stores import make_conversation_store
 
-    graph, tools, retriever = builder.build(spec, chat_client_factory=_chat_client_factory)
+    graph, tools, retriever = compile_deps(spec)
     name = backend or spec.get("backend", "local")
     stores_spec = spec.get("stores") or {}
     store_spec = stores_spec.get("conversation")
     store = make_conversation_store(store_spec) if store_spec else None
     long_term = make_long_term_store(stores_spec.get("long_term")) if stores_spec.get("long_term") else None
-    rt = backends.make_backend(name, graph, tools, retriever, store=store)
+    rt = backends.make_backend(
+        name, graph, tools, retriever, store=store, deps_factory=functools.partial(compile_deps, spec))
     cep = compile_cep(spec.get("cep"))
     return PipelineSystem(spec, rt, graph, tools, retriever, long_term=long_term, cep=cep)
 
