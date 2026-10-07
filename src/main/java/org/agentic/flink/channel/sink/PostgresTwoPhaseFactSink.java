@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.ContextItem;
@@ -68,6 +69,7 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> the element type
  */
+@Public
 public final class PostgresTwoPhaseFactSink<T> implements Sink<T>, SupportsCommitter<FactBatch> {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(PostgresTwoPhaseFactSink.class);

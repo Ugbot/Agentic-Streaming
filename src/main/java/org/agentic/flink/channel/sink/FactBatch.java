@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.core.memory.DataOutputSerializer;
@@ -13,6 +14,7 @@ import org.apache.flink.core.memory.DataOutputSerializer;
  * The committable of {@link PostgresTwoPhaseFactSink}: the facts one writer buffered between two
  * checkpoints plus the commit id that makes committing them idempotent.
  */
+@Public
 public final class FactBatch {
 
   /** One {@code agent_facts} row. */

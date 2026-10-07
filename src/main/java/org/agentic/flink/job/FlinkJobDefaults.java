@@ -5,6 +5,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Objects;
+import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
 import org.apache.flink.configuration.CheckpointingOptions;
@@ -40,6 +41,7 @@ import org.slf4j.LoggerFactory;
  * runs and recovery on the same host. Production deployments should point it at durable shared
  * storage.
  */
+@Public
 public final class FlinkJobDefaults implements Serializable {
 
   private static final long serialVersionUID = 1L;
