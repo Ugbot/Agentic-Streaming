@@ -39,7 +39,7 @@ flink = ["agentic-flink; python_version >= '3.10'"]
 pyflink = ["agentic-pyflink; python_version >= '3.10'"]
 jvm = ["agentic-flink; python_version >= '3.10'"]
 test = ["pytest>=7,<9"]
-dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1"]
+dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.16.10,<1"]
 
 [project.urls]
 Homepage = "https://github.com/Ugbot/Agentic-Streaming"
@@ -57,7 +57,7 @@ pyagentic = "agentic.conformance:matrix_binding"
 # Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
 # install or use the wheel.
 [dependency-groups]
-dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "build>=1.2", "twine>=5"]
+dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.16.10,<1", "build>=1.2", "twine>=5"]
 
 [tool.uv.sources]
 agentic-flink = { path = "../../python", editable = true }
