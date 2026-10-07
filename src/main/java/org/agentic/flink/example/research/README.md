@@ -19,14 +19,14 @@ agent's crawl-url ──► ToolInvocationChannel<UrlRequest> ──┐
                                                   IngestionPipeline.from(pages)
                                                        .chunk(RecursiveTextChunker)
                                                        .embed(DjlEmbeddingConnection)
-                                                       .into(BroadcastCorpus(HNSW))
+                                                       .embedded()
                                                           │
-                                                          ▼  DataStream<IngestAck>
-                                                       print
-
+                                                          ▼  DataStream<EmbeddedChunk>
+                                                          │
 queries (StaticSeedChannel<String>) ─► RetrievalPipeline.from(queries)
                                             .embed(djlEmbeddings)
-                                            .search(corpus, 6)
+                                            .search(SingleOperatorCorpus(HNSW), 6, indexed)
+                                            │     ingestAcks() ─► print  (DataStream<IngestAck>)
                                             .rerank(crossEncoder)
                                             .answer(ollama, chatSetup)
                                             │
@@ -43,9 +43,9 @@ queries (StaticSeedChannel<String>) ─► RetrievalPipeline.from(queries)
 | Multi-format extraction (HTML, PDF, ...) | `DocumentExtractor` (Jsoup + Tika) |
 | robots.txt enforcement | `RobotsCache` inside `Fetcher` |
 | HNSW over Flink state | `FlinkStateHnswVectorMemory.spec(dim)` |
-| Shared corpus across operators | `BroadcastCorpus.spec(name, vectorSpec)` |
-| Chunk → embed → upsert | `IngestionPipeline.from(pages).chunk(...).embed(...).into(corpus)` |
-| Embed → search → rerank → answer | `RetrievalPipeline.from(queries).embed(...).search(...).rerank(...).answer(...)` |
+| Corpus in Flink keyed state | `SingleOperatorCorpus.spec(name, vectorSpec)` |
+| Chunk → embed | `IngestionPipeline.from(pages).chunk(...).embed(...).embedded()` |
+| Embed → search (one keyed operator with the ingest) → rerank → answer | `RetrievalPipeline.from(queries).embed(...).search(corpus, k, indexed).rerank(...).answer(...)` |
 
 The point of this example: **everything heavy is a framework primitive.**
 The `main()` is the sentence the verbs let you write.

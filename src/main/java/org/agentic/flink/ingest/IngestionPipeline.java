@@ -101,9 +101,20 @@ public final class IngestionPipeline {
       this.upstream = upstream;
     }
 
+    /**
+     * Index into a corpus from a per-task operator. Suits {@code ExternalCorpus}; a corpus backed
+     * by Flink keyed state must instead share one keyed operator with its readers, see {@link
+     * org.agentic.flink.retrieve.RetrievalPipeline.StageSearch#search(CorpusSpec, int, DataStream)}
+     * together with {@link #embedded()}.
+     */
     public DataStream<IngestAck> into(CorpusSpec corpus) {
       Objects.requireNonNull(corpus, "corpus");
       return upstream.process(new IndexFn(corpus)).returns(IngestAck.class).name("ingest-index");
+    }
+
+    /** The embedded chunks, for wiring into a keyed corpus operator shared with the readers. */
+    public DataStream<EmbeddedChunk> embedded() {
+      return upstream;
     }
   }
 

@@ -6,8 +6,8 @@ import org.agentic.flink.channel.Channel;
 import org.agentic.flink.channel.StaticSeedChannel;
 import org.agentic.flink.channel.ToolInvocationChannel;
 import org.agentic.flink.config.ConfigKeys;
-import org.agentic.flink.corpus.BroadcastCorpus;
 import org.agentic.flink.corpus.CorpusSpec;
+import org.agentic.flink.corpus.SingleOperatorCorpus;
 import org.agentic.flink.embedding.djl.DjlEmbeddingConnection;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.djl.DjlInferenceConnection;
@@ -112,12 +112,11 @@ public class LiveResearchExample {
 
     // ── 2. Corpus ───────────────────────────────────────────────────────────────────────
     //
-    // BroadcastCorpus = ingest in one operator, reads via per-replica copies. The vector
-    // memory itself is HNSW-over-Flink-state — vectors checkpoint with the job; the graph
-    // rebuilds on restart.
+    // SingleOperatorCorpus = ingest and reads on one keyed operator. The vector memory itself
+    // is HNSW-over-Flink-state: vectors checkpoint with the job and the graph rebuilds on restart.
 
     VectorMemorySpec vectorSpec = FlinkStateHnswVectorMemory.spec(384);
-    CorpusSpec corpus = BroadcastCorpus.spec("research-kb", vectorSpec);
+    CorpusSpec corpus = SingleOperatorCorpus.spec("research-kb", vectorSpec);
 
     // ── 3. Connections (chat, embed, rerank) ────────────────────────────────────────────
 
@@ -143,23 +142,25 @@ public class LiveResearchExample {
             .options(WebToolkitOptions.defaults().withMaxDepth(1))
             .open(env);
 
-    IngestionPipeline.from(pages)
-        .chunk(new RecursiveTextChunker(512))
-        .embed(embeddings)
-        .into(corpus)
+    DataStream<IngestionPipeline.EmbeddedChunk> indexed =
+        IngestionPipeline.from(pages)
+            .chunk(new RecursiveTextChunker(512))
+            .embed(embeddings)
+            .embedded();
+
+    // ── 5. Retrieve pipeline: queries → embed → search (same keyed operator as the ingest)
+    //       → rerank → LLM answer ──────────────────────────────────────────────────────────
+
+    RetrievalPipeline.StageRerank searched =
+        RetrievalPipeline.from(queries.open(env)).embed(embeddings).search(corpus, 6, indexed);
+
+    searched
+        .ingestAcks()
         .map(ack -> "ingested " + ack.getChunkId() + " into " + ack.getCorpusName())
         .print()
         .name("ingest-acks");
 
-    // ── 5. Retrieve pipeline: queries → embed → search → rerank → LLM answer ────────────
-
-    RetrievalPipeline.from(queries.open(env))
-        .embed(embeddings)
-        .search(corpus, 6)
-        .rerank(reranker, rerankerSetup)
-        .answer(chat, chatSetup)
-        .print()
-        .name("answers");
+    searched.rerank(reranker, rerankerSetup).answer(chat, chatSetup).print().name("answers");
 
     env.execute("live-research");
 
