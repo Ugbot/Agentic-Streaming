@@ -25,15 +25,15 @@ of the two to Flink's topic-in/topic-out shape.
 | `PulsarStateConversationStore.java` | `ConversationStore` over the Pulsar state API, durable per-conversation transcript + attributes + user index (C1) |
 | `PulsarStateKeyedStore.java` | `KeyedStateStore` over the Pulsar state API, the Flink `ValueState` analogue |
 | `StateBytes.java` | the narrow byte-keyed seam onto `Context.getState/putState` (keeps the stores testable + Context-decoupled) |
-| `InMemoryContext.java` | an in-memory `Context`/`Record` (dynamic proxies) so the function runs with no cluster |
-| `LocalDemo.java` | runnable single-node demo (state persists across turns, proving C1) |
+| `src/test/.../InMemoryContext.java` | test-only in-memory `Context`/`Record` (dynamic proxies) so the function runs with no cluster; not part of the shipped jar |
+| `src/test/.../LocalDemo.java` | test-scoped single-node demo on that fake (state persists across turns in a heap map) |
 
 ## Run
 
 ```bash
 mvn -f ports/experimental/pulsar/pom.xml compile          # BUILD SUCCESS
 mvn -f ports/experimental/pulsar/pom.xml test              # 2 tests (banking + extended-graph through the seam)
-mvn -f ports/experimental/pulsar/pom.xml -q exec:java      # runs the banking demo on an in-memory Pulsar Context
+mvn -f ports/experimental/pulsar/pom.xml -q test-compile exec:java   # runs the banking demo on the test-only in-memory Context
 # ->
 # [c1] turn=1 reply=[cards] We offer three card types: classic, gold, and platinum...
 # [c2] turn=1 reply=[payments] Your balance is 1234.56.

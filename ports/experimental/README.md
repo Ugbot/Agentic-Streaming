@@ -1,7 +1,7 @@
 # `ports/experimental/`: engine adapters that predate `agentic/v1`
 
 The adapters in this directory predate the `agentic/v1` spec. They are not conformance
-tested: none of them runs the 22 fixtures under [`spec/conformance/v1`](../../spec/conformance/v1/),
+tested: none of them runs the 24 fixtures under [`spec/conformance/v1`](../../spec/conformance/v1/),
 none appears in the generated capability matrix [`docs/capabilities.md`](../../docs/capabilities.md),
 and none is on the acceptance path, which is: define a workflow once, select a runtime, get the
 same observable behavior. They may be removed. What each one does is run the banking worked
@@ -130,9 +130,9 @@ adapter is its own Maven project, not a module of the root reactor.
 
 | Adapter | What it does | How to run it |
 |---|---|---|
-| [`kafka-streams/`](kafka-streams/) | Processor API topology with a state store per conversation | `./mvnw -f ports/experimental/kafka-streams/pom.xml test`; `./mvnw -f ports/experimental/kafka-streams/pom.xml exec:java` prints the topology without a broker |
-| [`temporal/`](temporal/) | one durable workflow per conversation, turns as update methods | `./mvnw -f ports/experimental/temporal/pom.xml test`; `./mvnw -f ports/experimental/temporal/pom.xml -q compile exec:java` runs on an in-memory Temporal test service |
-| [`pulsar/`](pulsar/) | a Pulsar Function with function state as the stores | `./mvnw -f ports/experimental/pulsar/pom.xml test`; `./mvnw -f ports/experimental/pulsar/pom.xml -q exec:java` runs with an in-memory `Context` |
+| [`kafka-streams/`](kafka-streams/) | Processor API topology; keyed attributes in a persistent `KeyValueStore`, transcript in a heap map inside the processor (2 tests on `TopologyTestDriver`) | `./mvnw -f ports/experimental/kafka-streams/pom.xml test`; `./mvnw -f ports/experimental/kafka-streams/pom.xml exec:java` prints the topology without a broker |
+| [`temporal/`](temporal/) | one durable workflow per conversation, turns as update methods (2 tests on `TestWorkflowEnvironment`) | `./mvnw -f ports/experimental/temporal/pom.xml test`; `./mvnw -f ports/experimental/temporal/pom.xml -q compile exec:java` runs on an in-memory Temporal test service |
+| [`pulsar/`](pulsar/) | a Pulsar Function with function state as the stores (2 tests against the test-only reflective `InMemoryContext` under `src/test`; no broker path is exercised) | `./mvnw -f ports/experimental/pulsar/pom.xml test`; `./mvnw -f ports/experimental/pulsar/pom.xml -q test-compile exec:java` runs the test-scoped `LocalDemo` on that fake `Context` |
 | [`spring/`](spring/) | Spring Boot service hosting the core behind HTTP | `./mvnw -f ports/experimental/spring/pom.xml test` (compiles; there are no tests); `./mvnw -f ports/experimental/spring/pom.xml spring-boot:run` |
 | [`quarkus/`](quarkus/) | Quarkus reactive service hosting the core behind HTTP | `./mvnw -f ports/experimental/quarkus/pom.xml test` (compiles; there are no tests); `./mvnw -f ports/experimental/quarkus/pom.xml quarkus:dev` |
 | [`pekko/`](pekko/) | README only. The original `ports/pekko` proof-of-concept was deleted; `agentic-pekko/` is the Pekko runtime | `./mvnw -f agentic-pekko/pom.xml test` |

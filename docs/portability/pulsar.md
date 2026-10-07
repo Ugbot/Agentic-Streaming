@@ -84,9 +84,9 @@ Flink's topic-in/topic-out streaming shape.
 
 ## 4. Worked example: banking router→path→verifier
 
-[`LocalDemo`](../../ports/experimental/pulsar/src/main/java/org/jagentic/ports/pulsar/LocalDemo.java)
-runs the function with **no cluster**, an [`InMemoryContext`](../../ports/experimental/pulsar/src/main/java/org/jagentic/ports/pulsar/InMemoryContext.java)
-(a dynamic proxy over the state API) stands in for the broker + BookKeeper:
+[`LocalDemo`](../../ports/experimental/pulsar/src/test/java/org/jagentic/ports/pulsar/LocalDemo.java)
+(test scope) runs the function with **no cluster**, an [`InMemoryContext`](../../ports/experimental/pulsar/src/test/java/org/jagentic/ports/pulsar/InMemoryContext.java)
+(a test-only dynamic proxy over the state API, heap-map state) stands in for the broker + BookKeeper:
 
 ```
 [c1] turn=1 reply=[cards] We offer three card types: classic, gold, and platinum...
