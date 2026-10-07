@@ -28,6 +28,7 @@ import org.agentic.flink.inference.Guardrail;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.InferenceToolAdapter;
 import org.agentic.flink.job.AgentTurnDispatcher;
+import org.agentic.flink.job.TurnDispatchDedupFunction;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatSetup;
@@ -267,13 +268,17 @@ class AgentBuilderTest {
     Duration ttl = Duration.ofMinutes(ThreadLocalRandom.current().nextInt(1, 600));
     Agent agent = minimal().withShortTermTtl(ttl).build();
     assertEquals(ttl, agent.getShortTermTtl());
-    assertEquals(ttl, new AgentTurnDispatcher(agent, ToolRegistry.empty()).getDedupTtl());
+    assertEquals(ttl, new TurnDispatchDedupFunction(agent).getDedupTtl());
+    assertEquals(ttl, new AgentTurnDispatcher(agent, ToolRegistry.empty()).dedup().getDedupTtl());
 
     Agent unset = minimal().withShortTermTtl(null).build();
     assertEquals(Duration.ZERO, unset.getShortTermTtl());
     assertEquals(
-        AgentTurnDispatcher.DEFAULT_DEDUP_TTL,
-        new AgentTurnDispatcher(unset, ToolRegistry.empty()).getDedupTtl());
+        TurnDispatchDedupFunction.DEFAULT_DEDUP_TTL,
+        new TurnDispatchDedupFunction(unset).getDedupTtl());
+    assertEquals(
+        TurnDispatchDedupFunction.DEFAULT_DEDUP_TTL,
+        new AgentTurnDispatcher(unset, ToolRegistry.empty()).dedup().getDedupTtl());
   }
 
   @Test

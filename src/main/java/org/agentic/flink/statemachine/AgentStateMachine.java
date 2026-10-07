@@ -231,8 +231,8 @@ public class AgentStateMachine implements Serializable {
                         || event.getEventType() == AgentEventType.CORRECTION_FAILED;
                   }
                 })
-            .optional()
-            .oneOrMore();
+            .oneOrMore()
+            .optional();
 
     // Add supervisor review step (optional)
     pattern =

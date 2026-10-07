@@ -38,20 +38,21 @@ import org.junit.jupiter.api.Test;
 @SuppressWarnings("deprecation")
 class LegacyCepFunctionsTest {
 
-  /** Runs a {@link PatternProcessFunction} inside a keyed operator so it gets real keyed state. */
+  /** Runs the stateless CEP match function, then the keyed dedup operator it is followed by. */
   static final class Adapter extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {
     private static final long serialVersionUID = 1L;
-    final AgentTurnDispatcher delegate;
-    final List<AgentEvent> sideOutputs = new ArrayList<>();
+    final AgentTurnDispatcher match;
+    final TurnDispatchDedupFunction dedup;
 
-    Adapter(AgentTurnDispatcher delegate) {
-      this.delegate = delegate;
+    Adapter(AgentTurnDispatcher match) {
+      this.match = match;
+      this.dedup = match.dedup();
     }
 
     @Override
     public void open(OpenContext openContext) throws Exception {
-      delegate.setRuntimeContext(getRuntimeContext());
-      delegate.open(openContext);
+      dedup.setRuntimeContext(getRuntimeContext());
+      dedup.open(openContext);
     }
 
     @Override
@@ -74,7 +75,22 @@ class LegacyCepFunctionsTest {
               return ctx.timerService().currentProcessingTime();
             }
           };
-      delegate.processMatch(Map.of("initial", List.of(value)), cepCtx, out);
+      List<AgentEvent> requests = new ArrayList<>();
+      match.processMatch(
+          Map.of("initial", List.of(value)),
+          cepCtx,
+          new Collector<>() {
+            @Override
+            public void collect(AgentEvent record) {
+              requests.add(record);
+            }
+
+            @Override
+            public void close() {}
+          });
+      for (AgentEvent request : requests) {
+        dedup.processElement(request, ctx, out);
+      }
     }
   }
 
@@ -107,9 +123,12 @@ class LegacyCepFunctionsTest {
     AgentTurnDispatcher fn =
         new AgentTurnDispatcher(agent, ToolRegistry.empty(), Duration.ofMinutes(5));
     assertEquals(Duration.ofMinutes(5), fn.getDedupTtl());
+    assertEquals(Duration.ofMinutes(5), fn.dedup().getDedupTtl());
     assertThrows(
         IllegalArgumentException.class,
         () -> new AgentTurnDispatcher(agent, ToolRegistry.empty(), Duration.ZERO));
+    assertThrows(
+        IllegalArgumentException.class, () -> new TurnDispatchDedupFunction(agent, Duration.ZERO));
 
     try (KeyedOneInputStreamOperatorTestHarness<String, AgentEvent, AgentEvent> h =
         new KeyedOneInputStreamOperatorTestHarness<>(

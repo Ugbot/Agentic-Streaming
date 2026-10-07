@@ -8,9 +8,9 @@ import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.dsl.SupervisorChain;
-import org.agentic.flink.stream.CompensationFunction;
 import org.agentic.flink.execution.LLMClient;
 import org.agentic.flink.llm.ChatConnection;
+import org.agentic.flink.stream.CompensationFunction;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.cep.CEP;
 import org.apache.flink.cep.PatternStream;
@@ -213,10 +213,15 @@ public class AgentJobGenerator implements Serializable {
         CEP.pattern(
             agentEvents.keyBy(AgentEvent::getFlowId), agent.getStateMachine().generateCepPattern());
 
-    // Pattern matches → execution requests (keyed, non-blocking, dedups redelivered turns)
+    // Pattern matches → execution requests; a keyed operator then drops redelivered turns
+    // (CEP functions cannot hold keyed state, the dedup set must live in checkpointed state)
+    AgentTurnDispatcher matchFunction = new AgentTurnDispatcher(agent, job.getToolRegistry());
     SingleOutputStreamOperator<AgentEvent> requests =
-        patternStream
-            .process(new AgentTurnDispatcher(agent, job.getToolRegistry()))
+        patternStream.process(matchFunction).name("match-" + agent.getAgentId());
+    DataStream<AgentEvent> dispatched =
+        requests
+            .keyBy(AgentEvent::getFlowId)
+            .process(matchFunction.dedup())
             .name("dispatch-" + agent.getAgentId());
 
     // Execution requests → LLM/tool loop on the async operator with a cancelling timeout
@@ -225,7 +230,7 @@ public class AgentJobGenerator implements Serializable {
             agent, job.getToolRegistry(), llmClientFor(agent));
     DataStream<AgentEvent> results =
         AsyncDataStream.unorderedWait(
-                requests,
+                dispatched,
                 asyncExecution,
                 asyncExecution.getTimeout().toMillis(),
                 TimeUnit.MILLISECONDS,

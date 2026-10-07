@@ -122,7 +122,7 @@ every one of them:
 | `withMaxIterations`, `withTimeout` | loop and async operator bounds |
 | `withMaxValidationAttempts`, `withMaxCorrectionAttempts`, `withStateMachine` | the default `AgentStateMachine` (or your own) that drives the CEP pattern |
 | `withCompensationEnabled`, `withCompensatingTool` | a failed turn lists the compensating tools of the completed steps; `stream.CompensationFunction` runs them in reverse call order |
-| `withShortTermTtl` | TTL of the keyed dispatch state in `AgentTurnDispatcher` |
+| `withShortTermTtl` | TTL of the keyed dispatch dedup state in `TurnDispatchDedupFunction` (after `AgentTurnDispatcher`) |
 | `withConversationStore`, `withLongTermStore` | history appended per turn; the turn is archived as a fact and `onLongTermSync` fires |
 | `withGuardrail`, `withListener` | installed on the `LLMClient`; blocked calls return the guardrail's reason |
 
