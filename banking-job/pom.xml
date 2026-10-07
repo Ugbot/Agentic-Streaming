@@ -29,7 +29,6 @@
         <dependency>
             <groupId>org.jagentic</groupId>
             <artifactId>agentic-flink</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Flink local-execution stack (provided in core). flink-clients supplies the LocalExecutor
@@ -45,6 +44,34 @@
             <version>${flink.version}</version>
         </dependency>
 
+        <!-- Everything the framework marks optional but the banking graph reaches at runtime: the
+             four LLM providers LangChain4jChatConnection can select and the postgres
+             conversation/task stores. Versions are managed in reactor/pom.xml. -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-anthropic</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-google-ai-gemini</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+
         <!-- Redis bridge + RedisConversationStore (optional in core). -->
         <dependency>
             <groupId>redis.clients</groupId>
@@ -55,14 +82,12 @@
         <!-- Logging backend for the standalone process. -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-slf4j-impl</artifactId>
-            <version>2.17.1</version>
+            <artifactId>log4j-slf4j2-impl</artifactId>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
-            <version>2.17.1</version>
             <scope>runtime</scope>
         </dependency>
     </dependencies>

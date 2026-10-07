@@ -86,6 +86,11 @@
         <junit.version>5.10.2</junit.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <quarkus.platform.version>3.30.6</quarkus.platform.version>
+        <postgresql.version>42.7.13</postgresql.version>
+        <hikaricp.version>5.0.1</hikaricp.version>
+        <!-- SLF4J 2.x API line; the matching log4j binding is log4j-slf4j2-impl (log4j 2.19+). -->
+        <slf4j.version>2.0.17</slf4j.version>
+        <log4j.version>2.24.3</log4j.version>
 
         <maven.plugin.compiler.version>3.13.0</maven.plugin.compiler.version>
         <maven.plugin.surefire.version>3.2.5</maven.plugin.surefire.version>
@@ -108,6 +113,99 @@
              Javadoc run must skip the same sources or it fails on their unresolved imports. -->
         <javadoc.sourceFileExclude>**/plugins/flintagents/**</javadoc.sourceFileExclude>
     </properties>
+
+    <!-- Every cross-module coordinate is managed here, so no module states another module's
+         version: a module declares `org.jagentic:agentic-flink` with no <version>. Consumers
+         outside the reactor (ports/experimental/*) import this pom as a BOM instead of
+         inheriting from it. The LangChain4J BOM, flink-cep and the postgres/Hikari versions
+         are managed here too: the Flink framework (root pom) marks the provider SDKs and the
+         postgres driver/pool optional, so the modules that need them at runtime (banking-job,
+         a2a-gateway) declare them explicitly and must resolve to the same versions. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-bom</artifactId>
+                <version>${log4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>jagentic-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>agentic-flink</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>agentic-flink</artifactId>
+                <version>${project.version}</version>
+                <classifier>uber</classifier>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>agentic-pekko</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>agentic-pyflink</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>tool-services-packs</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>tool-services-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>agentic-flink-banking-job</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jagentic</groupId>
+                <artifactId>agentic-flink-a2a-gateway</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-bom</artifactId>
+                <version>${langchain4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.flink</groupId>
+                <artifactId>flink-cep</artifactId>
+                <version>${flink.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zaxxer</groupId>
+                <artifactId>HikariCP</artifactId>
+                <version>${hikaricp.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <pluginManagement>
@@ -176,8 +274,8 @@
                         <configuration>
                             <rules>
                                 <requireJavaVersion>
-                                    <version>[21,)</version>
-                                    <message>This project requires JDK 21 or newer (see docs/audit-backlog.md, AGS-13/AGS-14).</message>
+                                    <version>[21,22)</version>
+                                    <message>This project builds on JDK 21 (the baseline; see docs/audit-backlog.md, AGS-13/AGS-14). Newer JDKs are not part of the tested baseline yet.</message>
                                 </requireJavaVersion>
                                 <requireMavenVersion>
                                     <version>[3.9,)</version>

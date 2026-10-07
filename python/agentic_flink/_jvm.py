@@ -27,13 +27,33 @@ import jpype.imports  # noqa: F401  -- side-effect: enables ``from java...`` imp
 
 from ._classpath import MissingJarError, bundled_jars, env_classpath, framework_jar
 
+# Reflective-access opens Flink (Kryo / Twitter Chill) and Apache Arrow (Fluss's columnar log
+# format) need on JDK 17+. Same list as examples-bin/jvm-opts.sh and the surefire argLine in
+# the root pom; tools/check-jar-launch.sh asserts the copies agree.
+_ADD_OPENS = tuple(
+    f"--add-opens=java.base/{pkg}=ALL-UNNAMED"
+    for pkg in (
+        "java.util",
+        "java.lang",
+        "java.lang.invoke",
+        "java.lang.reflect",
+        "java.io",
+        "java.net",
+        "java.nio",
+        "sun.nio.ch",
+        "sun.nio.cs",
+        "sun.security.action",
+        "sun.util.calendar",
+        "java.util.concurrent.atomic",
+        "java.text",
+    )
+)
+
 _DEFAULT_JVM_ARGS = (
     "-Xms256m",
     "-Xmx2g",
     "-XX:+UseG1GC",
-    # Apache Arrow (used by Fluss's columnar log format) needs nio internals on JDK 17+.
-    "--add-opens=java.base/java.nio=ALL-UNNAMED",
-)
+) + _ADD_OPENS
 
 
 class JvmNotStartedError(RuntimeError):

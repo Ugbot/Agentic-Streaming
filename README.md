@@ -742,6 +742,36 @@ needs `:deps/root`; pin the commit you want with `:git/sha`.
 A local jar with the same `io.github.ugbot/agentic-clj` coordinate comes from
 `clojure -T:build install` inside `agentic-clj/` ([agentic-clj/README.md](agentic-clj/README.md)).
 
+### Optional dependencies of the Flink framework
+
+`org.jagentic:agentic-flink` (the thin jar, installed by `./mvnw -f reactor/pom.xml install`)
+pulls in `jagentic-core`, `langchain4j`, `flink-cep`, Jackson and `slf4j-api` at compile scope
+and nothing else: the Flink runtime is `provided`, and every backend driver and provider SDK is
+`<optional>true</optional>`. `flink-cep` stays compile scope because the DSL job generator and
+the pipeline runner use it and a Flink distribution does not ship it, so your job jar has to
+shade it. Add the optional ones your job uses to your own pom; the versions are managed by the
+reactor, so `flink.version` and `langchain4j.version` are the ones in `reactor/pom.xml`.
+
+| You use | Add |
+|---|---|
+| `LangChain4jChatConnection.ollama(...)` | `dev.langchain4j:langchain4j-ollama` |
+| `LangChain4jChatConnection.openai(...)` | `dev.langchain4j:langchain4j-open-ai` |
+| `LangChain4jChatConnection.anthropic(...)` | `dev.langchain4j:langchain4j-anthropic` |
+| `LangChain4jChatConnection.gemini(...)` | `dev.langchain4j:langchain4j-google-ai-gemini` |
+| the `postgres` conversation, vector or A2A task store | `org.postgresql:postgresql` and `com.zaxxer:HikariCP` |
+| the `redis` stores or the Redis A2A bridge | `redis.clients:jedis` |
+| the ZeroMQ A2A bridge | `org.zeromq:jeromq` |
+| the outbound A2A client | the `io.github.a2asdk:a2a-java-sdk-*` modules |
+| DJL inference, the web toolkit, Kafka channels, Fluss | see the `<optional>` entries in the root `pom.xml` |
+
+A logging backend is your choice as well: the library logs through `slf4j-api` and ships no
+binding (the Log4j backend is test scope). `slf4j-api` is the 2.x line, so pick a 2.x provider
+such as `org.apache.logging.log4j:log4j-slf4j2-impl` (banking-job does); the 1.7-era
+`log4j-slf4j-impl` is ignored by SLF4J 2 and logging silently becomes a no-op. The two runtime
+artifacts need none of this: the `agentic-flink-<version>-uber.jar` classifier and
+`banking-job/target/banking-job.jar` bundle every optional dependency they use, and
+`bash tools/check-jar-launch.sh` boots both under JDK 21.
+
 ## Contributing
 
 Contributions are welcome; open an issue or a PR. [CONTRIBUTING.md](CONTRIBUTING.md) describes
