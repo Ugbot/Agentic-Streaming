@@ -57,7 +57,7 @@ pyagentic = "agentic.conformance:matrix_binding"
 # Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
 # install or use the wheel.
 [dependency-groups]
-dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "build>=1.2", "twine>=5"]
+dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "build>=1.6.1", "twine>=5"]
 
 [tool.uv.sources]
 agentic-flink = { path = "../../python", editable = true }
