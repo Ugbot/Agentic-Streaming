@@ -34,7 +34,11 @@ import org.apache.flink.streaming.api.TimeDomain;
  *     #withManualClock(String)} or {@link #withProcessingClock} (not settable from the document)
  */
 @Public
-public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain)
+public record FlinkRuntimeOptions(
+    Duration stateTtl,
+    Duration resumeAfter,
+    TimeDomain timerDomain,
+    ProcessingClock processingClock)
     implements Serializable {
 
   public static final String RUNTIME_KEY = "runtime";
