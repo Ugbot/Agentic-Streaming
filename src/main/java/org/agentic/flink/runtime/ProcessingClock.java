@@ -6,10 +6,11 @@ import org.apache.flink.streaming.api.TimerService;
 /**
  * Where {@link WorkflowTurnFunction} reads the spec's processing-time clock for workflow
  * {@code timers} (section 8 of {@code spec/v1/primitives.md}). The default is the operator's own
- * processing time ({@link TimerService#currentProcessingTime()}); a fixture harness substitutes a
- * clock it advances by hand, since the spec's logical clock only moves when a fixture says so.
- * Implementations are serialized with the operator, so they must carry no live state of their own:
- * a manual clock keeps its reading in a registry the whole JVM shares.
+ * processing time ({@link TimerService#currentProcessingTime()}); a fixture harness or an embedding
+ * process substitutes a {@link ManualProcessingClock} it advances by hand, since the spec's logical
+ * clock only moves when a fixture says so. Implementations are serialized with the operator, so
+ * they must carry no live state of their own: the manual clock keeps its reading in a registry the
+ * whole JVM shares.
  */
 @FunctionalInterface
 public interface ProcessingClock extends Serializable {

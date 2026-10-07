@@ -11,7 +11,8 @@ fixture that needs a runtime restart is a skip unless the runtime exposes ``rest
 fixture that advances the logical clock (``advance_time_ms``) is a skip unless the runtime
 exposes ``advance_time(ms)``; a fixture with ``concurrent_with`` turns uses ``submit_async``
 when available and one bounded ``submit_all`` batch otherwise. Turn ``metadata`` (event time)
-is passed through to the runtime as is. ``local-jvm`` runs the fixtures on its manual clock.
+is passed through to the runtime as is. ``local-jvm`` and ``flink-jvm`` run the fixtures on their
+manual clock.
 """
 
 from __future__ import annotations
@@ -152,7 +153,7 @@ def run_fixture(path: Path, runtime: Runtime, comparator=None) -> Outcome:
 
 def _drive(runtime: Runtime, turns: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not isinstance(runtime, AsyncSubmitting) and isinstance(runtime, BatchSubmitting) \
-            and not any(t.get("restart_runtime") for t in turns):
+            and not any(t.get("restart_runtime") or t.get("advance_time_ms") for t in turns):
         return list(runtime.submit_all([_event(t) for t in turns]))
 
     results: List[Dict[str, Any]] = []
@@ -191,7 +192,7 @@ def run_all(runtime_name: str, fixtures_dir: Optional[Path] = None, only: Sequen
     unknown = sorted(set(only) - set(ids))
     if unknown:
         raise KeyError(f"unknown fixture id(s) {unknown}; known: {sorted(ids)}")
-    if runtime_name == "local-jvm":
+    if runtime_name in ("local-jvm", "flink-jvm"):
         runtime_options = {"clock": "manual", **runtime_options}
     outcomes: List[Outcome] = []
     for fixture_id, path in ids.items():

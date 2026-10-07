@@ -7,7 +7,9 @@ MiniCluster through :class:`FlinkRuntime`, and applies the comparator of
 Fixture verbs map onto Flink as in the JVM binding (``FlinkConformanceHarness``): a turn is an
 element keyed by conversation id; ``concurrent_with`` turns are delivered back to back in one
 file so Flink's per-key ordering is what gets tested; ``restart_runtime`` is stop-with-savepoint
-followed by a fresh job restored from that savepoint, so only checkpointed state survives.
+followed by a fresh job restored from that savepoint, so only checkpointed state survives;
+``advance_time_ms`` moves the runtime's manual processing clock (``clock="manual"``), which the
+workflow operator reads instead of wall time and which keeps its reading across the restart.
 
 Run it directly for a report::
 
@@ -95,7 +97,9 @@ def run_fixture(path: Path, config: FlinkConfig | None = None, result_timeout: f
 
     check_expectation = _comparator()
     results: list[Mapping[str, Any]] = []
-    with FlinkRuntime(config or FlinkConfig(checkpoint_interval="200ms"), result_timeout=result_timeout) as rt:
+    with FlinkRuntime(
+        config or FlinkConfig(checkpoint_interval="200ms"), result_timeout=result_timeout, clock="manual"
+    ) as rt:
         rt.deploy(workflow)
         batch: list[dict[str, Any]] = []
 
@@ -108,6 +112,9 @@ def run_fixture(path: Path, config: FlinkConfig | None = None, result_timeout: f
             if turn.get("restart_runtime"):
                 flush()
                 rt.restart()
+            if turn.get("advance_time_ms"):
+                flush()
+                rt.advance_time(int(turn["advance_time_ms"]))
             event = {"conversation_id": turn["conversation_id"], "turn_id": turn["turn_id"]}
             if turn.get("signal") is not None:
                 event["signal"] = turn["signal"]

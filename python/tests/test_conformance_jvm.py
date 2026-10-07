@@ -27,8 +27,8 @@ FIXTURES = sorted(default_fixtures_dir().glob("*.yaml"))
 assert FIXTURES, f"no fixtures under {default_fixtures_dir()}"
 assert len({p.stem for p in FIXTURES}) == len(FIXTURES), FIXTURES
 
-# local-jvm runs on its manual clock so the fixtures' advance_time_ms drives timers deterministically.
-RUNTIMES = {"local-jvm": {"clock": "manual"}, "flink-jvm": {"parallelism": 2}}
+# Both runtimes run on their manual clock so the fixtures' advance_time_ms drives timers deterministically.
+RUNTIMES = {"local-jvm": {"clock": "manual"}, "flink-jvm": {"parallelism": 2, "clock": "manual"}}
 
 pytestmark = pytest.mark.usefixtures("af")
 

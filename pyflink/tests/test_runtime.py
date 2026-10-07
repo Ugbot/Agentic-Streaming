@@ -117,14 +117,17 @@ def test_capabilities_vocabulary_and_proof() -> None:
     for cid, status in CAPABILITIES.items():
         assert (status == "supported") == (cid in PROOF), cid
     assert CAPABILITIES["llm_brain"] == "supported"
-    assert CAPABILITIES["timers"] == "not_tested"
-    assert CAPABILITIES["checkpoint_recovery"] == "not_tested"
+    assert CAPABILITIES["timers"] == "supported"
+    assert CAPABILITIES["event_time"] == "supported"
+    assert CAPABILITIES["checkpoint_recovery"] == "supported"
+    assert "timer-survives-restart" in PROOF["checkpoint_recovery"]
 
 
 def test_deploy_warns_on_untested_requirements_and_rejects_unsupported(support_workflow, monkeypatch) -> None:
     rt = FlinkRuntime()
     timer_doc = json.loads(json.dumps(support_workflow))
     timer_doc["timers"] = [{"id": "nudge", "after_ms": 1000, "tool": "lookup_charge"}]
+    monkeypatch.setitem(CAPABILITIES, "timers", "not_tested")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         from agentic_pyflink.capabilities import check_requirements

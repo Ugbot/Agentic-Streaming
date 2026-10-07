@@ -326,6 +326,41 @@ Run on `pyflink`. It printed:
 `FlinkConfig`, the connectors and cluster submission are documented on the
 [PyFlink runtime page](runtimes/pyflink.md).
 
+### Processing clock and timers
+
+`FlinkRuntime(clock="system")`, the default, leaves workflow timers on Flink's own processing time
+(the TaskManager's wall clock), which is what a deployment wants. `FlinkRuntime(clock="manual")`
+switches the job to the adapter's `ManualProcessingClock`: a serializable `ProcessingClock` named
+by an id this runtime object owns, whose reading lives in a JVM-wide registry so every parallel
+instance of the workflow operator inside the MiniCluster reads the same logical time. The clock
+starts at zero and only moves when you call `advance_time(ms)`; the call returns the new reading,
+`now_ms()` reads it, and a negative step raises `ValueError` because logical time never moves
+backwards. Advancing does not run anything by itself: a timer whose deadline has been reached
+fires at the start of the next turn for its conversation, before that turn is received, exactly as
+in the reference runtime. Event-time timers ignore the manual clock; they read the conversation's
+watermark, the highest `metadata.event_time_ms` seen on its turns, which a late turn does not
+move backwards.
+
+`restart()` keeps the manual clock: the job is stopped with a savepoint and a new job is restored
+from it with the same clock id, the registry entry is untouched because the gateway JVM stays
+alive, and pending timers come back from the savepoint with the conversation log without being
+rescheduled. A timer scheduled before the restart fires exactly once after it, when the advanced
+clock reaches its deadline. `close()` releases the registry entry. On a `clock="system"` runtime
+`advance_time` and `now_ms` raise `RuntimeStateError`. The conformance binding runs every fixture
+with `clock="manual"` so `advance_time_ms` steps are deterministic.
+
+`agentic_flink.runtimes.FlinkRuntime` (registered as `flink-jvm`) runs an `agentic/v1` document on
+a `LocalWorkflowSession` inside the in-process JVM: `deploy(spec)`, `submit(event)`, `restart()`
+(stop-with-savepoint plus restore) and `close()`. It takes the same `clock` keyword as the PyFlink
+runtime. With `clock="manual"` the session is built with `FlinkRuntimeOptions.fromSpec(spec)
+.withProcessingClock(ManualProcessingClock.create())`; `advance_time(ms)` moves that clock and
+returns the new reading, `now_ms()` reads it, a negative step raises `ValueError`, and both raise
+`RuntimeError` on a `clock="system"` runtime. The clock object is kept across `restart()` and
+released on `close()`, so a timer scheduled before a restart fires exactly once after it once the
+clock reaches its deadline. Event time is the conversation watermark folded from
+`metadata.event_time_ms`, monotonic under late turns. `python -m agentic_flink.conformance
+--runtime flink-jvm` runs the fixtures on the manual clock and passes all 24.
+
 ## Runtime names and what the matrix says
 
 | Name | Matrix column | Notes section |
@@ -338,9 +373,9 @@ Run on `pyflink`. It printed:
 Every capability claim for these runtimes lives in that generated file, and the per-runtime pages
 under [runtimes/](runtimes/) repeat only the entries that are not `supported`, with a test in
 `docs/tools/test_docs.py` that fails when a page and the matrix disagree. In the current matrix
-`local` and `local-jvm` pass the three timer fixtures, while `timers` and `checkpoint_recovery`
-are `unsupported` on `flink-jvm` and `pyflink`, which skip them. Do not read a `supported` entry
-in `rt.capabilities()` as a conformance result; only the matrix is.
+all four Python bindings pass every fixture, including the three timer fixtures, which run on the
+manual processing clock described above. Do not read a `supported` entry in `rt.capabilities()`
+as a conformance result; only the matrix is.
 
 ## Pekko through the facade: unsupported
 

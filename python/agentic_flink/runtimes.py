@@ -104,10 +104,14 @@ _FLINK_CAPABILITIES: Dict[str, str] = {
     # Durable in the same sense as the Flink JUnit binding: a savepoint on the local filesystem
     # survives the job and its local cluster; the JVM process itself stays up across restart().
     "durable_store": "supported",
-    # No kill-and-recover-from-checkpoint step is exposed, and timer-driven results are not
-    # collected, so nothing here is exercised; Python tools cannot ship in the job graph.
-    "checkpoint_recovery": "unsupported",
-    "timers": "unsupported",
+    # Workflow timers read the Flink adapter's ManualProcessingClock when the runtime is built with
+    # clock="manual" (advance_time moves it; the fixtures' advance_time_ms), event time is the
+    # conversation watermark folded from metadata.event_time_ms, and pending timers come back
+    # from the savepoint with the log while the clock keeps its reading in the JVM across
+    # restart(): fixtures timer-fires, event-time-timer, timer-survives-restart and
+    # python/tests/test_timers_flink.py.
+    "timers": "supported",
+    "checkpoint_recovery": "supported",
 }
 
 _FLINK_BATCH_CAPABILITIES: Dict[str, str] = {
@@ -392,17 +396,29 @@ class FlinkRuntime(_JvmRuntime):
       the log and are not executed again (no brain or tool runs for them).
     * ``durable=False``: each :meth:`submit` / :meth:`submit_all` executes one bounded job over
       the given events (keyed by conversation, so per-conversation ordering and idempotency hold
-      within the batch). Keyed state does not outlive the job and :meth:`restart` is refused."""
+      within the batch). Keyed state does not outlive the job and :meth:`restart` is refused.
+
+    ``clock`` selects the processing time workflow ``timers`` read: ``"system"`` (default) is the
+    operator's own processing time; ``"manual"`` is the adapter's ``ManualProcessingClock``,
+    registered JVM-wide under an id this runtime owns, starting at zero and moving only through
+    :meth:`advance_time`. The local cluster runs inside this process's JVM, so every operator
+    instance reads the same logical time, and the reading is kept across :meth:`restart` (the
+    pending timers themselves come back from the savepoint with the conversation log)."""
 
     name = "flink-jvm"
     _capabilities = _FLINK_CAPABILITIES
+    CLOCKS = ("system", "manual")
 
     def __init__(self, *, parallelism: int = 1, checkpoint_interval: Optional[Any] = None,
                  job_name: str = "agentic-flink", timeout: Any = "120s", durable: bool = True,
-                 savepoint_dir: Optional[str] = None, **jvm: Any) -> None:
+                 savepoint_dir: Optional[str] = None, clock: str = "system", **jvm: Any) -> None:
         super().__init__(**jvm)
         if int(parallelism) < 1:
             raise ValueError("parallelism must be >= 1")
+        if clock not in self.CLOCKS:
+            raise ValueError(f"clock must be one of {self.CLOCKS}, got {clock!r}")
+        self.clock_kind = clock
+        self._clock: Any = None
         self.parallelism = int(parallelism)
         self.checkpoint_interval_ms = parse_duration_ms(checkpoint_interval) if checkpoint_interval is not None else None
         self.job_name = job_name
@@ -449,6 +465,11 @@ class FlinkRuntime(_JvmRuntime):
             jdoc = to_java(doc)
             WorkflowValidator.validate(jdoc)
             self._options = FlinkRuntimeOptions.fromSpec(jdoc)
+            if self.clock_kind == "manual":
+                if self._clock is None:
+                    ManualProcessingClock = _jvm.jclass("org.agentic.flink.runtime.ManualProcessingClock")
+                    self._clock = ManualProcessingClock.create()
+                self._options = self._options.withProcessingClock(self._clock)
         self._doc = doc
         self._built = jdoc  # the serialized configuration of the job
         self._bound = bindings
@@ -485,6 +506,25 @@ class FlinkRuntime(_JvmRuntime):
             raise RuntimeError("restart() needs FlinkRuntime(durable=True): a bounded job keeps no state to restore")
         with java_calls():
             self._session.restart()
+
+    def advance_time(self, ms: int) -> int:
+        """Move logical processing time forward by ``ms`` (never backwards); returns the new reading.
+        Only a ``clock="manual"`` runtime can be advanced."""
+        self._require_deployed()
+        if self.clock_kind != "manual":
+            raise RuntimeError(f"runtime {self.name!r} reads wall time; construct it with clock='manual' to advance it")
+        if int(ms) < 0:
+            raise ValueError(f"logical time never moves backwards: advance by {ms}")
+        with java_calls():
+            return int(self._clock.advance(int(ms)))
+
+    def now_ms(self) -> int:
+        """The current logical processing time in milliseconds (``clock="manual"`` only)."""
+        self._require_deployed()
+        if self.clock_kind != "manual":
+            raise RuntimeError(f"runtime {self.name!r} reads wall time; construct it with clock='manual' to read it")
+        with java_calls():
+            return int(self._clock.nowMs())
 
     def submit(self, event: Event) -> Dict[str, Any]:
         return self.submit_all([event])[0]
@@ -536,6 +576,10 @@ class FlinkRuntime(_JvmRuntime):
         if self._owned_savepoint_dir is not None:
             shutil.rmtree(self._owned_savepoint_dir, ignore_errors=True)
             self._owned_savepoint_dir = None
+        if self._clock is not None:
+            with java_calls():
+                self._clock.release()
+            self._clock = None
         self._built: Any = None
         self._options = None
         self._closed = True

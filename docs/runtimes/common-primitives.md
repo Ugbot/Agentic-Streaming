@@ -58,8 +58,7 @@ processed in arrival order and does not move the watermark. `checkpoint_recovery
 timers and the logical clock survive a restart, rebuilt from the log.
 [Clocks](../../spec/v1/primitives.md#clocks) and [Timers](../../spec/v1/primitives.md#timers).
 Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`. In the current matrix every
-binding passes them except `pyflink` and `python-flink`, which skip them and therefore report
-`timers` and `checkpoint_recovery` as [unsupported](../capabilities.md#capabilities).
+binding passes them ([capabilities](../capabilities.md#capabilities)).
 
 ## CEP fold
 
@@ -116,7 +115,7 @@ Three cores implement these primitives once each, and the runtimes reuse them:
 in-memory stores; it is the floor for every JVM runtime's results.
 
 <!-- matrix: reference, jvm-core -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-14T17:15:17+00:00, commit `eef9c63ea3ff`) by
+Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
 `docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
 [supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
 

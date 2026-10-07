@@ -29,7 +29,8 @@ import org.apache.flink.streaming.api.TimeDomain;
  * @param resumeAfter delay before a suspended turn is resumed by timer, or {@code null} for none
  * @param timerDomain the Flink time domain the resume timer is registered in
  * @param processingClock where workflow {@code timers} read processing time; the operator's own
- *     processing time unless a harness substitutes a manual clock (not settable from the document)
+ *     processing time unless a {@link ManualProcessingClock} is selected with
+ *     {@link #withManualClock(String)} or {@link #withProcessingClock} (not settable from the document)
  */
 public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain,
                                   ProcessingClock processingClock)
@@ -74,6 +75,16 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
   /** The clock workflow timers read for processing time; see {@link ProcessingClock}. */
   public FlinkRuntimeOptions withProcessingClock(ProcessingClock clock) {
     return new FlinkRuntimeOptions(stateTtl, resumeAfter, timerDomain, clock);
+  }
+
+  /**
+   * Workflow timers read the {@link ManualProcessingClock} registered under {@code clockId}
+   * (registered at zero when new) instead of the operator's processing time. Meant for a job whose
+   * operators share the JVM of the process driving it: an in-process cluster under a test, PyFlink
+   * or the JPype facade.
+   */
+  public FlinkRuntimeOptions withManualClock(String clockId) {
+    return withProcessingClock(ManualProcessingClock.named(clockId));
   }
 
   /** Whether suspended turns are resumed by a registered timer rather than an explicit signal. */
