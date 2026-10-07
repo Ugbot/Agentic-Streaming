@@ -1,18 +1,18 @@
 package org.agentic.flink.function;
 
-import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import java.util.HashMap;
+import org.agentic.flink.storage.vector.InMemoryVectorStore;
 
 /**
  * Process-wide default RAG components for the {@code useDefaults=true} path of the research
  * pipeline functions.
  *
  * <p>The legacy {@code DefaultEmbeddingStore} kept a static in-memory store so that a document
- * ingested by one operator instance was visible to a separate search operator instance in the
- * same JVM. The migrated {@link InMemoryVectorStore} is per-instance, so this holder reproduces
- * that shared-singleton behaviour for the zero-infra default path used by tests and local
- * development. Production paths ({@code useDefaults=false}) never touch this and instead build
- * their own store via {@code StorageFactory}.
+ * ingested by one operator instance was visible to a separate search operator instance in the same
+ * JVM. The migrated {@link InMemoryVectorStore} is per-instance, so this holder reproduces that
+ * shared-singleton behaviour for the zero-infra default path used by tests and local development.
+ * Production paths ({@code useDefaults=false}) never touch this and instead build their own store
+ * via {@code StorageFactory}.
  */
 final class DefaultRagComponents {
 

@@ -38,8 +38,7 @@ public final class A2AToolRegistry {
   }
 
   /** Build executors from explicit specs with an explicit factory (no Agent needed). */
-  public static List<A2AToolExecutor> build(
-      List<RemoteAgentSpec> specs, A2AClientFactory factory) {
+  public static List<A2AToolExecutor> build(List<RemoteAgentSpec> specs, A2AClientFactory factory) {
     A2AClientFactory f = factory == null ? A2AClientFactory.discovering() : factory;
     List<A2AToolExecutor> executors = new ArrayList<>(specs.size());
     for (RemoteAgentSpec spec : specs) {
@@ -56,9 +55,7 @@ public final class A2AToolRegistry {
     }
     if (!executors.isEmpty()) {
       LOG.info(
-          "Registered {} A2A peer tool(s) for agent '{}'",
-          executors.size(),
-          agent.getAgentId());
+          "Registered {} A2A peer tool(s) for agent '{}'", executors.size(), agent.getAgentId());
     }
   }
 }

@@ -1,5 +1,8 @@
 package org.agentic.flink.stream;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.agentic.flink.core.AgentConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -8,9 +11,6 @@ import org.agentic.flink.function.*;
 import org.agentic.flink.serde.ToolCallRequest;
 import org.agentic.flink.serde.ToolCallResponse;
 import org.agentic.flink.tools.ToolExecutorRegistry;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
@@ -38,7 +38,8 @@ public class AgentExecutionStream {
     this.env = env;
     this.config = config;
     this.toolRegistry = toolRegistry != null ? toolRegistry : new HashMap<>();
-    this.executorRegistry = executorRegistry != null ? executorRegistry : new ToolExecutorRegistry();
+    this.executorRegistry =
+        executorRegistry != null ? executorRegistry : new ToolExecutorRegistry();
   }
 
   /**
@@ -122,8 +123,9 @@ public class AgentExecutionStream {
         validationEvents
             .union(correctionEvents)
             .union(supervisorEvents)
-            .union(toolCallEvents.filter(
-                event -> event.getEventType() == AgentEventType.TOOL_CALL_FAILED));
+            .union(
+                toolCallEvents.filter(
+                    event -> event.getEventType() == AgentEventType.TOOL_CALL_FAILED));
 
     // Step 8: Loop handling with side outputs
     SingleOutputStreamOperator<AgentEvent> loopProcessed =
@@ -147,9 +149,8 @@ public class AgentExecutionStream {
   private ToolCallRequest eventToToolCallRequest(AgentEvent event) {
     String toolId = event.getData("toolId", String.class);
     @SuppressWarnings("unchecked")
-    Map<String, Object> parameters =
-        event.getData("parameters", Map.class);
-        if (parameters == null) {
+    Map<String, Object> parameters = event.getData("parameters", Map.class);
+    if (parameters == null) {
       parameters = new HashMap<>();
     }
 

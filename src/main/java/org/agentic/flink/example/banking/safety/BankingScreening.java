@@ -31,14 +31,14 @@ public final class BankingScreening {
     this.pipeline = pipeline;
   }
 
-  /** Default banking screening: one injection category → REVIEW, two (or injection+repeat) → BLOCK. */
+  /**
+   * Default banking screening: one injection category → REVIEW, two (or injection+repeat) → BLOCK.
+   */
   public static BankingScreening defaults() {
     ScreeningPipeline pipeline =
         ScreeningPipeline.builder()
             .addDetector(new InjectionDetector(0.45))
-            .addDetector(
-                new RepeatDetector(
-                    3, 0.5, (a, b) -> Objects.equals(a.label(), b.label())))
+            .addDetector(new RepeatDetector(3, 0.5, (a, b) -> Objects.equals(a.label(), b.label())))
             .addDetector(new VelocityDetector(6, java.time.Duration.ofSeconds(20), 0.4))
             .withReviewThreshold(0.45)
             .withBlockThreshold(0.85)

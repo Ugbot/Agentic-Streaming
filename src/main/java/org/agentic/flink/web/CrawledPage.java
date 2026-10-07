@@ -84,7 +84,14 @@ public final class CrawledPage implements Serializable {
 
   @Override
   public String toString() {
-    return "CrawledPage[" + url + ", " + text.length() + " chars, "
-        + discoveredLinks.size() + " links, depth=" + depth + "]";
+    return "CrawledPage["
+        + url
+        + ", "
+        + text.length()
+        + " chars, "
+        + discoveredLinks.size()
+        + " links, depth="
+        + depth
+        + "]";
   }
 }

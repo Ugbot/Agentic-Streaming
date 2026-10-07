@@ -131,7 +131,8 @@ class PostgresConversationStoreTest {
   }
 
   @Test
-  @DisplayName("concurrent writers on the same conversation all succeed and leave one consistent row")
+  @DisplayName(
+      "concurrent writers on the same conversation all succeed and leave one consistent row")
   void concurrentWritersSameConversation() throws Exception {
     int writers = 8 + ThreadLocalRandom.current().nextInt(8);
     int writesPerWriter = 10 + ThreadLocalRandom.current().nextInt(10);

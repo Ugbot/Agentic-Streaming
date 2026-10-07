@@ -29,11 +29,14 @@ import org.apache.flink.streaming.api.TimeDomain;
  * @param resumeAfter delay before a suspended turn is resumed by timer, or {@code null} for none
  * @param timerDomain the Flink time domain the resume timer is registered in
  * @param processingClock where workflow {@code timers} read processing time; the operator's own
- *     processing time unless a {@link ManualProcessingClock} is selected with
- *     {@link #withManualClock(String)} or {@link #withProcessingClock} (not settable from the document)
+ *     processing time unless a {@link ManualProcessingClock} is selected with {@link
+ *     #withManualClock(String)} or {@link #withProcessingClock} (not settable from the document)
  */
-public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain,
-                                  ProcessingClock processingClock)
+public record FlinkRuntimeOptions(
+    Duration stateTtl,
+    Duration resumeAfter,
+    TimeDomain timerDomain,
+    ProcessingClock processingClock)
     implements Serializable {
 
   public static final String RUNTIME_KEY = "runtime";
@@ -92,7 +95,9 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
     return resumeAfter != null;
   }
 
-  /** Reads {@code runtime.flink} from a workflow document; absent block yields {@link #DEFAULTS}. */
+  /**
+   * Reads {@code runtime.flink} from a workflow document; absent block yields {@link #DEFAULTS}.
+   */
   public static FlinkRuntimeOptions fromSpec(Map<String, Object> spec) {
     Objects.requireNonNull(spec, "spec");
     Object runtime = spec.get(RUNTIME_KEY);
@@ -112,8 +117,12 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
       switch (d) {
         case "processing_time" -> domain = TimeDomain.PROCESSING_TIME;
         case "event_time" -> domain = TimeDomain.EVENT_TIME;
-        default -> throw new IllegalArgumentException(
-            "runtime.flink." + TIMER_DOMAIN + " must be processing_time|event_time, got " + rawDomain);
+        default ->
+            throw new IllegalArgumentException(
+                "runtime.flink."
+                    + TIMER_DOMAIN
+                    + " must be processing_time|event_time, got "
+                    + rawDomain);
       }
     }
     return new FlinkRuntimeOptions(ttl, resume, domain);
@@ -124,7 +133,8 @@ public record FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeD
       return null;
     }
     if (!(raw instanceof Number n)) {
-      throw new IllegalArgumentException("runtime.flink." + key + " must be a number of milliseconds, got " + raw);
+      throw new IllegalArgumentException(
+          "runtime.flink." + key + " must be a number of milliseconds, got " + raw);
     }
     return Duration.ofMillis(n.longValue());
   }

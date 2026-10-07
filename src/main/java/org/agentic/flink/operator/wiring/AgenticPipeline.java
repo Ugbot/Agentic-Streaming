@@ -2,17 +2,17 @@ package org.agentic.flink.operator.wiring;
 
 import java.util.Arrays;
 import org.agentic.flink.channel.Channel;
+import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.control.ControlMessage;
 import org.agentic.flink.control.ControlState;
 import org.agentic.flink.control.DebugEvent;
 import org.agentic.flink.operator.AgenticKeyedProcessFunction;
 import org.agentic.flink.operator.OperatorDebug;
+import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.KeyedStream;
-import org.agentic.flink.channel.source.PollingSource;
-import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.connector.sink2.Sink;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
@@ -20,8 +20,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * The framework's stream-graph wiring helper. Three responsibilities:
  *
  * <ol>
- *   <li>Build a {@link BroadcastStream} of {@link ControlMessage} from any {@link Channel}
- *       so every operator in the job listens on the same control plane.
+ *   <li>Build a {@link BroadcastStream} of {@link ControlMessage} from any {@link Channel} so every
+ *       operator in the job listens on the same control plane.
  *   <li>Wire any {@link AgenticKeyedProcessFunction} into the graph in one call, threading the
  *       broadcast control and setting the operator name from {@link
  *       AgenticKeyedProcessFunction#operatorId()}.
@@ -40,8 +40,8 @@ public final class AgenticPipeline {
 
   /**
    * Wire {@code fn} as a {@link AgenticKeyedProcessFunction} into the graph: connects the keyed
-   * input with the broadcast control, processes, and names the operator from
-   * {@link AgenticKeyedProcessFunction#operatorId()}.
+   * input with the broadcast control, processes, and names the operator from {@link
+   * AgenticKeyedProcessFunction#operatorId()}.
    */
   public static <K, IN, OUT> SingleOutputStreamOperator<OUT> wire(
       KeyedStream<IN, K> in,
@@ -59,9 +59,9 @@ public final class AgenticPipeline {
   }
 
   /**
-   * Build a broadcast control stream from a fixed seed of directives. Convenience for examples
-   * and tests that want to run with the debug side-output on at start without setting up an
-   * external control channel. Pass {@link DebugControl#everywhere()} to enable everywhere.
+   * Build a broadcast control stream from a fixed seed of directives. Convenience for examples and
+   * tests that want to run with the debug side-output on at start without setting up an external
+   * control channel. Pass {@link DebugControl#everywhere()} to enable everywhere.
    */
   public static BroadcastStream<ControlMessage> seededControl(
       StreamExecutionEnvironment env, ControlMessage... directives) {
@@ -81,9 +81,8 @@ public final class AgenticPipeline {
   }
 
   /**
-   * Tiny source that emits a fixed sequence of {@link ControlMessage}s then idles for a few
-   * seconds so the broadcast lands before the data sources finish. Used by
-   * {@link #seededControl}.
+   * Tiny source that emits a fixed sequence of {@link ControlMessage}s then idles for a few seconds
+   * so the broadcast lands before the data sources finish. Used by {@link #seededControl}.
    */
   static final class SeededControlPollFn implements PollingSource.PollFn<ControlMessage> {
     private static final long serialVersionUID = 1L;
@@ -111,9 +110,9 @@ public final class AgenticPipeline {
   }
 
   /**
-   * Union the predefined debug side-outputs from every supplied operator into a single
-   * {@link DataStream}. Cheap; downstream call sites add whatever sink they want (Kafka, Fluss,
-   * ZMQ, etc.).
+   * Union the predefined debug side-outputs from every supplied operator into a single {@link
+   * DataStream}. Cheap; downstream call sites add whatever sink they want (Kafka, Fluss, ZMQ,
+   * etc.).
    */
   public static DataStream<DebugEvent> debugStream(SingleOutputStreamOperator<?>... operators) {
     if (operators == null || operators.length == 0) {

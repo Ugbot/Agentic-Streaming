@@ -23,9 +23,9 @@ import org.apache.flink.util.Collector;
  * rolling z-score + Claude), but extends {@link AgenticKeyedProcessFunction} so it picks up the
  * framework debug side-output and broadcast control input for free.
  *
- * <p>Used by the session-cluster launcher's L5 stage. The original {@link MarketAgentFn} stays
- * in place for the {@code flink run}-style bond/crypto examples whose Flink graphs predate the
- * control plane.
+ * <p>Used by the session-cluster launcher's L5 stage. The original {@link MarketAgentFn} stays in
+ * place for the {@code flink run}-style bond/crypto examples whose Flink graphs predate the control
+ * plane.
  */
 public final class AgenticMarketAgentFn
     extends AgenticKeyedProcessFunction<String, MarketFeatures, String> {
@@ -124,9 +124,7 @@ public final class AgenticMarketAgentFn
     decision.put("verdict", String.valueOf(r.verdict));
     decision.put("decidedBy", String.valueOf(r.decidedBy));
     decision.put("combinedRisk", r.combinedRisk);
-    decision.put(
-        "firedPhases",
-        r.fired.stream().map(s -> s.phase().name()).distinct().toList());
+    decision.put("firedPhases", r.fired.stream().map(s -> s.phase().name()).distinct().toList());
     if (r.llmRationale != null) {
       decision.put("llmRationale", r.llmRationale);
     }

@@ -66,9 +66,7 @@ class A2AClientContractTest {
     try (A2AClient client = new FakeA2AClient(spec, Integer.MAX_VALUE, false)) {
       assertThrows(
           A2AClientException.class,
-          () ->
-              client.sendAndAwait(
-                  A2AMessage.userText(UUID.randomUUID().toString(), "x"), 1, 50));
+          () -> client.sendAndAwait(A2AMessage.userText(UUID.randomUUID().toString(), "x"), 1, 50));
     }
   }
 

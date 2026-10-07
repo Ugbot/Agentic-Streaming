@@ -8,10 +8,10 @@ import java.util.Locale;
  * 429 ceiling). Decides the {@link BankingPath} from the conversation {@link BankingPhase} plus
  * light keyword heuristics on the message text.
  *
- * <p>Personal-agent flow chains across turns: {@code NEW → DELEGATE} (get product facts) →
- * {@code NEED_INFO → GATHER} (ask the user) → {@code READY_TO_ACT → ACTION} (perform). CS-agent
- * routes by intent: dispute → {@code DISPUTE}, action → {@code ACTION}, else {@code KNOWLEDGE}.
- * Either agent escalates on explicit human/complaint requests.
+ * <p>Personal-agent flow chains across turns: {@code NEW → DELEGATE} (get product facts) → {@code
+ * NEED_INFO → GATHER} (ask the user) → {@code READY_TO_ACT → ACTION} (perform). CS-agent routes by
+ * intent: dispute → {@code DISPUTE}, action → {@code ACTION}, else {@code KNOWLEDGE}. Either agent
+ * escalates on explicit human/complaint requests.
  */
 public final class BankingClassifier {
 
@@ -22,16 +22,35 @@ public final class BankingClassifier {
     "file a complaint", "lodge a complaint", "manager", "supervisor"
   };
   private static final String[] DISPUTE_TERMS = {
-    "dispute", "chargeback", "charge back", "unauthorized", "unauthorised",
-    "fraud", "didn't make this", "did not make this", "wrong charge"
+    "dispute",
+    "chargeback",
+    "charge back",
+    "unauthorized",
+    "unauthorised",
+    "fraud",
+    "didn't make this",
+    "did not make this",
+    "wrong charge"
   };
   private static final String[] ACTION_TERMS = {
     "apply", "go ahead", "do it", "proceed", "submit it", "yes please do",
     "open the", "close the", "transfer", "set it up", "sign me up", "go for it"
   };
   private static final String[] FACT_TERMS = {
-    "which", "what", "how much", "rate", "fee", "fees", "cash back", "cashback",
-    "interest", "eligib", "compare", "options", "best card", "recommend"
+    "which",
+    "what",
+    "how much",
+    "rate",
+    "fee",
+    "fees",
+    "cash back",
+    "cashback",
+    "interest",
+    "eligib",
+    "compare",
+    "options",
+    "best card",
+    "recommend"
   };
 
   /** Decide the path for the personal agent. */

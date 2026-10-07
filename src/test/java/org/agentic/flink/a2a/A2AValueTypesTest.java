@@ -114,8 +114,7 @@ class A2AValueTypesTest {
     assertEquals(1, restored.getSkills().size());
     assertEquals("route", restored.getSkills().get(0).getId());
     assertTrue(restored.getCapabilities().isStreaming());
-    assertEquals(
-        "https://peer/grpc", restored.endpointFor(A2ATransport.GRPC).orElseThrow());
+    assertEquals("https://peer/grpc", restored.endpointFor(A2ATransport.GRPC).orElseThrow());
   }
 
   private A2ATask randomTask() {
@@ -133,12 +132,14 @@ class A2AValueTypesTest {
     A2ATaskState[] states = A2ATaskState.values();
     A2ATaskState state = states[random.nextInt(states.length)];
 
-    A2ATask task = A2ATask.submitted(id, ctx, msg, now).withState(state, "status-" + random.nextInt(), now);
+    A2ATask task =
+        A2ATask.submitted(id, ctx, msg, now).withState(state, "status-" + random.nextInt(), now);
     int artifactCount = random.nextInt(3);
     for (int i = 0; i < artifactCount; i++) {
       task =
           task.withArtifact(
-              A2AArtifact.text(UUID.randomUUID().toString(), "a" + i, "content-" + random.nextInt()),
+              A2AArtifact.text(
+                  UUID.randomUUID().toString(), "a" + i, "content-" + random.nextInt()),
               now + i);
     }
     return task;
@@ -150,7 +151,8 @@ class A2AValueTypesTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(obj);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return (T) ois.readObject();
     }
   }

@@ -49,12 +49,19 @@ class ToolAllowlistEnforcementTest {
             .withId("sm-" + UUID.randomUUID())
             .withInitialState(AgentState.INITIALIZED);
     b.addTransition(t(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED));
-    b.addTransition(t(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED));
-    b.addTransition(t(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED));
-    b.addTransition(t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
-    b.addTransition(t(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED));
     b.addTransition(
-        t(AgentState.EXECUTING, AgentState.SUPERVISOR_REVIEW, AgentEventType.SUPERVISOR_REVIEW_REQUESTED));
+        t(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED));
+    b.addTransition(
+        t(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED));
+    b.addTransition(
+        t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
+    b.addTransition(
+        t(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED));
+    b.addTransition(
+        t(
+            AgentState.EXECUTING,
+            AgentState.SUPERVISOR_REVIEW,
+            AgentEventType.SUPERVISOR_REVIEW_REQUESTED));
     b.addTransition(
         t(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
     b.addTransition(t(AgentState.PAUSED, AgentState.EXECUTING, AgentEventType.FLOW_RESUMED));
@@ -111,13 +118,17 @@ class ToolAllowlistEnforcementTest {
 
     for (String name : allowed) {
       ToolCallResult r =
-          engine.executeTool(new ToolCall("c-" + UUID.randomUUID(), name, Map.of("k", 1)), ctx).join();
+          engine
+              .executeTool(new ToolCall("c-" + UUID.randomUUID(), name, Map.of("k", 1)), ctx)
+              .join();
       assertTrue(r.isSuccess(), name + " is allowed: " + r.getError());
       assertEquals(1, tools.get(name).calls.size());
     }
     for (String name : denied) {
       ToolCallResult r =
-          engine.executeTool(new ToolCall("c-" + UUID.randomUUID(), name, Map.of("k", 2)), ctx).join();
+          engine
+              .executeTool(new ToolCall("c-" + UUID.randomUUID(), name, Map.of("k", 2)), ctx)
+              .join();
       assertFalse(r.isSuccess(), name + " must be denied");
       assertEquals("Tool not permitted for this agent", r.getError());
       assertTrue(tools.get(name).calls.isEmpty(), "denied tool must never run");
@@ -129,7 +140,8 @@ class ToolAllowlistEnforcementTest {
     String name = "only-" + UUID.randomUUID().toString().substring(0, 8);
     RecordingTool t = new RecordingTool(name);
     ToolRegistry registry = ToolRegistry.builder().registerTool(name, t).build();
-    Agent agent = Agent.builder()
+    Agent agent =
+        Agent.builder()
             .withId("a-" + UUID.randomUUID())
             .withSystemPrompt("p")
             .withStateMachine(stateMachine())

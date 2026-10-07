@@ -1,6 +1,5 @@
 package org.agentic.flink.channel;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -11,6 +10,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import org.agentic.flink.tools.ToolExecutor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -19,33 +19,31 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A tool that, when invoked by the LLM, materializes the request as an element on a
- * {@link Channel} for some downstream operator to consume.
+ * A tool that, when invoked by the LLM, materializes the request as an element on a {@link Channel}
+ * for some downstream operator to consume.
  *
  * <p>Implements both {@link ToolExecutor} (so the LLM can call it through the normal tool-call
  * path) and {@link Channel} (so the job graph can read what was emitted). The choice of
  * **transport** decides how the invocation reaches the consumer:
  *
  * <ul>
- *   <li><b>{@link #sideOutput(String, Class, Function)}</b> — the recommended default for
- *       intra-job consumers. Tool invocations are recorded on a Flink {@link OutputTag}; the
- *       consumer reads them via {@code agentOpStream.getSideOutput(channel.outputTag())}. Cross-
- *       TM safe, exactly-once with checkpoints. The associated {@link #open} returns an
- *       in-process fallback stream that's also populated, so unit tests that don't have an
- *       operator context still work.
- *   <li><b>{@link #via(String, Class, Function, Channel, java.util.function.Consumer)}</b> —
- *       wraps another {@link Channel} (Kafka, Redis, custom). Tool invocations are published
- *       through a user-supplied {@link java.util.function.Consumer}; the consumer reads from
- *       the wrapped channel. Use this when the consumer is a different Flink job or not a
- *       Flink operator at all.
- *   <li><b>{@link #inJvm(String, Class, Function)}</b> — per-task {@link BlockingQueue}. Single
- *       JVM only; loses in-flight items on operator restart. Useful for unit tests and
- *       single-JVM dev.
+ *   <li><b>{@link #sideOutput(String, Class, Function)}</b> — the recommended default for intra-job
+ *       consumers. Tool invocations are recorded on a Flink {@link OutputTag}; the consumer reads
+ *       them via {@code agentOpStream.getSideOutput(channel.outputTag())}. Cross- TM safe,
+ *       exactly-once with checkpoints. The associated {@link #open} returns an in-process fallback
+ *       stream that's also populated, so unit tests that don't have an operator context still work.
+ *   <li><b>{@link #via(String, Class, Function, Channel, java.util.function.Consumer)}</b> — wraps
+ *       another {@link Channel} (Kafka, Redis, custom). Tool invocations are published through a
+ *       user-supplied {@link java.util.function.Consumer}; the consumer reads from the wrapped
+ *       channel. Use this when the consumer is a different Flink job or not a Flink operator at
+ *       all.
+ *   <li><b>{@link #inJvm(String, Class, Function)}</b> — per-task {@link BlockingQueue}. Single JVM
+ *       only; loses in-flight items on operator restart. Useful for unit tests and single-JVM dev.
  * </ul>
  *
- * <p>The agent operator hosting the tool should set the current
- * {@code KeyedProcessFunction.Context} via {@link #currentContext} before invoking the LLM, so
- * the side-output transport can find the context in its thread-local lookup.
+ * <p>The agent operator hosting the tool should set the current {@code
+ * KeyedProcessFunction.Context} via {@link #currentContext} before invoking the LLM, so the
+ * side-output transport can find the context in its thread-local lookup.
  */
 public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor {
   private static final long serialVersionUID = 1L;
@@ -107,10 +105,9 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
   /**
    * Build a side-output-transported tool channel.
    *
-   * <p>The consumer reads via {@code agentOpStream.getSideOutput(channel.outputTag())}.
-   * The {@link #open(StreamExecutionEnvironment)} call returns an in-process fallback stream
-   * (drained from the per-tool BlockingQueue) so unit tests still work without an operator
-   * context.
+   * <p>The consumer reads via {@code agentOpStream.getSideOutput(channel.outputTag())}. The {@link
+   * #open(StreamExecutionEnvironment)} call returns an in-process fallback stream (drained from the
+   * per-tool BlockingQueue) so unit tests still work without an operator context.
    */
   public static <T> ToolInvocationChannel<T> sideOutput(
       String toolId, Class<T> type, Function<Map<String, Object>, T> mapper) {
@@ -146,8 +143,8 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
   }
 
   /**
-   * Set the current operator emit-context for the calling thread. Agent operators call this
-   * before invoking the LLM (or any code that might trigger tools), and clear it after.
+   * Set the current operator emit-context for the calling thread. Agent operators call this before
+   * invoking the LLM (or any code that might trigger tools), and clear it after.
    */
   public static void setCurrentContext(EmitContext<?> ctx) {
     if (ctx == null) {
@@ -244,7 +241,8 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
       } catch (Exception e) {
         LOG.warn(
             "Side-output emit failed for tool {}; falling back to in-JVM queue: {}",
-            toolId, e.getMessage());
+            toolId,
+            e.getMessage());
       }
     }
     return emitViaQueue(value, "side-output:fallback");
@@ -263,7 +261,8 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
   }
 
   private CompletableFuture<Object> emitViaQueue(T value, String transportLabel) {
-    BlockingQueue<Object> q = IN_JVM_QUEUES.computeIfAbsent(toolId, k -> new LinkedBlockingQueue<>());
+    BlockingQueue<Object> q =
+        IN_JVM_QUEUES.computeIfAbsent(toolId, k -> new LinkedBlockingQueue<>());
     boolean offered = q.offer(value);
     Map<String, Object> result = new HashMap<>();
     result.put("queued", offered);
@@ -272,7 +271,8 @@ public final class ToolInvocationChannel<T> implements Channel<T>, ToolExecutor 
   }
 
   /** Per-tool-id native poll fn that drains the shared BlockingQueue. */
-  static final class QueuePollFn<T> implements org.agentic.flink.channel.source.PollingSource.PollFn<T> {
+  static final class QueuePollFn<T>
+      implements org.agentic.flink.channel.source.PollingSource.PollFn<T> {
     private static final long serialVersionUID = 1L;
     private final String toolId;
     private transient BlockingQueue<Object> queue;

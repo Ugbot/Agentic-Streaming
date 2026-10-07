@@ -1,15 +1,15 @@
 package org.agentic.flink.compensation;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.core.AgentEvent;
 
 /**
  * Result of a compensation operation (saga rollback).
  *
- * <p>Contains the overall result of executing multiple compensation actions,
- * including success/failure counts and individual action results.
+ * <p>Contains the overall result of executing multiple compensation actions, including
+ * success/failure counts and individual action results.
  *
  * @author Agentic Flink Team
  */
@@ -87,7 +87,8 @@ public class CompensationResult implements Serializable {
 
   @Override
   public String toString() {
-    return String.format("CompensationResult[flow=%s, success=%s, actions=%d, succeeded=%d, failed=%d]",
+    return String.format(
+        "CompensationResult[flow=%s, success=%s, actions=%d, succeeded=%d, failed=%d]",
         flowId, success, actionResults.size(), successCount, failureCount);
   }
 }

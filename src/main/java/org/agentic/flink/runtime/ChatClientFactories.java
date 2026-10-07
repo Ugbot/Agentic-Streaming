@@ -7,10 +7,10 @@ import org.jagentic.core.llm.ScriptedChatClient;
 import org.jagentic.core.pipeline.GraphBuilder;
 
 /**
- * Serializable {@link GraphBuilder.ChatClientFactory} implementations for
- * {@link WorkflowTurnFunction}. The factory is shipped with the operator, so it must be
- * {@link Serializable}; the {@link ChatClient} it creates is built inside {@code open()} and
- * never serialized.
+ * Serializable {@link GraphBuilder.ChatClientFactory} implementations for {@link
+ * WorkflowTurnFunction}. The factory is shipped with the operator, so it must be {@link
+ * Serializable}; the {@link ChatClient} it creates is built inside {@code open()} and never
+ * serialized.
  */
 public final class ChatClientFactories {
 
@@ -23,8 +23,8 @@ public final class ChatClientFactories {
 
   /**
    * Default factory: refuses every {@code llm:} spec. {@link WorkflowTurnFunction} detects this
-   * factory at construction and rejects workflows with an {@code llm} brain there, so a missing
-   * LLM configuration fails when the job graph is built, not when the operator opens.
+   * factory at construction and rejects workflows with an {@code llm} brain there, so a missing LLM
+   * configuration fails when the job graph is built, not when the operator opens.
    */
   public static SerializableChatClientFactory failFast() {
     return FailFast.INSTANCE;
@@ -50,7 +50,8 @@ public final class ChatClientFactories {
     @Override
     public ChatClient create(Map<String, Object> llmSpec) {
       throw new IllegalStateException(
-          "no ChatClientFactory configured for llm spec " + llmSpec
+          "no ChatClientFactory configured for llm spec "
+              + llmSpec
               + "; pass one to WorkflowTurnFunction");
     }
   }

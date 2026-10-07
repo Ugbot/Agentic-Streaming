@@ -1,10 +1,10 @@
 package org.agentic.flink.completion;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.io.Serializable;
 import java.util.*;
 import java.util.function.Predicate;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 
 /**
  * Tracks completion of agent workflows using event aggregation and task lists.
@@ -18,6 +18,7 @@ import java.util.function.Predicate;
  * CompletionTracker aggregates agent events and checks if all required tasks are complete.
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * // Define tasks for a research workflow
  * TaskList researchTasks = TaskList.builder()
@@ -41,6 +42,7 @@ import java.util.function.Predicate;
  * }</pre>
  *
  * <p><b>Integration with Flink:</b>
+ *
  * <pre>{@code
  * // Use in a ProcessFunction
  * public class CompletionProcessFunction extends ProcessFunction<AgentEvent, AgentEvent> {
@@ -98,11 +100,12 @@ public class CompletionTracker implements Serializable {
    * Processes an incoming agent event.
    *
    * <p>This method:
+   *
    * <ul>
-   *   <li>Adds the event to history</li>
-   *   <li>Updates accumulated state</li>
-   *   <li>Checks if any tasks completed based on the event</li>
-   *   <li>Evaluates overall completion status</li>
+   *   <li>Adds the event to history
+   *   <li>Updates accumulated state
+   *   <li>Checks if any tasks completed based on the event
+   *   <li>Evaluates overall completion status
    * </ul>
    *
    * @param event The agent event to process
@@ -130,10 +133,11 @@ public class CompletionTracker implements Serializable {
    * Checks if a specific event completes any tasks.
    *
    * <p>Default mapping:
+   *
    * <ul>
-   *   <li>TOOL_CALL_COMPLETED → task named after the tool</li>
-   *   <li>VALIDATION_PASSED → task named "validation"</li>
-   *   <li>SUPERVISOR_APPROVED → task named "supervisor-review"</li>
+   *   <li>TOOL_CALL_COMPLETED → task named after the tool
+   *   <li>VALIDATION_PASSED → task named "validation"
+   *   <li>SUPERVISOR_APPROVED → task named "supervisor-review"
    * </ul>
    *
    * @param event The event to check
@@ -353,11 +357,7 @@ public class CompletionTracker implements Serializable {
   public String toString() {
     return String.format(
         "CompletionTracker[flow=%s, complete=%s, progress=%.1f%%, duration=%dms, events=%d]",
-        flowId,
-        isComplete,
-        getCompletionPercentage() * 100,
-        getDurationMs(),
-        eventHistory.size());
+        flowId, isComplete, getCompletionPercentage() * 100, getDurationMs(), eventHistory.size());
   }
 
   // ==================== Future: Goal-Based Completion ====================

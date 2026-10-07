@@ -12,14 +12,14 @@ import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatRole;
 
 /**
- * Pure (cluster-free) JSON codec for {@link FlussConversationStore}'s row payloads. A Fluss PK table
- * gives single-key upsert + lookup; this models a whole conversation as one {@code (key, payload)}
- * row whose payload is a JSON <em>envelope</em> ({@code msgs}/{@code attrs}/{@code owner}), plus
- * separate JSON-array <em>index</em> rows (all-conversations, per-user) so listing operations work
- * without a secondary-index scan.
+ * Pure (cluster-free) JSON codec for {@link FlussConversationStore}'s row payloads. A Fluss PK
+ * table gives single-key upsert + lookup; this models a whole conversation as one {@code (key,
+ * payload)} row whose payload is a JSON <em>envelope</em> ({@code msgs}/{@code attrs}/{@code
+ * owner}), plus separate JSON-array <em>index</em> rows (all-conversations, per-user) so listing
+ * operations work without a secondary-index scan.
  *
- * <p>Every mutation is a read-modify-write on the JSON string, so this logic is the correctness core
- * of the store and is unit-tested directly without a running Fluss cluster.
+ * <p>Every mutation is a read-modify-write on the JSON string, so this logic is the correctness
+ * core of the store and is unit-tested directly without a running Fluss cluster.
  */
 final class FlussConversationCodec {
 
@@ -74,7 +74,8 @@ final class FlussConversationCodec {
   }
 
   /** Append a message to the envelope, keeping at most {@code maxMessages} (0 = unbounded). */
-  static String appendMessage(ObjectMapper mapper, String envelopeJson, ChatMessage m, int maxMessages) {
+  static String appendMessage(
+      ObjectMapper mapper, String envelopeJson, ChatMessage m, int maxMessages) {
     Map<String, Object> env = parseEnvelope(mapper, envelopeJson);
     List<Map<String, String>> msgs = new ArrayList<>(msgList(env));
     Map<String, String> encoded = new LinkedHashMap<>();

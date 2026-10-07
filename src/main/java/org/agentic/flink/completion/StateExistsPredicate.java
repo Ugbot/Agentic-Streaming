@@ -1,9 +1,9 @@
 package org.agentic.flink.completion;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.core.AgentEvent;
 
 /**
  * A goal predicate that checks whether a specific key exists (and is non-null) in the accumulated
@@ -38,8 +38,7 @@ public class StateExistsPredicate implements GoalPredicate, Serializable {
   }
 
   @Override
-  public double getConfidence(
-      Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
+  public double getConfidence(Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
     return isSatisfied(currentState, eventHistory) ? 1.0 : 0.0;
   }
 

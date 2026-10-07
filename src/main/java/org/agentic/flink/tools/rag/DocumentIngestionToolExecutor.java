@@ -1,5 +1,11 @@
 package org.agentic.flink.tools.rag;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -11,12 +17,6 @@ import org.agentic.flink.storage.StorageFactory;
 import org.agentic.flink.storage.VectorStore;
 import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Document Ingestion Tool Executor. Ingests documents into the vector store:
@@ -28,8 +28,8 @@ import java.util.concurrent.CompletableFuture;
  * </ol>
  *
  * <p>Migrated off the legacy {@code langchain/model} + {@code langchain/store} packages onto the
- * framework embedding/vector SPIs. The default constructor builds an
- * {@link OllamaEmbeddingConnection} and a {@link VectorStore} selected by the {@code vector.backend}
+ * framework embedding/vector SPIs. The default constructor builds an {@link
+ * OllamaEmbeddingConnection} and a {@link VectorStore} selected by the {@code vector.backend}
  * config key (defaulting to the zero-infra {@link InMemoryVectorStore}).
  */
 public class DocumentIngestionToolExecutor extends AbstractToolExecutor {
@@ -98,8 +98,7 @@ public class DocumentIngestionToolExecutor extends AbstractToolExecutor {
                 getOptionalParameter(parameters, "metadata", Map.class, new HashMap<>());
 
             // Step 1: Split document into chunks.
-            String sourceId =
-                metadata.getOrDefault("document_id", UUID.randomUUID().toString());
+            String sourceId = metadata.getOrDefault("document_id", UUID.randomUUID().toString());
             RecursiveTextChunker chunker = new RecursiveTextChunker(chunkSize, chunkOverlap);
             List<Chunk> chunks = chunker.chunk(sourceId, content);
 

@@ -1,6 +1,10 @@
 package org.agentic.flink.example.triage;
 
+import dev.langchain4j.model.chat.ChatModel;
+import java.util.List;
+import java.util.Set;
 import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.inference.ClassifierGuardrail;
 import org.agentic.flink.inference.InferenceSetup;
@@ -15,13 +19,9 @@ import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatClient;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
-import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.statemachine.AgentStateMachine;
 import org.agentic.flink.statemachine.AgentTransition;
-import dev.langchain4j.model.chat.ChatModel;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Customer-support triage agent.
@@ -30,25 +30,26 @@ import java.util.Set;
  *
  * <ol>
  *   <li><b>Guardrail</b> — a sentiment classifier blocks abusive content from reaching the LLM.
- *   <li><b>Intent tool</b> — a topic classifier exposed as a {@code ToolExecutor} categorizes
- *       the ticket (billing / technical / refund / general).
- *   <li><b>Draft</b> — the LLM drafts three candidate replies through the framework's
- *       {@link ChatClient} SPI.
- *   <li><b>Rerank</b> — a cross-encoder {@link Scorer} ranks the candidates against the ticket;
- *       the highest-scoring draft wins.
- *   <li><b>Tone rewrite</b> — for the winning draft, we downcast to
- *       {@link LangChain4jChatClient} and call the underlying
- *       {@link ChatModel} directly. This shows the documented escape hatch in a real
- *       situation: we want LangChain4J's two-arg {@code generate(systemPrompt, userPrompt)}
- *       convenience that the vendor-neutral SPI does not expose.
+ *   <li><b>Intent tool</b> — a topic classifier exposed as a {@code ToolExecutor} categorizes the
+ *       ticket (billing / technical / refund / general).
+ *   <li><b>Draft</b> — the LLM drafts three candidate replies through the framework's {@link
+ *       ChatClient} SPI.
+ *   <li><b>Rerank</b> — a cross-encoder {@link Scorer} ranks the candidates against the ticket; the
+ *       highest-scoring draft wins.
+ *   <li><b>Tone rewrite</b> — for the winning draft, we downcast to {@link LangChain4jChatClient}
+ *       and call the underlying {@link ChatModel} directly. This shows the documented escape hatch
+ *       in a real situation: we want LangChain4J's two-arg {@code generate(systemPrompt,
+ *       userPrompt)} convenience that the vendor-neutral SPI does not expose.
  * </ol>
  *
  * <p><b>Prerequisites:</b>
+ *
  * <pre>
  *   bash examples-bin/run-ollama.sh      # Podman: starts Ollama and pulls qwen2.5:3b
  * </pre>
  *
  * <p><b>To run:</b>
+ *
  * <pre>
  *   bash examples-bin/run-support-triage.sh
  * </pre>
@@ -59,7 +60,6 @@ public class SupportTriageExample {
   /** Cross-encoder reranker; must be an artifact of the DJL Hugging Face PyTorch zoo. */
   public static final String RERANKER_MODEL_URI =
       "djl://ai.djl.huggingface.pytorch/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1";
-
 
   /** One inbound support ticket. */
   public record Ticket(String id, String customer, String subject, String body) {
@@ -74,27 +74,49 @@ public class SupportTriageExample {
 
   /**
    * Single-shot triage flow: INITIALIZED starts execution, execution either completes or goes
-   * through supervisor review, and every non-terminal state has a way out so the machine
-   * validates. {@code AgentStateMachine.Builder#withStandardTransitions()} has no transition
-   * out of INITIALIZED, PAUSED or OFFLOADING, so the builder default cannot be used here.
+   * through supervisor review, and every non-terminal state has a way out so the machine validates.
+   * {@code AgentStateMachine.Builder#withStandardTransitions()} has no transition out of
+   * INITIALIZED, PAUSED or OFFLOADING, so the builder default cannot be used here.
    */
   static AgentStateMachine triageStateMachine() {
     return AgentStateMachine.builder()
         .withId("support-triage-sm")
         .withGlobalTimeout(120)
-        .addTransition(step(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED))
-        .addTransition(step(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED))
-        .addTransition(step(AgentState.VALIDATING, AgentState.EXECUTING, AgentEventType.VALIDATION_PASSED))
-        .addTransition(step(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED))
-        .addTransition(step(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED))
         .addTransition(
-            step(AgentState.EXECUTING, AgentState.SUPERVISOR_REVIEW, AgentEventType.SUPERVISOR_REVIEW_REQUESTED))
-        .addTransition(step(AgentState.EXECUTING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED))
-        .addTransition(step(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED))
-        .addTransition(step(AgentState.SUPERVISOR_REVIEW, AgentState.CORRECTING, AgentEventType.SUPERVISOR_REJECTED))
+            step(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED))
+        .addTransition(
+            step(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED))
+        .addTransition(
+            step(AgentState.VALIDATING, AgentState.EXECUTING, AgentEventType.VALIDATION_PASSED))
+        .addTransition(
+            step(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED))
+        .addTransition(
+            step(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED))
+        .addTransition(
+            step(
+                AgentState.EXECUTING,
+                AgentState.SUPERVISOR_REVIEW,
+                AgentEventType.SUPERVISOR_REVIEW_REQUESTED))
+        .addTransition(
+            step(AgentState.EXECUTING, AgentState.COMPLETED, AgentEventType.FLOW_COMPLETED))
+        .addTransition(
+            step(
+                AgentState.SUPERVISOR_REVIEW,
+                AgentState.COMPLETED,
+                AgentEventType.SUPERVISOR_APPROVED))
+        .addTransition(
+            step(
+                AgentState.SUPERVISOR_REVIEW,
+                AgentState.CORRECTING,
+                AgentEventType.SUPERVISOR_REJECTED))
         .addTransition(step(AgentState.PAUSED, AgentState.EXECUTING, AgentEventType.FLOW_RESUMED))
-        .addTransition(step(AgentState.OFFLOADING, AgentState.EXECUTING, AgentEventType.STATE_OFFLOADED))
-        .addTransition(step(AgentState.COMPENSATING, AgentState.COMPENSATED, AgentEventType.COMPENSATION_COMPLETED))
+        .addTransition(
+            step(AgentState.OFFLOADING, AgentState.EXECUTING, AgentEventType.STATE_OFFLOADED))
+        .addTransition(
+            step(
+                AgentState.COMPENSATING,
+                AgentState.COMPENSATED,
+                AgentEventType.COMPENSATION_COMPLETED))
         .build();
   }
 
@@ -152,9 +174,7 @@ public class SupportTriageExample {
             InferenceToolAdapter.TaskKind.CLASSIFIER);
 
     // ── 4. Cross-encoder reranker for candidate replies ─────────────────────────────────
-    DjlInferenceConnection reranker =
-        DjlInferenceConnection.classification(
-            RERANKER_MODEL_URI);
+    DjlInferenceConnection reranker = DjlInferenceConnection.classification(RERANKER_MODEL_URI);
     InferenceSetup rerankerSetup =
         InferenceSetup.builder()
             .withModelName("mmarco-mMiniLMv2-L12-H384-v1")
@@ -199,7 +219,8 @@ public class SupportTriageExample {
     ChatClient chatClient = chatConn.bind(null);
 
     //  Guardrail: pre-LLM sentiment check.
-    var guardDecision = abuseFilter.beforeChat(agent.getAgentId(), List.of(ChatMessage.user(ticket.body())));
+    var guardDecision =
+        abuseFilter.beforeChat(agent.getAgentId(), List.of(ChatMessage.user(ticket.body())));
     if (guardDecision.isBlock()) {
       System.out.println("Routed to human queue: " + guardDecision.getReason());
       return;
@@ -219,10 +240,15 @@ public class SupportTriageExample {
       ChatResponse resp =
           chatClient.chat(
               List.of(
-                  ChatMessage.system(agent.getSystemPrompt()
-                      + "\nDetected intent: " + intentLabel
-                      + "\nThis is draft attempt #" + (i + 1) + "; vary phrasing."),
-                  ChatMessage.user("Customer: " + ticket.customer() + "\nTicket: " + ticket.body())),
+                  ChatMessage.system(
+                      agent.getSystemPrompt()
+                          + "\nDetected intent: "
+                          + intentLabel
+                          + "\nThis is draft attempt #"
+                          + (i + 1)
+                          + "; vary phrasing."),
+                  ChatMessage.user(
+                      "Customer: " + ticket.customer() + "\nTicket: " + ticket.body())),
               creative);
       double score = rerank.scorePair(resp.getText(), ticket.body(), rerankerSetup);
       drafts.add(new Draft(resp.getText(), score));
@@ -250,8 +276,8 @@ public class SupportTriageExample {
    * Tone-rewrite pass using LangChain4J directly through the documented escape hatch.
    *
    * <p>The framework's {@link ChatClient} doesn't expose LangChain4J's two-arg {@code
-   * generate(system, user)} convenience. Rather than build a new SPI method for it, we
-   * downcast — this is what {@link LangChain4jChatClient#getUnderlyingModel()} is for.
+   * generate(system, user)} convenience. Rather than build a new SPI method for it, we downcast —
+   * this is what {@link LangChain4jChatClient#getUnderlyingModel()} is for.
    */
   private static String tonePass(ChatClient chatClient, String draft) {
     if (!(chatClient instanceof LangChain4jChatClient lc)) {

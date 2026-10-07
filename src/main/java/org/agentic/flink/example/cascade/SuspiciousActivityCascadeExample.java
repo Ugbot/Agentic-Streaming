@@ -24,11 +24,11 @@ import org.apache.flink.util.Collector;
  *    suspicious?"      suspicious"          accordingly"
  * </pre>
  *
- * <p>Wired on the new framework instrumentation: the inner operator extends
- * {@link AgenticProcessFunction} so its debug side-output is observable from the broadcast
- * control plane. Pass {@code --debug} (or set {@code AGENTIC_DEBUG=1}) to seed a
- * {@link DebugControl#everywhere()} at startup; per-message debug events are then printed
- * with a {@code [debug]} prefix alongside the main verdict line.
+ * <p>Wired on the new framework instrumentation: the inner operator extends {@link
+ * AgenticProcessFunction} so its debug side-output is observable from the broadcast control plane.
+ * Pass {@code --debug} (or set {@code AGENTIC_DEBUG=1}) to seed a {@link DebugControl#everywhere()}
+ * at startup; per-message debug events are then printed with a {@code [debug]} prefix alongside the
+ * main verdict line.
  *
  * <p>Runnable with no external infra (built-in lexicon classifier). Set {@code ANTHROPIC_API_KEY}
  * to let the LLM tier adjudicate confirmed cases with Claude; without it, confirmed cases route to
@@ -66,8 +66,9 @@ public final class SuspiciousActivityCascadeExample {
     // Control plane: seed an "everywhere" directive when --debug is on so debug events flow
     // immediately. Otherwise wire an empty broadcast — operator behaves the same, just silent.
     BroadcastStream<ControlMessage> control =
-        debug ? AgenticPipeline.seededControl(env, DebugControl.everywhere())
-              : AgenticPipeline.emptyControl(env);
+        debug
+            ? AgenticPipeline.seededControl(env, DebugControl.everywhere())
+            : AgenticPipeline.emptyControl(env);
 
     SingleOutputStreamOperator<String> verdicts =
         AgenticPipeline.wire(messages, control, new CascadeFunction(apiKey));

@@ -1,8 +1,8 @@
 package org.agentic.flink.a2a;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
@@ -62,12 +62,14 @@ public final class A2ADelegatingProcessFunction
       A2AStepSupport.applyResult(step, event, task);
 
       if (task.getState() != A2ATaskState.COMPLETED && step.failOnError()) {
-        emitFailure(event, "A2A step '" + step.name() + "' ended in state " + task.getState().wire(), out);
+        emitFailure(
+            event, "A2A step '" + step.name() + "' ended in state " + task.getState().wire(), out);
         return;
       }
       out.collect(event);
     } catch (A2AClientException e) {
-      LOG.warn("A2A step '{}' failed for key {}: {}", step.name(), ctx.getCurrentKey(), e.getMessage());
+      LOG.warn(
+          "A2A step '{}' failed for key {}: {}", step.name(), ctx.getCurrentKey(), e.getMessage());
       if (step.failOnError()) {
         emitFailure(event, e.getMessage(), out);
       } else {

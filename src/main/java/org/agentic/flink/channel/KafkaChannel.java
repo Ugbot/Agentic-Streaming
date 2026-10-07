@@ -11,9 +11,9 @@ import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.metrics.Counter;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.metrics.Counter;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,13 +23,13 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Use this when you want to wire any payload type through Kafka — for the framework-built-in
  * {@link KeyedContextItem} feed see {@link KafkaContextChannel}. {@code T} must be deserializable
- * by Jackson from the raw bytes; supply a custom {@link DeserializationSchema} if you need
- * non-JSON wire formats.
+ * by Jackson from the raw bytes; supply a custom {@link DeserializationSchema} if you need non-JSON
+ * wire formats.
  *
  * <p>Records that fail to deserialize never fail the source: they are counted on the source's
  * metric group ({@link JsonSchema#DESERIALIZATION_FAILURES_METRIC}) and handed to the channel's
- * {@link DeadLetterHandler} (by default logged and dropped; {@link #withDeadLetterTopic} republishes
- * them to a Kafka topic with the error in a header).
+ * {@link DeadLetterHandler} (by default logged and dropped; {@link #withDeadLetterTopic}
+ * republishes them to a Kafka topic with the error in a header).
  */
 public final class KafkaChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 2L;
@@ -99,8 +99,7 @@ public final class KafkaChannel<T> implements Channel<T> {
             .setProperties(props)
             .build();
 
-    return env.fromSource(
-        source, WatermarkStrategy.noWatermarks(), "kafka[" + topic + "]");
+    return env.fromSource(source, WatermarkStrategy.noWatermarks(), "kafka[" + topic + "]");
   }
 
   @Override
@@ -126,7 +125,8 @@ public final class KafkaChannel<T> implements Channel<T> {
   }
 
   /**
-   * JSON-from-bytes deserializer driven by a Class&lt;T&gt;. Public so other Flink jobs can reuse it.
+   * JSON-from-bytes deserializer driven by a Class&lt;T&gt;. Public so other Flink jobs can reuse
+   * it.
    *
    * <p>A record Jackson cannot map to {@code T} is not an error of the source: the failure is
    * counted, the raw bytes go to the {@link DeadLetterHandler}, and nothing is emitted for it.
@@ -183,8 +183,8 @@ public final class KafkaChannel<T> implements Channel<T> {
     }
 
     /**
-     * Strict variant: throws on malformed input. Flink's source calls
-     * {@link #deserialize(byte[], Collector)}, which routes failures to the dead-letter handler.
+     * Strict variant: throws on malformed input. Flink's source calls {@link #deserialize(byte[],
+     * Collector)}, which routes failures to the dead-letter handler.
      */
     @Override
     public T deserialize(byte[] message) throws IOException {

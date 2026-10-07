@@ -18,8 +18,8 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
  *   <li><b>round-trips</b> — personal↔CS A2A calls in this session;
  *   <li><b>iterations</b> — internal LLM/tool steps in the current turn;
  *   <li><b>deadline</b> — a soft per-turn wall-clock budget, well under the harness's 5 min;
- *   <li><b>dedupe</b> — drops an identical sub-request seen again within a short window (the classic
- *       "two agents echo the same question forever" failure).
+ *   <li><b>dedupe</b> — drops an identical sub-request seen again within a short window (the
+ *       classic "two agents echo the same question forever" failure).
  * </ul>
  *
  * <p>Mutable counters + immutable caps, all {@link Serializable} so the object round-trips through
@@ -53,7 +53,8 @@ public final class RoutingBudget implements Serializable {
   private final Deque<String> recentHashes = new ArrayDeque<>();
   private String lastDenial;
 
-  public RoutingBudget(int maxRoundTrips, int maxIterations, long turnDeadlineMs, int dedupeWindow) {
+  public RoutingBudget(
+      int maxRoundTrips, int maxIterations, long turnDeadlineMs, int dedupeWindow) {
     this.maxRoundTrips = maxRoundTrips;
     this.maxIterations = maxIterations;
     this.turnDeadlineMs = turnDeadlineMs;
@@ -77,8 +78,7 @@ public final class RoutingBudget implements Serializable {
    */
   public boolean allowRoundTrip() {
     if (roundTrips >= maxRoundTrips) {
-      lastDenial =
-          "round-trip budget exhausted (" + roundTrips + "/" + maxRoundTrips + ")";
+      lastDenial = "round-trip budget exhausted (" + roundTrips + "/" + maxRoundTrips + ")";
       return false;
     }
     roundTrips++;

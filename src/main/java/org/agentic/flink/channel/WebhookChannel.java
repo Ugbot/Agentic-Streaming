@@ -18,12 +18,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Lightweight HTTP channel: spins up a JDK {@link HttpServer} bound to a host/port, accepts
- * {@code POST} requests of JSON bodies, deserializes each into a {@code T}, and emits.
+ * Lightweight HTTP channel: spins up a JDK {@link HttpServer} bound to a host/port, accepts {@code
+ * POST} requests of JSON bodies, deserializes each into a {@code T}, and emits.
  *
  * <p>Single-parallelism by design — multiple subtasks can't share a port. Good for development,
- * webhooks from upstream systems (GitHub events, Slack, …), and any case where you want
- * external producers to push without a message broker in the loop.
+ * webhooks from upstream systems (GitHub events, Slack, …), and any case where you want external
+ * producers to push without a message broker in the loop.
  */
 public final class WebhookChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 1L;

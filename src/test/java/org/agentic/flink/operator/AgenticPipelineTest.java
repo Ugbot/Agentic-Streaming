@@ -30,8 +30,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * End-to-end tests for the framework control plane. Uses a local Flink environment with
- * parallelism=1 and finite sources; the data source sleeps briefly to let broadcast state from
- * the control source propagate before the first keyed record arrives.
+ * parallelism=1 and finite sources; the data source sleeps briefly to let broadcast state from the
+ * control source propagate before the first keyed record arrives.
  */
 final class AgenticPipelineTest {
 
@@ -110,10 +110,7 @@ final class AgenticPipelineTest {
     MAIN_OUTPUT.clear();
 
     // Send a 1ms-TTL directive then sleep well past it; data should not see debug enabled.
-    runJob(
-        List.of(DebugControl.on("test-op", 1L)),
-        List.of(1, 2, 3),
-        /* preDataSleepMs = */ 250L);
+    runJob(List.of(DebugControl.on("test-op", 1L)), List.of(1, 2, 3), /* preDataSleepMs= */ 250L);
 
     assertEquals(0, DEBUG_EVENTS.size(), "expected no events after TTL expiry");
   }
@@ -121,7 +118,7 @@ final class AgenticPipelineTest {
   // ---- harness ----
 
   private void runJob(List<DebugControl> controlSeq, List<Integer> dataSeq) throws Exception {
-    runJob(controlSeq, dataSeq, /* preDataSleepMs = */ 600L);
+    runJob(controlSeq, dataSeq, /* preDataSleepMs= */ 600L);
   }
 
   private void runJob(List<DebugControl> controlSeq, List<Integer> dataSeq, long preDataSleepMs)
@@ -171,8 +168,8 @@ final class AgenticPipelineTest {
   }
 
   /**
-   * Source that emits a fixed sequence of {@link ControlMessage}s, then idles (so the data
-   * source has time to start) until the job is cancelled.
+   * Source that emits a fixed sequence of {@link ControlMessage}s, then idles (so the data source
+   * has time to start) until the job is cancelled.
    */
   static final class ControlSeqSource implements SourceFunction<ControlMessage> {
     private static final long serialVersionUID = 1L;

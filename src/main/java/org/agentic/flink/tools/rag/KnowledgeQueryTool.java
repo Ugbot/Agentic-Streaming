@@ -1,12 +1,12 @@
 package org.agentic.flink.tools.rag;
 
-import org.agentic.flink.rag.KnowledgeBase;
-import org.agentic.flink.tools.AbstractToolExecutor;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.rag.KnowledgeBase;
+import org.agentic.flink.tools.AbstractToolExecutor;
 
 /**
  * Agent-callable tool: answer a question from the shared {@link KnowledgeBase} using retrieval +
@@ -53,7 +53,6 @@ public final class KnowledgeQueryTool extends AbstractToolExecutor {
 
   @Override
   public boolean validateParameters(Map<String, Object> parameters) {
-    return super.validateParameters(parameters)
-        && parameters.get("question") instanceof String;
+    return super.validateParameters(parameters) && parameters.get("question") instanceof String;
   }
 }

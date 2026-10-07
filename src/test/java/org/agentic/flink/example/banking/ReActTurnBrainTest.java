@@ -24,7 +24,11 @@ import org.junit.jupiter.api.Test;
 final class ReActTurnBrainTest {
 
   private static ChatSetup setup() {
-    return ChatSetup.builder().withModel("test").withTemperature(0.0).withMaxResponseTokens(256).build();
+    return ChatSetup.builder()
+        .withModel("test")
+        .withTemperature(0.0)
+        .withMaxResponseTokens(256)
+        .build();
   }
 
   private static BankingTurnContext ctx(
@@ -52,7 +56,8 @@ final class ReActTurnBrainTest {
                 "{\"type\":\"final\",\"answer\":\"Your balance is $42.\"}"));
 
     ReActTurnBrain brain =
-        new ReActTurnBrain(chat, setup(), "You are a bank agent.", Map.of("lookup_balance", lookup), 5000);
+        new ReActTurnBrain(
+            chat, setup(), "You are a bank agent.", Map.of("lookup_balance", lookup), 5000);
 
     String reply = brain.respond("what's my balance?", ctx(RoutingBudget.defaults(), null));
     assertEquals("Your balance is $42.", reply);
@@ -70,7 +75,8 @@ final class ReActTurnBrainTest {
         };
     // The model never finalizes — it always asks CS again (the explosion the budget must stop).
     ChatConnection chat =
-        new AlwaysAsk("{\"type\":\"action\",\"tool\":\"ask_customer_service\",\"arguments\":{\"message\":\"more\"}}");
+        new AlwaysAsk(
+            "{\"type\":\"action\",\"tool\":\"ask_customer_service\",\"arguments\":{\"message\":\"more\"}}");
 
     RoutingBudget budget = new RoutingBudget(2, 50, 240_000L, 0); // cap CS round-trips at 2
     ReActTurnBrain brain = new ReActTurnBrain(chat, setup(), "personal", Map.of(), 5000);
@@ -93,7 +99,8 @@ final class ReActTurnBrainTest {
   }
 
   @Test
-  @DisplayName("a 'I need to inspect the tools first' stall final is rejected and forces the action")
+  @DisplayName(
+      "a 'I need to inspect the tools first' stall final is rejected and forces the action")
   void stallFinalForcesAction() {
     AtomicInteger toolCalls = new AtomicInteger();
     ToolExecutor listTools =
@@ -101,7 +108,8 @@ final class ReActTurnBrainTest {
             "list_env_tools",
             p -> {
               toolCalls.incrementAndGet();
-              return Map.of("error", false, "content", "[{\"name\":\"apply\",\"params\":[\"card_type\"]}]");
+              return Map.of(
+                  "error", false, "content", "[{\"name\":\"apply\",\"params\":[\"card_type\"]}]");
             });
     // 1) stall final (must be pushed back), 2) the action it should have emitted, 3) real final.
     ChatConnection chat =
@@ -122,7 +130,8 @@ final class ReActTurnBrainTest {
   @Test
   @DisplayName("a genuine final (no tool-stall language) is returned as-is, not nudged")
   void genuineFinalNotNudged() {
-    ToolExecutor unused = new StubTool("list_env_tools", p -> Map.of("error", false, "content", "x"));
+    ToolExecutor unused =
+        new StubTool("list_env_tools", p -> Map.of("error", false, "content", "x"));
     ChatConnection chat =
         new ScriptedChat(
             List.of(
@@ -151,8 +160,7 @@ final class ReActTurnBrainTest {
         @Override
         public ChatResponse chat(List<ChatMessage> messages, ChatSetup setup) {
           String text = queue.size() > 1 ? queue.poll() : queue.peek();
-          return new ChatResponse(
-              text, "test", List.of(), 1L, ChatResponse.FinishReason.STOP);
+          return new ChatResponse(text, "test", List.of(), 1L, ChatResponse.FinishReason.STOP);
         }
 
         @Override

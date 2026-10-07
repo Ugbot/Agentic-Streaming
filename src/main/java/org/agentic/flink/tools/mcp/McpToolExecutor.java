@@ -1,20 +1,20 @@
 package org.agentic.flink.tools.mcp;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tools.ToolExecutor;
 
 /**
  * Adapts a single tool exposed by an MCP server into our {@link ToolExecutor} interface.
  *
  * <p>One instance per MCP tool. The wrapping {@link McpClient} is supplied at construction —
- * typically by {@link McpToolRegistry#discover(McpServerSpec)}, which builds one client per
- * server and N executors per tool against it.
+ * typically by {@link McpToolRegistry#discover(McpServerSpec)}, which builds one client per server
+ * and N executors per tool against it.
  *
- * <p>Calls are executed on the common pool through {@link CompletableFuture#supplyAsync(java.util.function.Supplier)}
- * to match the async contract of {@link ToolExecutor#execute(Map)} without blocking the calling
- * Flink task thread.
+ * <p>Calls are executed on the common pool through {@link
+ * CompletableFuture#supplyAsync(java.util.function.Supplier)} to match the async contract of {@link
+ * ToolExecutor#execute(Map)} without blocking the calling Flink task thread.
  */
 public final class McpToolExecutor implements ToolExecutor {
   private static final long serialVersionUID = 1L;

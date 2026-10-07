@@ -1,17 +1,17 @@
 package org.agentic.flink.tools.rag;
 
-import org.agentic.flink.rag.KnowledgeBase;
-import org.agentic.flink.tools.AbstractToolExecutor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.rag.KnowledgeBase;
+import org.agentic.flink.tools.AbstractToolExecutor;
 
 /**
  * Agent-callable tool: scrape a web page and index it into a shared {@link KnowledgeBase}.
  *
- * <p>Lets an agent (or a supervisor planning loop) push its own scraping targets into the
- * knowledge base — e.g. "fetch this docs page so I can answer questions about it". Parameter:
- * {@code url} (required). Returns the title and number of chunks indexed.
+ * <p>Lets an agent (or a supervisor planning loop) push its own scraping targets into the knowledge
+ * base — e.g. "fetch this docs page so I can answer questions about it". Parameter: {@code url}
+ * (required). Returns the title and number of chunks indexed.
  */
 public final class ScrapeUrlTool extends AbstractToolExecutor {
 
@@ -41,7 +41,6 @@ public final class ScrapeUrlTool extends AbstractToolExecutor {
 
   @Override
   public boolean validateParameters(Map<String, Object> parameters) {
-    return super.validateParameters(parameters)
-        && parameters.get("url") instanceof String;
+    return super.validateParameters(parameters) && parameters.get("url") instanceof String;
   }
 }

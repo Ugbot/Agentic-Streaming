@@ -1,5 +1,10 @@
 package org.agentic.flink.tools.rag;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -15,11 +20,6 @@ import org.agentic.flink.storage.StorageFactory;
 import org.agentic.flink.storage.VectorStore;
 import org.agentic.flink.storage.vector.InMemoryVectorStore;
 import org.agentic.flink.tools.AbstractToolExecutor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * RAG (Retrieval-Augmented Generation) Tool Executor. Performs:

@@ -12,8 +12,8 @@ import org.apache.flink.api.common.functions.RuntimeContext;
  * <p>Derives a fixed-length vector from a SHA-256 digest of the input text. The same text always
  * produces the same vector, and similar (identical) texts collide — this is NOT a semantic
  * embedder. It exists so tests, examples, and local development can exercise the ingest → store →
- * search → answer path with no embedding server. For real semantic search use
- * {@link OllamaEmbeddingConnection} or {@code DjlEmbeddingConnection}.
+ * search → answer path with no embedding server. For real semantic search use {@link
+ * OllamaEmbeddingConnection} or {@code DjlEmbeddingConnection}.
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "hash"}. The vector
  * dimension comes from the {@link EmbeddingSetup} at each call.

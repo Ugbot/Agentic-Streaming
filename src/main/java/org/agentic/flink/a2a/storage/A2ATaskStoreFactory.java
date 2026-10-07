@@ -56,9 +56,7 @@ public final class A2ATaskStoreFactory {
           }
         }
         throw new IllegalArgumentException(
-            "Unknown A2ATaskStore backend: "
-                + backend
-                + ". Built-ins: memory, postgres, redis.");
+            "Unknown A2ATaskStore backend: " + backend + ". Built-ins: memory, postgres, redis.");
     }
   }
 

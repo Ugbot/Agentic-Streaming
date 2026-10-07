@@ -32,8 +32,7 @@ class A2ARedisTaskStoreIT {
 
   @BeforeAll
   static void startRedis() {
-    redis =
-        new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
+    redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
     redis.start();
   }
 
@@ -73,7 +72,8 @@ class A2ARedisTaskStoreIT {
       assertEquals(1, store.listTasksByState(A2ATaskState.COMPLETED).size());
 
       // Push configs.
-      store.savePushConfig(task.getId(), new A2APushConfig("c1", "https://cb", "t", AuthSpec.bearer("x")));
+      store.savePushConfig(
+          task.getId(), new A2APushConfig("c1", "https://cb", "t", AuthSpec.bearer("x")));
       assertEquals(1, store.listPushConfigs(task.getId()).size());
 
       store.deleteTask(task.getId());

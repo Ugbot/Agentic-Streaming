@@ -27,8 +27,7 @@ class AgentPlanRoundTripTest {
     ToolSpec javaTool =
         new ToolSpec(ToolSpec.KIND_JAVA, "web", "fetch", "com.example.Web", Map.of(), null, null);
     ToolSpec pyTool =
-        new ToolSpec(
-            ToolSpec.KIND_PYTHON, "classify", "py", null, null, pickle, List.of("text"));
+        new ToolSpec(ToolSpec.KIND_PYTHON, "classify", "py", null, null, pickle, List.of("text"));
     ActionSpec action =
         new ActionSpec(
             "handle",
@@ -69,8 +68,7 @@ class AgentPlanRoundTripTest {
     assertEquals(plan.getTools().get(0).getFqn(), round.getTools().get(0).getFqn());
     assertEquals(
         plan.getTools().get(1).getCloudpickleB64(), round.getTools().get(1).getCloudpickleB64());
-    assertEquals(
-        plan.getTools().get(1).getParamNames(), round.getTools().get(1).getParamNames());
+    assertEquals(plan.getTools().get(1).getParamNames(), round.getTools().get(1).getParamNames());
     assertEquals(plan.getActions().get(0).getEvents(), round.getActions().get(0).getEvents());
     assertEquals(plan.getResources().keySet(), round.getResources().keySet());
     assertEquals(plan.getListeners().size(), round.getListeners().size());
@@ -101,8 +99,7 @@ class AgentPlanRoundTripTest {
 
   @Test
   void planReaderInstantiatesNoArgClass() {
-    Object inst =
-        PlanReader.instantiate(new ResourceSpec(NoArgFixture.class.getName(), Map.of()));
+    Object inst = PlanReader.instantiate(new ResourceSpec(NoArgFixture.class.getName(), Map.of()));
     assertTrue(inst instanceof NoArgFixture);
   }
 

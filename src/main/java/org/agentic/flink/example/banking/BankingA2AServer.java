@@ -60,11 +60,21 @@ public final class BankingA2AServer {
   public static void main(String[] args) throws Exception {
     String roleEnv = env("A2A_BANKING_ROLE", "personal");
     BankingAgentSetup.Role role =
-        "cs".equalsIgnoreCase(roleEnv) ? BankingAgentSetup.Role.CS : BankingAgentSetup.Role.PERSONAL;
-    int port = Integer.parseInt(env("PORT", env("QUARKUS_HTTP_PORT", role == BankingAgentSetup.Role.CS ? "9002" : "9001")));
+        "cs".equalsIgnoreCase(roleEnv)
+            ? BankingAgentSetup.Role.CS
+            : BankingAgentSetup.Role.PERSONAL;
+    int port =
+        Integer.parseInt(
+            env(
+                "PORT",
+                env("QUARKUS_HTTP_PORT", role == BankingAgentSetup.Role.CS ? "9002" : "9001")));
     String publicUrl = env("PUBLIC_URL", "http://localhost:" + port);
     String name =
-        env("AGENT_NAME", role == BankingAgentSetup.Role.CS ? "Rho-Bank Customer Service" : "Rho-Bank Personal Assistant");
+        env(
+            "AGENT_NAME",
+            role == BankingAgentSetup.Role.CS
+                ? "Rho-Bank Customer Service"
+                : "Rho-Bank Personal Assistant");
 
     BankingTurnContext.CustomerServiceClient cs =
         role == BankingAgentSetup.Role.PERSONAL ? httpCsClient(env("CS_AGENT_URL", null)) : null;
@@ -76,11 +86,13 @@ public final class BankingA2AServer {
 
   void start(int port) throws IOException {
     server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
-    server.setExecutor(Executors.newCachedThreadPool(r -> {
-      Thread t = new Thread(r, "a2a-banking-" + port);
-      t.setDaemon(true);
-      return t;
-    }));
+    server.setExecutor(
+        Executors.newCachedThreadPool(
+            r -> {
+              Thread t = new Thread(r, "a2a-banking-" + port);
+              t.setDaemon(true);
+              return t;
+            }));
     server.createContext("/.well-known/agent-card.json", this::handleCard);
     server.createContext("/", this::handleRpc);
     server.start();
@@ -123,7 +135,11 @@ public final class BankingA2AServer {
     JsonNode idNode = req.get("id");
     String method = req.path("method").asText("");
     if (!"message/send".equals(method)) {
-      respond(ex, 200, rpcError(idNode, -32601, "Unsupported method: " + method).getBytes(StandardCharsets.UTF_8));
+      respond(
+          ex,
+          200,
+          rpcError(idNode, -32601, "Unsupported method: " + method)
+              .getBytes(StandardCharsets.UTF_8));
       return;
     }
     try {
@@ -137,7 +153,11 @@ public final class BankingA2AServer {
       respond(ex, 200, rpcResult(idNode, reply, contextId).getBytes(StandardCharsets.UTF_8));
     } catch (Exception e) {
       LOG.warn("turn failed", e);
-      respond(ex, 200, rpcError(idNode, -32603, "Internal error: " + e.getMessage()).getBytes(StandardCharsets.UTF_8));
+      respond(
+          ex,
+          200,
+          rpcError(idNode, -32603, "Internal error: " + e.getMessage())
+              .getBytes(StandardCharsets.UTF_8));
     }
   }
 
@@ -146,7 +166,9 @@ public final class BankingA2AServer {
     RoutingBudget budget =
         budgets.computeIfAbsent(
             contextId,
-            k -> new RoutingBudget(setup.maxRoundTrips(), setup.maxIterations(), setup.turnDeadlineMs(), 8));
+            k ->
+                new RoutingBudget(
+                    setup.maxRoundTrips(), setup.maxIterations(), setup.turnDeadlineMs(), 8));
     budget.startTurn(now);
 
     ScreeningResult screen = setup.screening().screen(contextId, userText, now);
@@ -157,7 +179,8 @@ public final class BankingA2AServer {
     final RoutingBudget b = budget;
     return EnvSession.withContext(
         contextId,
-        () -> setup.brain().respond(userText, new BankingTurnContext(contextId, b, now, setup.cs())));
+        () ->
+            setup.brain().respond(userText, new BankingTurnContext(contextId, b, now, setup.cs())));
   }
 
   // ---- outbound personal->CS client (also speaks message/send) ----
@@ -173,16 +196,17 @@ public final class BankingA2AServer {
       return null;
     }
     if (csToken == null || csToken.isBlank()) {
-      LOG.warn("CS_AGENT_TOKEN not set — the CS gateway rejects ask_customer_service unless in dev mode");
+      LOG.warn(
+          "CS_AGENT_TOKEN not set — the CS gateway rejects ask_customer_service unless in dev mode");
     }
     return new HttpCsClient(csUrl, csToken);
   }
 
   /**
    * Serializable personal→CS A2A client (spec {@code message/send}, contextId-propagating). It is
-   * held by the DELEGATE path operator and shipped into the Flink job, so the JDK {@link HttpClient}
-   * is {@code transient} and built lazily on the task side (a plain lambda capturing an HttpClient
-   * is not serializable — Flink rejects the operator at submit).
+   * held by the DELEGATE path operator and shipped into the Flink job, so the JDK {@link
+   * HttpClient} is {@code transient} and built lazily on the task side (a plain lambda capturing an
+   * HttpClient is not serializable — Flink rejects the operator at submit).
    */
   static final class HttpCsClient implements BankingTurnContext.CustomerServiceClient {
     private static final long serialVersionUID = 1L;
@@ -244,7 +268,9 @@ public final class BankingA2AServer {
     }
   }
 
-  /** Extract reply text from a message/send result (Message, or Task artifacts + status message). */
+  /**
+   * Extract reply text from a message/send result (Message, or Task artifacts + status message).
+   */
   private static String replyText(JsonNode result) {
     if (result == null || result.isMissingNode() || result.isNull()) {
       return "[no response from customer service]";

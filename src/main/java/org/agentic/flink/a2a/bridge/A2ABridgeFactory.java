@@ -43,8 +43,7 @@ public final class A2ABridgeFactory {
       case "redis":
         String host = config.get(ConfigKeys.REDIS_HOST, ConfigKeys.DEFAULT_REDIS_HOST);
         int port =
-            config.getInt(
-                ConfigKeys.REDIS_PORT, Integer.parseInt(ConfigKeys.DEFAULT_REDIS_PORT));
+            config.getInt(ConfigKeys.REDIS_PORT, Integer.parseInt(ConfigKeys.DEFAULT_REDIS_PORT));
         return new RedisA2ABridge(host, port, request, response);
       case "kafka":
         throw new IllegalArgumentException(
@@ -57,7 +56,8 @@ public final class A2ABridgeFactory {
   }
 
   /** Build a bridge directly by transport + endpoints (no config object). */
-  public static A2ABridge create(String transport, String requestEndpoint, String responseEndpoint) {
+  public static A2ABridge create(
+      String transport, String requestEndpoint, String responseEndpoint) {
     switch (transport.toLowerCase()) {
       case "inproc":
         return new InProcA2ABridge(requestEndpoint, responseEndpoint);

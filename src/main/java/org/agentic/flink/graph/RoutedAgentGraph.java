@@ -14,9 +14,9 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
  * be expressed as "a router, some path operators, and a verifier" instead of hand-wired Flink.
  *
  * <pre>{@code
- *   DataStream<Turn> routed = requests.keyBy(key).process(routerFn);     // router sets turn.path
- *   DataStream<Resp> out = RoutedAgentGraph.wire(
- *       routed, Turn::path, Turn::contextId, pathFns, verifierFn, turnType, respType);
+ * DataStream<Turn> routed = requests.keyBy(key).process(routerFn);     // router sets turn.path
+ * DataStream<Resp> out = RoutedAgentGraph.wire(
+ *     routed, Turn::path, Turn::contextId, pathFns, verifierFn, turnType, respType);
  * }</pre>
  *
  * <p>Routing is by a {@code path} field on the mid-stream element (the {@code pathOf} selector),

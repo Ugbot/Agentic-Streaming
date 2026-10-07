@@ -26,10 +26,11 @@ import org.junit.jupiter.api.Test;
  *   mvn test -P integration-tests -Dtest=FlussConversationStoreIT
  * </pre>
  *
- * Bootstrap defaults to {@code localhost:9123} (the compose's coordinator CLIENT listener), override
- * with {@code FLUSS_BOOTSTRAP_SERVERS}. If the cluster is unreachable the test self-skips (assumption)
- * rather than failing, so the integration profile stays green without a Fluss up. Exercises the same
- * {@link ConversationStore} contract as the in-JVM unit test, with randomized data.
+ * Bootstrap defaults to {@code localhost:9123} (the compose's coordinator CLIENT listener),
+ * override with {@code FLUSS_BOOTSTRAP_SERVERS}. If the cluster is unreachable the test self-skips
+ * (assumption) rather than failing, so the integration profile stays green without a Fluss up.
+ * Exercises the same {@link ConversationStore} contract as the in-JVM unit test, with randomized
+ * data.
  */
 @Tag("integration")
 class FlussConversationStoreIT {

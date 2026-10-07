@@ -16,18 +16,20 @@ import org.slf4j.LoggerFactory;
 /**
  * Synchronous Flink function for executing agents in a streaming context.
  *
- * <p>This is a simpler alternative to AgentExecutionFunction that executes
- * agents synchronously. Use this when async I/O is not required.
+ * <p>This is a simpler alternative to AgentExecutionFunction that executes agents synchronously.
+ * Use this when async I/O is not required.
  *
  * <p><b>Features:</b>
+ *
  * <ul>
- *   <li>Synchronous agent execution</li>
- *   <li>Real LLM calls via LangChain4J</li>
- *   <li>Real tool execution</li>
- *   <li>Error handling and event enrichment</li>
+ *   <li>Synchronous agent execution
+ *   <li>Real LLM calls via LangChain4J
+ *   <li>Real tool execution
+ *   <li>Error handling and event enrichment
  * </ul>
  *
  * <p><b>Usage:</b>
+ *
  * <pre>{@code
  * DataStream<AgentEvent> results = inputStream
  *     .flatMap(new AgentFlatMapFunction(agent, toolRegistry, llmClient));
@@ -59,19 +61,23 @@ public class AgentFlatMapFunction extends RichFlatMapFunction<AgentEvent, AgentE
     LOG.info("Initializing AgentExecutor for agent: {}", agent.getAgentId());
 
     // Create agent executor
-    executor = AgentExecutor.builder()
-        .withAgent(agent)
-        .withToolRegistry(toolRegistry)
-        .withLlmClient(llmClient)
-        .build();
+    executor =
+        AgentExecutor.builder()
+            .withAgent(agent)
+            .withToolRegistry(toolRegistry)
+            .withLlmClient(llmClient)
+            .build();
 
     LOG.info("AgentExecutor initialized successfully");
   }
 
   @Override
   public void flatMap(AgentEvent inputEvent, Collector<AgentEvent> out) throws Exception {
-    LOG.debug("Processing event: flow={}, agent={}, type={}",
-        inputEvent.getFlowId(), inputEvent.getAgentId(), inputEvent.getEventType());
+    LOG.debug(
+        "Processing event: flow={}, agent={}, type={}",
+        inputEvent.getFlowId(),
+        inputEvent.getAgentId(),
+        inputEvent.getEventType());
 
     try {
       // Execute agent synchronously
@@ -83,7 +89,8 @@ public class AgentFlatMapFunction extends RichFlatMapFunction<AgentEvent, AgentE
         // Create success event with output
         AgentEvent successEvent = inputEvent.withEventType(AgentEventType.FLOW_COMPLETED);
         successEvent.putData("result", result.getOutput());
-        successEvent.putData("tool_calls", result.getToolCalls() != null ? result.getToolCalls().size() : 0);
+        successEvent.putData(
+            "tool_calls", result.getToolCalls() != null ? result.getToolCalls().size() : 0);
         successEvent.putData("events_generated", result.getEvents().size());
 
         out.collect(successEvent);

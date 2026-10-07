@@ -20,9 +20,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Idempotency note:</b> {@code send}/{@code stream} are retried on transient failure. The A2A
  * {@code message/send} carries a stable {@code messageId}, so a peer that dedupes by message id is
- * safe; a peer that does not may observe a duplicate if a failure occurs <em>after</em> it processed
- * the request but <em>before</em> the response reached us. The deadline + bounded attempts keep this
- * tightly contained, and the alternative (no retry on a pre-processing connection blip) is worse.
+ * safe; a peer that does not may observe a duplicate if a failure occurs <em>after</em> it
+ * processed the request but <em>before</em> the response reached us. The deadline + bounded
+ * attempts keep this tightly contained, and the alternative (no retry on a pre-processing
+ * connection blip) is worse.
  */
 public final class ResilientA2AClient implements A2AClient {
 
@@ -43,12 +44,14 @@ public final class ResilientA2AClient implements A2AClient {
     this(delegate, spec, System::currentTimeMillis, Thread::sleep);
   }
 
-  ResilientA2AClient(A2AClient delegate, RemoteAgentSpec spec, LongSupplier clock, Sleeper sleeper) {
+  ResilientA2AClient(
+      A2AClient delegate, RemoteAgentSpec spec, LongSupplier clock, Sleeper sleeper) {
     this.delegate = java.util.Objects.requireNonNull(delegate, "delegate");
     this.spec = java.util.Objects.requireNonNull(spec, "spec");
     this.clock = clock;
     this.sleeper = sleeper;
-    this.breaker = new CircuitBreaker(spec.circuitBreakerThreshold(), spec.circuitBreakerOpenMs(), clock);
+    this.breaker =
+        new CircuitBreaker(spec.circuitBreakerThreshold(), spec.circuitBreakerOpenMs(), clock);
   }
 
   @Override
@@ -78,7 +81,8 @@ public final class ResilientA2AClient implements A2AClient {
 
   @Override
   public A2ATask stream(A2AMessage message, Consumer<A2ATask> onUpdate) {
-    // Retried as a unit; a mid-stream failure that already pushed updates will replay them on retry.
+    // Retried as a unit; a mid-stream failure that already pushed updates will replay them on
+    // retry.
     return guarded("stream", () -> delegate.stream(message, onUpdate));
   }
 
@@ -103,8 +107,8 @@ public final class ResilientA2AClient implements A2AClient {
 
   /**
    * Run {@code action} under the breaker + retry policy. Fast-fails when the breaker is open;
-   * otherwise retries transient {@link A2AClientException}s with exponential backoff + jitter, never
-   * exceeding the per-call deadline.
+   * otherwise retries transient {@link A2AClientException}s with exponential backoff + jitter,
+   * never exceeding the per-call deadline.
    */
   private <T> T guarded(String op, Supplier<T> action) {
     if (!breaker.allowRequest()) {
@@ -139,12 +143,18 @@ public final class ResilientA2AClient implements A2AClient {
           break; // out of time budget
         }
         // Full-jitter backoff may legitimately be 0 ("retry immediately") — that must NOT abort the
-        // retry loop; only the deadline (above) or exhausted attempts end it. Clamp to the remaining
+        // retry loop; only the deadline (above) or exhausted attempts end it. Clamp to the
+        // remaining
         // budget and skip the sleep when it's zero.
         long backoff = Math.max(0, Math.min(computeBackoff(attempt), remaining));
         LOG.debug(
             "A2A {} to '{}' failed (attempt {}/{}): {} — retrying in {}ms",
-            op, spec.name(), attempt + 1, spec.maxRetries() + 1, e.getMessage(), backoff);
+            op,
+            spec.name(),
+            attempt + 1,
+            spec.maxRetries() + 1,
+            e.getMessage(),
+            backoff);
         if (backoff > 0) {
           try {
             sleeper.sleep(backoff);
@@ -158,7 +168,8 @@ public final class ResilientA2AClient implements A2AClient {
       }
     }
     throw new A2AClientException(
-        "A2A " + op + " to '" + spec.name() + "' failed after " + (attempt + 1) + " attempt(s)", last);
+        "A2A " + op + " to '" + spec.name() + "' failed after " + (attempt + 1) + " attempt(s)",
+        last);
   }
 
   /** Full-jitter exponential backoff: random in [0, min(maxBackoff, base * 2^attempt)]. */

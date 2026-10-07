@@ -1,24 +1,24 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.dsl.Agent;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.dsl.Agent;
 
 /**
  * Execution context that tracks state during agent execution.
  *
  * <p>The ExecutionContext maintains:
+ *
  * <ul>
- *   <li>Input event and agent configuration</li>
- *   <li>History of events generated during execution</li>
- *   <li>Iteration count and timing metrics</li>
- *   <li>Execution metadata</li>
+ *   <li>Input event and agent configuration
+ *   <li>History of events generated during execution
+ *   <li>Iteration count and timing metrics
+ *   <li>Execution metadata
  * </ul>
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */

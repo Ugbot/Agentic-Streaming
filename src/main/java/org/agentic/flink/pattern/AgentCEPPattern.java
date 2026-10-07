@@ -1,8 +1,8 @@
 package org.agentic.flink.pattern;
 
+import java.time.Duration;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
-import java.time.Duration;
 import org.apache.flink.cep.pattern.Pattern;
 import org.apache.flink.cep.pattern.conditions.IterativeCondition;
 
@@ -11,9 +11,9 @@ public class AgentCEPPattern {
   private AgentCEPPattern() {}
 
   /**
-   * Creates the main agent workflow pattern: 1. Flow starts 2. Tool call requested and completed
-   * 3. Validation (optional) 4. Either passes validation or goes to correction/supervisor 5. Loop
-   * or complete
+   * Creates the main agent workflow pattern: 1. Flow starts 2. Tool call requested and completed 3.
+   * Validation (optional) 4. Either passes validation or goes to correction/supervisor 5. Loop or
+   * complete
    */
   public static Pattern<AgentEvent, ?> createAgentWorkflowPattern() {
     // NOTE: Simplified pattern - complex branching with .or() removed
@@ -31,9 +31,7 @@ public class AgentCEPPattern {
         .within(Duration.ofMinutes(30)); // Overall workflow timeout
   }
 
-  /**
-   * Pattern for detecting loop iterations Detects when we should loop back vs complete
-   */
+  /** Pattern for detecting loop iterations Detects when we should loop back vs complete */
   public static Pattern<AgentEvent, ?> createLoopDetectionPattern() {
     return Pattern.<AgentEvent>begin(AgentPatternName.LOOP_ITERATION.name())
         .where(new EventTypeCondition(AgentEventType.LOOP_ITERATION_STARTED))
@@ -72,9 +70,7 @@ public class AgentCEPPattern {
         .within(Duration.ofMinutes(30)); // 30 minutes of inactivity
   }
 
-  /**
-   * Pattern for error handling and rollback Detects error states that require intervention
-   */
+  /** Pattern for error handling and rollback Detects error states that require intervention */
   public static Pattern<AgentEvent, ?> createErrorHandlingPattern() {
     // NOTE: Simplified to only match ERROR_OCCURRED. For TIMEOUT_OCCURRED, use a separate pattern.
     return Pattern.<AgentEvent>begin(AgentPatternName.ERROR_STATE.name())
@@ -82,9 +78,7 @@ public class AgentCEPPattern {
         .within(Duration.ofSeconds(5));
   }
 
-  /**
-   * Simple validation-only pattern For agents that don't require correction or supervisor
-   */
+  /** Simple validation-only pattern For agents that don't require correction or supervisor */
   public static Pattern<AgentEvent, ?> createSimpleValidationPattern() {
     return Pattern.<AgentEvent>begin(AgentPatternName.FLOW_STARTED.name())
         .where(new EventTypeCondition(AgentEventType.FLOW_STARTED))

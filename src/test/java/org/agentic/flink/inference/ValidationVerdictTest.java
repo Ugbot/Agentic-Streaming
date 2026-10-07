@@ -15,7 +15,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-/** Regression for the validator collapsing {@code INVALID} into {@code VALID} via substring match. */
+/**
+ * Regression for the validator collapsing {@code INVALID} into {@code VALID} via substring match.
+ */
 class ValidationVerdictTest {
 
   private static String reason() {
@@ -25,7 +27,10 @@ class ValidationVerdictTest {
   private static String randomCase(String word) {
     StringBuilder sb = new StringBuilder();
     for (char c : word.toCharArray()) {
-      sb.append(ThreadLocalRandom.current().nextBoolean() ? Character.toUpperCase(c) : Character.toLowerCase(c));
+      sb.append(
+          ThreadLocalRandom.current().nextBoolean()
+              ? Character.toUpperCase(c)
+              : Character.toLowerCase(c));
     }
     return sb.toString();
   }
@@ -35,7 +40,8 @@ class ValidationVerdictTest {
         Arguments.of("INVALID: " + reason()),
         Arguments.of(randomCase("invalid") + " - " + reason()),
         Arguments.of("The response is INVALID because " + reason()),
-        Arguments.of("Verdict: INVALID\nConfidence: 0." + ThreadLocalRandom.current().nextInt(10, 99)),
+        Arguments.of(
+            "Verdict: INVALID\nConfidence: 0." + ThreadLocalRandom.current().nextInt(10, 99)),
         Arguments.of("invalid"));
   }
 
@@ -85,7 +91,8 @@ class ValidationVerdictTest {
       assertEquals(ValidationVerdict.Outcome.UNDETERMINED, v.getOutcome(), r);
       assertFalse(v.isValid(), r);
     }
-    assertEquals(ValidationVerdict.Outcome.UNDETERMINED, ValidationVerdict.parse(null).getOutcome());
+    assertEquals(
+        ValidationVerdict.Outcome.UNDETERMINED, ValidationVerdict.parse(null).getOutcome());
   }
 
   @Test
@@ -96,7 +103,8 @@ class ValidationVerdictTest {
     String agent = "agent-" + UUID.randomUUID();
 
     GuardrailDecision blocked =
-        guardrail.afterChat(agent, new ChatResponse("INVALID: " + reason(), model, null, null, null));
+        guardrail.afterChat(
+            agent, new ChatResponse("INVALID: " + reason(), model, null, null, null));
     assertTrue(blocked.isBlock());
     assertEquals(model, blocked.getModelName());
     assertTrue(blocked.getReason().contains("INVALID"), blocked.getReason());
@@ -105,7 +113,8 @@ class ValidationVerdictTest {
         guardrail.afterChat(agent, new ChatResponse("VALID: " + reason(), model, null, null, null));
     assertFalse(allowed.isBlock());
 
-    assertTrue(guardrail.afterChat(agent, new ChatResponse(reason(), model, null, null, null)).isBlock());
+    assertTrue(
+        guardrail.afterChat(agent, new ChatResponse(reason(), model, null, null, null)).isBlock());
     assertTrue(guardrail.afterChat(agent, null).isBlock());
   }
 }

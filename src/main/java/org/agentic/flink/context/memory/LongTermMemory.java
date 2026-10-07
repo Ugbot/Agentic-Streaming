@@ -1,7 +1,5 @@
 package org.agentic.flink.context.memory;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.context.core.ContextPriority;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.Data;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.context.core.ContextPriority;
 
 /**
  * Long-term persistent memory Immutable facts, persisted across restarts Used for: - Hard facts

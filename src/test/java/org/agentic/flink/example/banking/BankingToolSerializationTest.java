@@ -24,8 +24,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Every tool a routed-graph path operator ({@link
- * org.agentic.flink.example.banking.graph.BankingPathFunction}) holds is shipped <b>inside the Flink
- * operator</b>, so it must be Java-serializable — otherwise the job dies at submit with a
+ * org.agentic.flink.example.banking.graph.BankingPathFunction}) holds is shipped <b>inside the
+ * Flink operator</b>, so it must be Java-serializable — otherwise the job dies at submit with a
  * {@code NotSerializableException} from {@code ClosureCleaner}. This test round-trips each tool to
  * guard that contract (it caught {@code KbSearchTool$Doc} / {@code VectorKbSearchTool} holding
  * non-serializable index state). Uses randomized temp KB docs.
@@ -37,8 +37,13 @@ final class BankingToolSerializationTest {
 
   private void writeDoc(String id) throws Exception {
     String json =
-        "{\"id\":\"" + id + "\",\"title\":\"Title " + id + "\",\"content\":\"content "
-            + UUID.randomUUID() + "\"}";
+        "{\"id\":\""
+            + id
+            + "\",\"title\":\"Title "
+            + id
+            + "\",\"content\":\"content "
+            + UUID.randomUUID()
+            + "\"}";
     Files.writeString(kbDir.resolve(id + ".json"), json);
   }
 
@@ -48,7 +53,8 @@ final class BankingToolSerializationTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(tool);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return (T) ois.readObject();
     }
   }

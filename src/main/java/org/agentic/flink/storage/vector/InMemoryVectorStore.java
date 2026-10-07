@@ -1,8 +1,5 @@
 package org.agentic.flink.storage.vector;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.StorageTier;
-import org.agentic.flink.storage.VectorStore;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -11,6 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.storage.StorageTier;
+import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,12 +19,12 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Zero external infrastructure — the default vector backend for tests, local development, and
  * small RAG corpora. Search is O(n) per query, which is sub-millisecond for a few thousand vectors
- * and fine into the low tens of thousands. For larger corpora use {@link PgVectorStore},
- * {@code QdrantVectorStore}, or {@code MilvusVectorStore}, or the Flink-state-backed
- * {@code FlinkStateVectorMemory} / {@code FlinkStateHnswVectorMemory}.
+ * and fine into the low tens of thousands. For larger corpora use {@link PgVectorStore}, {@code
+ * QdrantVectorStore}, or {@code MilvusVectorStore}, or the Flink-state-backed {@code
+ * FlinkStateVectorMemory} / {@code FlinkStateHnswVectorMemory}.
  *
- * <p>Config keys (all optional): {@code vector.dimension} (validated on store if set),
- * {@code vector.similarity} (one of {@code cosine} (default), {@code euclidean}, {@code dot_product}).
+ * <p>Config keys (all optional): {@code vector.dimension} (validated on store if set), {@code
+ * vector.similarity} (one of {@code cosine} (default), {@code euclidean}, {@code dot_product}).
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "in-memory"}.
  */
@@ -64,19 +64,16 @@ public final class InMemoryVectorStore implements VectorStore {
       throw new IllegalArgumentException(
           "embedding dimension " + embedding.length + " != store dimension " + dimension);
     }
-    Map<String, Object> meta =
-        metadata == null ? new HashMap<>() : new HashMap<>(metadata);
+    Map<String, Object> meta = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
     store.put(id, new Entry(embedding.clone(), meta));
   }
 
   @Override
   public void storeEmbeddingsBatch(
-      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata)
-      throws Exception {
+      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata) throws Exception {
     if (embeddings == null) return;
     for (Map.Entry<String, float[]> e : embeddings.entrySet()) {
-      Map<String, Object> meta =
-          metadata == null ? null : metadata.get(e.getKey());
+      Map<String, Object> meta = metadata == null ? null : metadata.get(e.getKey());
       storeEmbedding(e.getKey(), e.getValue(), meta);
     }
   }
@@ -89,7 +86,8 @@ public final class InMemoryVectorStore implements VectorStore {
   @Override
   public List<VectorSearchResult> searchSimilarWithFilter(
       float[] queryEmbedding, int topK, Map<String, Object> metadataFilter) {
-    if (queryEmbedding == null) throw new IllegalArgumentException("queryEmbedding must not be null");
+    if (queryEmbedding == null)
+      throw new IllegalArgumentException("queryEmbedding must not be null");
     if (topK <= 0) return new ArrayList<>();
 
     List<VectorSearchResult> scored = new ArrayList<>();

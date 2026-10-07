@@ -7,12 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
 import org.apache.flink.cep.pattern.Pattern;
 import org.junit.jupiter.api.Test;
 
-/** Phase C: the same declarative {@code cep:} rule translates to a native Flink {@link Pattern}.
- * Verifies the stage chain + the {@code where} conditions without needing a cluster. */
+/**
+ * Phase C: the same declarative {@code cep:} rule translates to a native Flink {@link Pattern}.
+ * Verifies the stage chain + the {@code where} conditions without needing a cluster.
+ */
 class CepSpecTranslatorTest {
 
   /** A tiny stream event for the test: text + metadata. */
@@ -21,11 +22,27 @@ class CepSpecTranslatorTest {
   @SuppressWarnings("unchecked")
   private static Map<String, Object> incidentSpec() {
     return Map.of(
-        "name", "incident", "within", 300000,
-        "pattern", List.of(
+        "name",
+        "incident",
+        "within",
+        300000,
+        "pattern",
+        List.of(
             Map.of("stage", "first", "where", Map.of("text_contains", "anomaly")),
-            Map.of("stage", "second", "where", Map.of("text_contains", "anomaly"), "contiguity", "followedBy"),
-            Map.of("stage", "third", "where", Map.of("text_contains", "anomaly"), "contiguity", "followedBy")));
+            Map.of(
+                "stage",
+                "second",
+                "where",
+                Map.of("text_contains", "anomaly"),
+                "contiguity",
+                "followedBy"),
+            Map.of(
+                "stage",
+                "third",
+                "where",
+                Map.of("text_contains", "anomaly"),
+                "contiguity",
+                "followedBy")));
   }
 
   @Test
@@ -43,11 +60,14 @@ class CepSpecTranslatorTest {
 
   @Test
   void conditionsReflectTheWhereMiniLanguage() throws Exception {
-    var textContains = CepSpecTranslator.<Ev>condition(Map.of("text_contains", "anomaly"), Ev::text, Ev::meta);
+    var textContains =
+        CepSpecTranslator.<Ev>condition(Map.of("text_contains", "anomaly"), Ev::text, Ev::meta);
     assertTrue(textContains.filter(new Ev("anomaly cpu", Map.of())));
     assertFalse(textContains.filter(new Ev("all good", Map.of())));
 
-    var gt = CepSpecTranslator.<Ev>condition(Map.of("metadata_gt", Map.of("score", 0.9)), Ev::text, Ev::meta);
+    var gt =
+        CepSpecTranslator.<Ev>condition(
+            Map.of("metadata_gt", Map.of("score", 0.9)), Ev::text, Ev::meta);
     assertTrue(gt.filter(new Ev("x", Map.of("score", "0.95"))));
     assertFalse(gt.filter(new Ev("x", Map.of("score", "0.5"))));
 

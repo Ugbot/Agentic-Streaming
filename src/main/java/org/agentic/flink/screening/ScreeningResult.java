@@ -26,8 +26,15 @@ public final class ScreeningResult implements Serializable {
   public final String reason;
 
   public ScreeningResult(
-      ScreenItem item, List<Signal> fired, double combinedRisk, Tier decidedBy, String verdict,
-      String mlLabel, double mlScore, String llmRationale, String reason) {
+      ScreenItem item,
+      List<Signal> fired,
+      double combinedRisk,
+      Tier decidedBy,
+      String verdict,
+      String mlLabel,
+      double mlScore,
+      String llmRationale,
+      String reason) {
     this.item = item;
     this.fired = fired;
     this.combinedRisk = combinedRisk;
@@ -46,7 +53,13 @@ public final class ScreeningResult implements Serializable {
       if (phases.length() > 0) phases.append(',');
       phases.append(s.phase());
     }
-    return String.format(Locale.ROOT, "[%s] %s risk=%.2f signals=[%s] — %s",
-        decidedBy, verdict, combinedRisk, phases, reason);
+    return String.format(
+        Locale.ROOT,
+        "[%s] %s risk=%.2f signals=[%s] — %s",
+        decidedBy,
+        verdict,
+        combinedRisk,
+        phases,
+        reason);
   }
 }

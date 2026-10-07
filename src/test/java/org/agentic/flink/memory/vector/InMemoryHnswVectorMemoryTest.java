@@ -11,7 +11,9 @@ import org.agentic.flink.context.core.MemoryType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Exercises the Flink-free HNSW graph via {@link InMemoryHnswVectorMemory} on randomized vectors. */
+/**
+ * Exercises the Flink-free HNSW graph via {@link InMemoryHnswVectorMemory} on randomized vectors.
+ */
 class InMemoryHnswVectorMemoryTest {
 
   private static ContextItem item(String s) {

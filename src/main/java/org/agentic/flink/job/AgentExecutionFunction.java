@@ -1,15 +1,15 @@
 package org.agentic.flink.job;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
 import org.agentic.flink.execution.AgentExecutor;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.tool.ToolRegistry;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -26,25 +26,24 @@ import org.slf4j.LoggerFactory;
  * CEP {@link PatternProcessFunction} that turns a pattern match into an agent execution request.
  *
  * <p>This function does not run the LLM or tools itself. It emits the matched start event as a
- * request that {@link AgentJobGenerator} feeds into an Flink async operator running
- * {@link org.agentic.flink.stream.AgentExecutionFunction}, so the keyed CEP operator never
- * blocks on model or tool latency and checkpoints are not stalled by agent execution.
+ * request that {@link AgentJobGenerator} feeds into an Flink async operator running {@link
+ * org.agentic.flink.stream.AgentExecutionFunction}, so the keyed CEP operator never blocks on model
+ * or tool latency and checkpoints are not stalled by agent execution.
  *
- * <p>Dispatched turns are recorded in keyed state ({@code legacy.dispatched-turns}, keyed by
- * flow id, TTL {@link #DEFAULT_DEDUP_TTL} by default) so that a match redelivered after a
- * restore does not dispatch the same turn twice. Duplicates are dropped and counted by the
- * {@code duplicate_turns_dropped} metric.
+ * <p>Dispatched turns are recorded in keyed state ({@code legacy.dispatched-turns}, keyed by flow
+ * id, TTL {@link #DEFAULT_DEDUP_TTL} by default) so that a match redelivered after a restore does
+ * not dispatch the same turn twice. Duplicates are dropped and counted by the {@code
+ * duplicate_turns_dropped} metric.
  *
- * <p>Pattern timeouts and compensation requests are still emitted through side outputs here;
- * {@link AgentResultRouter} routes execution results and these events to the same tags at the
- * end of the pipeline.
+ * <p>Pattern timeouts and compensation requests are still emitted through side outputs here; {@link
+ * AgentResultRouter} routes execution results and these events to the same tags at the end of the
+ * pipeline.
  *
  * @see AgentExecutor
  * @see AgentJobGenerator
  * @see AgentResultRouter
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
- *     {@link org.agentic.flink.runtime.WorkflowTurnFunction} with
- *     {@code KeyedConversationLog}.
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction} with {@code KeyedConversationLog}.
  */
 @Deprecated
 public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, AgentEvent>
@@ -57,6 +56,7 @@ public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, A
   public static final String DISPATCHED_TURNS_STATE = "legacy.dispatched-turns";
   public static final String DUPLICATES_METRIC = "duplicate_turns_dropped";
   public static final String DISPATCHED_METRIC = "turns_dispatched";
+
   /** Data key marking an emitted event as an execution request for the async operator. */
   public static final String REQUEST_TURN_ID = "request_turn_id";
 
@@ -64,8 +64,7 @@ public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, A
   private final ToolRegistry toolRegistry;
   private final long dedupTtlMillis;
 
-  private static final OutputTag<AgentEvent> TIMEOUT_TAG =
-      AgentJobGenerator.TIMEOUT_TAG;
+  private static final OutputTag<AgentEvent> TIMEOUT_TAG = AgentJobGenerator.TIMEOUT_TAG;
 
   private transient MapState<String, Long> dispatchedTurns;
   private transient Counter duplicatesDropped;
@@ -129,8 +128,11 @@ public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, A
 
     if (dispatchedTurns.contains(turnId)) {
       duplicatesDropped.inc();
-      LOG.warn("Turn {} for flow {} already dispatched to agent {}, dropping duplicate match",
-          turnId, startEvent.getFlowId(), agent.getAgentId());
+      LOG.warn(
+          "Turn {} for flow {} already dispatched to agent {}, dropping duplicate match",
+          turnId,
+          startEvent.getFlowId(),
+          agent.getAgentId());
       return;
     }
     dispatchedTurns.put(turnId, ctx.currentProcessingTime());
@@ -140,14 +142,17 @@ public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, A
     request.setAgentId(agent.getAgentId());
     request.putData(REQUEST_TURN_ID, turnId);
     request.putMetadata("state", AgentState.EXECUTING.name());
-    LOG.info("Dispatching agent {} for flow: {} (turn {})",
-        agent.getAgentId(), startEvent.getFlowId(), turnId);
+    LOG.info(
+        "Dispatching agent {} for flow: {} (turn {})",
+        agent.getAgentId(),
+        startEvent.getFlowId(),
+        turnId);
     out.collect(request);
   }
 
   @Override
-  public void processTimedOutMatch(
-      Map<String, List<AgentEvent>> match, Context ctx) throws Exception {
+  public void processTimedOutMatch(Map<String, List<AgentEvent>> match, Context ctx)
+      throws Exception {
 
     List<AgentEvent> startEvents = match.get("initial");
     if (startEvents == null || startEvents.isEmpty()) {
@@ -155,8 +160,10 @@ public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, A
     }
 
     AgentEvent startEvent = startEvents.get(0);
-    LOG.warn("Pattern match timed out for agent {} flow: {}",
-        agent.getAgentId(), startEvent.getFlowId());
+    LOG.warn(
+        "Pattern match timed out for agent {} flow: {}",
+        agent.getAgentId(),
+        startEvent.getFlowId());
 
     AgentEvent timeoutEvent = startEvent.withEventType(AgentEventType.TIMEOUT_OCCURRED);
     timeoutEvent.incrementIteration();

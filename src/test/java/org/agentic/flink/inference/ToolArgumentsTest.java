@@ -83,7 +83,9 @@ class ToolArgumentsTest {
   void trickyLiterals() {
     String id = UUID.randomUUID().toString();
     String json =
-        "{\"query\":{\"filter\":{\"ids\":[\"" + id + "\",\"a,b\",\"c}d\"],\"limit\":5},"
+        "{\"query\":{\"filter\":{\"ids\":[\""
+            + id
+            + "\",\"a,b\",\"c}d\"],\"limit\":5},"
             + "\"text\":\"say \\\"hi\\\", [not an array]\"},\"tags\":[[1,2],[3,[4,5]]],\"flag\":true}";
     Map<String, Object> args = ToolArguments.parse(json);
 

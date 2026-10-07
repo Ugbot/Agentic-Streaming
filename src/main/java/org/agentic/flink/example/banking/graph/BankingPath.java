@@ -1,8 +1,8 @@
 package org.agentic.flink.example.banking.graph;
 
 /**
- * The specialized operator path a banking turn is routed to by {@link BankingRouterFunction}.
- * Each non-terminal path is a keyed operator running a focused brain; the router emits each turn to
+ * The specialized operator path a banking turn is routed to by {@link BankingRouterFunction}. Each
+ * non-terminal path is a keyed operator running a focused brain; the router emits each turn to
  * exactly one path's side output.
  */
 public enum BankingPath {

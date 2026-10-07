@@ -3,25 +3,38 @@ package org.agentic.flink.example.markets.stage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Comparator;
+import java.util.List;
 import org.agentic.flink.example.markets.model.MarketRecords.EnrichedInventory;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import org.agentic.flink.example.markets.model.MarketRecords.MarketFeatures;
 import org.agentic.flink.example.markets.model.MarketRecords.RankedQuote;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
-import java.util.Comparator;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Pure-function tests for the market-signal math (no Flink runtime needed). */
 class MarketSignalsTest {
 
   private static Inventory inv(String dealer, String side, double price, long size) {
-    return new Inventory(dealer, 42L, side, price, size, 0.0, 1, 1, "HG", "USHG", "F", "UPDATE", 0L);
+    return new Inventory(
+        dealer, 42L, side, price, size, 0.0, 1, 1, "HG", "USHG", "F", "UPDATE", 0L);
   }
 
   private static Security sec() {
-    return new Security(42L, "US1234567890", "123456789", "ALPHACORE", "ALPHACORE", "Financials",
-        "Banks", 0.045, "2035-07-12", "A+", "A", "A2", "Y");
+    return new Security(
+        42L,
+        "US1234567890",
+        "123456789",
+        "ALPHACORE",
+        "ALPHACORE",
+        "Financials",
+        "Banks",
+        0.045,
+        "2035-07-12",
+        "A+",
+        "A",
+        "A2",
+        "Y");
   }
 
   private static EnrichedInventory ei(String dealer, String side, double price, long size) {
@@ -32,18 +45,22 @@ class MarketSignalsTest {
   void topNComparatorOrdersBidsDescendingAndOffersAscending() {
     Comparator<EnrichedInventory> bid = TopNRankerFn.comparator("BID");
     Comparator<EnrichedInventory> ofr = TopNRankerFn.comparator("OFFER");
-    List<EnrichedInventory> bids = new java.util.ArrayList<>(List.of(
-        ei("d1", "BID", 100.10, 100),
-        ei("d2", "BID", 100.50, 100),
-        ei("d3", "BID", 100.25, 100)));
+    List<EnrichedInventory> bids =
+        new java.util.ArrayList<>(
+            List.of(
+                ei("d1", "BID", 100.10, 100),
+                ei("d2", "BID", 100.50, 100),
+                ei("d3", "BID", 100.25, 100)));
     bids.sort(bid);
     assertEquals(100.50, bids.get(0).inventory().price(), 1e-9);
     assertEquals(100.10, bids.get(2).inventory().price(), 1e-9);
 
-    List<EnrichedInventory> ofs = new java.util.ArrayList<>(List.of(
-        ei("d1", "OFFER", 101.10, 100),
-        ei("d2", "OFFER", 100.80, 100),
-        ei("d3", "OFFER", 101.50, 100)));
+    List<EnrichedInventory> ofs =
+        new java.util.ArrayList<>(
+            List.of(
+                ei("d1", "OFFER", 101.10, 100),
+                ei("d2", "OFFER", 100.80, 100),
+                ei("d3", "OFFER", 101.50, 100)));
     ofs.sort(ofr);
     assertEquals(100.80, ofs.get(0).inventory().price(), 1e-9);
     assertEquals(101.50, ofs.get(2).inventory().price(), 1e-9);

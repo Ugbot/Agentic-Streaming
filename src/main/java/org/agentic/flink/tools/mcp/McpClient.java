@@ -13,7 +13,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -26,13 +25,13 @@ import org.slf4j.LoggerFactory;
 /**
  * Minimal JSON-RPC 2.0 client for MCP servers.
  *
- * <p>Implements just enough of the protocol to {@code initialize}, {@code tools/list} and
- * {@code tools/call} — which is enough to turn any MCP server into a set of
- * {@link org.agentic.flink.tools.ToolExecutor}s. Notifications and server-initiated
- * messages are ignored (they are not relevant to the tool-execution flow).
+ * <p>Implements just enough of the protocol to {@code initialize}, {@code tools/list} and {@code
+ * tools/call} — which is enough to turn any MCP server into a set of {@link
+ * org.agentic.flink.tools.ToolExecutor}s. Notifications and server-initiated messages are ignored
+ * (they are not relevant to the tool-execution flow).
  *
- * <p>Not thread-safe: each operator task should hold its own client instance, constructed once
- * in {@code RichFunction.open()}.
+ * <p>Not thread-safe: each operator task should hold its own client instance, constructed once in
+ * {@code RichFunction.open()}.
  */
 public final class McpClient implements AutoCloseable {
 
@@ -80,7 +79,8 @@ public final class McpClient implements AutoCloseable {
     JsonNode result = rpc("initialize", params);
     LOG.info(
         "MCP server '{}' initialized: serverInfo={}",
-        spec.getName(), result == null ? null : result.path("serverInfo"));
+        spec.getName(),
+        result == null ? null : result.path("serverInfo"));
     initialized = true;
   }
 
@@ -173,8 +173,11 @@ public final class McpClient implements AutoCloseable {
     pb.environment().putAll(spec.getEnv());
     pb.redirectErrorStream(false);
     process = pb.start();
-    stdin = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
-    stdout = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+    stdin =
+        new BufferedWriter(
+            new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
+    stdout =
+        new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
   }
 
   private void startHttp() {

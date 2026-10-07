@@ -32,8 +32,8 @@ import org.slf4j.LoggerFactory;
  * {@link ForEachSink} backed by a {@link FlussWriteFn}; wire it with {@code stream.sinkTo(...)}.
  * Pairs with {@link FlussChannel} on the source side; the key is provided by a {@link KeySelector}.
  *
- * <p>Table is auto-created if missing using the same envelope layout
- * {@link FlussChannel} reads. Schema is fixed:
+ * <p>Table is auto-created if missing using the same envelope layout {@link FlussChannel} reads.
+ * Schema is fixed:
  *
  * <pre>
  *   CREATE TABLE database.table (
@@ -133,7 +133,8 @@ public final class FlussSink<T> {
       try {
         key = keySelector.getKey(value);
       } catch (Exception e) {
-        LOG.warn("fluss sink: key selector failed, falling back to random UUID: {}", e.getMessage());
+        LOG.warn(
+            "fluss sink: key selector failed, falling back to random UUID: {}", e.getMessage());
         key = UUID.randomUUID().toString();
       }
       if (key == null || key.isEmpty()) {

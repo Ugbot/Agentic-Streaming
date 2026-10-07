@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-
 import org.agentic.flink.typeinfo.FlinkJson;
 import org.agentic.flink.typeinfo.JsonTypeInfo;
 import org.apache.flink.api.common.serialization.SerializerConfigImpl;
@@ -62,21 +61,28 @@ class RuntimeSerializationTest {
     if (RND.nextBoolean()) {
       return Event.turn(rnd("c"), rnd("t"), rnd("u"), "text " + RND.nextInt());
     }
-    return Event.resume(rnd("c"), rnd("t"), Map.of("kind", "approval", "approved", RND.nextBoolean(), "n", 3));
+    return Event.resume(
+        rnd("c"), rnd("t"), Map.of("kind", "approval", "approved", RND.nextBoolean(), "n", 3));
   }
 
   private static LogEvent randomLogEvent() {
     EventType[] types = EventType.values();
-    return new LogEvent(rnd("c"), RND.nextLong(0, 1_000_000), rnd("t"), types[RND.nextInt(types.length)].wire(),
+    return new LogEvent(
+        rnd("c"),
+        RND.nextLong(0, 1_000_000),
+        rnd("t"),
+        types[RND.nextInt(types.length)].wire(),
         randomPayload());
   }
 
   private static TurnResult randomResult() {
     String cid = rnd("c");
     String tid = rnd("t");
-    List<ToolCall> calls = List.of(
-        ToolCall.succeeded("lookup", 0, Map.of("user", rnd("u"), "amount", 12.5), Map.of("ok", true), 1),
-        ToolCall.failed("broken", 1, Map.of("id", RND.nextInt()), "boom " + RND.nextInt(), 2));
+    List<ToolCall> calls =
+        List.of(
+            ToolCall.succeeded(
+                "lookup", 0, Map.of("user", rnd("u"), "amount", 12.5), Map.of("ok", true), 1),
+            ToolCall.failed("broken", 1, Map.of("id", RND.nextInt()), "boom " + RND.nextInt(), 2));
     List<LogEvent> events = new ArrayList<>();
     for (int i = 0; i < 1 + RND.nextInt(5); i++) {
       LogEvent e = randomLogEvent();
@@ -88,7 +94,15 @@ class RuntimeSerializationTest {
     TurnStatus[] statuses = TurnStatus.values();
     TurnStatus status = statuses[RND.nextInt(statuses.length)];
     TurnError err = RND.nextBoolean() ? null : new TurnError(TurnError.ErrorClass.TOOL, rnd("msg"));
-    return new TurnResult(cid, tid, status, RND.nextBoolean() ? "billing" : null, rnd("reply"), err, calls, events,
+    return new TurnResult(
+        cid,
+        tid,
+        status,
+        RND.nextBoolean() ? "billing" : null,
+        rnd("reply"),
+        err,
+        calls,
+        events,
         state);
   }
 
@@ -108,10 +122,14 @@ class RuntimeSerializationTest {
     DataOutputSerializer out = new DataOutputSerializer(64);
     TypeSerializerSnapshotSerializationUtil.writeSerializerSnapshot(out, snapshot);
     DataInputDeserializer in = new DataInputDeserializer(out.getCopyOfBuffer());
-    TypeSerializerSnapshot<T> restored = TypeSerializerSnapshotSerializationUtil.readSerializerSnapshot(in,
-        Thread.currentThread().getContextClassLoader());
-    TypeSerializerSchemaCompatibility<T> compat = ser.snapshotConfiguration().resolveSchemaCompatibility(restored);
-    assertTrue(compat.isCompatibleAsIs(), "restored snapshot is compatible with the current serializer: " + compat);
+    TypeSerializerSnapshot<T> restored =
+        TypeSerializerSnapshotSerializationUtil.readSerializerSnapshot(
+            in, Thread.currentThread().getContextClassLoader());
+    TypeSerializerSchemaCompatibility<T> compat =
+        ser.snapshotConfiguration().resolveSchemaCompatibility(restored);
+    assertTrue(
+        compat.isCompatibleAsIs(),
+        "restored snapshot is compatible with the current serializer: " + compat);
     assertNotNull(restored.restoreSerializer());
   }
 
@@ -122,7 +140,8 @@ class RuntimeSerializationTest {
     assertEquals(e, back);
     assertEquals(e.isResume(), back.isResume());
     if (e.isResume()) {
-      assertEquals(e.signal().get("approved"), back.signal().get("approved"), "structured signal survives");
+      assertEquals(
+          e.signal().get("approved"), back.signal().get("approved"), "structured signal survives");
     }
   }
 
@@ -135,18 +154,30 @@ class RuntimeSerializationTest {
     assertEquals(e.turnId(), back.turnId());
     assertEquals(e.type(), back.type());
     assertEquals(e.payload().get("s"), back.payload().get("s"));
-    assertEquals(((Number) e.payload().get("n")).longValue(), ((Number) back.payload().get("n")).longValue());
-    assertEquals(Map.of("list", List.of(1, "two", 3.5), "user", e.payload().get("nested") instanceof Map<?, ?> m
-        ? m.get("user") : null), back.payload().get("nested"), "nested structured payload is preserved as maps");
+    assertEquals(
+        ((Number) e.payload().get("n")).longValue(),
+        ((Number) back.payload().get("n")).longValue());
+    assertEquals(
+        Map.of(
+            "list",
+            List.of(1, "two", 3.5),
+            "user",
+            e.payload().get("nested") instanceof Map<?, ?> m ? m.get("user") : null),
+        back.payload().get("nested"),
+        "nested structured payload is preserved as maps");
   }
 
   @RepeatedTest(5)
   void turnResultRoundTripsThroughFlinkSerializerAsNormalizedDocument() throws IOException {
     TurnResult r = randomResult();
     TurnResult back = roundTrip(TurnResultTypeInfo.INSTANCE, r);
-    assertEquals(FlinkJson.mapper().writeValueAsString(r.toMap()), FlinkJson.mapper().writeValueAsString(back.toMap()),
+    assertEquals(
+        FlinkJson.mapper().writeValueAsString(r.toMap()),
+        FlinkJson.mapper().writeValueAsString(back.toMap()),
         "the normalized result document is the wire format (JSON numbers carry no int/long distinction)");
-    assertEquals(((Number) r.state.get("turn_count")).longValue(), ((Number) back.state.get("turn_count")).longValue());
+    assertEquals(
+        ((Number) r.state.get("turn_count")).longValue(),
+        ((Number) back.state.get("turn_count")).longValue());
     assertEquals(r.calls.get(0).args(), back.calls.get(0).args(), "tool args stay structured maps");
     assertEquals(r.status, back.status);
     assertEquals(r.error == null, back.error == null);
@@ -168,20 +199,29 @@ class RuntimeSerializationTest {
     assertFalse(WorkflowTurnFunction.EVENT_TYPE instanceof GenericTypeInfo);
     assertFalse(WorkflowTurnFunction.LOG_EVENT_TYPE instanceof GenericTypeInfo);
     assertFalse(((TypeInformation<?>) TurnResultTypeInfo.INSTANCE) instanceof GenericTypeInfo);
-    assertEquals(TurnResultTypeInfo.INSTANCE, new WorkflowTurnFunction(
-        org.agentic.flink.runtime.testkit.Workflows.billing()).getProducedType());
+    assertEquals(
+        TurnResultTypeInfo.INSTANCE,
+        new WorkflowTurnFunction(org.agentic.flink.runtime.testkit.Workflows.billing())
+            .getProducedType());
     assertTrue(WorkflowTurnFunction.EVENT_TYPE instanceof JsonTypeInfo);
   }
 
   @Test
   void operatorIsJavaSerializableWithTransientRuntimeFields() throws Exception {
-    Map<String, Object> wf = org.agentic.flink.runtime.testkit.Workflows.withFlink(
-        org.agentic.flink.runtime.testkit.Workflows.billing(),
-        Map.of("state_ttl_ms", 1000 + RND.nextInt(100_000), "resume_after_ms", RND.nextInt(10_000),
-            "timer_domain", "event_time"));
+    Map<String, Object> wf =
+        org.agentic.flink.runtime.testkit.Workflows.withFlink(
+            org.agentic.flink.runtime.testkit.Workflows.billing(),
+            Map.of(
+                "state_ttl_ms",
+                1000 + RND.nextInt(100_000),
+                "resume_after_ms",
+                RND.nextInt(10_000),
+                "timer_domain",
+                "event_time"));
     WorkflowTurnFunction fn = new WorkflowTurnFunction(wf);
     byte[] bytes = InstantiationUtil.serializeObject(fn);
-    WorkflowTurnFunction back = InstantiationUtil.deserializeObject(bytes, getClass().getClassLoader());
+    WorkflowTurnFunction back =
+        InstantiationUtil.deserializeObject(bytes, getClass().getClassLoader());
     assertEquals(fn.options(), back.options());
     assertEquals(TurnResultTypeInfo.INSTANCE, back.getProducedType());
   }

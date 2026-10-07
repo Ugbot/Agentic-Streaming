@@ -18,11 +18,11 @@ import org.slf4j.LoggerFactory;
  * Exposes a remote A2A agent as a {@link ToolExecutor}, so calling a peer agent chains into an
  * Agentic-Flink workflow exactly like any other tool the LLM may select.
  *
- * <p>Registered under {@code "a2a:" + spec.name()} (see {@link RemoteAgentSpec#toolId()}). On {@link
- * #execute(Map)} it builds an {@link A2AMessage} from the call parameters, sends it to the peer, and
- * — for long-running tasks — awaits a {@linkplain A2ATaskState#isFinal() final} state (streaming
- * where the spec/peer support it, otherwise {@code message/send} + {@code tasks/get} polling),
- * returning the peer's artifacts flattened into the result map the agent loop consumes.
+ * <p>Registered under {@code "a2a:" + spec.name()} (see {@link RemoteAgentSpec#toolId()}). On
+ * {@link #execute(Map)} it builds an {@link A2AMessage} from the call parameters, sends it to the
+ * peer, and — for long-running tasks — awaits a {@linkplain A2ATaskState#isFinal() final} state
+ * (streaming where the spec/peer support it, otherwise {@code message/send} + {@code tasks/get}
+ * polling), returning the peer's artifacts flattened into the result map the agent loop consumes.
  *
  * <p>Serializable (ships in the job graph); the live {@link A2AClient} and the blocking-call thread
  * pool are {@code transient} and built lazily on the task side, per the project's convention for
@@ -43,6 +43,7 @@ public final class A2AToolExecutor implements ToolExecutor {
 
   /** Upper bound on concurrent blocking A2A calls per operator subtask. */
   private static final int MAX_BLOCKING_THREADS = 8;
+
   /** Bounded backlog before saturation degrades to running on the caller thread. */
   private static final int QUEUE_CAPACITY = 64;
 
@@ -54,8 +55,7 @@ public final class A2AToolExecutor implements ToolExecutor {
 
   public A2AToolExecutor(RemoteAgentSpec spec, A2AClientFactory clientFactory) {
     this.spec = java.util.Objects.requireNonNull(spec, "spec");
-    this.clientFactory =
-        clientFactory == null ? A2AClientFactory.discovering() : clientFactory;
+    this.clientFactory = clientFactory == null ? A2AClientFactory.discovering() : clientFactory;
   }
 
   @Override
@@ -68,7 +68,9 @@ public final class A2AToolExecutor implements ToolExecutor {
     if (spec.description() != null && !spec.description().isEmpty()) {
       return spec.description();
     }
-    return "Delegate to remote A2A agent '" + spec.name() + "'"
+    return "Delegate to remote A2A agent '"
+        + spec.name()
+        + "'"
         + (spec.skillId() != null ? " (skill: " + spec.skillId() + ")" : "");
   }
 

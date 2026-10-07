@@ -6,10 +6,10 @@ import org.agentic.flink.memory.conversation.ConversationStore;
  * Typed per-{@code contextId} {@link BankingPhase} accessor — a thin facade over a conversation
  * attribute (key {@code "banking.phase"}) in the framework's {@link ConversationStore}. Written by
  * {@link BankingVerifierFunction} and read by {@link BankingRouterFunction}; because those are
- * <b>separate</b> keyed operators, the phase must live in the cross-operator conversation store, not
- * in any single operator's keyed state. It shares the same store as {@link ConversationMemory}, so
- * the transcript and the workflow phase are co-located per session and swappable together (in-JVM by
- * default, Redis/Postgres-backed for a distributed cluster).
+ * <b>separate</b> keyed operators, the phase must live in the cross-operator conversation store,
+ * not in any single operator's keyed state. It shares the same store as {@link ConversationMemory},
+ * so the transcript and the workflow phase are co-located per session and swappable together
+ * (in-JVM by default, Redis/Postgres-backed for a distributed cluster).
  */
 public final class PhaseStore {
 

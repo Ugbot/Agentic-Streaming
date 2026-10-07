@@ -7,8 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Fans out a single hook invocation to every registered listener. Exceptions in one listener
- * never block the others — they're logged and swallowed.
+ * Fans out a single hook invocation to every registered listener. Exceptions in one listener never
+ * block the others — they're logged and swallowed.
  */
 public final class CompositeListener implements AgentEventListener {
   private static final long serialVersionUID = 1L;

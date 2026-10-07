@@ -8,8 +8,8 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
 /**
- * Keyed pre-step of {@link A2AStep#applyToStateful}: before the stateless async A2A call, stamps the
- * conversation's remembered remote {@code contextId} onto the event so it rides through the
+ * Keyed pre-step of {@link A2AStep#applyToStateful}: before the stateless async A2A call, stamps
+ * the conversation's remembered remote {@code contextId} onto the event so it rides through the
  * (state-less) async operator to the peer.
  *
  * <p>Continuity is held in the shared {@link ConversationStore} keyed by the conversation id (the

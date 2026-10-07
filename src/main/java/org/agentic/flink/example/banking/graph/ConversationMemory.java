@@ -6,11 +6,11 @@ import org.agentic.flink.memory.conversation.ConversationStore;
 import org.agentic.flink.memory.conversation.ConversationStores;
 
 /**
- * Per-{@code contextId} conversation transcript for the banking graph — a thin typed facade over the
- * framework's {@link ConversationStore}. The cross-operator, cross-turn transcript the routed graph
- * needs now lives in the core framework ({@code org.agentic.flink.memory.conversation}); this class
- * just routes to the discovered store so existing call sites (router appends the user turn, paths
- * read history, verifier appends the reply) stay unchanged.
+ * Per-{@code contextId} conversation transcript for the banking graph — a thin typed facade over
+ * the framework's {@link ConversationStore}. The cross-operator, cross-turn transcript the routed
+ * graph needs now lives in the core framework ({@code org.agentic.flink.memory.conversation}); this
+ * class just routes to the discovered store so existing call sites (router appends the user turn,
+ * paths read history, verifier appends the reply) stay unchanged.
  *
  * <p>By default that store is the process-wide in-JVM {@link
  * org.agentic.flink.memory.conversation.InMemoryConversationStore} — correct for the embedded

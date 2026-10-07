@@ -14,14 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-
 import org.agentic.flink.runtime.testkit.MiniClusterWorkflowDriver;
 import org.agentic.flink.runtime.testkit.TestClusters;
 import org.agentic.flink.runtime.testkit.Workflows;
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.runtime.minicluster.MiniCluster;
 import org.jagentic.core.Event;
-import org.jagentic.core.EventType;
 import org.jagentic.core.LogEvent;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
@@ -41,8 +39,7 @@ class WorkflowTurnFunctionMiniClusterTest {
 
   static MiniCluster cluster;
 
-  @TempDir
-  static Path savepoints;
+  @TempDir static Path savepoints;
 
   @BeforeAll
   static void startCluster() throws Exception {
@@ -67,7 +64,8 @@ class WorkflowTurnFunctionMiniClusterTest {
   }
 
   private static MiniClusterWorkflowDriver driver(Map<String, Object> wf) {
-    return new MiniClusterWorkflowDriver(cluster, wf, FlinkRuntimeOptions.fromSpec(wf), savepoints.resolve(rnd("sp")));
+    return new MiniClusterWorkflowDriver(
+        cluster, wf, FlinkRuntimeOptions.fromSpec(wf), savepoints.resolve(rnd("sp")));
   }
 
   @Test
@@ -83,10 +81,12 @@ class WorkflowTurnFunctionMiniClusterTest {
       assertEquals("lookup_charge", r.calls.get(0).tool());
       assertEquals(Map.of("user", "alice"), r.calls.get(0).args());
       List<String> t = types(r);
-      assertTrue(t.indexOf("turn_received") < t.indexOf("routed")
-          && t.indexOf("routed") < t.indexOf("tool_called")
-          && t.indexOf("tool_called") < t.indexOf("reply_drafted")
-          && t.indexOf("reply_drafted") < t.indexOf("turn_completed"), t.toString());
+      assertTrue(
+          t.indexOf("turn_received") < t.indexOf("routed")
+              && t.indexOf("routed") < t.indexOf("tool_called")
+              && t.indexOf("tool_called") < t.indexOf("reply_drafted")
+              && t.indexOf("reply_drafted") < t.indexOf("turn_completed"),
+          t.toString());
       for (int i = 0; i < r.events.size(); i++) {
         assertEquals(i, r.events.get(i).sequence(), "dense zero-based sequence");
       }
@@ -111,7 +111,9 @@ class WorkflowTurnFunctionMiniClusterTest {
       TurnResult next = d.submit(Event.turn(cid, rnd("t"), "u", "hello"));
       assertEquals(TurnStatus.COMPLETED, next.status);
       assertEquals(2L, ((Number) next.state.get("turn_count")).longValue());
-      assertEquals(first.events.size(), next.events.get(0).sequence(),
+      assertEquals(
+          first.events.size(),
+          next.events.get(0).sequence(),
           "the second turn continues the same keyed log");
     }
   }
@@ -134,7 +136,10 @@ class WorkflowTurnFunctionMiniClusterTest {
 
       TurnResult second = d.submit(Event.turn(cid, rnd("t"), "u", "hi"));
       assertEquals(TurnStatus.COMPLETED, second.status);
-      assertEquals(2L, ((Number) second.state.get("turn_count")).longValue(), "state is the fold of the restored log");
+      assertEquals(
+          2L,
+          ((Number) second.state.get("turn_count")).longValue(),
+          "state is the fold of the restored log");
       assertEquals(first.events.size(), second.events.get(0).sequence());
     }
   }
@@ -166,14 +171,17 @@ class WorkflowTurnFunctionMiniClusterTest {
     int n = 5 + ThreadLocalRandom.current().nextInt(5);
     List<Event> events = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      events.add(Event.turn(cid, "t" + i + "-" + UUID.randomUUID(), "u", i % 2 == 0 ? "balance" : "hello"));
+      events.add(
+          Event.turn(
+              cid, "t" + i + "-" + UUID.randomUUID(), "u", i % 2 == 0 ? "balance" : "hello"));
     }
     try (MiniClusterWorkflowDriver d = driver(Workflows.billing())) {
       d.start();
       List<TurnResult> results = d.submitAll(events);
       assertEquals(n, results.size());
       for (int i = 0; i < n; i++) {
-        assertEquals(events.get(i).turnId(), results.get(i).turnId, "results arrive in submission order");
+        assertEquals(
+            events.get(i).turnId(), results.get(i).turnId, "results arrive in submission order");
         assertEquals(i + 1L, ((Number) results.get(i).state.get("turn_count")).longValue());
       }
     }
@@ -183,7 +191,8 @@ class WorkflowTurnFunctionMiniClusterTest {
   void suspendedTurnResumesFromRegisteredTimer() throws Exception {
     String cid = rnd("c");
     String tid = rnd("t");
-    Map<String, Object> wf = Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 300));
+    Map<String, Object> wf =
+        Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 300));
     try (MiniClusterWorkflowDriver d = driver(wf)) {
       d.start();
       TurnResult suspended = d.submit(Event.turn(cid, tid, "u", "refund my last charge"));
@@ -202,7 +211,9 @@ class WorkflowTurnFunctionMiniClusterTest {
       assertEquals("timer_fired", rt.get(0));
       assertTrue(rt.indexOf("turn_resumed") < rt.indexOf("turn_completed"), rt.toString());
       assertEquals(scheduled.get("timer_id"), resumed.events.get(0).payload().get("timer_id"));
-      assertEquals(resumed.events.get(0).sequence(), suspended.events.get(suspended.events.size() - 1).sequence() + 1,
+      assertEquals(
+          resumed.events.get(0).sequence(),
+          suspended.events.get(suspended.events.size() - 1).sequence() + 1,
           "timer_fired continues the same keyed log");
     }
   }
@@ -211,13 +222,15 @@ class WorkflowTurnFunctionMiniClusterTest {
   void registeredTimerSurvivesSavepointRestart() throws Exception {
     String cid = rnd("c");
     String tid = rnd("t");
-    Map<String, Object> wf = Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 1500));
+    Map<String, Object> wf =
+        Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 1500));
     try (MiniClusterWorkflowDriver d = driver(wf)) {
       d.start();
       TurnResult suspended = d.submit(Event.turn(cid, tid, "u", "refund"));
       assertEquals(TurnStatus.SUSPENDED, suspended.status);
       d.restart();
-      TurnResult resumed = d.awaitNext(r -> tid.equals(r.turnId) && r.status == TurnStatus.COMPLETED);
+      TurnResult resumed =
+          d.awaitNext(r -> tid.equals(r.turnId) && r.status == TurnStatus.COMPLETED);
       assertEquals("timer_fired", resumed.events.get(0).type());
     }
   }
@@ -226,18 +239,27 @@ class WorkflowTurnFunctionMiniClusterTest {
   void explicitSignalBeforeTimerCompletesOnceAndTimerFiringIsOnlyRecorded() throws Exception {
     String cid = rnd("c");
     String tid = rnd("t");
-    Map<String, Object> wf = Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 700));
+    Map<String, Object> wf =
+        Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 700));
     try (MiniClusterWorkflowDriver d = driver(wf)) {
       d.start();
       d.submit(Event.turn(cid, tid, "u", "refund"));
-      TurnResult resumed = d.submit(Event.resume(cid, tid, Map.of("kind", "approval", "approved", true)));
+      TurnResult resumed =
+          d.submit(Event.resume(cid, tid, Map.of("kind", "approval", "approved", true)));
       assertEquals(TurnStatus.COMPLETED, resumed.status, () -> d.allResults().toString());
       Thread.sleep(1200);
       TurnResult after = d.submit(Event.turn(cid, rnd("t"), "u", "another refund"));
       assertEquals(TurnStatus.SUSPENDED, after.status);
-      assertEquals(2L, ((Number) after.state.get("turn_count")).longValue(), "the fired timer did not add a turn");
-      assertEquals(1, d.allResults().stream().filter(r -> tid.equals(r.turnId) && r.status == TurnStatus.COMPLETED)
-          .count(), "the turn completed exactly once");
+      assertEquals(
+          2L,
+          ((Number) after.state.get("turn_count")).longValue(),
+          "the fired timer did not add a turn");
+      assertEquals(
+          1,
+          d.allResults().stream()
+              .filter(r -> tid.equals(r.turnId) && r.status == TurnStatus.COMPLETED)
+              .count(),
+          "the turn completed exactly once");
     }
   }
 
@@ -256,9 +278,11 @@ class WorkflowTurnFunctionMiniClusterTest {
       Thread.sleep(1500);
 
       TurnResult afterTtl = d.submit(Event.turn(cid, tid, "u", "balance"));
-      assertEquals(TurnStatus.COMPLETED, afterTtl.status, "an expired log no longer remembers the turn");
+      assertEquals(
+          TurnStatus.COMPLETED, afterTtl.status, "an expired log no longer remembers the turn");
       assertEquals(1L, ((Number) afterTtl.state.get("turn_count")).longValue());
-      assertEquals(0L, afterTtl.events.get(0).sequence(), "the sequence counter expired with the log");
+      assertEquals(
+          0L, afterTtl.events.get(0).sequence(), "the sequence counter expired with the log");
     }
   }
 
@@ -286,8 +310,15 @@ class WorkflowTurnFunctionMiniClusterTest {
   void pipelineRunsWithGenericTypesDisabled() throws Exception {
     String cid = rnd("c");
     Map<String, Object> wf = Workflows.billing();
-    try (MiniClusterWorkflowDriver d = new MiniClusterWorkflowDriver(cluster, wf, FlinkRuntimeOptions.fromSpec(wf),
-        savepoints.resolve(rnd("sp")), Duration.ofSeconds(60), true, true)) {
+    try (MiniClusterWorkflowDriver d =
+        new MiniClusterWorkflowDriver(
+            cluster,
+            wf,
+            FlinkRuntimeOptions.fromSpec(wf),
+            savepoints.resolve(rnd("sp")),
+            Duration.ofSeconds(60),
+            true,
+            true)) {
       d.start();
       TurnResult r = d.submit(Event.turn(cid, rnd("t"), "u", "balance"));
       assertEquals(TurnStatus.COMPLETED, r.status);
@@ -301,6 +332,7 @@ class WorkflowTurnFunctionMiniClusterTest {
   void invalidWorkflowFailsFastOnTheClient() {
     Map<String, Object> wf = new java.util.HashMap<>(Workflows.billing());
     wf.put("spec_version", "agentic/v" + (2 + ThreadLocalRandom.current().nextInt(9)));
-    assertThrows(WorkflowValidator.WorkflowValidationException.class, () -> new WorkflowTurnFunction(wf));
+    assertThrows(
+        WorkflowValidator.WorkflowValidationException.class, () -> new WorkflowTurnFunction(wf));
   }
 }

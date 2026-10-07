@@ -39,18 +39,23 @@ public final class BankingFlinkJob {
   public static void main(String[] args) throws Exception {
     String roleEnv = env("A2A_BANKING_ROLE", "personal");
     BankingAgentSetup.Role role =
-        "cs".equalsIgnoreCase(roleEnv) ? BankingAgentSetup.Role.CS : BankingAgentSetup.Role.PERSONAL;
+        "cs".equalsIgnoreCase(roleEnv)
+            ? BankingAgentSetup.Role.CS
+            : BankingAgentSetup.Role.PERSONAL;
     String roleName = role == BankingAgentSetup.Role.CS ? "cs" : "personal";
 
     // Default the bridge to Redis with role-namespaced channels (env still wins). The gateway in
     // this same container derives the identical names from its role, so the two halves rendezvous.
     defaultSysProp("agentic.flink." + ConfigKeys.A2A_BRIDGE_TRANSPORT, "redis");
-    defaultSysProp("agentic.flink." + ConfigKeys.A2A_BRIDGE_REQUEST_ENDPOINT, "a2a:" + roleName + ":req");
-    defaultSysProp("agentic.flink." + ConfigKeys.A2A_BRIDGE_RESPONSE_ENDPOINT, "a2a:" + roleName + ":resp");
+    defaultSysProp(
+        "agentic.flink." + ConfigKeys.A2A_BRIDGE_REQUEST_ENDPOINT, "a2a:" + roleName + ":req");
+    defaultSysProp(
+        "agentic.flink." + ConfigKeys.A2A_BRIDGE_RESPONSE_ENDPOINT, "a2a:" + roleName + ":resp");
 
     AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
 
-    // Personal→CS round-trip must speak spec message/send (the CS gateway only accepts that), so use
+    // Personal→CS round-trip must speak spec message/send (the CS gateway only accepts that), so
+    // use
     // the hand-rolled HTTP client, not the SDK one. CS role has no peer.
     BankingTurnContext.CustomerServiceClient cs =
         role == BankingAgentSetup.Role.PERSONAL
@@ -76,7 +81,8 @@ public final class BankingFlinkJob {
 
   private static void defaultSysProp(String key, String value) {
     // Only set when neither the env var nor an explicit system property already provides it.
-    String envKey = "AGENTIC_FLINK_" + key.replace("agentic.flink.", "").replace('.', '_').toUpperCase();
+    String envKey =
+        "AGENTIC_FLINK_" + key.replace("agentic.flink.", "").replace('.', '_').toUpperCase();
     if (System.getenv(envKey) == null && System.getProperty(key) == null) {
       System.setProperty(key, value);
     }

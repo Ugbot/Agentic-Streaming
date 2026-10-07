@@ -18,11 +18,11 @@ import org.testcontainers.utility.DockerImageName;
  * A real PostgreSQL started through Testcontainers for the storage integration tests.
  *
  * <p>The project runs containers with rootless Podman. Testcontainers talks to Podman through its
- * Docker-compatible API socket, which must be exported as {@code DOCKER_HOST}
- * ({@code unix:///run/user/<uid>/podman/podman.sock}, started with {@code podman system service
- * --time=0}) or symlinked to {@code /run/user/<uid>/docker.sock}, which Testcontainers detects on
- * its own. Ryuk (the reaper side-car) needs a privileged container and Docker Hub short-name
- * resolution, which rootless Podman does not provide by default; export {@code
+ * Docker-compatible API socket, which must be exported as {@code DOCKER_HOST} ({@code
+ * unix:///run/user/<uid>/podman/podman.sock}, started with {@code podman system service --time=0})
+ * or symlinked to {@code /run/user/<uid>/docker.sock}, which Testcontainers detects on its own.
+ * Ryuk (the reaper side-car) needs a privileged container and Docker Hub short-name resolution,
+ * which rootless Podman does not provide by default; export {@code
  * TESTCONTAINERS_RYUK_DISABLED=true} (the tests stop their containers explicitly).
  *
  * <p>Uses a plain {@link GenericContainer} (the module only declares {@code testcontainers} core,

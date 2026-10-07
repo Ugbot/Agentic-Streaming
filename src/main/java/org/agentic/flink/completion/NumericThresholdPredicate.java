@@ -1,9 +1,9 @@
 package org.agentic.flink.completion;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.core.AgentEvent;
 
 /**
  * A goal predicate that checks whether a numeric state value exceeds a given threshold.
@@ -49,8 +49,7 @@ public class NumericThresholdPredicate implements GoalPredicate, Serializable {
   }
 
   @Override
-  public double getConfidence(
-      Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
+  public double getConfidence(Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
     Object value = currentState.get(key);
     if (value instanceof Number) {
       double actual = ((Number) value).doubleValue();

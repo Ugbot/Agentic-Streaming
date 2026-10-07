@@ -14,8 +14,8 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Egress policy for URLs that originate from untrusted input (model output, request bodies,
- * webhook registrations). A URL passes only if:
+ * Egress policy for URLs that originate from untrusted input (model output, request bodies, webhook
+ * registrations). A URL passes only if:
  *
  * <ul>
  *   <li>the scheme is {@code http} or {@code https};
@@ -28,13 +28,15 @@ import java.util.Set;
  * </ul>
  *
  * <p>Callers that follow redirects must re-validate each {@code Location} with {@link #validate}
- * and stop after {@link #getMaxRedirects()} hops. Resolution runs through a pluggable
- * {@link Resolver} so tests can pin hostnames to addresses without touching DNS.
+ * and stop after {@link #getMaxRedirects()} hops. Resolution runs through a pluggable {@link
+ * Resolver} so tests can pin hostnames to addresses without touching DNS.
  */
 public final class OutboundUrlPolicy implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  /** Resolves a host to its addresses. The default delegates to {@link InetAddress#getAllByName}. */
+  /**
+   * Resolves a host to its addresses. The default delegates to {@link InetAddress#getAllByName}.
+   */
   @FunctionalInterface
   public interface Resolver extends Serializable {
     InetAddress[] resolve(String host) throws UnknownHostException;
@@ -57,7 +59,10 @@ public final class OutboundUrlPolicy implements Serializable {
   private final Resolver resolver;
 
   private OutboundUrlPolicy(
-      Set<String> allowedHosts, boolean allowPrivateAddresses, int maxRedirects, Resolver resolver) {
+      Set<String> allowedHosts,
+      boolean allowPrivateAddresses,
+      int maxRedirects,
+      Resolver resolver) {
     this.allowedHosts = Collections.unmodifiableSet(new LinkedHashSet<>(allowedHosts));
     this.allowPrivateAddresses = allowPrivateAddresses;
     this.maxRedirects = Math.max(0, maxRedirects);
@@ -70,8 +75,8 @@ public final class OutboundUrlPolicy implements Serializable {
   }
 
   /**
-   * Builds a policy from a comma-separated host allowlist. Entries are exact hostnames or
-   * {@code *.suffix} wildcards. A null or blank list means every public host is permitted.
+   * Builds a policy from a comma-separated host allowlist. Entries are exact hostnames or {@code
+   * *.suffix} wildcards. A null or blank list means every public host is permitted.
    */
   public static OutboundUrlPolicy fromAllowlist(String commaSeparatedHosts) {
     OutboundUrlPolicy p = defaults();
@@ -144,7 +149,8 @@ public final class OutboundUrlPolicy implements Serializable {
   public URI validate(URI uri) throws BlockedUrlException {
     String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
     if (!scheme.equals("http") && !scheme.equals("https")) {
-      throw new BlockedUrlException("scheme not allowed: " + (scheme.isEmpty() ? "(none)" : scheme));
+      throw new BlockedUrlException(
+          "scheme not allowed: " + (scheme.isEmpty() ? "(none)" : scheme));
     }
     if (uri.getRawUserInfo() != null) {
       throw new BlockedUrlException("userinfo in url is not allowed");
@@ -220,7 +226,8 @@ public final class OutboundUrlPolicy implements Serializable {
 
   /**
    * Whether {@code a} is anything other than a publicly routable unicast address. Covers IPv4,
-   * IPv6, and IPv4 embedded in IPv6 (mapped {@code ::ffff:a.b.c.d} and compatible {@code ::a.b.c.d}).
+   * IPv6, and IPv4 embedded in IPv6 (mapped {@code ::ffff:a.b.c.d} and compatible {@code
+   * ::a.b.c.d}).
    */
   public static boolean isForbiddenAddress(InetAddress a) {
     if (a == null) {
@@ -259,7 +266,10 @@ public final class OutboundUrlPolicy implements Serializable {
         }
       }
       // 64:ff9b::/96 NAT64 well-known prefix
-      if ((first) == 0x00 && (b[1] & 0xff) == 0x64 && (b[2] & 0xff) == 0xff && (b[3] & 0xff) == 0x9b) {
+      if ((first) == 0x00
+          && (b[1] & 0xff) == 0x64
+          && (b[2] & 0xff) == 0xff
+          && (b[3] & 0xff) == 0x9b) {
         boolean zeros = true;
         for (int i = 4; i < 12; i++) {
           if (b[i] != 0) {

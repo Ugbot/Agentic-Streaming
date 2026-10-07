@@ -19,11 +19,10 @@ import org.apache.flink.util.Collector;
  * (Claude when {@code ANTHROPIC_API_KEY} is set) which adjudicates the action.
  *
  * <p>This is the "classic Flink upstream + agentic inline downstream" pattern in one place — the
- * pipeline is built once per task in {@link #open}, then called per record. Key is
- * {@code instrumentId} so each instrument has its own per-key rolling history inside the pipeline.
+ * pipeline is built once per task in {@link #open}, then called per record. Key is {@code
+ * instrumentId} so each instrument has its own per-key rolling history inside the pipeline.
  */
-public final class MarketAgentFn
-    extends KeyedProcessFunction<String, MarketFeatures, AlertEvent> {
+public final class MarketAgentFn extends KeyedProcessFunction<String, MarketFeatures, AlertEvent> {
   private static final long serialVersionUID = 1L;
 
   private final String apiKey; // nullable

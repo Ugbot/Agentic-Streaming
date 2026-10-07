@@ -5,8 +5,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
  * The A2A transport bindings a peer can speak. The protocol defines three functionally-equivalent
- * bindings advertised in the {@link A2AAgentCard} via {@code preferredTransport} /
- * {@code additionalInterfaces}.
+ * bindings advertised in the {@link A2AAgentCard} via {@code preferredTransport} / {@code
+ * additionalInterfaces}.
  */
 public enum A2ATransport {
   /** JSON-RPC 2.0 over HTTP (the most widely deployed binding). */

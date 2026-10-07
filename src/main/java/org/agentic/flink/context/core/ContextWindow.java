@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 /** Context window with size limits and item management */
 @Data
-@NoArgsConstructor  // Required for Jackson deserialization
+@NoArgsConstructor // Required for Jackson deserialization
 public class ContextWindow implements Serializable {
 
   private int maxTokens;

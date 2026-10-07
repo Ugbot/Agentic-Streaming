@@ -1,7 +1,7 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
+import org.agentic.flink.core.AgentEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,14 +9,16 @@ import org.slf4j.LoggerFactory;
  * Executes correction of failed validations.
  *
  * <p>When validation fails, the corrector:
+ *
  * <ul>
- *   <li>Analyzes the validation failure</li>
- *   <li>Generates a correction prompt</li>
- *   <li>Calls LLM to fix the output</li>
- *   <li>Returns corrected output for re-validation</li>
+ *   <li>Analyzes the validation failure
+ *   <li>Generates a correction prompt
+ *   <li>Calls LLM to fix the output
+ *   <li>Returns corrected output for re-validation
  * </ul>
  *
  * <p><b>Correction Loop:</b>
+ *
  * <pre>
  * 1. Agent produces output
  * 2. Validation fails (score < threshold)
@@ -26,17 +28,17 @@ import org.slf4j.LoggerFactory;
  * 6. Loop back to validation
  * </pre>
  *
- * <p><b>Placeholder Implementation:</b>
- * This is a stub for Phase 3. Full implementation will include:
+ * <p><b>Placeholder Implementation:</b> This is a stub for Phase 3. Full implementation will
+ * include:
+ *
  * <ul>
- *   <li>LLM-based correction with feedback</li>
- *   <li>Correction attempt tracking</li>
- *   <li>Quality improvement scoring</li>
- *   <li>Max correction attempts</li>
+ *   <li>LLM-based correction with feedback
+ *   <li>Correction attempt tracking
+ *   <li>Quality improvement scoring
+ *   <li>Max correction attempts
  * </ul>
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -61,9 +63,7 @@ public class CorrectionExecutor implements Serializable {
    * @return Corrected output
    */
   public CorrectionResult correct(
-      String originalOutput,
-      String validationMessage,
-      String correctionPrompt) {
+      String originalOutput, String validationMessage, String correctionPrompt) {
 
     LOG.info("Correcting output. Validation message: {}", validationMessage);
 
@@ -97,26 +97,31 @@ public class CorrectionExecutor implements Serializable {
       String originalOutput, String validationMessage, String customPrompt) {
 
     if (customPrompt != null && !customPrompt.isEmpty()) {
-      return customPrompt + "\n\n" +
-          "Original output:\n" + originalOutput + "\n\n" +
-          "Validation failure reason:\n" + validationMessage + "\n\n" +
-          "Please provide the corrected output.";
+      return customPrompt
+          + "\n\n"
+          + "Original output:\n"
+          + originalOutput
+          + "\n\n"
+          + "Validation failure reason:\n"
+          + validationMessage
+          + "\n\n"
+          + "Please provide the corrected output.";
     }
 
-    return "You are a correction assistant. The following output failed validation.\n\n" +
-        "Original output:\n" + originalOutput + "\n\n" +
-        "Why it failed:\n" + validationMessage + "\n\n" +
-        "Please provide a corrected version that addresses the validation failures. " +
-        "Output only the corrected content, no explanations.";
+    return "You are a correction assistant. The following output failed validation.\n\n"
+        + "Original output:\n"
+        + originalOutput
+        + "\n\n"
+        + "Why it failed:\n"
+        + validationMessage
+        + "\n\n"
+        + "Please provide a corrected version that addresses the validation failures. "
+        + "Output only the corrected content, no explanations.";
   }
 
-  /**
-   * Corrects a failed agent event.
-   */
+  /** Corrects a failed agent event. */
   public CorrectionResult correct(
-      AgentEvent failedEvent,
-      String validationMessage,
-      String correctionPrompt) {
+      AgentEvent failedEvent, String validationMessage, String correctionPrompt) {
 
     Object output = failedEvent.getData("result");
     if (output == null) {
@@ -136,13 +141,28 @@ public class CorrectionExecutor implements Serializable {
     private boolean success;
     private String message;
 
-    public String getCorrectedOutput() { return correctedOutput; }
-    public void setCorrectedOutput(String correctedOutput) { this.correctedOutput = correctedOutput; }
+    public String getCorrectedOutput() {
+      return correctedOutput;
+    }
 
-    public boolean isSuccess() { return success; }
-    public void setSuccess(boolean success) { this.success = success; }
+    public void setCorrectedOutput(String correctedOutput) {
+      this.correctedOutput = correctedOutput;
+    }
 
-    public String getMessage() { return message; }
-    public void setMessage(String message) { this.message = message; }
+    public boolean isSuccess() {
+      return success;
+    }
+
+    public void setSuccess(boolean success) {
+      this.success = success;
+    }
+
+    public String getMessage() {
+      return message;
+    }
+
+    public void setMessage(String message) {
+      this.message = message;
+    }
   }
 }

@@ -52,7 +52,8 @@ class RedisHotVectorIndexIT {
   @DisplayName("a query-side instance sees an ingest-side instance's writes and finds the nearest")
   void crossInstanceKnn() {
     String name = "hot-" + UUID.randomUUID();
-    RedisHotVectorIndex ingest = new RedisHotVectorIndex(name, redis.getHost(), redis.getMappedPort(6379));
+    RedisHotVectorIndex ingest =
+        new RedisHotVectorIndex(name, redis.getHost(), redis.getMappedPort(6379));
     int dim = 16;
     float[] target = randomVec(dim);
     ingest.upsert("target", target, "the answer", java.util.Map.of("source_url", "u://t"));
@@ -61,7 +62,8 @@ class RedisHotVectorIndexIT {
     }
 
     // A separate instance (as the query operator) over the same Redis.
-    RedisHotVectorIndex query = new RedisHotVectorIndex(name, redis.getHost(), redis.getMappedPort(6379));
+    RedisHotVectorIndex query =
+        new RedisHotVectorIndex(name, redis.getHost(), redis.getMappedPort(6379));
     assertEquals(41, query.size());
     List<ScoredItem> hits = query.search(target, 5);
     assertEquals(5, hits.size());
@@ -76,7 +78,8 @@ class RedisHotVectorIndexIT {
   @DisplayName("FIFO eviction keeps the window bounded to maxEntries")
   void fifoEviction() {
     String name = "evict-" + UUID.randomUUID();
-    RedisHotVectorIndex hot = new RedisHotVectorIndex(name, redis.getHost(), redis.getMappedPort(6379), 10, 3600);
+    RedisHotVectorIndex hot =
+        new RedisHotVectorIndex(name, redis.getHost(), redis.getMappedPort(6379), 10, 3600);
     float[] v = randomVec(8);
     for (int i = 0; i < 25; i++) {
       hot.upsert("doc-" + i, v.clone(), "d" + i, null);

@@ -1,7 +1,7 @@
 package org.agentic.flink.memory.vector;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.io.Serializable;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Search result from {@link VectorMemory#search(float[], int)}.

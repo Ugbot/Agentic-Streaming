@@ -1,12 +1,14 @@
 package org.agentic.flink.example.incident;
 
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.embedding.EmbeddingClient;
+import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.GenericInferenceModel;
 import org.agentic.flink.inference.InferenceClient;
 import org.agentic.flink.inference.InferenceConnection;
 import org.agentic.flink.inference.InferenceSetup;
-import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.Scorer;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatMessage;
@@ -14,8 +16,6 @@ import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 import org.agentic.flink.tools.ToolExecutor;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
@@ -32,25 +32,26 @@ import org.apache.flink.util.Collector;
 /**
  * Anomaly + CEP incident agent.
  *
- * <p>Streaming metric samples flow through a per-host anomaly detector implemented as a
- * {@link GenericInferenceModel}. Outliers become {@code AnomalyEvent}s. Flink CEP watches for
- * three anomalies within a sliding window on the same host and emits an
- * {@code IncidentEvent}. The agent then runs only on confirmed incidents — runbook lookup +
- * ticket creation — so the expensive LLM call fires once per real incident, not per metric
- * sample.
+ * <p>Streaming metric samples flow through a per-host anomaly detector implemented as a {@link
+ * GenericInferenceModel}. Outliers become {@code AnomalyEvent}s. Flink CEP watches for three
+ * anomalies within a sliding window on the same host and emits an {@code IncidentEvent}. The agent
+ * then runs only on confirmed incidents — runbook lookup + ticket creation — so the expensive LLM
+ * call fires once per real incident, not per metric sample.
  *
- * <p>The anomaly detector is deliberately written as a {@link GenericInferenceModel} rather
- * than a {@link Classifier}: this is the framework's "raw" inference escape hatch for models
- * whose input/output shape doesn't fit the typed surfaces. Here it's a sliding-window
- * z-score; in production it could be an autoencoder loaded through ONNX or DJL.
+ * <p>The anomaly detector is deliberately written as a {@link GenericInferenceModel} rather than a
+ * {@link Classifier}: this is the framework's "raw" inference escape hatch for models whose
+ * input/output shape doesn't fit the typed surfaces. Here it's a sliding-window z-score; in
+ * production it could be an autoencoder loaded through ONNX or DJL.
  *
  * <p><b>Prerequisites:</b>
+ *
  * <pre>
  *   docker compose up -d ollama
  *   docker compose exec ollama ollama pull qwen2.5:3b
  * </pre>
  *
  * <p><b>To run:</b>
+ *
  * <pre>
  *   mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.incident.IncidentAgentExample"
  * </pre>
@@ -93,21 +94,23 @@ public class IncidentAgentExample {
             .where(SimpleCondition.of(a -> true))
             .within(java.time.Duration.ofMinutes(5));
 
-    PatternStream<AnomalyEvent> patterned = CEP.pattern(anomalies.keyBy(AnomalyEvent::host), sequence);
+    PatternStream<AnomalyEvent> patterned =
+        CEP.pattern(anomalies.keyBy(AnomalyEvent::host), sequence);
 
     DataStream<IncidentEvent> incidents =
-        patterned.select(
-            match -> {
-              AnomalyEvent first = match.get("first").get(0);
-              AnomalyEvent third = match.get("third").get(0);
-              return new IncidentEvent(first.host(), first.metric(), first.ts(), third.ts(), 3);
-            }).name("incident-detect");
+        patterned
+            .select(
+                match -> {
+                  AnomalyEvent first = match.get("first").get(0);
+                  AnomalyEvent third = match.get("third").get(0);
+                  return new IncidentEvent(first.host(), first.metric(), first.ts(), third.ts(), 3);
+                })
+            .name("incident-detect");
 
     // Agent invocation — once per confirmed incident.
     LangChain4jChatConnection chat =
         LangChain4jChatConnection.ollama(ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
-    ChatSetup chatSetup =
-        ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.2).build();
+    ChatSetup chatSetup = ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.2).build();
 
     incidents
         .keyBy(IncidentEvent::host)
@@ -143,7 +146,8 @@ public class IncidentAgentExample {
     }
 
     @Override
-    public InferenceClient bind(org.apache.flink.api.common.functions.RuntimeContext runtimeContext) {
+    public InferenceClient bind(
+        org.apache.flink.api.common.functions.RuntimeContext runtimeContext) {
       return new Client();
     }
 
@@ -200,7 +204,8 @@ public class IncidentAgentExample {
   }
 
   /** Per-host detector — feeds each sample to the connection and emits anomalies. */
-  static final class AnomalyDetectFn extends KeyedProcessFunction<String, MetricSample, AnomalyEvent> {
+  static final class AnomalyDetectFn
+      extends KeyedProcessFunction<String, MetricSample, AnomalyEvent> {
     private static final long serialVersionUID = 1L;
     private final InferenceConnection conn;
     private transient GenericInferenceModel model;
@@ -254,8 +259,10 @@ public class IncidentAgentExample {
 
     @Override
     public void processElement(
-        IncidentEvent inc, KeyedProcessFunction<String, IncidentEvent, String>.Context ctx,
-        Collector<String> out) throws Exception {
+        IncidentEvent inc,
+        KeyedProcessFunction<String, IncidentEvent, String>.Context ctx,
+        Collector<String> out)
+        throws Exception {
       Integer prior = handledCount.value();
       int n = prior == null ? 1 : prior + 1;
       handledCount.update(n);
@@ -267,8 +274,7 @@ public class IncidentAgentExample {
                   ChatMessage.system(
                       "You are an on-call SRE. Propose a concise remediation plan (<=4 steps)"
                           + " given the runbook and incident details."),
-                  ChatMessage.user(
-                      "Incident: " + inc + "\nRunbook excerpt:\n" + runbook)),
+                  ChatMessage.user("Incident: " + inc + "\nRunbook excerpt:\n" + runbook)),
               chatSetup);
       Object ticket =
           ticketTool
@@ -321,7 +327,12 @@ public class IncidentAgentExample {
     public CompletableFuture<Object> execute(Map<String, Object> parameters) {
       String id = "INC-" + SEQ.incrementAndGet();
       System.out.println(
-          "📨 created " + id + " host=" + parameters.get("host") + " metric=" + parameters.get("metric"));
+          "📨 created "
+              + id
+              + " host="
+              + parameters.get("host")
+              + " metric="
+              + parameters.get("metric"));
       return CompletableFuture.completedFuture(id);
     }
 

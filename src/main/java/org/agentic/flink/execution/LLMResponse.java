@@ -8,7 +8,6 @@ import java.util.List;
  * Response from LLM call.
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -26,17 +25,37 @@ public class LLMResponse implements Serializable {
     this.toolCalls = new ArrayList<>();
   }
 
-  public String getText() { return text; }
-  public void setText(String text) { this.text = text; }
+  public String getText() {
+    return text;
+  }
 
-  public String getModel() { return model; }
-  public void setModel(String model) { this.model = model; }
+  public void setText(String text) {
+    this.text = text;
+  }
 
-  public List<ToolCall> getToolCalls() { return toolCalls; }
-  public void setToolCalls(List<ToolCall> toolCalls) { this.toolCalls = toolCalls; }
+  public String getModel() {
+    return model;
+  }
 
-  public int getTokenUsage() { return tokenUsage; }
-  public void setTokenUsage(int tokenUsage) { this.tokenUsage = tokenUsage; }
+  public void setModel(String model) {
+    this.model = model;
+  }
+
+  public List<ToolCall> getToolCalls() {
+    return toolCalls;
+  }
+
+  public void setToolCalls(List<ToolCall> toolCalls) {
+    this.toolCalls = toolCalls;
+  }
+
+  public int getTokenUsage() {
+    return tokenUsage;
+  }
+
+  public void setTokenUsage(int tokenUsage) {
+    this.tokenUsage = tokenUsage;
+  }
 
   public boolean hasToolCalls() {
     return toolCalls != null && !toolCalls.isEmpty();

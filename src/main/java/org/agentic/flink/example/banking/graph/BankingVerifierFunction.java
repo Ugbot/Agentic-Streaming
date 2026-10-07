@@ -84,7 +84,9 @@ public final class BankingVerifierFunction
         if (turn.isActionPerformed()) {
           return BankingPhase.DONE;
         }
-        return current == BankingPhase.READY_TO_ACT ? BankingPhase.READY_TO_ACT : BankingPhase.NEED_INFO;
+        return current == BankingPhase.READY_TO_ACT
+            ? BankingPhase.READY_TO_ACT
+            : BankingPhase.NEED_INFO;
       default:
         return current;
     }

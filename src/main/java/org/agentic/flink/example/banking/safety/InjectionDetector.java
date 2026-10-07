@@ -13,7 +13,8 @@ import org.agentic.flink.screening.Signal;
 /**
  * Classic keyword/lexicon screening for the threats that target a customer-service agent:
  * prompt-injection, identity-verification bypass, impersonation/social-engineering, and bulk
- * data-exfiltration. A {@link Detector} for use in a {@link org.agentic.flink.screening.ScreeningPipeline}.
+ * data-exfiltration. A {@link Detector} for use in a {@link
+ * org.agentic.flink.screening.ScreeningPipeline}.
  *
  * <p>Each category that matches the message text contributes {@code categoryWeight} to the combined
  * risk; the pipeline's review/block thresholds then turn one-vs-many matches into ALLOW / REVIEW /
@@ -58,10 +59,7 @@ public final class InjectionDetector implements Detector {
       return null;
     }
     return new Signal(
-        name(),
-        Phase.LEXICON,
-        categoryWeight * matched,
-        "matched threat categories: " + hits);
+        name(), Phase.LEXICON, categoryWeight * matched, "matched threat categories: " + hits);
   }
 
   @Override
@@ -74,26 +72,45 @@ public final class InjectionDetector implements Detector {
     m.put(
         "prompt-injection",
         List.of(
-            "ignore previous", "ignore all previous", "disregard the instructions",
-            "disregard your instructions", "you are now", "new instructions:",
-            "system prompt", "reveal your instructions", "print your instructions",
+            "ignore previous",
+            "ignore all previous",
+            "disregard the instructions",
+            "disregard your instructions",
+            "you are now",
+            "new instructions:",
+            "system prompt",
+            "reveal your instructions",
+            "print your instructions",
             "repeat the words above"));
     m.put(
         "identity-bypass",
         List.of(
-            "skip verification", "bypass verification", "no need to verify",
-            "don't verify", "do not verify", "without verifying", "skip the security"));
+            "skip verification",
+            "bypass verification",
+            "no need to verify",
+            "don't verify",
+            "do not verify",
+            "without verifying",
+            "skip the security"));
     m.put(
         "impersonation",
         List.of(
-            "i am the bank", "i am an administrator", "i am your developer",
-            "as your developer", "this is an emergency, skip", "i work for rho-bank",
+            "i am the bank",
+            "i am an administrator",
+            "i am your developer",
+            "as your developer",
+            "this is an emergency, skip",
+            "i work for rho-bank",
             "override authorization"));
     m.put(
         "data-exfiltration",
         List.of(
-            "list all customers", "all account numbers", "every account",
-            "dump the database", "everyone's balance", "all customer data"));
+            "list all customers",
+            "all account numbers",
+            "every account",
+            "dump the database",
+            "everyone's balance",
+            "all customer data"));
     return m;
   }
 }

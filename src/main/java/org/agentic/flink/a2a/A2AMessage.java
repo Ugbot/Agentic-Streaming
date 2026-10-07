@@ -41,7 +41,9 @@ public final class A2AMessage implements Serializable {
     this.role = Objects.requireNonNull(role, "role");
     this.messageId = messageId;
     this.parts =
-        parts == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(parts));
+        parts == null
+            ? Collections.emptyList()
+            : Collections.unmodifiableList(new ArrayList<>(parts));
     this.contextId = contextId;
     this.taskId = taskId;
     this.metadata = metadata == null ? null : Collections.unmodifiableMap(metadata);
@@ -119,7 +121,16 @@ public final class A2AMessage implements Serializable {
 
   @Override
   public String toString() {
-    return "A2AMessage{role=" + role + ", messageId=" + messageId + ", parts=" + parts.size()
-        + ", taskId=" + taskId + ", contextId=" + contextId + '}';
+    return "A2AMessage{role="
+        + role
+        + ", messageId="
+        + messageId
+        + ", parts="
+        + parts.size()
+        + ", taskId="
+        + taskId
+        + ", contextId="
+        + contextId
+        + '}';
   }
 }

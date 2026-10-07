@@ -1,6 +1,8 @@
 package org.agentic.flink.plugins.flintagents.action;
-import org.apache.flink.api.common.functions.OpenContext;
 
+import java.time.Duration;
+import java.util.*;
+import java.util.stream.Collectors;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
@@ -13,12 +15,9 @@ import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.config.StorageConfiguration;
 import org.agentic.flink.storage.metrics.MetricsWrapper;
 import org.agentic.flink.storage.metrics.StorageMetrics;
-import java.time.Duration;
-import java.util.*;
-import java.util.stream.Collectors;
 import org.apache.flink.agents.api.Event;
 import org.apache.flink.agents.api.OutputEvent;
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -27,17 +26,16 @@ import org.slf4j.LoggerFactory;
 /**
  * Flink-state-first context management action.
  *
- * <p>Short-term memory lives in Flink keyed state through a {@link ShortTermMemory} bound from
- * the supplied {@link ShortTermMemorySpec}; long-term memory is an optional external {@link
+ * <p>Short-term memory lives in Flink keyed state through a {@link ShortTermMemory} bound from the
+ * supplied {@link ShortTermMemorySpec}; long-term memory is an optional external {@link
  * LongTermMemoryStore} used solely for resumption across job lifetimes and for archival of
- * long-term facts. The previous "three-tier" Flink → HOT → WARM fallback has been collapsed: HOT
- * is now the Flink state itself.
+ * long-term facts. The previous "three-tier" Flink → HOT → WARM fallback has been collapsed: HOT is
+ * now the Flink state itself.
  *
- * <p>Sync to the long-term store is write-behind, triggered either by event-count interval or
- * by a successful MoSCoW compaction. Checkpoint barriers do not block on long-term writes.
+ * <p>Sync to the long-term store is write-behind, triggered either by event-count interval or by a
+ * successful MoSCoW compaction. Checkpoint barriers do not block on long-term writes.
  */
-public class ContextManagementActionWithStorage
-    extends KeyedProcessFunction<String, Event, Event> {
+public class ContextManagementActionWithStorage extends KeyedProcessFunction<String, Event, Event> {
 
   private static final Logger LOG =
       LoggerFactory.getLogger(ContextManagementActionWithStorage.class);
@@ -81,9 +79,7 @@ public class ContextManagementActionWithStorage
     this.agentId = agentId;
     this.storageConfig = storageConfig;
     this.shortTermSpec =
-        shortTermSpec == null
-            ? FlinkStateShortTermMemory.spec(Duration.ZERO)
-            : shortTermSpec;
+        shortTermSpec == null ? FlinkStateShortTermMemory.spec(Duration.ZERO) : shortTermSpec;
     this.maxTokens = maxTokens;
     this.maxItems = maxItems;
     this.compactionThreshold = compactionThreshold;
@@ -123,7 +119,10 @@ public class ContextManagementActionWithStorage
     LOG.info(
         "ContextManagementActionWithStorage initialized: agent={}, maxTokens={}, maxItems={}, "
             + "warmTierSync={}",
-        agentId, maxTokens, maxItems, warmTierSyncInterval);
+        agentId,
+        maxTokens,
+        maxItems,
+        warmTierSyncInterval);
   }
 
   @Override
@@ -147,8 +146,7 @@ public class ContextManagementActionWithStorage
     }
 
     ContextItem item =
-        new ContextItem(
-            messageContent.toString(), ContextPriority.SHOULD, MemoryType.SHORT_TERM);
+        new ContextItem(messageContent.toString(), ContextPriority.SHOULD, MemoryType.SHORT_TERM);
     memory.putItem(item);
 
     context.updateLastAccess();
@@ -172,7 +170,8 @@ public class ContextManagementActionWithStorage
     if (usageRatio >= compactionThreshold || currentItems >= maxItems) {
       LOG.info(
           "Context overflow for flow {}: usage={}, triggering compaction",
-          flowId, String.format("%.1f%%", usageRatio * 100));
+          flowId,
+          String.format("%.1f%%", usageRatio * 100));
       performCompaction(event, ctx, out, context, flowId);
       if (warmStore != null) {
         syncToWarmTier(flowId, context);

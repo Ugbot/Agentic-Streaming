@@ -1,12 +1,12 @@
 package org.agentic.flink.context.inverse;
 
-import org.agentic.flink.config.ConfigKeys;
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.tools.rag.DocumentIngestionToolExecutor;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.tools.rag.DocumentIngestionToolExecutor;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
@@ -44,8 +44,7 @@ import org.slf4j.LoggerFactory;
  * @see InverseRagResult
  * @see DocumentIngestionToolExecutor
  */
-public class QdrantAsyncFunction
-    extends RichAsyncFunction<ContextItem, InverseRagResult> {
+public class QdrantAsyncFunction extends RichAsyncFunction<ContextItem, InverseRagResult> {
 
   private static final Logger LOG = LoggerFactory.getLogger(QdrantAsyncFunction.class);
 
@@ -62,10 +61,7 @@ public class QdrantAsyncFunction
    * @param flowId Flow ID for metadata tagging
    * @param agentId Agent ID for metadata tagging
    */
-  public QdrantAsyncFunction(
-      Map<String, String> qdrantConfig,
-      String flowId,
-      String agentId) {
+  public QdrantAsyncFunction(Map<String, String> qdrantConfig, String flowId, String agentId) {
     this.qdrantConfig = qdrantConfig != null ? qdrantConfig : createDefaultConfig();
     this.flowId = flowId;
     this.agentId = agentId;
@@ -152,20 +148,15 @@ public class QdrantAsyncFunction
                   flowId,
                   error);
 
-              InverseRagResult failureResult =
-                  new InverseRagResult(item.getItemId(), flowId);
+              InverseRagResult failureResult = new InverseRagResult(item.getItemId(), flowId);
               failureResult.addFailedItem(item.getItemId(), error.getMessage());
 
               resultFuture.complete(Collections.singleton(failureResult));
             } else {
               // Ingestion succeeded
-              LOG.debug(
-                  "Successfully stored item {} to Qdrant: {}",
-                  item.getItemId(),
-                  result);
+              LOG.debug("Successfully stored item {} to Qdrant: {}", item.getItemId(), result);
 
-              InverseRagResult successResult =
-                  new InverseRagResult(item.getItemId(), flowId);
+              InverseRagResult successResult = new InverseRagResult(item.getItemId(), flowId);
               successResult.addStoredItem(item.getItemId(), result.toString());
 
               resultFuture.complete(Collections.singleton(successResult));

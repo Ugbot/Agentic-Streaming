@@ -31,7 +31,9 @@ public final class VelocityDetector implements Detector {
     }
     if (inWindow < n) return null;
     return new Signal(
-        name(), Phase.VELOCITY, weight,
+        name(),
+        Phase.VELOCITY,
+        weight,
         String.format("%d items within %dms for key '%s'", inWindow, windowMillis, item.key()));
   }
 

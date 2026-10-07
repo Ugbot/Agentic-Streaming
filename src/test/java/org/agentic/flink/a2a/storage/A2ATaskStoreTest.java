@@ -37,8 +37,10 @@ class A2ATaskStoreTest {
     A2ATask task = A2ATask.submitted(id, contextId, msg, now).withState(state, "s", now);
     int n = random.nextInt(3);
     for (int i = 0; i < n; i++) {
-      task = task.withArtifact(
-          A2AArtifact.text(UUID.randomUUID().toString(), "a" + i, "out-" + random.nextInt()), now + i);
+      task =
+          task.withArtifact(
+              A2AArtifact.text(UUID.randomUUID().toString(), "a" + i, "out-" + random.nextInt()),
+              now + i);
     }
     return task;
   }
@@ -87,12 +89,15 @@ class A2ATaskStoreTest {
       store.saveTask(task);
       assertEquals(1, store.listTasksByState(A2ATaskState.WORKING).size());
 
-      A2ATask completed = task.withState(A2ATaskState.COMPLETED, "done", task.getUpdatedAtEpochMs() + 1);
+      A2ATask completed =
+          task.withState(A2ATaskState.COMPLETED, "done", task.getUpdatedAtEpochMs() + 1);
       store.saveTask(completed);
-      assertTrue(store.listTasksByState(A2ATaskState.WORKING).stream()
-          .noneMatch(t -> t.getId().equals(task.getId())));
-      assertTrue(store.listTasksByState(A2ATaskState.COMPLETED).stream()
-          .anyMatch(t -> t.getId().equals(task.getId())));
+      assertTrue(
+          store.listTasksByState(A2ATaskState.WORKING).stream()
+              .noneMatch(t -> t.getId().equals(task.getId())));
+      assertTrue(
+          store.listTasksByState(A2ATaskState.COMPLETED).stream()
+              .anyMatch(t -> t.getId().equals(task.getId())));
     }
   }
 

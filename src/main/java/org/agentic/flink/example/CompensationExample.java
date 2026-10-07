@@ -1,5 +1,9 @@
 package org.agentic.flink.example;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.compensation.CompensationAction;
 import org.agentic.flink.compensation.CompensationHandler;
 import org.agentic.flink.compensation.CompensationResult;
@@ -7,19 +11,15 @@ import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.tool.ToolRegistry;
 import org.agentic.flink.tools.ToolExecutor;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Compensation Example - Saga Pattern for Rollback
  *
- * <p>This example demonstrates how compensation (rollback) works when an agent
- * workflow fails partway through execution.
+ * <p>This example demonstrates how compensation (rollback) works when an agent workflow fails
+ * partway through execution.
  *
  * <p><b>Scenario:</b>
+ *
  * <pre>
  * 1. Create user account → SUCCESS (compensation: delete-user)
  * 2. Send welcome email → SUCCESS (compensation: send-cancellation-email)
@@ -43,12 +43,13 @@ public class CompensationExample {
 
     System.out.println("🔧 Step 1: Setting up tools with compensation...\n");
 
-    ToolRegistry toolRegistry = ToolRegistry.builder()
-        .registerTool("create-user", new MockUserTool("create"))
-        .registerTool("delete-user", new MockUserTool("delete"))
-        .registerTool("send-email", new MockEmailTool("send"))
-        .registerTool("send-cancellation", new MockEmailTool("cancel"))
-        .build();
+    ToolRegistry toolRegistry =
+        ToolRegistry.builder()
+            .registerTool("create-user", new MockUserTool("create"))
+            .registerTool("delete-user", new MockUserTool("delete"))
+            .registerTool("send-email", new MockEmailTool("send"))
+            .registerTool("send-cancellation", new MockEmailTool("cancel"))
+            .build();
 
     System.out.println("✅ Tools registered: " + toolRegistry.getToolNames());
     System.out.println();
@@ -61,20 +62,19 @@ public class CompensationExample {
 
     // Operation 1: Create user (with compensation)
     System.out.println("1️⃣  Operation: create-user");
-    CompensationAction comp1 = new CompensationAction(
-        "delete-user",
-        "delete-user",
-        Map.of("user_id", "user-123"));
+    CompensationAction comp1 =
+        new CompensationAction("delete-user", "delete-user", Map.of("user_id", "user-123"));
     compensationActions.add(comp1);
     System.out.println("   ✅ SUCCESS - Compensation registered: delete-user");
     System.out.println();
 
     // Operation 2: Send welcome email (with compensation)
     System.out.println("2️⃣  Operation: send-welcome-email");
-    CompensationAction comp2 = new CompensationAction(
-        "send-cancellation",
-        "send-cancellation",
-        Map.of("user_id", "user-123", "email", "user@example.com"));
+    CompensationAction comp2 =
+        new CompensationAction(
+            "send-cancellation",
+            "send-cancellation",
+            Map.of("user_id", "user-123", "email", "user@example.com"));
     compensationActions.add(comp2);
     System.out.println("   ✅ SUCCESS - Compensation registered: send-cancellation");
     System.out.println();
@@ -87,23 +87,21 @@ public class CompensationExample {
     // ==================== Step 3: Trigger Compensation ====================
 
     System.out.println("🔄 Step 3: Triggering compensation (rollback)...\n");
-    System.out.println("Executing " + compensationActions.size() + " compensation actions in REVERSE order:");
+    System.out.println(
+        "Executing " + compensationActions.size() + " compensation actions in REVERSE order:");
     System.out.println("-".repeat(80));
 
     // Create failed event
-    AgentEvent failedEvent = new AgentEvent(
-        "flow-001",
-        "user-001",
-        "checkout-agent",
-        AgentEventType.FLOW_FAILED
-    );
+    AgentEvent failedEvent =
+        new AgentEvent("flow-001", "user-001", "checkout-agent", AgentEventType.FLOW_FAILED);
     failedEvent.setErrorMessage("Payment declined");
 
     // Create compensation handler
     CompensationHandler handler = new CompensationHandler(toolRegistry);
 
     // Execute compensation
-    CompletableFuture<CompensationResult> future = handler.compensate(failedEvent, compensationActions);
+    CompletableFuture<CompensationResult> future =
+        handler.compensate(failedEvent, compensationActions);
     CompensationResult result = future.get();
 
     System.out.println("-".repeat(80));
@@ -130,9 +128,13 @@ public class CompensationExample {
     for (int i = 0; i < result.getActionResults().size(); i++) {
       var actionResult = result.getActionResults().get(i);
       String status = actionResult.isSuccess() ? "✓" : "✗";
-      System.out.println(String.format("  %s Action %d: %s - %s",
-          status, i + 1, actionResult.getActionName(),
-          actionResult.isSuccess() ? "Success" : actionResult.getErrorMessage()));
+      System.out.println(
+          String.format(
+              "  %s Action %d: %s - %s",
+              status,
+              i + 1,
+              actionResult.getActionName(),
+              actionResult.isSuccess() ? "Success" : actionResult.getErrorMessage()));
     }
 
     System.out.println();
@@ -157,14 +159,14 @@ public class CompensationExample {
 
     @Override
     public CompletableFuture<Object> execute(Map<String, Object> parameters) {
-      return CompletableFuture.supplyAsync(() -> {
-        String userId = (String) parameters.get("user_id");
-        String result = operation.equals("create")
-            ? "User created: " + userId
-            : "User deleted: " + userId;
-        System.out.println("      🔧 " + result);
-        return result;
-      });
+      return CompletableFuture.supplyAsync(
+          () -> {
+            String userId = (String) parameters.get("user_id");
+            String result =
+                operation.equals("create") ? "User created: " + userId : "User deleted: " + userId;
+            System.out.println("      🔧 " + result);
+            return result;
+          });
     }
 
     @Override
@@ -190,14 +192,16 @@ public class CompensationExample {
 
     @Override
     public CompletableFuture<Object> execute(Map<String, Object> parameters) {
-      return CompletableFuture.supplyAsync(() -> {
-        String email = (String) parameters.get("email");
-        String result = operation.equals("send")
-            ? "Welcome email sent to: " + email
-            : "Cancellation email sent to: " + email;
-        System.out.println("      📧 " + result);
-        return result;
-      });
+      return CompletableFuture.supplyAsync(
+          () -> {
+            String email = (String) parameters.get("email");
+            String result =
+                operation.equals("send")
+                    ? "Welcome email sent to: " + email
+                    : "Cancellation email sent to: " + email;
+            System.out.println("      📧 " + result);
+            return result;
+          });
     }
 
     @Override

@@ -1,5 +1,7 @@
 package org.agentic.flink.example;
 
+import java.util.*;
+import org.agentic.flink.channel.source.PollingSource;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -12,12 +14,10 @@ import org.agentic.flink.storage.ShortTermMemoryStore;
 import org.agentic.flink.storage.config.StorageConfiguration;
 import org.agentic.flink.storage.metrics.MetricsWrapper;
 import org.agentic.flink.storage.metrics.StorageMetrics;
-import java.util.*;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.agentic.flink.channel.source.PollingSource;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -207,8 +207,7 @@ public class StorageIntegratedFlinkJob {
 
       // 1. Try to load context from HOT storage
       Optional<List<ContextItem>> hotContextOpt = hotMetrics.get(flowId);
-      List<ContextItem> hotContext =
-          hotContextOpt.orElse(new ArrayList<>());
+      List<ContextItem> hotContext = hotContextOpt.orElse(new ArrayList<>());
 
       // 2. If not in HOT, hydrate from WARM storage
       if (hotContext.isEmpty()) {
@@ -228,8 +227,7 @@ public class StorageIntegratedFlinkJob {
       }
 
       // 3. Add new context item
-      ContextItem newItem =
-          new ContextItem(message, ContextPriority.MUST, MemoryType.SHORT_TERM);
+      ContextItem newItem = new ContextItem(message, ContextPriority.MUST, MemoryType.SHORT_TERM);
       newItem.setItemId("item-" + UUID.randomUUID());
       hotContext.add(newItem);
 
@@ -238,13 +236,14 @@ public class StorageIntegratedFlinkJob {
 
       // 5. Periodically persist to WARM storage
       if (hotContext.size() % 5 == 0) { // Every 5 messages
-        AgentContext agentContext = new AgentContext(
-            "conversation-agent",
-            flowId,
-            userId,
-            8000, // max tokens
-            50   // max items
-        );
+        AgentContext agentContext =
+            new AgentContext(
+                "conversation-agent",
+                flowId,
+                userId,
+                8000, // max tokens
+                50 // max items
+                );
 
         // Add all items to context window
         for (ContextItem item : hotContext) {
@@ -280,21 +279,17 @@ public class StorageIntegratedFlinkJob {
         LOG.info("HOT Storage ({}ms latency):", hotStats.getAverageLatencyMs());
         LOG.info(
             "  - Operations: {} ({}% success)",
-            hotStats.getTotalOperations(),
-            (1.0 - hotStats.getErrorRate()) * 100);
+            hotStats.getTotalOperations(), (1.0 - hotStats.getErrorRate()) * 100);
         LOG.info(
             "  - Latency: avg={}ms, max={}ms",
             hotStats.getAverageLatencyMs(),
             hotStats.getMaxGetLatencyMs());
-        LOG.info(
-            "  - Hit rate: {}%",
-            hotStats.getHitRate() * 100);
+        LOG.info("  - Hit rate: {}%", hotStats.getHitRate() * 100);
 
         LOG.info("WARM Storage ({}ms latency):", warmStats.getAverageLatencyMs());
         LOG.info(
             "  - Operations: {} ({}% success)",
-            warmStats.getTotalOperations(),
-            (1.0 - warmStats.getErrorRate()) * 100);
+            warmStats.getTotalOperations(), (1.0 - warmStats.getErrorRate()) * 100);
         LOG.info(
             "  - Latency: avg={}ms, max={}ms",
             warmStats.getAverageLatencyMs(),

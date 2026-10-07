@@ -60,11 +60,13 @@ public final class A2APart implements Serializable {
   }
 
   public static A2APart text(String text) {
-    return new A2APart(Kind.TEXT, Objects.requireNonNull(text, "text"), null, null, null, null, null);
+    return new A2APart(
+        Kind.TEXT, Objects.requireNonNull(text, "text"), null, null, null, null, null);
   }
 
   public static A2APart data(Map<String, Object> data) {
-    return new A2APart(Kind.DATA, null, Objects.requireNonNull(data, "data"), null, null, null, null);
+    return new A2APart(
+        Kind.DATA, null, Objects.requireNonNull(data, "data"), null, null, null, null);
   }
 
   public static A2APart fileUri(String uri, String mimeType, String fileName) {
@@ -136,7 +138,11 @@ public final class A2APart implements Serializable {
       case DATA:
         return "A2APart{data=" + data + '}';
       case FILE:
-        return "A2APart{file=" + (fileUri != null ? fileUri : "<bytes>") + ", mime=" + mimeType + '}';
+        return "A2APart{file="
+            + (fileUri != null ? fileUri : "<bytes>")
+            + ", mime="
+            + mimeType
+            + '}';
       default:
         return "A2APart{kind=" + kind + '}';
     }

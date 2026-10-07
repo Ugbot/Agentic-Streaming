@@ -1,27 +1,24 @@
 package org.agentic.flink.plugins.flintagents.action;
-import org.apache.flink.api.common.functions.OpenContext;
 
-import org.agentic.flink.context.compaction.CompactionResult;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.context.relevancy.RelevancyScorer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.flink.agents.api.Event;
 import org.apache.flink.agents.api.OutputEvent;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -66,8 +63,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Integration with Flink Agents:</b>
  *
- * This function processes Flink Agents events and emits new events. It can be used
- * alongside Flink Agents ReAct agents to provide intelligent context management.
+ * <p>This function processes Flink Agents events and emits new events. It can be used alongside
+ * Flink Agents ReAct agents to provide intelligent context management.
  *
  * @author Agentic Flink Team
  * @see AgentContext
@@ -225,8 +222,7 @@ public class ContextManagementAction extends KeyedProcessFunction<String, Event,
     if (usageRatio >= compactionThreshold || currentItems >= maxItems) {
       LOG.info(
           "Context overflow detected for agent {}: usage={:.1f}%, triggering compaction",
-          agentId,
-          usageRatio * 100);
+          agentId, usageRatio * 100);
 
       // Emit context overflow event
       Event overflowEvent = createContextOverflowEvent(context, currentTokens, currentItems);
@@ -382,7 +378,8 @@ public class ContextManagementAction extends KeyedProcessFunction<String, Event,
   private AgentContext createNewContext(Event event) {
     String flowId = (String) event.getAttr("flowId");
     String userId = (String) event.getAttr("userId");
-    return new AgentContext(agentId, flowId != null ? flowId : "unknown", userId, maxTokens, maxItems);
+    return new AgentContext(
+        agentId, flowId != null ? flowId : "unknown", userId, maxTokens, maxItems);
   }
 
   /** Calculates total tokens across all context items in state. */

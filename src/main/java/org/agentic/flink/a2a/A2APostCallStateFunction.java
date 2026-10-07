@@ -10,13 +10,13 @@ import org.apache.flink.util.Collector;
 /**
  * Keyed post-step of {@link A2AStep#applyToStateful}: after the stateless async A2A call, persists
  * the peer's returned remote {@code contextId} into the shared {@link ConversationStore} keyed by
- * the conversation id, so the next turn's {@link A2APreCallStateFunction} can resume the same remote
- * conversation.
+ * the conversation id, so the next turn's {@link A2APreCallStateFunction} can resume the same
+ * remote conversation.
  *
  * <p>See {@link A2APreCallStateFunction} for why continuity lives in the shared store rather than
- * per-operator keyed state. This is the "apply the response to state" half of the
- * keyed → async → keyed split: the async operator stays state-free (so it cannot corrupt keyed
- * state), and all per-conversation continuity is mediated here in a keyed operator.
+ * per-operator keyed state. This is the "apply the response to state" half of the keyed → async →
+ * keyed split: the async operator stays state-free (so it cannot corrupt keyed state), and all
+ * per-conversation continuity is mediated here in a keyed operator.
  */
 public final class A2APostCallStateFunction
     extends KeyedProcessFunction<String, AgentEvent, AgentEvent> {

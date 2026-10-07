@@ -5,14 +5,14 @@ import java.util.List;
 /**
  * Per-operator vector memory abstraction backed by Flink state.
  *
- * <p>Like {@link org.agentic.flink.memory.ShortTermMemory}, this lives inside a Flink
- * {@code RichFunction} — instances are constructed in {@code open()} from a serializable
- * {@link VectorMemorySpec}. The current operator key supplies the scope: every method operates on
- * the vectors belonging to the currently-keyed conversation (or, when scope is {@code
- * PER_OPERATOR}, on a single shared graph for the whole task slot).
+ * <p>Like {@link org.agentic.flink.memory.ShortTermMemory}, this lives inside a Flink {@code
+ * RichFunction} — instances are constructed in {@code open()} from a serializable {@link
+ * VectorMemorySpec}. The current operator key supplies the scope: every method operates on the
+ * vectors belonging to the currently-keyed conversation (or, when scope is {@code PER_OPERATOR}, on
+ * a single shared graph for the whole task slot).
  *
- * <p>The default implementation ({@link FlinkStateVectorMemory}) is exact brute-force KNN. That
- * is intentional: for the typical "conversation-local semantic recall" workload — hundreds to low
+ * <p>The default implementation ({@link FlinkStateVectorMemory}) is exact brute-force KNN. That is
+ * intentional: for the typical "conversation-local semantic recall" workload — hundreds to low
  * thousands of vectors per key — brute-force at d=768 takes well under a millisecond and is
  * provably correct. Users with larger graphs register an HNSW-backed spec via {@code
  * ServiceLoader}.

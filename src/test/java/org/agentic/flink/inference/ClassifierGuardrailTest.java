@@ -5,17 +5,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.agentic.flink.execution.LLMClient;
 import org.agentic.flink.execution.LLMResponse;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.EchoChatConnection;
-import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -68,7 +67,8 @@ class ClassifierGuardrailTest {
             true,
             false);
 
-    GuardrailDecision before = guardrail.beforeChat("agent-1", List.of(ChatMessage.user("bad stuff")));
+    GuardrailDecision before =
+        guardrail.beforeChat("agent-1", List.of(ChatMessage.user("bad stuff")));
     assertEquals(GuardrailDecision.Action.BLOCK, before.getAction());
     assertTrue(before.getReason().contains("unsafe"));
     assertNotNull(before.getModelName());
@@ -156,8 +156,7 @@ class ClassifierGuardrailTest {
 
     @SuppressWarnings("unchecked")
     Map<String, Object> result =
-        (Map<String, Object>)
-            adapter.execute(Map.of("text", "great product, loved it")).get();
+        (Map<String, Object>) adapter.execute(Map.of("text", "great product, loved it")).get();
 
     assertEquals("positive", result.get("label"));
     assertEquals(0.92, (Double) result.get("score"), 1e-9);
@@ -169,8 +168,7 @@ class ClassifierGuardrailTest {
   @Test
   @DisplayName("InferenceToolAdapter wraps a Scorer and returns just the numeric score")
   void inferenceToolAdapterScorer() throws Exception {
-    EchoInferenceConnection conn =
-        new EchoInferenceConnection("n/a", 0.0, Map.of(), 0.73, 8);
+    EchoInferenceConnection conn = new EchoInferenceConnection("n/a", 0.0, Map.of(), 0.73, 8);
     InferenceToolAdapter adapter =
         new InferenceToolAdapter(
             "ranker",

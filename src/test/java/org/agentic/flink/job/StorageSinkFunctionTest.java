@@ -2,13 +2,13 @@ package org.agentic.flink.job;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.agentic.flink.config.AgenticFlinkConfig;
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
+import org.agentic.flink.config.AgenticFlinkConfig;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.junit.jupiter.api.*;
@@ -17,18 +17,19 @@ import org.junit.jupiter.api.*;
  * Unit tests for {@link StorageSinkFunction}.
  *
  * <p>Tests verify:
+ *
  * <ul>
- *   <li>Construction with various configs (null, forTesting, custom)</li>
- *   <li>Pass-through behavior: every event is emitted unchanged</li>
- *   <li>Terminal events (FLOW_COMPLETED, FLOW_FAILED) trigger long-term storage</li>
- *   <li>Non-terminal events only hit short-term storage</li>
- *   <li>Timeout handler still passes the event through</li>
- *   <li>Storage backend detection (memory defaults when no Redis/Postgres configured)</li>
- *   <li>Serialization (Flink requirement)</li>
+ *   <li>Construction with various configs (null, forTesting, custom)
+ *   <li>Pass-through behavior: every event is emitted unchanged
+ *   <li>Terminal events (FLOW_COMPLETED, FLOW_FAILED) trigger long-term storage
+ *   <li>Non-terminal events only hit short-term storage
+ *   <li>Timeout handler still passes the event through
+ *   <li>Storage backend detection (memory defaults when no Redis/Postgres configured)
+ *   <li>Serialization (Flink requirement)
  * </ul>
  *
- * <p>All test data uses randomized flowIds, userIds, and agentIds via
- * {@link UUID#randomUUID()} and {@link ThreadLocalRandom}.
+ * <p>All test data uses randomized flowIds, userIds, and agentIds via {@link UUID#randomUUID()} and
+ * {@link ThreadLocalRandom}.
  *
  * @author Agentic Flink Team
  * @see StorageSinkFunction
@@ -37,23 +38,20 @@ class StorageSinkFunctionTest {
 
   // ==================== Helpers ====================
 
-  /**
-   * Creates an AgentEvent with randomized identifiers.
-   */
+  /** Creates an AgentEvent with randomized identifiers. */
   private static AgentEvent randomEvent(AgentEventType type) {
-    AgentEvent event = new AgentEvent(
-        UUID.randomUUID().toString(),
-        UUID.randomUUID().toString(),
-        "agent-" + UUID.randomUUID().toString().substring(0, 8),
-        type);
+    AgentEvent event =
+        new AgentEvent(
+            UUID.randomUUID().toString(),
+            UUID.randomUUID().toString(),
+            "agent-" + UUID.randomUUID().toString().substring(0, 8),
+            type);
     event.setCurrentStage("test-stage-" + ThreadLocalRandom.current().nextInt(100));
     event.setIterationNumber(ThreadLocalRandom.current().nextInt(0, 10));
     return event;
   }
 
-  /**
-   * Simple ResultFuture implementation that captures the collected results.
-   */
+  /** Simple ResultFuture implementation that captures the collected results. */
   private static class CapturingResultFuture implements ResultFuture<AgentEvent> {
     private final AtomicReference<Collection<AgentEvent>> results = new AtomicReference<>();
     private final AtomicReference<Throwable> error = new AtomicReference<>();
@@ -188,17 +186,17 @@ class StorageSinkFunctionTest {
     @DisplayName("should pass through non-terminal events unchanged")
     void passesNonTerminalEventsThrough() {
       AgentEventType[] nonTerminalTypes = {
-          AgentEventType.FLOW_STARTED,
-          AgentEventType.TOOL_CALL_REQUESTED,
-          AgentEventType.TOOL_CALL_COMPLETED,
-          AgentEventType.VALIDATION_REQUESTED,
-          AgentEventType.VALIDATION_PASSED,
-          AgentEventType.LOOP_ITERATION_STARTED,
-          AgentEventType.LOOP_ITERATION_COMPLETED,
-          AgentEventType.SUPERVISOR_REVIEW_REQUESTED,
+        AgentEventType.FLOW_STARTED,
+        AgentEventType.TOOL_CALL_REQUESTED,
+        AgentEventType.TOOL_CALL_COMPLETED,
+        AgentEventType.VALIDATION_REQUESTED,
+        AgentEventType.VALIDATION_PASSED,
+        AgentEventType.LOOP_ITERATION_STARTED,
+        AgentEventType.LOOP_ITERATION_COMPLETED,
+        AgentEventType.SUPERVISOR_REVIEW_REQUESTED,
       };
-      AgentEventType type = nonTerminalTypes[
-          ThreadLocalRandom.current().nextInt(nonTerminalTypes.length)];
+      AgentEventType type =
+          nonTerminalTypes[ThreadLocalRandom.current().nextInt(nonTerminalTypes.length)];
       AgentEvent event = randomEvent(type);
       String originalFlowId = event.getFlowId();
 
@@ -316,8 +314,9 @@ class StorageSinkFunctionTest {
     @RepeatedTest(5)
     @DisplayName("should pass event through on timeout without loss")
     void passesEventOnTimeout() {
-      AgentEventType type = AgentEventType.values()[
-          ThreadLocalRandom.current().nextInt(AgentEventType.values().length)];
+      AgentEventType type =
+          AgentEventType.values()[
+              ThreadLocalRandom.current().nextInt(AgentEventType.values().length)];
       AgentEvent event = randomEvent(type);
       String originalFlowId = event.getFlowId();
 
@@ -385,8 +384,7 @@ class StorageSinkFunctionTest {
       } catch (Exception e) {
         // Expected: Redis connection failure, not a config detection error
         String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-        assertFalse(msg.contains("Unknown"),
-            "Should not get 'unknown backend' error, got: " + msg);
+        assertFalse(msg.contains("Unknown"), "Should not get 'unknown backend' error, got: " + msg);
       }
     }
   }
@@ -445,11 +443,12 @@ class StorageSinkFunctionTest {
     @Test
     @DisplayName("should handle event with minimal fields (no optional data)")
     void handlesMinimalEvent() {
-      AgentEvent event = new AgentEvent(
-          UUID.randomUUID().toString(),
-          null, // no userId
-          null, // no agentId
-          AgentEventType.FLOW_STARTED);
+      AgentEvent event =
+          new AgentEvent(
+              UUID.randomUUID().toString(),
+              null, // no userId
+              null, // no agentId
+              AgentEventType.FLOW_STARTED);
 
       CapturingResultFuture resultFuture = new CapturingResultFuture();
       function.asyncInvoke(event, resultFuture);
@@ -496,11 +495,14 @@ class StorageSinkFunctionTest {
         AgentEvent event = randomEvent(type);
         CapturingResultFuture resultFuture = new CapturingResultFuture();
 
-        assertDoesNotThrow(() -> function.asyncInvoke(event, resultFuture),
+        assertDoesNotThrow(
+            () -> function.asyncInvoke(event, resultFuture),
             "asyncInvoke should not throw for event type: " + type);
-        assertNotNull(resultFuture.getResults(),
-            "Result should be completed for event type: " + type);
-        assertEquals(1, resultFuture.getResults().size(),
+        assertNotNull(
+            resultFuture.getResults(), "Result should be completed for event type: " + type);
+        assertEquals(
+            1,
+            resultFuture.getResults().size(),
             "Exactly one event should pass through for type: " + type);
       }
     }

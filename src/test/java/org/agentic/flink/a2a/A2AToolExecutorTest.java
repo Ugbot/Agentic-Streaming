@@ -17,7 +17,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
-/** Verifies {@link A2AToolExecutor} maps tool params to A2A messages and artifacts back to results. */
+/**
+ * Verifies {@link A2AToolExecutor} maps tool params to A2A messages and artifacts back to results.
+ */
 class A2AToolExecutorTest {
 
   private final Random random = new Random();
@@ -88,13 +90,13 @@ class A2AToolExecutorTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(tool);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       A2AToolExecutor restored = (A2AToolExecutor) ois.readObject();
       assertEquals("a2a:planner", restored.getToolId());
       // The restored executor still works (client/pool rebuilt lazily, transient).
       assertEquals(
-          "completed",
-          ((Map<?, ?>) restored.execute(Map.of("input", "hi")).get()).get("state"));
+          "completed", ((Map<?, ?>) restored.execute(Map.of("input", "hi")).get()).get("state"));
     }
   }
 }

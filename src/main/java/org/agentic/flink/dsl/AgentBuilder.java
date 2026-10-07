@@ -1,7 +1,14 @@
 package org.agentic.flink.dsl;
 
-import org.agentic.flink.config.ConfigKeys;
+import java.time.Duration;
+import java.util.*;
+import org.agentic.flink.a2a.A2AClientFactory;
+import org.agentic.flink.a2a.A2ASkillMapper;
+import org.agentic.flink.a2a.RemoteAgentSpec;
+import org.agentic.flink.channel.Channel;
+import org.agentic.flink.channel.KeyedContextItem;
 import org.agentic.flink.completion.TaskList;
+import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.manager.ContextWindowManager;
 import org.agentic.flink.dsl.Agent.AgentType;
 import org.agentic.flink.embedding.EmbeddingConnection;
@@ -15,21 +22,13 @@ import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.OutputSchema;
 import org.agentic.flink.memory.FlinkStateShortTermMemory;
 import org.agentic.flink.memory.ShortTermMemorySpec;
-import org.agentic.flink.channel.Channel;
-import org.agentic.flink.channel.KeyedContextItem;
 import org.agentic.flink.memory.conversation.ConversationStore;
 import org.agentic.flink.memory.conversation.ConversationStores;
 import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.agentic.flink.skill.Skill;
-import org.agentic.flink.a2a.A2AClientFactory;
-import org.agentic.flink.a2a.A2ASkillMapper;
-import org.agentic.flink.a2a.RemoteAgentSpec;
-import org.agentic.flink.skill.SkillRegistry;
-import org.agentic.flink.tools.mcp.McpServerSpec;
 import org.agentic.flink.statemachine.AgentStateMachine;
 import org.agentic.flink.storage.LongTermMemoryStore;
-import java.time.Duration;
-import java.util.*;
+import org.agentic.flink.tools.mcp.McpServerSpec;
 
 /**
  * Fluent builder for creating immutable Agent instances.
@@ -39,6 +38,7 @@ import java.util.*;
  * type-safe manner.
  *
  * <p><b>Basic Usage:</b>
+ *
  * <pre>{@code
  * Agent agent = Agent.builder()
  *     .withId("my-agent")
@@ -48,6 +48,7 @@ import java.util.*;
  * }</pre>
  *
  * <p><b>Advanced Usage:</b>
+ *
  * <pre>{@code
  * Agent agent = Agent.builder()
  *     .withId("research-agent")
@@ -232,8 +233,8 @@ public class AgentBuilder {
    *
    * <p>This is the preferred LLM configuration entry-point. One {@link ChatConnection} can serve
    * many agents at different {@link ChatSetup}s. If unset, a default {@code
-   * LangChain4jChatConnection} is discovered via {@link java.util.ServiceLoader} pointing at
-   * local Ollama.
+   * LangChain4jChatConnection} is discovered via {@link java.util.ServiceLoader} pointing at local
+   * Ollama.
    *
    * @return this builder
    */
@@ -243,11 +244,11 @@ public class AgentBuilder {
   }
 
   /**
-   * Sets the per-agent chat configuration (model name, temperature, max response tokens,
-   * structured output, etc.).
+   * Sets the per-agent chat configuration (model name, temperature, max response tokens, structured
+   * output, etc.).
    *
-   * <p>If unset, an implicit {@link ChatSetup} is built at {@link #build()} time using the
-   * default model and the agent-type temperature default.
+   * <p>If unset, an implicit {@link ChatSetup} is built at {@link #build()} time using the default
+   * model and the agent-type temperature default.
    *
    * @return this builder
    */
@@ -301,7 +302,7 @@ public class AgentBuilder {
    */
   public AgentBuilder withRequiredTools(String... toolNames) {
     this.requiredTools.addAll(Arrays.asList(toolNames));
-    this.allowedTools.addAll(Arrays.asList(toolNames));  // Required tools are also allowed
+    this.allowedTools.addAll(Arrays.asList(toolNames)); // Required tools are also allowed
     return this;
   }
 
@@ -558,8 +559,8 @@ public class AgentBuilder {
   // ==================== Memory ====================
 
   /**
-   * Sets the TTL applied to short-term Flink keyed state. {@link Duration#ZERO} (default)
-   * disables TTL — entries live until the key is cleared or the checkpoint is dropped.
+   * Sets the TTL applied to short-term Flink keyed state. {@link Duration#ZERO} (default) disables
+   * TTL — entries live until the key is cleared or the checkpoint is dropped.
    */
   public AgentBuilder withShortTermTtl(Duration ttl) {
     this.shortTermTtl = ttl == null ? Duration.ZERO : ttl;
@@ -586,9 +587,9 @@ public class AgentBuilder {
 
   /**
    * Register one or more memory channels that emit {@link KeyedContextItem}s into the agent's
-   * memory layer. Replaces the older {@code withFeed(MemoryFeed...)}; pass
-   * {@code KafkaContextChannel}, {@code PostgresChangeChannel}, {@code RedisPubSubChannel}, or
-   * any custom {@code Channel<KeyedContextItem>}.
+   * memory layer. Replaces the older {@code withFeed(MemoryFeed...)}; pass {@code
+   * KafkaContextChannel}, {@code PostgresChangeChannel}, {@code RedisPubSubChannel}, or any custom
+   * {@code Channel<KeyedContextItem>}.
    */
   @SafeVarargs
   public final AgentBuilder withMemoryChannel(Channel<KeyedContextItem>... channels) {
@@ -641,9 +642,9 @@ public class AgentBuilder {
   }
 
   /**
-   * Add one or more {@link Skill}s. Tools declared by the skill are added to the agent's
-   * allowed tool list; the skill's prompt fragment is concatenated onto the system prompt at
-   * {@link #build()} time.
+   * Add one or more {@link Skill}s. Tools declared by the skill are added to the agent's allowed
+   * tool list; the skill's prompt fragment is concatenated onto the system prompt at {@link
+   * #build()} time.
    */
   public AgentBuilder withSkill(Skill... newSkills) {
     if (newSkills != null) {
@@ -656,8 +657,8 @@ public class AgentBuilder {
   }
 
   /**
-   * Register one or more MCP servers. The framework discovers tools from each server at job
-   * startup and registers them in the agent's tool registry.
+   * Register one or more MCP servers. The framework discovers tools from each server at job startup
+   * and registers them in the agent's tool registry.
    */
   public AgentBuilder withMcpServer(McpServerSpec... servers) {
     if (servers != null) {
@@ -689,8 +690,8 @@ public class AgentBuilder {
 
   /**
    * Override the {@link A2AClientFactory} used to build clients for this agent's remote peers.
-   * Defaults to {@link A2AClientFactory#discovering()} (resolves the SDK adapter via ServiceLoader).
-   * Tests inject an in-memory factory here.
+   * Defaults to {@link A2AClientFactory#discovering()} (resolves the SDK adapter via
+   * ServiceLoader). Tests inject an in-memory factory here.
    */
   public AgentBuilder withA2AClientFactory(A2AClientFactory factory) {
     if (factory != null) {
@@ -702,9 +703,9 @@ public class AgentBuilder {
   // ==================== Inference ====================
 
   /**
-   * Register an {@link InferenceConnection} (classifier, scorer, embedder, generic) under a
-   * logical name. Multiple may be registered. Retrieve at runtime via
-   * {@link Agent#getInferenceConnection(String)}.
+   * Register an {@link InferenceConnection} (classifier, scorer, embedder, generic) under a logical
+   * name. Multiple may be registered. Retrieve at runtime via {@link
+   * Agent#getInferenceConnection(String)}.
    */
   public AgentBuilder withInferenceConnection(String name, InferenceConnection connection) {
     if (name == null || connection == null) {
@@ -715,8 +716,8 @@ public class AgentBuilder {
   }
 
   /**
-   * Register an inference model as a tool, callable via the LLM tool-call path. The adapter is
-   * also added to {@link #allowedTools} so the LLM sees it in the available-tools list.
+   * Register an inference model as a tool, callable via the LLM tool-call path. The adapter is also
+   * added to {@link #allowedTools} so the LLM sees it in the available-tools list.
    */
   public AgentBuilder withInferenceTool(InferenceToolAdapter adapter) {
     if (adapter == null) {
@@ -728,8 +729,8 @@ public class AgentBuilder {
   }
 
   /**
-   * Add one or more guardrails. They run before and after every LLM call inside
-   * {@link org.agentic.flink.execution.LLMClient#chat}.
+   * Add one or more guardrails. They run before and after every LLM call inside {@link
+   * org.agentic.flink.execution.LLMClient#chat}.
    */
   public AgentBuilder withGuardrail(Guardrail... gs) {
     if (gs != null) {
@@ -776,11 +777,12 @@ public class AgentBuilder {
 
     // Create default context config if not provided
     if (contextConfig == null) {
-      contextConfig = new ContextWindowManager.ContextWindowConfig(
-          maxTokens,
-          50,  // maxItems
-          0.8   // compactionThreshold
-      );
+      contextConfig =
+          new ContextWindowManager.ContextWindowConfig(
+              maxTokens,
+              50, // maxItems
+              0.8 // compactionThreshold
+              );
     }
 
     // Default short-term memory: Flink keyed state with the configured TTL.
@@ -822,49 +824,48 @@ public class AgentBuilder {
 
     // Create default state machine if not provided
     if (stateMachine == null) {
-      stateMachine = AgentStateMachine.builder()
-          .withId(agentId + "-state-machine")
-          .withStandardTransitions()
-          .withMaxValidationAttempts(maxValidationAttempts)
-          .withMaxCorrectionAttempts(maxCorrectionAttempts)
-          .withCompensationEnabled(compensationEnabled)
-          .withGlobalTimeout((int) timeout.getSeconds())
-          .build();
+      stateMachine =
+          AgentStateMachine.builder()
+              .withId(agentId + "-state-machine")
+              .withStandardTransitions()
+              .withMaxValidationAttempts(maxValidationAttempts)
+              .withMaxCorrectionAttempts(maxCorrectionAttempts)
+              .withCompensationEnabled(compensationEnabled)
+              .withGlobalTimeout((int) timeout.getSeconds())
+              .build();
     }
   }
 
-  /**
-   * Applies type-specific defaults based on AgentType.
-   */
+  /** Applies type-specific defaults based on AgentType. */
   private void applyTypeDefaults(AgentType type) {
     switch (type) {
       case VALIDATOR:
         this.validationEnabled = true;
         this.maxValidationAttempts = 3;
-        this.temperature = 0.1;  // More deterministic for validation
+        this.temperature = 0.1; // More deterministic for validation
         break;
 
       case CORRECTOR:
         this.correctionEnabled = true;
         this.maxCorrectionAttempts = 3;
-        this.temperature = 0.5;  // Moderate creativity for corrections
+        this.temperature = 0.5; // Moderate creativity for corrections
         break;
 
       case SUPERVISOR:
-        this.supervisorReviewRequired = false;  // Supervisors don't have supervisors
+        this.supervisorReviewRequired = false; // Supervisors don't have supervisors
         this.validationEnabled = true;
-        this.temperature = 0.3;  // Careful review
+        this.temperature = 0.3; // Careful review
         break;
 
       case COORDINATOR:
-        this.maxIterations = 20;  // Coordinators may need more iterations
-        this.timeout = Duration.ofMinutes(10);  // Longer timeout
+        this.maxIterations = 20; // Coordinators may need more iterations
+        this.timeout = Duration.ofMinutes(10); // Longer timeout
         break;
 
       case RESEARCHER:
-        this.maxIterations = 15;  // Research may need multiple passes
+        this.maxIterations = 15; // Research may need multiple passes
         this.timeout = Duration.ofMinutes(5);
-        this.temperature = 0.4;  // Balanced for research
+        this.temperature = 0.4; // Balanced for research
         break;
 
       case EXECUTOR:

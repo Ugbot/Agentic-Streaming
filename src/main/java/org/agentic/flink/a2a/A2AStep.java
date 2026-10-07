@@ -17,7 +17,8 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
  * to call it), {@code A2AStep} splices a remote agent into the stream graph at a fixed position —
  * for orchestrations like {@code localAgent → A2AStep(peer) → localAgent} where the delegation is
  * part of the topology, not a model choice. {@link #applyTo(DataStream)} keys the stream by A2A
- * {@code contextId} and runs an {@link A2ADelegatingProcessFunction}, returning the enriched stream.
+ * {@code contextId} and runs an {@link A2ADelegatingProcessFunction}, returning the enriched
+ * stream.
  *
  * <p>Serializable so it can be recorded on an {@link org.agentic.flink.job.AgentJob} and shipped in
  * the job graph. The default key selector groups by {@link AgentEvent} {@code correlationId} (then
@@ -53,8 +54,7 @@ public final class A2AStep implements Serializable {
   private A2AStep(Builder b) {
     this.spec = Objects.requireNonNull(b.spec, "spec");
     this.name = b.name == null ? spec.name() : b.name;
-    this.clientFactory =
-        b.clientFactory == null ? A2AClientFactory.discovering() : b.clientFactory;
+    this.clientFactory = b.clientFactory == null ? A2AClientFactory.discovering() : b.clientFactory;
     this.inputKey = b.inputKey;
     this.outputKey = b.outputKey == null ? "a2a." + name : b.outputKey;
     this.failOnError = b.failOnError;
@@ -63,7 +63,8 @@ public final class A2AStep implements Serializable {
     this.conversationStore = b.conversationStore;
     // Default async-operator timeout: a margin above the client's own deadline so the client
     // produces a proper timeout/error result first; the operator timeout is only a backstop.
-    this.asyncTimeoutMs = b.asyncTimeoutMs > 0 ? b.asyncTimeoutMs : spec.requestTimeoutMs() + 10_000L;
+    this.asyncTimeoutMs =
+        b.asyncTimeoutMs > 0 ? b.asyncTimeoutMs : spec.requestTimeoutMs() + 10_000L;
   }
 
   /** Convenience for a step delegating to the given peer with default mapping. */
@@ -83,7 +84,9 @@ public final class A2AStep implements Serializable {
     return clientFactory;
   }
 
-  /** AgentEvent data key holding the prompt; null = default resolution (input/result/output/prompt). */
+  /**
+   * AgentEvent data key holding the prompt; null = default resolution (input/result/output/prompt).
+   */
   public String inputKey() {
     return inputKey;
   }
@@ -112,8 +115,8 @@ public final class A2AStep implements Serializable {
   }
 
   /**
-   * Operator-level async timeout: the peer client already enforces its own deadline
-   * ({@link RemoteAgentSpec#requestTimeoutMs()}), so the Async-I/O timeout sits a margin above it as a
+   * Operator-level async timeout: the peer client already enforces its own deadline ({@link
+   * RemoteAgentSpec#requestTimeoutMs()}), so the Async-I/O timeout sits a margin above it as a
    * backstop — the client should produce a proper timeout/error result first.
    */
   long asyncTimeoutMs() {
@@ -121,8 +124,8 @@ public final class A2AStep implements Serializable {
   }
 
   /**
-   * Wire this step into a stream: keyBy({@code contextId}) → delegate to the remote agent → emit the
-   * enriched events. Chain steps by feeding the result into the next transform.
+   * Wire this step into a stream: keyBy({@code contextId}) → delegate to the remote agent → emit
+   * the enriched events. Chain steps by feeding the result into the next transform.
    */
   public SingleOutputStreamOperator<AgentEvent> applyTo(DataStream<AgentEvent> stream) {
     return stream
@@ -133,9 +136,9 @@ public final class A2AStep implements Serializable {
   }
 
   /**
-   * Alias for {@link #applyTo}: the blocking remote call runs inside a single keyed operator, so its
-   * keyed {@code ValueState} (remote contextId) is naturally correct across turns. Use this when the
-   * call latency is acceptable on the operator thread; use {@link #applyToAsync}/{@link
+   * Alias for {@link #applyTo}: the blocking remote call runs inside a single keyed operator, so
+   * its keyed {@code ValueState} (remote contextId) is naturally correct across turns. Use this
+   * when the call latency is acceptable on the operator thread; use {@link #applyToAsync}/{@link
    * #applyToStateful} when a slow peer must not stall the pipeline.
    */
   public SingleOutputStreamOperator<AgentEvent> applyToKeyed(DataStream<AgentEvent> stream) {
@@ -242,13 +245,19 @@ public final class A2AStep implements Serializable {
       return this;
     }
 
-    /** Max in-flight async remote calls per subtask for {@link #applyToAsync}/{@link #applyToStateful}. */
+    /**
+     * Max in-flight async remote calls per subtask for {@link #applyToAsync}/{@link
+     * #applyToStateful}.
+     */
     public Builder withCapacity(int capacity) {
       this.capacity = Math.max(1, capacity);
       return this;
     }
 
-    /** Shared store for cross-turn contextId continuity in {@link #applyToStateful} (else discovered). */
+    /**
+     * Shared store for cross-turn contextId continuity in {@link #applyToStateful} (else
+     * discovered).
+     */
     public Builder withConversationStore(ConversationStore conversationStore) {
       this.conversationStore = conversationStore;
       return this;

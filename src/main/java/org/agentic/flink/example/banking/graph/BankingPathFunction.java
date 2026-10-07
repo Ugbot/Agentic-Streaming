@@ -1,15 +1,13 @@
 package org.agentic.flink.example.banking.graph;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import org.agentic.flink.example.banking.BankingTurnContext;
 import org.agentic.flink.example.banking.TurnBrain;
 import org.agentic.flink.example.banking.env.EnvSession;
 import org.agentic.flink.example.banking.env.TurnSignals;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 

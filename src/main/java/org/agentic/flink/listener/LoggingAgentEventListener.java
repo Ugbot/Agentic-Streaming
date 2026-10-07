@@ -23,7 +23,10 @@ public final class LoggingAgentEventListener implements AgentEventListener {
       String agentId, String modelName, int responseLength, Long tokensUsed) {
     LOG.debug(
         "chat.response id={} model={} chars={} tokens={}",
-        agentId, modelName, responseLength, tokensUsed);
+        agentId,
+        modelName,
+        responseLength,
+        tokensUsed);
   }
 
   @Override
@@ -36,7 +39,11 @@ public final class LoggingAgentEventListener implements AgentEventListener {
       String agentId, String toolName, String toolCallId, boolean success, long durationMs) {
     LOG.info(
         "tool.end id={} tool={} callId={} success={} durationMs={}",
-        agentId, toolName, toolCallId, success, durationMs);
+        agentId,
+        toolName,
+        toolCallId,
+        success,
+        durationMs);
   }
 
   @Override
@@ -44,13 +51,16 @@ public final class LoggingAgentEventListener implements AgentEventListener {
       String agentId, String flowId, int itemsBefore, int itemsAfter, long durationMs) {
     LOG.info(
         "compaction id={} flow={} {} -> {} items in {}ms",
-        agentId, flowId, itemsBefore, itemsAfter, durationMs);
+        agentId,
+        flowId,
+        itemsBefore,
+        itemsAfter,
+        durationMs);
   }
 
   @Override
   public void onLongTermSync(String agentId, String flowId, int factsWritten) {
-    LOG.debug(
-        "longterm.sync id={} flow={} facts={}", agentId, flowId, factsWritten);
+    LOG.debug("longterm.sync id={} flow={} facts={}", agentId, flowId, factsWritten);
   }
 
   @Override
@@ -60,7 +70,8 @@ public final class LoggingAgentEventListener implements AgentEventListener {
 
   @Override
   public void onInference(String agentId, String modelName, String task, long durationMs) {
-    LOG.debug("inference id={} model={} task={} durationMs={}", agentId, modelName, task, durationMs);
+    LOG.debug(
+        "inference id={} model={} task={} durationMs={}", agentId, modelName, task, durationMs);
   }
 
   @Override

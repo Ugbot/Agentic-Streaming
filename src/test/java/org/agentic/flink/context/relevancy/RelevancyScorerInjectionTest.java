@@ -4,15 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.Scorer;
-import java.util.HashMap;
-import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -45,8 +45,7 @@ class RelevancyScorerInjectionTest {
 
     RelevancyScorer rs = new RelevancyScorer(scorer, setup);
     ContextItem item =
-        new ContextItem(
-            "user prefers SI units", ContextPriority.MUST, MemoryType.SHORT_TERM);
+        new ContextItem("user prefers SI units", ContextPriority.MUST, MemoryType.SHORT_TERM);
     double observed = rs.scoreRelevancy(item, "convert measurements").get();
     assertEquals(fixed, observed, 1e-9);
     assertEquals(1, calls.get());
@@ -70,8 +69,7 @@ class RelevancyScorerInjectionTest {
         };
     RelevancyScorer rs =
         new RelevancyScorer(
-            wildPair,
-            InferenceSetup.builder().withModelName("m").withModelUri("u").build());
+            wildPair, InferenceSetup.builder().withModelName("m").withModelUri("u").build());
     double observed =
         rs.scoreRelevancy(
                 new ContextItem("anything", ContextPriority.MUST, MemoryType.SHORT_TERM),

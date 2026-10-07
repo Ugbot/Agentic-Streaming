@@ -1,9 +1,6 @@
 package org.agentic.flink.storage.vector;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.storage.ReopenableStore;
-import org.agentic.flink.storage.VectorStore;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
@@ -16,17 +13,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.storage.ReopenableStore;
+import org.agentic.flink.storage.VectorStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link VectorStore} implementation backed by PostgreSQL + the
- * <a href="https://github.com/pgvector/pgvector">pgvector</a> extension.
+ * {@link VectorStore} implementation backed by PostgreSQL + the <a
+ * href="https://github.com/pgvector/pgvector">pgvector</a> extension.
  *
- * <p>Schema is created lazily on {@link #initialize(Map)} if {@code postgres.auto.create.tables}
- * is true (the default). Embeddings live in a {@code vector(dim)} column; metadata is stored as
- * {@code jsonb} for flexible querying. Cosine similarity is computed via the {@code <=>}
- * operator and converted to a "higher = more similar" score before returning to callers.
+ * <p>Schema is created lazily on {@link #initialize(Map)} if {@code postgres.auto.create.tables} is
+ * true (the default). Embeddings live in a {@code vector(dim)} column; metadata is stored as {@code
+ * jsonb} for flexible querying. Cosine similarity is computed via the {@code <=>} operator and
+ * converted to a "higher = more similar" score before returning to callers.
  *
  * <p>Requires the {@code postgres.dimension} configuration key on first initialize.
  */
@@ -63,8 +63,7 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
     hc.setJdbcUrl(jdbcUrl);
     hc.setUsername(username);
     hc.setPassword(password);
-    hc.setMaximumPoolSize(
-        Integer.parseInt(config.getOrDefault("postgres.pool.max.size", "10")));
+    hc.setMaximumPoolSize(Integer.parseInt(config.getOrDefault("postgres.pool.max.size", "10")));
     hc.setMinimumIdle(Integer.parseInt(config.getOrDefault("postgres.pool.min.idle", "2")));
     hc.setInitializationFailTimeout(1);
     this.dataSource = new HikariDataSource(hc);
@@ -81,15 +80,19 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
         Statement st = conn.createStatement()) {
       st.execute("CREATE EXTENSION IF NOT EXISTS vector");
       st.execute(
-          "CREATE TABLE IF NOT EXISTS " + tableName
+          "CREATE TABLE IF NOT EXISTS "
+              + tableName
               + " (id TEXT PRIMARY KEY, embedding vector("
               + dimension
               + ") NOT NULL, metadata JSONB NOT NULL DEFAULT '{}'::jsonb,"
               + " created_at TIMESTAMP NOT NULL DEFAULT now())");
       // ivfflat index is the standard pgvector choice for cosine.
       st.execute(
-          "CREATE INDEX IF NOT EXISTS " + tableName + "_embedding_cos_idx ON "
-              + tableName + " USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)");
+          "CREATE INDEX IF NOT EXISTS "
+              + tableName
+              + "_embedding_cos_idx ON "
+              + tableName
+              + " USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)");
     }
   }
 
@@ -105,7 +108,8 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
     try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
-                "INSERT INTO " + tableName
+                "INSERT INTO "
+                    + tableName
                     + " (id, embedding, metadata) VALUES (?, ?::vector, ?::jsonb)"
                     + " ON CONFLICT (id) DO UPDATE SET embedding = EXCLUDED.embedding,"
                     + " metadata = EXCLUDED.metadata, created_at = now()")) {
@@ -118,18 +122,19 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
 
   @Override
   public void storeEmbeddingsBatch(
-      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata)
-      throws Exception {
+      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata) throws Exception {
     if (embeddings == null || embeddings.isEmpty()) return;
     try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
-                "INSERT INTO " + tableName
+                "INSERT INTO "
+                    + tableName
                     + " (id, embedding, metadata) VALUES (?, ?::vector, ?::jsonb)"
                     + " ON CONFLICT (id) DO UPDATE SET embedding = EXCLUDED.embedding,"
                     + " metadata = EXCLUDED.metadata, created_at = now()")) {
       for (Map.Entry<String, float[]> e : embeddings.entrySet()) {
-        Map<String, Object> md = metadata == null ? Map.of() : metadata.getOrDefault(e.getKey(), Map.of());
+        Map<String, Object> md =
+            metadata == null ? Map.of() : metadata.getOrDefault(e.getKey(), Map.of());
         ps.setString(1, e.getKey());
         ps.setString(2, floatArrayToPgVector(e.getValue()));
         ps.setString(3, mapper().writeValueAsString(md));
@@ -147,9 +152,13 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
     try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
-                "SELECT id, metadata, embedding " + op + " ?::vector AS distance FROM "
+                "SELECT id, metadata, embedding "
+                    + op
+                    + " ?::vector AS distance FROM "
                     + tableName
-                    + " ORDER BY embedding " + op + " ?::vector ASC LIMIT ?")) {
+                    + " ORDER BY embedding "
+                    + op
+                    + " ?::vector ASC LIMIT ?")) {
       ps.setString(1, vec);
       ps.setString(2, vec);
       ps.setInt(3, Math.max(1, topK));
@@ -180,9 +189,14 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
     try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
             conn.prepareStatement(
-                "SELECT id, metadata, embedding " + op + " ?::vector AS distance FROM "
-                    + tableName + " WHERE metadata @> ?::jsonb"
-                    + " ORDER BY embedding " + op + " ?::vector ASC LIMIT ?")) {
+                "SELECT id, metadata, embedding "
+                    + op
+                    + " ?::vector AS distance FROM "
+                    + tableName
+                    + " WHERE metadata @> ?::jsonb"
+                    + " ORDER BY embedding "
+                    + op
+                    + " ?::vector ASC LIMIT ?")) {
       ps.setString(1, vec);
       ps.setString(2, filterJson);
       ps.setString(3, vec);
@@ -255,8 +269,7 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
   public void deleteByFlowId(String flowId) throws Exception {
     try (Connection conn = dataSource().getConnection();
         PreparedStatement ps =
-            conn.prepareStatement(
-                "DELETE FROM " + tableName + " WHERE metadata->>'flow_id' = ?")) {
+            conn.prepareStatement("DELETE FROM " + tableName + " WHERE metadata->>'flow_id' = ?")) {
       ps.setString(1, flowId);
       ps.executeUpdate();
     }
@@ -335,6 +348,7 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
     }
     markClosed();
   }
+
   private HikariDataSource dataSource() {
     ensureOpen();
     return dataSource;
@@ -344,7 +358,6 @@ public final class PgVectorStore extends ReopenableStore implements VectorStore 
     ensureOpen();
     return mapper;
   }
-
 
   // ---------- helpers ----------
 

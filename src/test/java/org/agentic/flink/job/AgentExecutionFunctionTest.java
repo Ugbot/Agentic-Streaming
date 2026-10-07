@@ -1,19 +1,18 @@
 package org.agentic.flink.job;
 
-import org.agentic.flink.llm.ChatSetup;
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
-import org.agentic.flink.dsl.Agent;
-import org.agentic.flink.statemachine.AgentState;
-import org.agentic.flink.statemachine.AgentStateMachine;
-import org.agentic.flink.statemachine.AgentTransition;
-import org.agentic.flink.tool.ToolRegistry;
 import java.io.*;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.llm.ChatSetup;
+import org.agentic.flink.statemachine.AgentState;
+import org.agentic.flink.statemachine.AgentStateMachine;
+import org.agentic.flink.statemachine.AgentTransition;
+import org.agentic.flink.tool.ToolRegistry;
 import org.apache.flink.cep.functions.PatternProcessFunction;
 import org.apache.flink.cep.functions.TimedOutPartialMatchHandler;
 import org.junit.jupiter.api.*;
@@ -24,11 +23,12 @@ import org.junit.jupiter.api.*;
  * <p>Because {@code AgentExecutionFunction} is a CEP {@link PatternProcessFunction}, full
  * integration testing requires a Flink MiniCluster with CEP infrastructure. These tests focus on
  * verifiable unit-level properties:
+ *
  * <ul>
- *   <li>Construction with Agent and ToolRegistry</li>
- *   <li>Serialization (required for Flink distribution across task managers)</li>
- *   <li>Type hierarchy: implements both {@link PatternProcessFunction} and
- *       {@link TimedOutPartialMatchHandler}</li>
+ *   <li>Construction with Agent and ToolRegistry
+ *   <li>Serialization (required for Flink distribution across task managers)
+ *   <li>Type hierarchy: implements both {@link PatternProcessFunction} and {@link
+ *       TimedOutPartialMatchHandler}
  * </ul>
  *
  * <p>All test data uses randomized identifiers via {@link UUID#randomUUID()}.
@@ -43,17 +43,16 @@ class AgentExecutionFunctionTest {
   /**
    * Builds a valid state machine with all required transitions for validation to pass.
    *
-   * <p>All transitions use only condition-free definitions (no {@code .when()} lambdas) so
-   * the resulting state machine is fully serializable, which is required for Flink distribution.
-   * The standard factory methods like {@code AgentTransition.validationFailedWithRetry()} use
+   * <p>All transitions use only condition-free definitions (no {@code .when()} lambdas) so the
+   * resulting state machine is fully serializable, which is required for Flink distribution. The
+   * standard factory methods like {@code AgentTransition.validationFailedWithRetry()} use
    * non-serializable {@code Predicate} lambdas, so we avoid them in favor of simple transitions.
    */
-  private static AgentStateMachine buildValidStateMachine(String id, int timeoutSec,
-      boolean compensation) {
+  private static AgentStateMachine buildValidStateMachine(
+      String id, int timeoutSec, boolean compensation) {
 
-    AgentStateMachine.Builder builder = AgentStateMachine.builder()
-        .withId(id)
-        .withGlobalTimeout(timeoutSec);
+    AgentStateMachine.Builder builder =
+        AgentStateMachine.builder().withId(id).withGlobalTimeout(timeoutSec);
 
     if (compensation) {
       // When compensation is enabled, FAILED is not terminal (it transitions to COMPENSATING)
@@ -61,113 +60,124 @@ class AgentExecutionFunctionTest {
     }
 
     // INITIALIZED transitions
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.INITIALIZED)
-        .to(AgentState.VALIDATING)
-        .on(AgentEventType.VALIDATION_REQUESTED)
-        .withDescription("Start validation from initialized")
-        .build());
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.INITIALIZED)
-        .to(AgentState.EXECUTING)
-        .on(AgentEventType.FLOW_STARTED)
-        .withDescription("Start execution from initialized")
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.INITIALIZED)
+            .to(AgentState.VALIDATING)
+            .on(AgentEventType.VALIDATION_REQUESTED)
+            .withDescription("Start validation from initialized")
+            .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.INITIALIZED)
+            .to(AgentState.EXECUTING)
+            .on(AgentEventType.FLOW_STARTED)
+            .withDescription("Start execution from initialized")
+            .build());
 
     // VALIDATING transitions (no lambdas)
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.VALIDATING)
-        .to(AgentState.EXECUTING)
-        .on(AgentEventType.VALIDATION_PASSED)
-        .withDescription("Validation passed")
-        .build());
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.VALIDATING)
-        .to(AgentState.CORRECTING)
-        .on(AgentEventType.VALIDATION_FAILED)
-        .withDescription("Validation failed, attempting correction")
-        .withPriority(10)
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.VALIDATING)
+            .to(AgentState.EXECUTING)
+            .on(AgentEventType.VALIDATION_PASSED)
+            .withDescription("Validation passed")
+            .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.VALIDATING)
+            .to(AgentState.CORRECTING)
+            .on(AgentEventType.VALIDATION_FAILED)
+            .withDescription("Validation failed, attempting correction")
+            .withPriority(10)
+            .build());
 
     // CORRECTING transitions
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.CORRECTING)
-        .to(AgentState.EXECUTING)
-        .on(AgentEventType.CORRECTION_COMPLETED)
-        .withDescription("Correction completed")
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.CORRECTING)
+            .to(AgentState.EXECUTING)
+            .on(AgentEventType.CORRECTION_COMPLETED)
+            .withDescription("Correction completed")
+            .build());
 
     // EXECUTING transitions
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.EXECUTING)
-        .to(AgentState.SUPERVISOR_REVIEW)
-        .on(AgentEventType.SUPERVISOR_REVIEW_REQUESTED)
-        .withDescription("Execution complete, supervisor review")
-        .withPriority(10)
-        .build());
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.EXECUTING)
-        .to(AgentState.COMPLETED)
-        .on(AgentEventType.FLOW_COMPLETED)
-        .withDescription("Execution complete, no review")
-        .withPriority(5)
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.EXECUTING)
+            .to(AgentState.SUPERVISOR_REVIEW)
+            .on(AgentEventType.SUPERVISOR_REVIEW_REQUESTED)
+            .withDescription("Execution complete, supervisor review")
+            .withPriority(10)
+            .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.EXECUTING)
+            .to(AgentState.COMPLETED)
+            .on(AgentEventType.FLOW_COMPLETED)
+            .withDescription("Execution complete, no review")
+            .withPriority(5)
+            .build());
 
     // SUPERVISOR_REVIEW transitions
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.SUPERVISOR_REVIEW)
-        .to(AgentState.COMPLETED)
-        .on(AgentEventType.SUPERVISOR_APPROVED)
-        .withDescription("Supervisor approved")
-        .build());
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.SUPERVISOR_REVIEW)
-        .to(AgentState.CORRECTING)
-        .on(AgentEventType.SUPERVISOR_REJECTED)
-        .withDescription("Supervisor rejected, correcting")
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.SUPERVISOR_REVIEW)
+            .to(AgentState.COMPLETED)
+            .on(AgentEventType.SUPERVISOR_APPROVED)
+            .withDescription("Supervisor approved")
+            .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.SUPERVISOR_REVIEW)
+            .to(AgentState.CORRECTING)
+            .on(AgentEventType.SUPERVISOR_REJECTED)
+            .withDescription("Supervisor rejected, correcting")
+            .build());
 
     // PAUSED transitions
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.PAUSED)
-        .to(AgentState.EXECUTING)
-        .on(AgentEventType.FLOW_RESUMED)
-        .withDescription("Resume from paused")
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.PAUSED)
+            .to(AgentState.EXECUTING)
+            .on(AgentEventType.FLOW_RESUMED)
+            .withDescription("Resume from paused")
+            .build());
 
     // OFFLOADING transitions
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.OFFLOADING)
-        .to(AgentState.EXECUTING)
-        .on(AgentEventType.STATE_OFFLOADED)
-        .withDescription("Return from offloading")
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.OFFLOADING)
+            .to(AgentState.EXECUTING)
+            .on(AgentEventType.STATE_OFFLOADED)
+            .withDescription("Return from offloading")
+            .build());
 
     if (compensation) {
       // FAILED -> COMPENSATING
-      builder.addTransition(AgentTransition.builder()
-          .from(AgentState.FAILED)
-          .to(AgentState.COMPENSATING)
-          .on(AgentEventType.COMPENSATION_REQUESTED)
-          .withDescription("Start compensation after failure")
-          .build());
+      builder.addTransition(
+          AgentTransition.builder()
+              .from(AgentState.FAILED)
+              .to(AgentState.COMPENSATING)
+              .on(AgentEventType.COMPENSATION_REQUESTED)
+              .withDescription("Start compensation after failure")
+              .build());
     }
 
     // COMPENSATING -> COMPENSATED (always present, even if not compensation-enabled,
     // because COMPENSATING is non-terminal in the AgentState enum)
-    builder.addTransition(AgentTransition.builder()
-        .from(AgentState.COMPENSATING)
-        .to(AgentState.COMPENSATED)
-        .on(AgentEventType.COMPENSATION_COMPLETED)
-        .withDescription("Compensation completed")
-        .build());
+    builder.addTransition(
+        AgentTransition.builder()
+            .from(AgentState.COMPENSATING)
+            .to(AgentState.COMPENSATED)
+            .on(AgentEventType.COMPENSATION_COMPLETED)
+            .withDescription("Compensation completed")
+            .build());
 
     return builder.build();
   }
 
-  /**
-   * Builds a minimal Agent with randomized id and a valid, serializable state machine.
-   */
+  /** Builds a minimal Agent with randomized id and a valid, serializable state machine. */
   private static Agent randomAgent() {
     String id = "agent-" + UUID.randomUUID().toString().substring(0, 8);
     int timeout = ThreadLocalRandom.current().nextInt(5, 120);
@@ -187,9 +197,7 @@ class AgentExecutionFunctionTest {
         .build();
   }
 
-  /**
-   * Builds a complex Agent with tools, validation, supervision, and compensation.
-   */
+  /** Builds a complex Agent with tools, validation, supervision, and compensation. */
   private static Agent complexAgent() {
     String id = "complex-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -228,11 +236,12 @@ class AgentExecutionFunctionTest {
     @DisplayName("should construct with complex agent and populated registry")
     void constructWithComplexAgent() {
       Agent agent = complexAgent();
-      ToolRegistry registry = ToolRegistry.builder()
-          .registerTool("web-search", "Search the web")
-          .registerTool("calculator", "Perform calculations")
-          .registerTool("database-query", "Query a database")
-          .build();
+      ToolRegistry registry =
+          ToolRegistry.builder()
+              .registerTool("web-search", "Search the web")
+              .registerTool("calculator", "Perform calculations")
+              .registerTool("database-query", "Query a database")
+              .build();
 
       AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
       assertNotNull(function);
@@ -302,10 +311,11 @@ class AgentExecutionFunctionTest {
     @DisplayName("should serialize and deserialize with complex agent and tools")
     void serializeWithComplexAgent() throws Exception {
       Agent agent = complexAgent();
-      ToolRegistry registry = ToolRegistry.builder()
-          .registerTool("web-search", "Search the web")
-          .registerTool("calculator", "Perform calculations")
-          .build();
+      ToolRegistry registry =
+          ToolRegistry.builder()
+              .registerTool("web-search", "Search the web")
+              .registerTool("calculator", "Perform calculations")
+              .build();
 
       AgentExecutionFunction original = new AgentExecutionFunction(agent, registry);
 
@@ -321,14 +331,15 @@ class AgentExecutionFunctionTest {
     void consistentSerializationSize() throws Exception {
       AgentStateMachine sm = buildValidStateMachine("deterministic-sm", 30, false);
 
-      Agent agent = Agent.builder()
-          .withId("deterministic-agent")
-          .withName("Deterministic")
-          .withSystemPrompt("Fixed prompt for size consistency test")
-          .withMaxIterations(5)
-          .withTimeout(Duration.ofSeconds(30))
-          .withStateMachine(sm)
-          .build();
+      Agent agent =
+          Agent.builder()
+              .withId("deterministic-agent")
+              .withName("Deterministic")
+              .withSystemPrompt("Fixed prompt for size consistency test")
+              .withMaxIterations(5)
+              .withTimeout(Duration.ofSeconds(30))
+              .withStateMachine(sm)
+              .build();
       ToolRegistry registry = ToolRegistry.empty();
 
       AgentExecutionFunction func1 = new AgentExecutionFunction(agent, registry);
@@ -337,7 +348,9 @@ class AgentExecutionFunctionTest {
       byte[] bytes1 = serialize(func1);
       byte[] bytes2 = serialize(func2);
 
-      assertEquals(bytes1.length, bytes2.length,
+      assertEquals(
+          bytes1.length,
+          bytes2.length,
           "Same configuration should produce same serialization size");
     }
 
@@ -371,21 +384,23 @@ class AgentExecutionFunctionTest {
       int maxIter = ThreadLocalRandom.current().nextInt(1, 50);
       AgentStateMachine sm = buildValidStateMachine(agentId + "-sm", 180, false);
 
-      Agent agent = Agent.builder()
-          .withId(agentId)
-          .withName("Preservation Test Agent")
-          .withSystemPrompt(prompt)
-          .withMaxIterations(maxIter)
-          .withTimeout(Duration.ofMinutes(3))
-          .withTools("tool-a", "tool-b")
-          .withValidationEnabled(true)
-          .withStateMachine(sm)
-          .build();
+      Agent agent =
+          Agent.builder()
+              .withId(agentId)
+              .withName("Preservation Test Agent")
+              .withSystemPrompt(prompt)
+              .withMaxIterations(maxIter)
+              .withTimeout(Duration.ofMinutes(3))
+              .withTools("tool-a", "tool-b")
+              .withValidationEnabled(true)
+              .withStateMachine(sm)
+              .build();
 
-      ToolRegistry registry = ToolRegistry.builder()
-          .registerTool("tool-a", "Tool A description")
-          .registerTool("tool-b", "Tool B description")
-          .build();
+      ToolRegistry registry =
+          ToolRegistry.builder()
+              .registerTool("tool-a", "Tool A description")
+              .registerTool("tool-b", "Tool B description")
+              .build();
 
       AgentExecutionFunction original = new AgentExecutionFunction(agent, registry);
 
@@ -395,7 +410,7 @@ class AgentExecutionFunctionTest {
       }
       AgentExecutionFunction deserialized;
       try (ObjectInputStream ois =
-               new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+          new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
         deserialized = (AgentExecutionFunction) ois.readObject();
       }
 
@@ -410,12 +425,13 @@ class AgentExecutionFunctionTest {
       String id = "compensation-" + UUID.randomUUID().toString().substring(0, 8);
       AgentStateMachine sm = buildValidStateMachine(id + "-sm", 30, true);
 
-      Agent agent = Agent.builder()
-          .withId(id)
-          .withSystemPrompt("Agent with saga compensation")
-          .withCompensationEnabled(true)
-          .withStateMachine(sm)
-          .build();
+      Agent agent =
+          Agent.builder()
+              .withId(id)
+              .withSystemPrompt("Agent with saga compensation")
+              .withCompensationEnabled(true)
+              .withStateMachine(sm)
+              .build();
 
       ToolRegistry registry = ToolRegistry.empty();
       AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
@@ -439,11 +455,12 @@ class AgentExecutionFunctionTest {
       String id = "no-tools-" + UUID.randomUUID().toString().substring(0, 8);
       AgentStateMachine sm = buildValidStateMachine(id + "-sm", 30, false);
 
-      Agent agent = Agent.builder()
-          .withId(id)
-          .withSystemPrompt("Agent without any tools")
-          .withStateMachine(sm)
-          .build();
+      Agent agent =
+          Agent.builder()
+              .withId(id)
+              .withSystemPrompt("Agent without any tools")
+              .withStateMachine(sm)
+              .build();
 
       ToolRegistry registry = ToolRegistry.empty();
       AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
@@ -455,18 +472,23 @@ class AgentExecutionFunctionTest {
     void agentWithLongPrompt() throws Exception {
       StringBuilder longPrompt = new StringBuilder();
       for (int i = 0; i < 1000; i++) {
-        longPrompt.append("Paragraph ").append(i).append(": ")
-            .append(UUID.randomUUID()).append(". ");
+        longPrompt
+            .append("Paragraph ")
+            .append(i)
+            .append(": ")
+            .append(UUID.randomUUID())
+            .append(". ");
       }
 
       String id = "long-prompt-" + UUID.randomUUID().toString().substring(0, 8);
       AgentStateMachine sm = buildValidStateMachine(id + "-sm", 30, false);
 
-      Agent agent = Agent.builder()
-          .withId(id)
-          .withSystemPrompt(longPrompt.toString())
-          .withStateMachine(sm)
-          .build();
+      Agent agent =
+          Agent.builder()
+              .withId(id)
+              .withSystemPrompt(longPrompt.toString())
+              .withStateMachine(sm)
+              .build();
 
       ToolRegistry registry = ToolRegistry.empty();
       AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
@@ -492,12 +514,13 @@ class AgentExecutionFunctionTest {
       String id = "many-tools-" + UUID.randomUUID().toString().substring(0, 8);
       AgentStateMachine sm = buildValidStateMachine(id + "-sm", 30, false);
 
-      Agent agent = Agent.builder()
-          .withId(id)
-          .withSystemPrompt("Agent with many tools")
-          .withTools(toolNames)
-          .withStateMachine(sm)
-          .build();
+      Agent agent =
+          Agent.builder()
+              .withId(id)
+              .withSystemPrompt("Agent with many tools")
+              .withTools(toolNames)
+              .withStateMachine(sm)
+              .build();
 
       ToolRegistry registry = registryBuilder.build();
       AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);

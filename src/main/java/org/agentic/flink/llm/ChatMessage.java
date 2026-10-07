@@ -8,8 +8,8 @@ import org.apache.flink.api.common.typeinfo.TypeInfo;
 /**
  * A single message in a chat conversation, decoupled from any vendor SDK.
  *
- * <p>{@code toolCallId} and {@code toolName} are only populated for {@link ChatRole#TOOL}
- * messages — they identify which tool call this message reports the result of.
+ * <p>{@code toolCallId} and {@code toolName} are only populated for {@link ChatRole#TOOL} messages
+ * — they identify which tool call this message reports the result of.
  */
 @TypeInfo(ChatMessage.Factory.class)
 public final class ChatMessage implements Serializable {

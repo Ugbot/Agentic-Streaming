@@ -1,5 +1,8 @@
 package org.agentic.flink.retrieve;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import org.agentic.flink.corpus.Corpus;
 import org.agentic.flink.corpus.CorpusSpec;
 import org.agentic.flink.embedding.EmbeddingClient;
@@ -14,9 +17,6 @@ import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.memory.vector.ScoredItem;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -40,8 +40,8 @@ import org.slf4j.LoggerFactory;
  *     .print();
  * }</pre>
  *
- * <p>The {@code rerank} stage is optional — calling {@code .answer} directly after {@code
- * .search} works fine; the top-k from the embedder is used as-is.
+ * <p>The {@code rerank} stage is optional — calling {@code .answer} directly after {@code .search}
+ * works fine; the top-k from the embedder is used as-is.
  */
 public final class RetrievalPipeline {
 
@@ -66,7 +66,8 @@ public final class RetrievalPipeline {
     public StageSearch embed(EmbeddingConnection conn, EmbeddingSetup defaultSetup) {
       Objects.requireNonNull(conn, "conn");
       DataStream<EmbeddedQuery> embedded =
-          upstream.process(new EmbedQueryFn(conn, defaultSetup))
+          upstream
+              .process(new EmbedQueryFn(conn, defaultSetup))
               .returns(EmbeddedQuery.class)
               .name("retrieve-embed");
       return new StageSearch(embedded);
@@ -84,7 +85,8 @@ public final class RetrievalPipeline {
     public StageRerank search(CorpusSpec corpusSpec, int k) {
       Objects.requireNonNull(corpusSpec, "corpusSpec");
       DataStream<QueryWithHits> hits =
-          upstream.process(new SearchFn(corpusSpec, k))
+          upstream
+              .process(new SearchFn(corpusSpec, k))
               .returns(QueryWithHits.class)
               .name("retrieve-search[" + corpusSpec.name() + "]");
       return new StageRerank(hits);
@@ -99,7 +101,8 @@ public final class RetrievalPipeline {
       Objects.requireNonNull(corpusSpec, "corpusSpec");
       Objects.requireNonNull(hot, "hot");
       DataStream<QueryWithHits> hits =
-          upstream.process(new HotColdSearchFn(corpusSpec, hot, k))
+          upstream
+              .process(new HotColdSearchFn(corpusSpec, hot, k))
               .returns(QueryWithHits.class)
               .name("retrieve-search-hotcold[" + corpusSpec.name() + "]");
       return new StageRerank(hits);
@@ -124,7 +127,8 @@ public final class RetrievalPipeline {
       Objects.requireNonNull(scorerConn, "scorerConn");
       Objects.requireNonNull(setup, "setup");
       DataStream<QueryWithHits> reranked =
-          upstream.process(new RerankFn(scorerConn, setup))
+          upstream
+              .process(new RerankFn(scorerConn, setup))
               .returns(QueryWithHits.class)
               .name("retrieve-rerank");
       return new StageAnswer(reranked);
@@ -142,7 +146,10 @@ public final class RetrievalPipeline {
     public DataStream<Answer> answer(ChatConnection conn, ChatSetup setup) {
       Objects.requireNonNull(conn, "conn");
       Objects.requireNonNull(setup, "setup");
-      return upstream.process(new AnswerFn(conn, setup)).returns(Answer.class).name("retrieve-answer");
+      return upstream
+          .process(new AnswerFn(conn, setup))
+          .returns(Answer.class)
+          .name("retrieve-answer");
     }
   }
 
@@ -246,9 +253,12 @@ public final class RetrievalPipeline {
         List<RetrievedPassage> passages = new ArrayList<>(hits.size());
         for (ScoredItem si : hits) {
           String text = si.getItem() == null ? "" : si.getItem().getContent();
-          String url = si.getItem() == null ? null
-              : (si.getItem().getMetadata() == null ? null
-                  : si.getItem().getMetadata().get("source_url"));
+          String url =
+              si.getItem() == null
+                  ? null
+                  : (si.getItem().getMetadata() == null
+                      ? null
+                      : si.getItem().getMetadata().get("source_url"));
           passages.add(new RetrievedPassage(si.getId(), text, si.getScore(), url));
         }
         out.collect(new QueryWithHits(q.getQuestion(), passages));
@@ -292,7 +302,9 @@ public final class RetrievalPipeline {
           String url =
               si.getItem() == null
                   ? null
-                  : (si.getItem().getMetadata() == null ? null : si.getItem().getMetadata().get("source_url"));
+                  : (si.getItem().getMetadata() == null
+                      ? null
+                      : si.getItem().getMetadata().get("source_url"));
           passages.add(new RetrievedPassage(si.getId(), text, si.getScore(), url));
         }
         out.collect(new QueryWithHits(q.getQuestion(), passages));

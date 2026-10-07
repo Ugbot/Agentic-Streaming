@@ -17,13 +17,13 @@ import org.apache.flink.core.memory.DataOutputView;
  *
  * <p>Use it for types Flink would otherwise Kryo — immutable value types (no no-arg ctor / {@code
  * final} fields) or POJOs carrying {@code Map<String,Object>} — by attaching it with {@link
- * org.apache.flink.api.common.typeinfo.TypeInfo @TypeInfo} + a {@link JsonTypeInfoFactory} subclass,
- * so Flink's {@code TypeExtractor} picks it up automatically for both stream elements and keyed
- * state (no per-call-site {@code .returns(...)}).
+ * org.apache.flink.api.common.typeinfo.TypeInfo @TypeInfo} + a {@link JsonTypeInfoFactory}
+ * subclass, so Flink's {@code TypeExtractor} picks it up automatically for both stream elements and
+ * keyed state (no per-call-site {@code .returns(...)}).
  *
- * <p>The {@code mutable} flag controls value-copy semantics: immutable types are copied by reference
- * (cheap, safe); mutable types (e.g. an event whose fields operators rewrite) are deep-copied via a
- * JSON round-trip so Flink's object reuse never aliases live state.
+ * <p>The {@code mutable} flag controls value-copy semantics: immutable types are copied by
+ * reference (cheap, safe); mutable types (e.g. an event whose fields operators rewrite) are
+ * deep-copied via a JSON round-trip so Flink's object reuse never aliases live state.
  *
  * @param <T> the value type
  */

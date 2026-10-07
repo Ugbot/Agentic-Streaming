@@ -1,5 +1,9 @@
 package org.agentic.flink.function;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -8,13 +12,9 @@ import org.agentic.flink.embedding.OllamaEmbeddingConnection;
 import org.agentic.flink.storage.StorageFactory;
 import org.agentic.flink.storage.VectorStore;
 import org.agentic.flink.tools.rag.SemanticSearchToolExecutor;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.OpenContext;
-import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
+import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,10 +27,11 @@ import org.slf4j.LoggerFactory;
  * result events with matched documents.
  *
  * <p><b>Expected input data fields:</b>
+ *
  * <ul>
- *   <li>{@code query} (required) - The search query text</li>
- *   <li>{@code max_results} (optional) - Maximum number of results to return, default 10</li>
- *   <li>{@code min_score} (optional) - Minimum similarity score threshold, default 0.7</li>
+ *   <li>{@code query} (required) - The search query text
+ *   <li>{@code max_results} (optional) - Maximum number of results to return, default 10
+ *   <li>{@code min_score} (optional) - Minimum similarity score threshold, default 0.7
  * </ul>
  */
 public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentEvent> {
@@ -47,8 +48,8 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
    *
    * @param config Configuration map for the embedding model and store
    * @param useDefaults If true, uses a deterministic {@link HashEmbeddingConnection} and a shared
-   *     in-memory {@link VectorStore} (zero infrastructure). If false, uses an
-   *     {@link OllamaEmbeddingConnection} plus a {@code StorageFactory}-selected vector store.
+   *     in-memory {@link VectorStore} (zero infrastructure). If false, uses an {@link
+   *     OllamaEmbeddingConnection} plus a {@code StorageFactory}-selected vector store.
    */
   public SemanticSearchFunction(Map<String, String> config, boolean useDefaults) {
     this.config = config != null ? config : new HashMap<>();
@@ -60,15 +61,17 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
     super.open(openContext);
 
     if (useDefaults) {
-      this.executor = new SemanticSearchToolExecutor(
-          config, new HashEmbeddingConnection(), DefaultRagComponents.sharedVectorStore());
+      this.executor =
+          new SemanticSearchToolExecutor(
+              config, new HashEmbeddingConnection(), DefaultRagComponents.sharedVectorStore());
     } else {
       String baseUrl = config.getOrDefault("baseUrl", ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
       VectorStore vectorStore =
           StorageFactory.createVectorStore(
               config.getOrDefault("vector.backend", "in-memory"), config);
-      this.executor = new SemanticSearchToolExecutor(
-          config, new OllamaEmbeddingConnection(baseUrl), vectorStore);
+      this.executor =
+          new SemanticSearchToolExecutor(
+              config, new OllamaEmbeddingConnection(baseUrl), vectorStore);
     }
 
     LOG.info("SemanticSearchFunction initialized: useDefaults={}, config={}", useDefaults, config);
@@ -81,8 +84,7 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
 
       // Extract required query
       Object queryObj = inputData != null ? inputData.get("query") : null;
-      if (queryObj == null || !(queryObj instanceof String)
-          || ((String) queryObj).isEmpty()) {
+      if (queryObj == null || !(queryObj instanceof String) || ((String) queryObj).isEmpty()) {
         AgentEvent failEvent = createResultEvent(input, AgentEventType.TOOL_CALL_FAILED);
         failEvent.setErrorMessage("Missing required field: query");
         failEvent.setErrorCode("MISSING_PARAMETER");
@@ -101,39 +103,48 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
       params.put("max_results", maxResults);
       params.put("min_score", minScore);
 
-      LOG.debug("Starting semantic search for flow={}, query='{}', maxResults={}, minScore={}",
-          input.getFlowId(), query, maxResults, minScore);
+      LOG.debug(
+          "Starting semantic search for flow={}, query='{}', maxResults={}, minScore={}",
+          input.getFlowId(),
+          query,
+          maxResults,
+          minScore);
 
       CompletableFuture<Object> executionFuture = executor.execute(params);
 
-      executionFuture.whenComplete((result, error) -> {
-        if (error != null) {
-          LOG.error("Semantic search failed for flow={}, query='{}'",
-              input.getFlowId(), query, error);
+      executionFuture.whenComplete(
+          (result, error) -> {
+            if (error != null) {
+              LOG.error(
+                  "Semantic search failed for flow={}, query='{}'",
+                  input.getFlowId(),
+                  query,
+                  error);
 
-          AgentEvent failEvent = createResultEvent(input, AgentEventType.TOOL_CALL_FAILED);
-          failEvent.setErrorMessage("Semantic search failed: " + error.getMessage());
-          failEvent.setErrorCode("SEARCH_ERROR");
-          resultFuture.complete(Collections.singleton(failEvent));
-        } else {
-          LOG.info("Semantic search completed for flow={}, query='{}'",
-              input.getFlowId(), query);
+              AgentEvent failEvent = createResultEvent(input, AgentEventType.TOOL_CALL_FAILED);
+              failEvent.setErrorMessage("Semantic search failed: " + error.getMessage());
+              failEvent.setErrorCode("SEARCH_ERROR");
+              resultFuture.complete(Collections.singleton(failEvent));
+            } else {
+              LOG.info(
+                  "Semantic search completed for flow={}, query='{}'", input.getFlowId(), query);
 
-          AgentEvent successEvent = createResultEvent(input, AgentEventType.TOOL_CALL_COMPLETED);
-          successEvent.putData("query", query);
+              AgentEvent successEvent =
+                  createResultEvent(input, AgentEventType.TOOL_CALL_COMPLETED);
+              successEvent.putData("query", query);
 
-          if (result instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> resultMap = (Map<String, Object>) result;
-            successEvent.putData("search_results", resultMap.get("results"));
-            successEvent.putData("result_count", resultMap.get("result_count"));
-          } else {
-            successEvent.putData("result", result != null ? result.toString() : "null");
-          }
+              if (result instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> resultMap = (Map<String, Object>) result;
+                successEvent.putData("search_results", resultMap.get("results"));
+                successEvent.putData("result_count", resultMap.get("result_count"));
+              } else {
+                successEvent.putData("result", result != null ? result.toString() : "null");
+              }
 
-          resultFuture.complete(Collections.singleton(successEvent));
-        }
-      });
+              resultFuture.complete(Collections.singleton(successEvent));
+            }
+          });
 
     } catch (Exception e) {
       LOG.error("Error initiating semantic search for flow={}", input.getFlowId(), e);
@@ -156,8 +167,8 @@ public class SemanticSearchFunction extends RichAsyncFunction<AgentEvent, AgentE
   }
 
   private AgentEvent createResultEvent(AgentEvent input, AgentEventType eventType) {
-    AgentEvent event = new AgentEvent(
-        input.getFlowId(), input.getUserId(), input.getAgentId(), eventType);
+    AgentEvent event =
+        new AgentEvent(input.getFlowId(), input.getUserId(), input.getAgentId(), eventType);
     event.setCurrentStage("semantic_search");
     event.setCorrelationId(input.getCorrelationId());
     event.setParentFlowId(input.getParentFlowId());

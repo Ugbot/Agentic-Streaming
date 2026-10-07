@@ -22,14 +22,14 @@ import org.slf4j.LoggerFactory;
  * the originating {@link VectorEntry}s in Flink state. The graph is a transient acceleration
  * structure that is <b>per key</b>: the MapState is keyed, so each Flink key owns its own set of
  * vectors and its own graph. Because {@code bind()} runs in {@code open()} where no key is set,
- * nothing is rebuilt there. Instead every operation first resolves the current key's graph:
- * a keyed {@code ValueState<String>} holds a per-key graph id, and a bounded LRU of graphs keyed
- * by that id is consulted; on a miss (first access for that key, or after a restore) the graph is
- * rebuilt by replaying that key's MapState (see {@link #graphForCurrentKey}). This keeps vectors
- * of different keys isolated and makes state restored from a checkpoint searchable again.
- * For larger graphs swap in a JVector- or Lucene-HNSW-backed {@link VectorMemorySpec} via the
- * {@code ServiceLoader} path — the abstraction here is identical. For a non-Flink (plain JVM) host,
- * use {@link InMemoryHnswVectorMemory}, which shares the same {@link HnswGraph}.
+ * nothing is rebuilt there. Instead every operation first resolves the current key's graph: a keyed
+ * {@code ValueState<String>} holds a per-key graph id, and a bounded LRU of graphs keyed by that id
+ * is consulted; on a miss (first access for that key, or after a restore) the graph is rebuilt by
+ * replaying that key's MapState (see {@link #graphForCurrentKey}). This keeps vectors of different
+ * keys isolated and makes state restored from a checkpoint searchable again. For larger graphs swap
+ * in a JVector- or Lucene-HNSW-backed {@link VectorMemorySpec} via the {@code ServiceLoader} path —
+ * the abstraction here is identical. For a non-Flink (plain JVM) host, use {@link
+ * InMemoryHnswVectorMemory}, which shares the same {@link HnswGraph}.
  */
 public final class FlinkStateHnswVectorMemory implements VectorMemory {
 
@@ -99,8 +99,10 @@ public final class FlinkStateHnswVectorMemory implements VectorMemory {
   public void put(VectorEntry entry) throws Exception {
     if (entry.getEmbedding().length != dimension) {
       throw new IllegalArgumentException(
-          "Embedding dimension " + entry.getEmbedding().length
-              + " does not match configured dimension " + dimension);
+          "Embedding dimension "
+              + entry.getEmbedding().length
+              + " does not match configured dimension "
+              + dimension);
     }
     HnswGraph graph = graphForCurrentKey();
     state.put(entry.getId(), entry);
@@ -140,8 +142,8 @@ public final class FlinkStateHnswVectorMemory implements VectorMemory {
   }
 
   /**
-   * Resolves the graph of the key currently set on the keyed state backend, rebuilding it from
-   * that key's MapState when it is not cached.
+   * Resolves the graph of the key currently set on the keyed state backend, rebuilding it from that
+   * key's MapState when it is not cached.
    */
   private HnswGraph graphForCurrentKey() throws Exception {
     String graphId = graphIdState.value();
@@ -177,7 +179,8 @@ public final class FlinkStateHnswVectorMemory implements VectorMemory {
     if (count > 0) {
       LOG.info(
           "FlinkStateHnswVectorMemory rebuilt per-key graph from MapState: {} vectors in {} ms",
-          count, durationMs);
+          count,
+          durationMs);
     }
     return graph;
   }
@@ -214,14 +217,24 @@ public final class FlinkStateHnswVectorMemory implements VectorMemory {
       ValueStateDescriptor<String> graphIdDescriptor =
           new ValueStateDescriptor<>(GRAPH_ID_STATE, String.class);
       return new FlinkStateHnswVectorMemory(
-          rc.getMapState(descriptor), rc.getState(graphIdDescriptor), dimension, config,
+          rc.getMapState(descriptor),
+          rc.getState(graphIdDescriptor),
+          dimension,
+          config,
           maxCachedKeys);
     }
 
     @Override
     public String providerName() {
-      return "FlinkStateHnswVectorMemory(d=" + dimension + ", M=" + config.getM()
-          + ", beam=" + config.getBeamWidth() + ", search=" + config.getSearchBeam() + ")";
+      return "FlinkStateHnswVectorMemory(d="
+          + dimension
+          + ", M="
+          + config.getM()
+          + ", beam="
+          + config.getBeamWidth()
+          + ", search="
+          + config.getSearchBeam()
+          + ")";
     }
   }
 }

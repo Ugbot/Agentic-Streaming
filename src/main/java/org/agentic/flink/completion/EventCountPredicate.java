@@ -1,10 +1,10 @@
 package org.agentic.flink.completion;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 
 /**
  * A goal predicate that counts events of a specific {@link AgentEventType} and checks whether the
@@ -45,8 +45,7 @@ public class EventCountPredicate implements GoalPredicate, Serializable {
   }
 
   @Override
-  public double getConfidence(
-      Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
+  public double getConfidence(Map<String, Object> currentState, Iterable<AgentEvent> eventHistory) {
     int count = countMatching(eventHistory);
     return Math.min(1.0, (double) count / targetCount);
   }

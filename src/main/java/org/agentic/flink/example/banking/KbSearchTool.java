@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Keyword (BM25-ish) knowledge-base search for the CS agent, over the public {@code kb/documents}
- * JSON files ({@code {id, title, content}}). A {@link ToolExecutor} the agent calls as
- * {@code kb_search(query, top_k)}.
+ * JSON files ({@code {id, title, content}}). A {@link ToolExecutor} the agent calls as {@code
+ * kb_search(query, top_k)}.
  *
  * <p>Deliberately dependency-free (no Redis/embeddings) so the demo runs with only an LLM key — the
  * "swap" to the template's Redis + gemini-embedding vector index is a drop-in replacement behind
@@ -47,9 +47,7 @@ public final class KbSearchTool implements ToolExecutor {
       for (File f : files) {
         try {
           Map<?, ?> m = mapper.readValue(Files.readAllBytes(Path.of(f.getPath())), Map.class);
-          docs.add(
-              new Doc(
-                  str(m.get("id")), str(m.get("title")), str(m.get("content"))));
+          docs.add(new Doc(str(m.get("id")), str(m.get("title")), str(m.get("content"))));
         } catch (IOException e) {
           LOG.warn("Skipping unreadable KB doc {}: {}", f.getName(), e.getMessage());
         }
@@ -98,7 +96,9 @@ public final class KbSearchTool implements ToolExecutor {
       Map<String, Object> row = new LinkedHashMap<>();
       row.put("doc_id", d.id);
       row.put("title", d.title);
-      row.put("content", d.content.length() > MAX_CONTENT ? d.content.substring(0, MAX_CONTENT) : d.content);
+      row.put(
+          "content",
+          d.content.length() > MAX_CONTENT ? d.content.substring(0, MAX_CONTENT) : d.content);
       out.add(row);
     }
     return out;

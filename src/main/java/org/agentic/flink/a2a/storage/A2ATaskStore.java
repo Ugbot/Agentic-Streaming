@@ -14,8 +14,8 @@ import org.agentic.flink.a2a.A2ATaskState;
  * <p>The Quarkus gateway creates an {@link A2ATask} per inbound request and updates it as the Flink
  * job reports progress, serving {@code tasks/get}, resubscribe, and push notifications from this
  * store. Mirrors the {@link org.agentic.flink.storage.LongTermMemoryStore} convention: backends are
- * {@code initialize(config)}-d and discovered via {@link java.util.ServiceLoader} /
- * {@link A2ATaskStoreFactory}. Built-ins: {@code memory}, {@code postgres}, {@code redis}.
+ * {@code initialize(config)}-d and discovered via {@link java.util.ServiceLoader} / {@link
+ * A2ATaskStoreFactory}. Built-ins: {@code memory}, {@code postgres}, {@code redis}.
  */
 public interface A2ATaskStore extends AutoCloseable {
 

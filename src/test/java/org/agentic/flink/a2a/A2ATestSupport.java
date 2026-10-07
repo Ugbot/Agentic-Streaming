@@ -22,12 +22,19 @@ final class A2ATestSupport {
             .withId("sm-" + UUID.randomUUID())
             .withInitialState(AgentState.INITIALIZED);
     b.addTransition(t(AgentState.INITIALIZED, AgentState.EXECUTING, AgentEventType.FLOW_STARTED));
-    b.addTransition(t(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED));
-    b.addTransition(t(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED));
-    b.addTransition(t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
-    b.addTransition(t(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED));
     b.addTransition(
-        t(AgentState.EXECUTING, AgentState.SUPERVISOR_REVIEW, AgentEventType.SUPERVISOR_REVIEW_REQUESTED));
+        t(AgentState.EXECUTING, AgentState.VALIDATING, AgentEventType.VALIDATION_REQUESTED));
+    b.addTransition(
+        t(AgentState.VALIDATING, AgentState.CORRECTING, AgentEventType.VALIDATION_FAILED));
+    b.addTransition(
+        t(AgentState.VALIDATING, AgentState.COMPLETED, AgentEventType.VALIDATION_PASSED));
+    b.addTransition(
+        t(AgentState.CORRECTING, AgentState.EXECUTING, AgentEventType.CORRECTION_COMPLETED));
+    b.addTransition(
+        t(
+            AgentState.EXECUTING,
+            AgentState.SUPERVISOR_REVIEW,
+            AgentEventType.SUPERVISOR_REVIEW_REQUESTED));
     b.addTransition(
         t(AgentState.SUPERVISOR_REVIEW, AgentState.COMPLETED, AgentEventType.SUPERVISOR_APPROVED));
     b.addTransition(t(AgentState.PAUSED, AgentState.EXECUTING, AgentEventType.FLOW_RESUMED));

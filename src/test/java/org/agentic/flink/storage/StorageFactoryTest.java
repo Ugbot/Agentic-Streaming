@@ -2,9 +2,9 @@ package org.agentic.flink.storage;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import org.agentic.flink.storage.memory.InMemoryShortTermStore;
 import java.util.HashMap;
 import java.util.Map;
+import org.agentic.flink.storage.memory.InMemoryShortTermStore;
 import org.junit.jupiter.api.*;
 
 /**
@@ -101,8 +101,7 @@ class StorageFactoryTest {
 
     IllegalStateException e =
         assertThrows(
-            IllegalStateException.class,
-            () -> StorageFactory.createLongTermStore("redis", config));
+            IllegalStateException.class, () -> StorageFactory.createLongTermStore("redis", config));
     assertTrue(e.getMessage().contains("127.0.0.1:" + closedPort), e.getMessage());
   }
 

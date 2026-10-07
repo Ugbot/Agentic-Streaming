@@ -12,9 +12,9 @@ import org.slf4j.LoggerFactory;
  * PythonAction} whose {@link #events()} contains the inferred event type.
  *
  * <p>The Python callable is invoked as {@code fn(event, ctx)} where {@code event} is the routed
- * element (passed through to Python as-is) and {@code ctx} is a {@link Map} of contextual state
- * the operator chooses to expose (agent id, processing time, key, etc.). PEMJA marshals JVM
- * collections to native Python types automatically.
+ * element (passed through to Python as-is) and {@code ctx} is a {@link Map} of contextual state the
+ * operator chooses to expose (agent id, processing time, key, etc.). PEMJA marshals JVM collections
+ * to native Python types automatically.
  */
 public final class PythonAction implements Serializable {
 

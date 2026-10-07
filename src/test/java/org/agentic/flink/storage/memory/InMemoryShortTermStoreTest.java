@@ -2,11 +2,11 @@ package org.agentic.flink.storage.memory;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.*;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.context.core.ContextPriority;
 import org.agentic.flink.context.core.MemoryType;
 import org.agentic.flink.storage.StorageTier;
-import java.util.*;
 import org.junit.jupiter.api.*;
 
 /**

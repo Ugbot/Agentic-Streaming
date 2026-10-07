@@ -7,11 +7,11 @@ import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.tools.ToolExecutor;
 
 /**
- * Lets the agent discover its session-scoped environment tools at runtime:
- * {@code list_env_tools()} returns the OpenAI-style schemas the harness granted for the current
- * A2A {@code contextId}. Paired with {@link EnvApiToolExecutor#fallback} ({@code call_env_tool}),
- * this exposes the dynamic, per-session env toolset to the LLM through two stable tools — no need
- * to pre-register every env tool on the agent.
+ * Lets the agent discover its session-scoped environment tools at runtime: {@code list_env_tools()}
+ * returns the OpenAI-style schemas the harness granted for the current A2A {@code contextId}.
+ * Paired with {@link EnvApiToolExecutor#fallback} ({@code call_env_tool}), this exposes the
+ * dynamic, per-session env toolset to the LLM through two stable tools — no need to pre-register
+ * every env tool on the agent.
  */
 public final class ListEnvToolsExecutor implements ToolExecutor {
   private static final long serialVersionUID = 1L;

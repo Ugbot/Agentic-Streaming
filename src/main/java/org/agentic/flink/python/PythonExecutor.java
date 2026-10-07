@@ -8,8 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Thin wrapper around a PEMJA {@code PythonInterpreter}. One executor instance per task slot;
- * keeps the embedded interpreter warm across invocations, and caches unpickled callables so the
+ * Thin wrapper around a PEMJA {@code PythonInterpreter}. One executor instance per task slot; keeps
+ * the embedded interpreter warm across invocations, and caches unpickled callables so the
  * cloudpickle cost is paid once per registered tool / action.
  *
  * <p>PEMJA itself is an <b>optional</b> dependency. If {@code com.alibaba.pemja.PythonInterpreter}
@@ -68,22 +68,27 @@ public final class PythonExecutor implements AutoCloseable {
     try {
       Class<?> configCls = Class.forName(PEMJA_CONFIG_CLASS);
       Object builder = configCls.getMethod("newBuilder").invoke(null);
-      builder = builder.getClass().getMethod("setPythonExec", String.class).invoke(builder,
-          pythonExec);
+      builder =
+          builder.getClass().getMethod("setPythonExec", String.class).invoke(builder, pythonExec);
       if (!pythonPaths.isEmpty()) {
-        builder = builder.getClass().getMethod("addPythonPaths", String[].class).invoke(builder,
-            (Object) pythonPaths.toArray(new String[0]));
+        builder =
+            builder
+                .getClass()
+                .getMethod("addPythonPaths", String[].class)
+                .invoke(builder, (Object) pythonPaths.toArray(new String[0]));
       }
       Object config = builder.getClass().getMethod("build").invoke(builder);
       Class<?> interpCls = Class.forName(PEMJA_INTERPRETER_CLASS);
       interpreter = interpCls.getConstructor(configCls).newInstance(config);
       exec("import cloudpickle, base64");
       exec("_AGFLINK_REG = {}");
-      exec("def _agflink_load(handle, b64):\n"
-          + "    _AGFLINK_REG[handle] = cloudpickle.loads(base64.b64decode(b64))\n");
-      exec("def _agflink_call(handle, args, kwargs):\n"
-          + "    fn = _AGFLINK_REG[handle]\n"
-          + "    return fn(*args, **(kwargs or {}))\n");
+      exec(
+          "def _agflink_load(handle, b64):\n"
+              + "    _AGFLINK_REG[handle] = cloudpickle.loads(base64.b64decode(b64))\n");
+      exec(
+          "def _agflink_call(handle, args, kwargs):\n"
+              + "    fn = _AGFLINK_REG[handle]\n"
+              + "    return fn(*args, **(kwargs or {}))\n");
       LOG.info("PythonExecutor opened: pythonExec={}, paths={}", pythonExec, pythonPaths);
     } catch (ReflectiveOperationException e) {
       throw new IllegalStateException("Failed to initialize PEMJA interpreter: " + e, e);
@@ -91,8 +96,8 @@ public final class PythonExecutor implements AutoCloseable {
   }
 
   /**
-   * Deserialize a cloudpickled callable, register it under an opaque handle, and return the
-   * handle. Subsequent calls to {@link #invoke(String, List, Map)} reuse the cached callable.
+   * Deserialize a cloudpickled callable, register it under an opaque handle, and return the handle.
+   * Subsequent calls to {@link #invoke(String, List, Map)} reuse the cached callable.
    */
   public synchronized String register(String cloudpickleB64) {
     require();
@@ -108,7 +113,8 @@ public final class PythonExecutor implements AutoCloseable {
     if (!registeredHandles.containsKey(handle)) {
       throw new IllegalArgumentException("Unknown Python handle: " + handle);
     }
-    return invokeFunction("_agflink_call",
+    return invokeFunction(
+        "_agflink_call",
         new Object[] {handle, args == null ? List.of() : args, kwargs == null ? Map.of() : kwargs});
   }
 
@@ -150,7 +156,8 @@ public final class PythonExecutor implements AutoCloseable {
 
   private Object invokeFunction(String name, Object[] args) {
     try {
-      return interpreter.getClass()
+      return interpreter
+          .getClass()
           .getMethod("invoke", String.class, Object[].class)
           .invoke(interpreter, name, args);
     } catch (ReflectiveOperationException e) {

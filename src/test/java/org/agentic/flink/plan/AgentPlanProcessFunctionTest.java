@@ -1,20 +1,18 @@
 package org.agentic.flink.plan;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.flink.configuration.Configuration;
+import org.agentic.flink.tools.ToolExecutor;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
@@ -26,8 +24,7 @@ class AgentPlanProcessFunctionTest {
   @Test
   void passThroughWhenNoActions() throws Exception {
     AgentPlan plan =
-        new AgentPlan(
-            "agent-" + UUID.randomUUID(), null, null, null, null, null, null, null);
+        new AgentPlan("agent-" + UUID.randomUUID(), null, null, null, null, null, null, null);
     AgentPlanProcessFunction<String> fn = new AgentPlanProcessFunction<>(plan);
     fn.open((OpenContext) null);
 
@@ -44,10 +41,14 @@ class AgentPlanProcessFunctionTest {
   void javaToolRegisteredFromPlan() throws Exception {
     ToolSpec ts =
         new ToolSpec(
-            ToolSpec.KIND_JAVA, "echo", "echo-desc", EchoTool.class.getName(), Map.of(), null,
+            ToolSpec.KIND_JAVA,
+            "echo",
+            "echo-desc",
+            EchoTool.class.getName(),
+            Map.of(),
+            null,
             null);
-    AgentPlan plan =
-        new AgentPlan("a", null, null, null, List.of(ts), null, null, null);
+    AgentPlan plan = new AgentPlan("a", null, null, null, List.of(ts), null, null, null);
     AgentPlanProcessFunction<String> fn = new AgentPlanProcessFunction<>(plan);
     fn.open((OpenContext) null);
 
@@ -74,8 +75,7 @@ class AgentPlanProcessFunctionTest {
   @Test
   void inferEventTypeFromTypeKey() {
     assertEquals(
-        "ticket",
-        AgentPlanProcessFunction.inferEventType(Map.of("type", "ticket", "body", "x")));
+        "ticket", AgentPlanProcessFunction.inferEventType(Map.of("type", "ticket", "body", "x")));
     assertEquals("String", AgentPlanProcessFunction.inferEventType("plain"));
     assertEquals("null", AgentPlanProcessFunction.inferEventType(null));
   }
@@ -149,8 +149,7 @@ class AgentPlanProcessFunctionTest {
     }
 
     @Override
-    public <X> void output(
-        org.apache.flink.util.OutputTag<X> outputTag, X value) {
+    public <X> void output(org.apache.flink.util.OutputTag<X> outputTag, X value) {
       // no-op
     }
 

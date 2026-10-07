@@ -14,8 +14,9 @@ import org.agentic.flink.core.AgentEvent;
  *
  * <p>The remote {@code contextId} (A2A conversation continuity) is carried on the event under
  * {@link #contextIdKey(A2AStep)} rather than in keyed state, so it can ride through the stateless
- * async operator: a keyed pre-step stamps the stored contextId on, the async operator forwards it to
- * the peer and writes the peer's (possibly new) contextId back, and a keyed post-step persists it.
+ * async operator: a keyed pre-step stamps the stored contextId on, the async operator forwards it
+ * to the peer and writes the peer's (possibly new) contextId back, and a keyed post-step persists
+ * it.
  */
 final class A2AStepSupport {
 
@@ -26,7 +27,9 @@ final class A2AStepSupport {
     return step.outputKey() + ".contextId";
   }
 
-  /** Resolve the prompt text for the peer from the event, honoring the step's configured inputKey. */
+  /**
+   * Resolve the prompt text for the peer from the event, honoring the step's configured inputKey.
+   */
   static String resolveInput(A2AStep step, AgentEvent event) {
     Map<String, Object> data = event.getData();
     if (data == null) {
@@ -49,7 +52,9 @@ final class A2AStepSupport {
     return null;
   }
 
-  /** Build a USER message with the input as a text part, continuing the given contextId if present. */
+  /**
+   * Build a USER message with the input as a text part, continuing the given contextId if present.
+   */
   static A2AMessage buildMessage(String input, String contextId) {
     return new A2AMessage(
         A2AMessage.Role.USER,
@@ -65,7 +70,8 @@ final class A2AStepSupport {
     A2AMessage message = buildMessage(input, contextId);
     return step.spec().streaming()
         ? client.stream(message, t -> {})
-        : client.sendAndAwait(message, step.spec().pollIntervalMs(), step.spec().requestTimeoutMs());
+        : client.sendAndAwait(
+            message, step.spec().pollIntervalMs(), step.spec().requestTimeoutMs());
   }
 
   /** Flatten a task's artifact text parts. */

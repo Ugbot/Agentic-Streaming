@@ -13,8 +13,8 @@ import org.apache.flink.util.Collector;
 
 /**
  * Base class for every framework process function. Wraps a {@link KeyedBroadcastProcessFunction}
- * that consumes a keyed input alongside a broadcast stream of {@link ControlMessage}s, hiding
- * the boilerplate so subclasses only need to implement {@link #onElement}.
+ * that consumes a keyed input alongside a broadcast stream of {@link ControlMessage}s, hiding the
+ * boilerplate so subclasses only need to implement {@link #onElement}.
  *
  * <p>For free, subclasses get:
  *
@@ -26,8 +26,8 @@ import org.apache.flink.util.Collector;
  * </ul>
  *
  * <p>The hot path overhead when debug is OFF is one {@link ReadOnlyBroadcastState#get} call plus
- * two comparisons. When debug is ON, {@link #emitDebug} pays for the {@link DebugEvent}
- * allocation plus a side-output emission.
+ * two comparisons. When debug is ON, {@link #emitDebug} pays for the {@link DebugEvent} allocation
+ * plus a side-output emission.
  *
  * @param <K> key type
  * @param <IN> keyed input element type
@@ -49,8 +49,8 @@ public abstract class AgenticKeyedProcessFunction<K, IN, OUT>
   }
 
   /**
-   * Implement the per-element behaviour. Identical contract to
-   * {@link KeyedBroadcastProcessFunction#processElement} but with the broadcast plumbing handled.
+   * Implement the per-element behaviour. Identical contract to {@link
+   * KeyedBroadcastProcessFunction#processElement} but with the broadcast plumbing handled.
    */
   protected abstract void onElement(IN value, ReadOnlyContext ctx, Collector<OUT> out)
       throws Exception;

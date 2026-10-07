@@ -1,15 +1,12 @@
 package org.agentic.flink.job;
 
-import org.agentic.flink.cep.CepPatternBuilder;
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
-import org.agentic.flink.dsl.Agent;
-import org.agentic.flink.dsl.SupervisorChain;
-import org.agentic.flink.config.AgenticFlinkConfig;
-import org.agentic.flink.tool.ToolRegistry;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import org.agentic.flink.config.AgenticFlinkConfig;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.dsl.SupervisorChain;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.cep.CEP;
 import org.apache.flink.cep.PatternStream;
@@ -28,16 +25,18 @@ import org.slf4j.LoggerFactory;
  * executable Flink pipelines with CEP patterns, storage backends, and routing logic.
  *
  * <p><b>Core Responsibilities:</b>
+ *
  * <ul>
- *   <li>Wire agents to CEP patterns based on their state machines</li>
- *   <li>Route events through supervisor chains with escalation logic</li>
- *   <li>Connect storage backends (PostgreSQL, Redis) for state persistence</li>
- *   <li>Set up tool execution infrastructure</li>
- *   <li>Handle internal vs external (Kafka) event routing</li>
- *   <li>Generate side outputs for monitoring and debugging</li>
+ *   <li>Wire agents to CEP patterns based on their state machines
+ *   <li>Route events through supervisor chains with escalation logic
+ *   <li>Connect storage backends (PostgreSQL, Redis) for state persistence
+ *   <li>Set up tool execution infrastructure
+ *   <li>Handle internal vs external (Kafka) event routing
+ *   <li>Generate side outputs for monitoring and debugging
  * </ul>
  *
  * <p><b>Basic Usage:</b>
+ *
  * <pre>{@code
  * // 1. Define agents
  * Agent executor = Agent.builder()
@@ -64,6 +63,7 @@ import org.slf4j.LoggerFactory;
  * }</pre>
  *
  * <p><b>With Supervisor Chain:</b>
+ *
  * <pre>{@code
  * SupervisorChain chain = SupervisorChain.builder()
  *     .withId("quality-chain")
@@ -84,21 +84,19 @@ import org.slf4j.LoggerFactory;
  * }</pre>
  *
  * <p><b>Execution model.</b> Single and multi agent pipelines run the LLM/tool loop on a Flink
- * async operator ({@code AsyncDataStream.unorderedWait}) fed by the keyed CEP dispatcher, so
- * the CEP operator never blocks and checkpoints proceed while turns are in flight. The async
- * timeout is {@link Agent#getTimeout()} (default
- * {@link org.agentic.flink.stream.AgentExecutionFunction#DEFAULT_TIMEOUT}) and cancels the
- * running execution. Supervisor chain tiers still execute synchronously inside the CEP
- * operator (see {@link SupervisorTierFunction} for the checkpoint impact); size their
- * {@code Agent.timeout} accordingly.
+ * async operator ({@code AsyncDataStream.unorderedWait}) fed by the keyed CEP dispatcher, so the
+ * CEP operator never blocks and checkpoints proceed while turns are in flight. The async timeout is
+ * {@link Agent#getTimeout()} (default {@link
+ * org.agentic.flink.stream.AgentExecutionFunction#DEFAULT_TIMEOUT}) and cancels the running
+ * execution. Supervisor chain tiers still execute synchronously inside the CEP operator (see {@link
+ * SupervisorTierFunction} for the checkpoint impact); size their {@code Agent.timeout} accordingly.
  *
  * @author Agentic Flink Team
  * @see AgentJob
  * @see Agent
  * @see SupervisorChain
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
- *     {@link org.agentic.flink.runtime.WorkflowTurnFunction} with
- *     {@code KeyedConversationLog}.
+ *     {@link org.agentic.flink.runtime.WorkflowTurnFunction} with {@code KeyedConversationLog}.
  */
 @Deprecated
 public class AgentJobGenerator implements Serializable {
@@ -116,8 +114,7 @@ public class AgentJobGenerator implements Serializable {
   // Side output tags for monitoring
   public static final OutputTag<AgentEvent> VALIDATION_FAILURES_TAG =
       new OutputTag<AgentEvent>("validation-failures") {};
-  public static final OutputTag<AgentEvent> TIMEOUT_TAG =
-      new OutputTag<AgentEvent>("timeouts") {};
+  public static final OutputTag<AgentEvent> TIMEOUT_TAG = new OutputTag<AgentEvent>("timeouts") {};
   public static final OutputTag<AgentEvent> ESCALATION_TAG =
       new OutputTag<AgentEvent>("escalations") {};
   public static final OutputTag<AgentEvent> COMPENSATION_TAG =
@@ -134,8 +131,8 @@ public class AgentJobGenerator implements Serializable {
   }
 
   /**
-   * Creates a new job generator with an explicit async operator capacity (maximum number of
-   * agent turns in flight per subtask before backpressure).
+   * Creates a new job generator with an explicit async operator capacity (maximum number of agent
+   * turns in flight per subtask before backpressure).
    */
   public AgentJobGenerator(StreamExecutionEnvironment env, AgentJob job, int asyncCapacity) {
     if (asyncCapacity <= 0) {
@@ -150,12 +147,13 @@ public class AgentJobGenerator implements Serializable {
    * Generates the complete Flink pipeline from the agent job definition.
    *
    * <p>This is the main entry point that:
+   *
    * <ol>
-   *   <li>Validates the job configuration</li>
-   *   <li>Sets up storage backends</li>
-   *   <li>Wires agent pipelines with CEP patterns</li>
-   *   <li>Configures supervisor chain routing (if applicable)</li>
-   *   <li>Sets up side outputs for monitoring</li>
+   *   <li>Validates the job configuration
+   *   <li>Sets up storage backends
+   *   <li>Wires agent pipelines with CEP patterns
+   *   <li>Configures supervisor chain routing (if applicable)
+   *   <li>Sets up side outputs for monitoring
    * </ol>
    *
    * @param input The input stream of AgentEvents
@@ -165,11 +163,10 @@ public class AgentJobGenerator implements Serializable {
     LOG.info("Generating agent job: {}", job.getJobId());
 
     // Apply watermark strategy for event time processing
-    DataStream<AgentEvent> inputWithWatermarks = input.assignTimestampsAndWatermarks(
-        WatermarkStrategy
-            .<AgentEvent>forMonotonousTimestamps()
-            .withTimestampAssigner((event, timestamp) -> event.getTimestamp())
-    );
+    DataStream<AgentEvent> inputWithWatermarks =
+        input.assignTimestampsAndWatermarks(
+            WatermarkStrategy.<AgentEvent>forMonotonousTimestamps()
+                .withTimestampAssigner((event, timestamp) -> event.getTimestamp()));
 
     // Route to appropriate pipeline based on job type
     if (job.hasSupervisorChain()) {
@@ -198,37 +195,40 @@ public class AgentJobGenerator implements Serializable {
       DataStream<AgentEvent> input, Agent agent) {
 
     // Filter events for this agent
-    DataStream<AgentEvent> agentEvents = input
-        .filter(event -> event.getAgentId().equals(agent.getAgentId()))
-        .name("filter-" + agent.getAgentId());
+    DataStream<AgentEvent> agentEvents =
+        input
+            .filter(event -> event.getAgentId().equals(agent.getAgentId()))
+            .name("filter-" + agent.getAgentId());
 
     // Apply CEP pattern from agent's state machine
-    PatternStream<AgentEvent> patternStream = CEP.pattern(
-        agentEvents.keyBy(AgentEvent::getFlowId),
-        agent.getStateMachine().generateCepPattern()
-    );
+    PatternStream<AgentEvent> patternStream =
+        CEP.pattern(
+            agentEvents.keyBy(AgentEvent::getFlowId), agent.getStateMachine().generateCepPattern());
 
     // Pattern matches → execution requests (keyed, non-blocking, dedups redelivered turns)
-    SingleOutputStreamOperator<AgentEvent> requests = patternStream
-        .process(new AgentExecutionFunction(agent, job.getToolRegistry()))
-        .name("dispatch-" + agent.getAgentId());
+    SingleOutputStreamOperator<AgentEvent> requests =
+        patternStream
+            .process(new AgentExecutionFunction(agent, job.getToolRegistry()))
+            .name("dispatch-" + agent.getAgentId());
 
     // Execution requests → LLM/tool loop on the async operator with a cancelling timeout
     org.agentic.flink.stream.AgentExecutionFunction asyncExecution =
         new org.agentic.flink.stream.AgentExecutionFunction(agent, job.getToolRegistry());
-    DataStream<AgentEvent> results = AsyncDataStream.unorderedWait(
-        requests,
-        asyncExecution,
-        asyncExecution.getTimeout().toMillis(),
-        TimeUnit.MILLISECONDS,
-        asyncCapacity
-    ).name("execute-" + agent.getAgentId());
+    DataStream<AgentEvent> results =
+        AsyncDataStream.unorderedWait(
+                requests,
+                asyncExecution,
+                asyncExecution.getTimeout().toMillis(),
+                TimeUnit.MILLISECONDS,
+                asyncCapacity)
+            .name("execute-" + agent.getAgentId());
 
     // Results plus CEP pattern timeouts and compensations → side output tags
-    SingleOutputStreamOperator<AgentEvent> processedEvents = results
-        .union(requests.getSideOutput(TIMEOUT_TAG), requests.getSideOutput(COMPENSATION_TAG))
-        .process(new AgentResultRouter())
-        .name("route-" + agent.getAgentId());
+    SingleOutputStreamOperator<AgentEvent> processedEvents =
+        results
+            .union(requests.getSideOutput(TIMEOUT_TAG), requests.getSideOutput(COMPENSATION_TAG))
+            .process(new AgentResultRouter())
+            .name("route-" + agent.getAgentId());
 
     // Wire storage if configured
     if (job.getStorageConfig() != null) {
@@ -269,6 +269,7 @@ public class AgentJobGenerator implements Serializable {
    * Generates a pipeline for a supervisor chain (N-tier escalation).
    *
    * <p>Flow:
+   *
    * <pre>
    * Input → Tier 0 → Quality Check → Pass? → Output
    *                              ↓
@@ -321,31 +322,31 @@ public class AgentJobGenerator implements Serializable {
    * <p>Includes quality checking and escalation logic.
    */
   private SingleOutputStreamOperator<AgentEvent> generateTierPipeline(
-      DataStream<AgentEvent> input,
-      SupervisorChain.SupervisorTier tier,
-      SupervisorChain chain) {
+      DataStream<AgentEvent> input, SupervisorChain.SupervisorTier tier, SupervisorChain chain) {
 
     Agent agent = tier.getAgent();
 
     // Filter events for this tier
-    DataStream<AgentEvent> tierEvents = input
-        .filter(event -> {
-          // Check if event is for this tier
-          Integer targetTier = (Integer) event.getMetadata().get("target_tier");
-          return targetTier == null || targetTier == tier.getTierIndex();
-        })
-        .name("filter-tier-" + tier.getTierIndex());
+    DataStream<AgentEvent> tierEvents =
+        input
+            .filter(
+                event -> {
+                  // Check if event is for this tier
+                  Integer targetTier = (Integer) event.getMetadata().get("target_tier");
+                  return targetTier == null || targetTier == tier.getTierIndex();
+                })
+            .name("filter-tier-" + tier.getTierIndex());
 
     // Apply CEP pattern
-    PatternStream<AgentEvent> patternStream = CEP.pattern(
-        tierEvents.keyBy(AgentEvent::getFlowId),
-        agent.getStateMachine().generateCepPattern()
-    );
+    PatternStream<AgentEvent> patternStream =
+        CEP.pattern(
+            tierEvents.keyBy(AgentEvent::getFlowId), agent.getStateMachine().generateCepPattern());
 
     // Process with escalation logic
-    SingleOutputStreamOperator<AgentEvent> processedEvents = patternStream
-        .process(new SupervisorTierFunction(tier, chain, job.getToolRegistry()))
-        .name("tier-" + tier.getTierIndex() + "-" + tier.getTierName());
+    SingleOutputStreamOperator<AgentEvent> processedEvents =
+        patternStream
+            .process(new SupervisorTierFunction(tier, chain, job.getToolRegistry()))
+            .name("tier-" + tier.getTierIndex() + "-" + tier.getTierName());
 
     // Wire storage
     if (job.getStorageConfig() != null) {
@@ -367,60 +368,54 @@ public class AgentJobGenerator implements Serializable {
 
     AgenticFlinkConfig config = job.getStorageConfig();
 
-    return (SingleOutputStreamOperator<AgentEvent>) AsyncDataStream.unorderedWait(
-        stream,
-        new StorageSinkFunction(config),
-        5000, TimeUnit.MILLISECONDS, 100
-    ).name("storage-" + agent.getAgentId());
+    return (SingleOutputStreamOperator<AgentEvent>)
+        AsyncDataStream.unorderedWait(
+                stream, new StorageSinkFunction(config), 5000, TimeUnit.MILLISECONDS, 100)
+            .name("storage-" + agent.getAgentId());
   }
 
   // ==================== Side Output Routing ====================
 
-  /**
-   * Gets side output stream for validation failures.
-   */
+  /** Gets side output stream for validation failures. */
   public DataStream<AgentEvent> getValidationFailures(DataStream<AgentEvent> mainStream) {
     if (mainStream instanceof SingleOutputStreamOperator) {
-      return ((SingleOutputStreamOperator<AgentEvent>) mainStream).getSideOutput(VALIDATION_FAILURES_TAG);
+      return ((SingleOutputStreamOperator<AgentEvent>) mainStream)
+          .getSideOutput(VALIDATION_FAILURES_TAG);
     }
-    throw new IllegalArgumentException("Stream must be SingleOutputStreamOperator to get side outputs");
+    throw new IllegalArgumentException(
+        "Stream must be SingleOutputStreamOperator to get side outputs");
   }
 
-  /**
-   * Gets side output stream for timeouts.
-   */
+  /** Gets side output stream for timeouts. */
   public DataStream<AgentEvent> getTimeouts(DataStream<AgentEvent> mainStream) {
     if (mainStream instanceof SingleOutputStreamOperator) {
       return ((SingleOutputStreamOperator<AgentEvent>) mainStream).getSideOutput(TIMEOUT_TAG);
     }
-    throw new IllegalArgumentException("Stream must be SingleOutputStreamOperator to get side outputs");
+    throw new IllegalArgumentException(
+        "Stream must be SingleOutputStreamOperator to get side outputs");
   }
 
-  /**
-   * Gets side output stream for escalations.
-   */
+  /** Gets side output stream for escalations. */
   public DataStream<AgentEvent> getEscalations(DataStream<AgentEvent> mainStream) {
     if (mainStream instanceof SingleOutputStreamOperator) {
       return ((SingleOutputStreamOperator<AgentEvent>) mainStream).getSideOutput(ESCALATION_TAG);
     }
-    throw new IllegalArgumentException("Stream must be SingleOutputStreamOperator to get side outputs");
+    throw new IllegalArgumentException(
+        "Stream must be SingleOutputStreamOperator to get side outputs");
   }
 
-  /**
-   * Gets side output stream for compensations.
-   */
+  /** Gets side output stream for compensations. */
   public DataStream<AgentEvent> getCompensations(DataStream<AgentEvent> mainStream) {
     if (mainStream instanceof SingleOutputStreamOperator) {
       return ((SingleOutputStreamOperator<AgentEvent>) mainStream).getSideOutput(COMPENSATION_TAG);
     }
-    throw new IllegalArgumentException("Stream must be SingleOutputStreamOperator to get side outputs");
+    throw new IllegalArgumentException(
+        "Stream must be SingleOutputStreamOperator to get side outputs");
   }
 
   // ==================== Builder Support ====================
 
-  /**
-   * Creates a generator with default settings.
-   */
+  /** Creates a generator with default settings. */
   public static AgentJobGenerator create(StreamExecutionEnvironment env, AgentJob job) {
     return new AgentJobGenerator(env, job);
   }

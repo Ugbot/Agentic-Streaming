@@ -4,7 +4,9 @@ import java.io.Serializable;
 import java.util.List;
 import java.util.Locale;
 
-/** Outcome of a {@link RefinementLoop}: the chosen output, whether it was accepted, and the trace. */
+/**
+ * Outcome of a {@link RefinementLoop}: the chosen output, whether it was accepted, and the trace.
+ */
 public final class RefinementResult implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -29,7 +31,8 @@ public final class RefinementResult implements Serializable {
   public final int attemptsUsed;
   public final List<Attempt> trace;
 
-  public RefinementResult(String finalText, boolean accepted, int attemptsUsed, List<Attempt> trace) {
+  public RefinementResult(
+      String finalText, boolean accepted, int attemptsUsed, List<Attempt> trace) {
     this.finalText = finalText;
     this.accepted = accepted;
     this.attemptsUsed = attemptsUsed;
@@ -42,7 +45,7 @@ public final class RefinementResult implements Serializable {
 
   @Override
   public String toString() {
-    return String.format(Locale.ROOT, "accepted=%s attempts=%d score=%.2f",
-        accepted, attemptsUsed, finalScore());
+    return String.format(
+        Locale.ROOT, "accepted=%s attempts=%d score=%.2f", accepted, attemptsUsed, finalScore());
   }
 }

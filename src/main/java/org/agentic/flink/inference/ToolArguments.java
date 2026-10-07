@@ -11,8 +11,8 @@ import java.util.Map;
  * Parses LLM tool-call argument payloads into the {@code Map<String, Object>} that {@link
  * org.agentic.flink.tools.ToolExecutor#execute} expects.
  *
- * <p>Nested objects become nested {@link Map}s and arrays become {@link List}s; numbers keep
- * their JSON numeric type. Values are never flattened or re-stringified.
+ * <p>Nested objects become nested {@link Map}s and arrays become {@link List}s; numbers keep their
+ * JSON numeric type. Values are never flattened or re-stringified.
  */
 public final class ToolArguments {
   private static final ObjectMapper MAPPER = new ObjectMapper();

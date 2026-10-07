@@ -14,8 +14,8 @@ import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
 /**
- * ZeroMQ-backed {@link Channel} for in-JVM / localhost job-to-job chaining without a Kafka or
- * Fluss topic in the middle.
+ * ZeroMQ-backed {@link Channel} for in-JVM / localhost job-to-job chaining without a Kafka or Fluss
+ * topic in the middle.
  *
  * <p>Exposes static factories for every common ZMQ source pattern:
  *
@@ -34,8 +34,8 @@ import org.zeromq.ZMQ;
  * <p>Bind-vs-connect defaults to the "server" side of each pattern (PULL/ROUTER bind; SUB/XSUB/
  * DEALER connect) but can be overridden via {@link Builder#bind(boolean)}.
  *
- * <p>Wire format: JSON by default (via {@link KafkaChannel.JsonSchema}). Supply a custom
- * {@link DeserializationSchema} for binary / Avro / Protobuf transports.
+ * <p>Wire format: JSON by default (via {@link KafkaChannel.JsonSchema}). Supply a custom {@link
+ * DeserializationSchema} for binary / Avro / Protobuf transports.
  *
  * <p>Single-parallelism by design: a ZMQ socket per Flink subtask would round-robin (PULL) or
  * duplicate (SUB) the stream in ways the caller almost certainly doesn't expect.
@@ -80,7 +80,9 @@ public final class ZeroMqChannel<T> implements Channel<T> {
     return builder(Pattern.PULL, endpoint, type).build();
   }
 
-  /** {@code SUB} socket — broadcast fan-out with topic prefix filter. Source connects by default. */
+  /**
+   * {@code SUB} socket — broadcast fan-out with topic prefix filter. Source connects by default.
+   */
   public static <T> ZeroMqChannel<T> sub(String endpoint, Class<T> type, String topicPrefix) {
     return builder(Pattern.SUB, endpoint, type).subscribe(topicPrefix).build();
   }
@@ -110,7 +112,14 @@ public final class ZeroMqChannel<T> implements Channel<T> {
     PollingSource<T> source =
         new PollingSource<>(
             new ZmqPollFn<>(
-                pattern, endpoint, bind, subscribePrefix, hwm, linger, receiveTimeoutMs, deserializer));
+                pattern,
+                endpoint,
+                bind,
+                subscribePrefix,
+                hwm,
+                linger,
+                receiveTimeoutMs,
+                deserializer));
     return env.fromSource(
             source,
             WatermarkStrategy.noWatermarks(),
@@ -252,7 +261,10 @@ public final class ZeroMqChannel<T> implements Channel<T> {
       }
       LOG.info(
           "zeromq source open pattern={} endpoint={} bind={} sub='{}'",
-          pattern, endpoint, bind, subscribePrefix);
+          pattern,
+          endpoint,
+          bind,
+          subscribePrefix);
     }
 
     @Override

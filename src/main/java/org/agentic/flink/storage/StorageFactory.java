@@ -1,11 +1,11 @@
 package org.agentic.flink.storage;
 
-import org.agentic.flink.storage.memory.InMemoryLongTermStore;
-import org.agentic.flink.storage.memory.InMemoryShortTermStore;
-import org.agentic.flink.storage.postgres.PostgresConversationStore;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
+import org.agentic.flink.storage.memory.InMemoryLongTermStore;
+import org.agentic.flink.storage.memory.InMemoryShortTermStore;
+import org.agentic.flink.storage.postgres.PostgresConversationStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,10 +13,10 @@ import org.slf4j.LoggerFactory;
  * Factory for legacy {@link StorageProvider} instances.
  *
  * <p><b>Flink-state-first note:</b> Short-term memory should be obtained through {@link
- * org.agentic.flink.memory.FlinkStateShortTermMemory} rather than this factory. The
- * {@link #createShortTermStore} method is retained for backward compatibility and only supports
- * the {@code "memory"} backend, which is useful for tests and for plumbing the old
- * {@code MetricsWrapper} into examples.
+ * org.agentic.flink.memory.FlinkStateShortTermMemory} rather than this factory. The {@link
+ * #createShortTermStore} method is retained for backward compatibility and only supports the {@code
+ * "memory"} backend, which is useful for tests and for plumbing the old {@code MetricsWrapper} into
+ * examples.
  *
  * <p>Long-term store discovery uses {@link ServiceLoader} of {@link LongTermMemoryStore}, with
  * three built-ins also recognized by their short name:
@@ -35,11 +35,11 @@ public final class StorageFactory {
   private StorageFactory() {}
 
   /**
-   * Create an {@link InMemoryShortTermStore} for backward-compatibility with code that still
-   * holds a {@link ShortTermMemoryStore} reference. New code should bind a {@link
+   * Create an {@link InMemoryShortTermStore} for backward-compatibility with code that still holds
+   * a {@link ShortTermMemoryStore} reference. New code should bind a {@link
    * org.agentic.flink.memory.ShortTermMemory} from {@link
-   * org.agentic.flink.memory.FlinkStateShortTermMemory#spec()} inside a {@code
-   * RichFunction.open()} instead.
+   * org.agentic.flink.memory.FlinkStateShortTermMemory#spec()} inside a {@code RichFunction.open()}
+   * instead.
    *
    * @param backend Only {@code "memory"} is accepted. Other values throw.
    */
@@ -63,12 +63,12 @@ public final class StorageFactory {
 
   /**
    * Create a long-term store by short name. Built-ins ({@code memory}, {@code postgres}) are
-   * recognized first; otherwise {@link ServiceLoader} is consulted, matching by
-   * {@link LongTermMemoryStore#getProviderName()} case-insensitively, by simple class name, or by
-   * fully qualified class name.
+   * recognized first; otherwise {@link ServiceLoader} is consulted, matching by {@link
+   * LongTermMemoryStore#getProviderName()} case-insensitively, by simple class name, or by fully
+   * qualified class name.
    */
-  public static LongTermMemoryStore createLongTermStore(
-      String backend, Map<String, String> config) throws Exception {
+  public static LongTermMemoryStore createLongTermStore(String backend, Map<String, String> config)
+      throws Exception {
     require(backend, "backend");
     require(config, "config");
 
@@ -100,7 +100,8 @@ public final class StorageFactory {
           } catch (Throwable t) {
             LOG.debug(
                 "Skipping LongTermMemoryStore provider {} (missing dependency?): {}",
-                p.type().getName(), t.toString());
+                p.type().getName(),
+                t.toString());
           }
         }
         throw new IllegalArgumentException(
@@ -137,10 +138,9 @@ public final class StorageFactory {
 
   /**
    * Vector store creation is now ServiceLoader-only. The framework ships no built-in
-   * external-vector-store implementation; users plug their own (Qdrant, Pinecone, pgvector,
-   * etc.) by registering a {@link VectorStore} service. For in-JVM vector memory backed by
-   * Flink state, use {@link org.agentic.flink.memory.vector.FlinkStateVectorMemory}
-   * instead.
+   * external-vector-store implementation; users plug their own (Qdrant, Pinecone, pgvector, etc.)
+   * by registering a {@link VectorStore} service. For in-JVM vector memory backed by Flink state,
+   * use {@link org.agentic.flink.memory.vector.FlinkStateVectorMemory} instead.
    */
   public static VectorStore createVectorStore(String backend, Map<String, String> config)
       throws Exception {

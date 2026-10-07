@@ -5,8 +5,8 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * A webhook push-notification configuration registered against an A2A task
- * ({@code tasks/pushNotificationConfig/set}).
+ * A webhook push-notification configuration registered against an A2A task ({@code
+ * tasks/pushNotificationConfig/set}).
  *
  * <p>For long-running tasks where holding an SSE stream is impractical, the caller registers a
  * webhook the gateway {@code POST}s task updates to. {@code token} lets the caller validate the

@@ -21,13 +21,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * In-JVM Coinbase Exchange WebSocket source — replaces the Python {@code coinbase_producer.py} +
- * Kafka path for the session-cluster flavour. Subscribes to the public {@code ticker} channel
- * (no API key required) and translates each ticker event into <b>two</b> {@link Inventory} rows
- * (one BID, one OFFER) so the rows slot straight into the existing market pipeline.
+ * Kafka path for the session-cluster flavour. Subscribes to the public {@code ticker} channel (no
+ * API key required) and translates each ticker event into <b>two</b> {@link Inventory} rows (one
+ * BID, one OFFER) so the rows slot straight into the existing market pipeline.
  *
  * <p>Uses the JDK's built-in {@link java.net.http.WebSocket} — no extra dependency. The async
- * listener pushes events onto a bounded queue; the {@link SourceFunction#run} loop drains the
- * queue with the Flink {@code SourceContext}'s checkpoint lock held.
+ * listener pushes events onto a bounded queue; the {@link SourceFunction#run} loop drains the queue
+ * with the Flink {@code SourceContext}'s checkpoint lock held.
  *
  * <p>Single parallelism by design — Coinbase rate-limits per connection and we want a stable
  * monotonic per-product update stream.
@@ -98,8 +98,8 @@ public final class CoinbaseTickerSource implements PollingSource.PollFn<Inventor
   }
 
   /**
-   * Asynchronous WebSocket listener. Reassembles fragmented frames, parses each ticker into the
-   * two Inventory rows (BID + OFFER), and pushes them onto the source's queue.
+   * Asynchronous WebSocket listener. Reassembles fragmented frames, parses each ticker into the two
+   * Inventory rows (BID + OFFER), and pushes them onto the source's queue.
    */
   static final class Listener implements WebSocket.Listener {
     private final BlockingQueue<Inventory> queue;
@@ -119,9 +119,12 @@ public final class CoinbaseTickerSource implements PollingSource.PollFn<Inventor
         String sub =
             mapper.writeValueAsString(
                 java.util.Map.of(
-                    "type", "subscribe",
-                    "product_ids", products,
-                    "channels", List.of("ticker", "heartbeat")));
+                    "type",
+                    "subscribe",
+                    "product_ids",
+                    products,
+                    "channels",
+                    List.of("ticker", "heartbeat")));
         ws.sendText(sub, true);
       } catch (Exception e) {
         LOG.warn("coinbase ws subscribe failed: {}", e.getMessage());

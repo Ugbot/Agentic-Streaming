@@ -29,14 +29,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Mirrors {@link AgenticPipelineTest} but exercises the non-keyed
- * {@link AgenticProcessFunction} base. Asserts (1) debug stays silent without control,
- * (2) {@code on()} enables emissions, (3) the seeded-control helper works end-to-end via
- * {@link AgenticPipeline#seededControl}.
+ * Mirrors {@link AgenticPipelineTest} but exercises the non-keyed {@link AgenticProcessFunction}
+ * base. Asserts (1) debug stays silent without control, (2) {@code on()} enables emissions, (3) the
+ * seeded-control helper works end-to-end via {@link AgenticPipeline#seededControl}.
  */
 final class AgenticProcessFunctionTest {
 
-  private static final ConcurrentLinkedQueue<DebugEvent> DEBUG_EVENTS = new ConcurrentLinkedQueue<>();
+  private static final ConcurrentLinkedQueue<DebugEvent> DEBUG_EVENTS =
+      new ConcurrentLinkedQueue<>();
   private static final ConcurrentLinkedQueue<String> MAIN_OUTPUT = new ConcurrentLinkedQueue<>();
 
   @Test

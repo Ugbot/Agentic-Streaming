@@ -77,7 +77,8 @@ public class StringTools {
    * @return true if text contains substring
    */
   @Tool("Checks if a string contains a substring")
-  public boolean contains(@P("Text to search in") String text, @P("Substring to search for") String substring) {
+  public boolean contains(
+      @P("Text to search in") String text, @P("Substring to search for") String substring) {
     if (text == null || substring == null) {
       return false;
     }
@@ -152,7 +153,8 @@ public class StringTools {
    * @return A comma-separated string of parts
    */
   @Tool("Splits a string by a delimiter")
-  public String split(@P("Text to split") String text, @P("Delimiter to split by") String delimiter) {
+  public String split(
+      @P("Text to split") String text, @P("Delimiter to split by") String delimiter) {
     if (text == null || delimiter == null) {
       return text;
     }
@@ -168,7 +170,8 @@ public class StringTools {
    * @return true if text starts with prefix
    */
   @Tool("Checks if a string starts with a prefix")
-  public boolean startsWith(@P("Text to check") String text, @P("Prefix to check for") String prefix) {
+  public boolean startsWith(
+      @P("Text to check") String text, @P("Prefix to check for") String prefix) {
     if (text == null || prefix == null) {
       return false;
     }
@@ -183,7 +186,8 @@ public class StringTools {
    * @return true if text ends with suffix
    */
   @Tool("Checks if a string ends with a suffix")
-  public boolean endsWith(@P("Text to check") String text, @P("Suffix to check for") String suffix) {
+  public boolean endsWith(
+      @P("Text to check") String text, @P("Suffix to check for") String suffix) {
     if (text == null || suffix == null) {
       return false;
     }

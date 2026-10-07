@@ -1,9 +1,9 @@
 package org.agentic.flink.cep;
 
+import java.time.Duration;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.statemachine.AgentState;
-import java.time.Duration;
 import org.apache.flink.cep.pattern.Pattern;
 import org.apache.flink.cep.pattern.conditions.IterativeCondition;
 import org.apache.flink.cep.pattern.conditions.SimpleCondition;
@@ -16,6 +16,7 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * event-driven state machines.
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * Pattern<AgentEvent, ?> pattern = CepPatternBuilder.create()
  *     .start("init")
@@ -33,20 +34,20 @@ import org.apache.flink.cep.pattern.conditions.SimpleCondition;
  * }</pre>
  *
  * <p><b>Pattern Semantics Borrowed from Saga Kit:</b>
+ *
  * <ul>
- *   <li><b>.next()</b> - Strict contiguity: no events can occur between</li>
- *   <li><b>.followedBy()</b> - Relaxed contiguity: other events allowed between</li>
- *   <li><b>.followedByAny()</b> - Non-deterministic relaxed contiguity</li>
- *   <li><b>.oneOrMore()</b> - Match pattern 1 or more times</li>
- *   <li><b>.optional()</b> - Pattern may or may not occur</li>
- *   <li><b>.greedy()</b> - Match as many events as possible</li>
- *   <li><b>.within()</b> - Time window constraint (like saga timeout)</li>
+ *   <li><b>.next()</b> - Strict contiguity: no events can occur between
+ *   <li><b>.followedBy()</b> - Relaxed contiguity: other events allowed between
+ *   <li><b>.followedByAny()</b> - Non-deterministic relaxed contiguity
+ *   <li><b>.oneOrMore()</b> - Match pattern 1 or more times
+ *   <li><b>.optional()</b> - Pattern may or may not occur
+ *   <li><b>.greedy()</b> - Match as many events as possible
+ *   <li><b>.within()</b> - Time window constraint (like saga timeout)
  * </ul>
  *
  * @author Agentic Flink Team
  * @see Pattern
  * @see PatternConditions
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -160,9 +161,7 @@ public class CepPatternBuilder {
     return pattern;
   }
 
-  /**
-   * Builder for configuring individual pattern steps.
-   */
+  /** Builder for configuring individual pattern steps. */
   public class PatternStepBuilder {
     private final CepPatternBuilder parentBuilder;
     private final String stepName;
@@ -264,14 +263,15 @@ public class CepPatternBuilder {
 
       // Now add the terminal step
       Pattern<AgentEvent, ?> terminalPattern;
-      SimpleCondition<AgentEvent> terminalCondition = new SimpleCondition<AgentEvent>() {
-        @Override
-        public boolean filter(AgentEvent event) throws Exception {
-          return event.getEventType() == AgentEventType.FLOW_COMPLETED
-              || event.getEventType() == AgentEventType.FLOW_FAILED
-              || event.getEventType() == AgentEventType.LOOP_MAX_ITERATIONS_REACHED;
-        }
-      };
+      SimpleCondition<AgentEvent> terminalCondition =
+          new SimpleCondition<AgentEvent>() {
+            @Override
+            public boolean filter(AgentEvent event) throws Exception {
+              return event.getEventType() == AgentEventType.FLOW_COMPLETED
+                  || event.getEventType() == AgentEventType.FLOW_FAILED
+                  || event.getEventType() == AgentEventType.LOOP_MAX_ITERATIONS_REACHED;
+            }
+          };
 
       if (parentBuilder.pattern == null) {
         terminalPattern = Pattern.<AgentEvent>begin(stepName).where(terminalCondition);
@@ -337,9 +337,7 @@ public class CepPatternBuilder {
       return parentBuilder.build();
     }
 
-    /**
-     * Finalizes the current step and adds it to the parent pattern.
-     */
+    /** Finalizes the current step and adds it to the parent pattern. */
     @SuppressWarnings("unchecked")
     private void finalizeStep() {
       Pattern<AgentEvent, ?> stepPattern;
@@ -392,9 +390,7 @@ public class CepPatternBuilder {
     }
   }
 
-  /**
-   * Enum for pattern step types (how they connect to previous step).
-   */
+  /** Enum for pattern step types (how they connect to previous step). */
   private enum StepType {
     START,
     NEXT,
@@ -413,9 +409,9 @@ public class CepPatternBuilder {
   public static Pattern<AgentEvent, ?> simpleAgentPattern(int timeoutSeconds) {
     return CepPatternBuilder.create()
         .start("start")
-            .matching(AgentEventType.FLOW_STARTED)
+        .matching(AgentEventType.FLOW_STARTED)
         .followedBy("execute")
-            .matching(AgentEventType.TOOL_CALL_COMPLETED)
+        .matching(AgentEventType.TOOL_CALL_COMPLETED)
         .end("complete")
         .within(Duration.ofSeconds(timeoutSeconds))
         .build();
@@ -430,11 +426,11 @@ public class CepPatternBuilder {
   public static Pattern<AgentEvent, ?> validatedAgentPattern(int timeoutSeconds) {
     return CepPatternBuilder.create()
         .start("start")
-            .matching(AgentEventType.FLOW_STARTED)
+        .matching(AgentEventType.FLOW_STARTED)
         .followedBy("validate")
-            .matching(AgentEventType.VALIDATION_PASSED)
+        .matching(AgentEventType.VALIDATION_PASSED)
         .followedBy("execute")
-            .matching(AgentEventType.TOOL_CALL_COMPLETED)
+        .matching(AgentEventType.TOOL_CALL_COMPLETED)
         .end("complete")
         .within(Duration.ofSeconds(timeoutSeconds))
         .build();
@@ -449,11 +445,11 @@ public class CepPatternBuilder {
   public static Pattern<AgentEvent, ?> supervisedAgentPattern(int timeoutSeconds) {
     return CepPatternBuilder.create()
         .start("start")
-            .matching(AgentEventType.FLOW_STARTED)
+        .matching(AgentEventType.FLOW_STARTED)
         .followedBy("execute")
-            .matching(AgentEventType.TOOL_CALL_COMPLETED)
+        .matching(AgentEventType.TOOL_CALL_COMPLETED)
         .followedBy("supervisor")
-            .matching(AgentEventType.SUPERVISOR_APPROVED)
+        .matching(AgentEventType.SUPERVISOR_APPROVED)
         .end("complete")
         .within(Duration.ofSeconds(timeoutSeconds))
         .build();
@@ -468,20 +464,20 @@ public class CepPatternBuilder {
   public static Pattern<AgentEvent, ?> fullAgentPattern(int timeoutSeconds) {
     return CepPatternBuilder.create()
         .start("start")
-            .matching(AgentEventType.FLOW_STARTED)
+        .matching(AgentEventType.FLOW_STARTED)
         .followedBy("validate")
-            .matching(AgentEventType.VALIDATION_PASSED, AgentEventType.VALIDATION_FAILED)
-            .optional()
+        .matching(AgentEventType.VALIDATION_PASSED, AgentEventType.VALIDATION_FAILED)
+        .optional()
         .followedBy("execute")
-            .matching(AgentEventType.TOOL_CALL_COMPLETED, AgentEventType.TOOL_CALL_FAILED)
-            .oneOrMore()
+        .matching(AgentEventType.TOOL_CALL_COMPLETED, AgentEventType.TOOL_CALL_FAILED)
+        .oneOrMore()
         .followedBy("correct")
-            .matching(AgentEventType.CORRECTION_COMPLETED)
-            .optional()
-            .oneOrMore()
+        .matching(AgentEventType.CORRECTION_COMPLETED)
+        .optional()
+        .oneOrMore()
         .followedBy("supervisor")
-            .matching(AgentEventType.SUPERVISOR_APPROVED, AgentEventType.SUPERVISOR_REJECTED)
-            .optional()
+        .matching(AgentEventType.SUPERVISOR_APPROVED, AgentEventType.SUPERVISOR_REJECTED)
+        .optional()
         .end("terminal")
         .within(Duration.ofSeconds(timeoutSeconds))
         .build();

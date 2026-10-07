@@ -1,14 +1,13 @@
 package org.agentic.flink.feedback;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatClient;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
-import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,12 +76,15 @@ public final class RefinementLoop {
       conv.add(ChatMessage.assistant(output));
       conv.add(
           ChatMessage.user(
-              String.format(Locale.ROOT,
+              String.format(
+                  Locale.ROOT,
                   "That attempt scored %.2f. Issues: %s. Please revise to address these and "
                       + "improve the answer.",
-                  cr.score, cr.critique)));
+                  cr.score,
+                  cr.critique)));
     }
-    LOG.info("RefinementLoop exhausted {} attempts without passing; returning best-so-far", maxAttempts);
+    LOG.info(
+        "RefinementLoop exhausted {} attempts without passing; returning best-so-far", maxAttempts);
     return new RefinementResult(best.output, false, maxAttempts, trace);
   }
 

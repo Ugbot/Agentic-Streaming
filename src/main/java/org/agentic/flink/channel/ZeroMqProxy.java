@@ -7,22 +7,22 @@ import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
 /**
- * Tiny in-process ZeroMQ proxy. Lets you put a stable broker address in front of dynamic
- * publishers / workers so subscribers (or workers) can connect once and not care which producer
- * cycle they're attached to.
+ * Tiny in-process ZeroMQ proxy. Lets you put a stable broker address in front of dynamic publishers
+ * / workers so subscribers (or workers) can connect once and not care which producer cycle they're
+ * attached to.
  *
  * <p>Two flavours:
  *
  * <ul>
  *   <li>{@link #pubSubProxy(String, String)} — {@code XSUB ↔ XPUB}. Publishers send to the
  *       front-end; subscribers attach to the back-end.
- *   <li>{@link #routerDealerProxy(String, String)} — {@code ROUTER ↔ DEALER}. Clients (DEALER)
- *       send requests to the front-end; workers (DEALER) read from the back-end.
+ *   <li>{@link #routerDealerProxy(String, String)} — {@code ROUTER ↔ DEALER}. Clients (DEALER) send
+ *       requests to the front-end; workers (DEALER) read from the back-end.
  * </ul>
  *
- * <p>Each call spawns a daemon thread that runs {@link ZMQ#proxy} until {@link #stop()}. The
- * proxy is intended for the notebook control plane / dev loop; for production stand up a
- * dedicated broker.
+ * <p>Each call spawns a daemon thread that runs {@link ZMQ#proxy} until {@link #stop()}. The proxy
+ * is intended for the notebook control plane / dev loop; for production stand up a dedicated
+ * broker.
  */
 public final class ZeroMqProxy implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(ZeroMqProxy.class);

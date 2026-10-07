@@ -7,13 +7,12 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * An event-keyed Python action: when an event of one of {@link #getEvents()} types arrives at
- * the agent operator, the cloudpickled callable in {@link #getCloudpickleB64()} is invoked via
- * PEMJA with {@code (event, ctx)} arguments.
+ * An event-keyed Python action: when an event of one of {@link #getEvents()} types arrives at the
+ * agent operator, the cloudpickled callable in {@link #getCloudpickleB64()} is invoked via PEMJA
+ * with {@code (event, ctx)} arguments.
  *
- * <p>Java-side actions are expressed indirectly through other plan fields (chat, listeners,
- * tools); this descriptor is specifically for Python callbacks that ride in the plan as
- * cloudpickle bytes.
+ * <p>Java-side actions are expressed indirectly through other plan fields (chat, listeners, tools);
+ * this descriptor is specifically for Python callbacks that ride in the plan as cloudpickle bytes.
  */
 public final class ActionSpec implements Serializable {
   private static final long serialVersionUID = 1L;

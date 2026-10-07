@@ -4,10 +4,10 @@ import java.io.Serializable;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
 
 /**
- * The bounded action surface a {@link TurnBrain} gets for one turn. Every outward action is gated by
- * the turn's {@link RoutingBudget}, so the brain physically cannot run away even if its prompt logic
- * tries to: {@link #askCustomerService} consumes a round-trip and refuses past the cap, and {@link
- * #budgetExhausted()} lets the brain bail early with a partial answer.
+ * The bounded action surface a {@link TurnBrain} gets for one turn. Every outward action is gated
+ * by the turn's {@link RoutingBudget}, so the brain physically cannot run away even if its prompt
+ * logic tries to: {@link #askCustomerService} consumes a round-trip and refuses past the cap, and
+ * {@link #budgetExhausted()} lets the brain bail early with a partial answer.
  */
 public final class BankingTurnContext implements Serializable {
   private static final long serialVersionUID = 1L;

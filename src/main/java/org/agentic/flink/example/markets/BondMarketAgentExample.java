@@ -6,19 +6,20 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 /**
  * Classic Flink upstream + inline agentic downstream over a (anonymised) fixed-income bond market
- * data feed. Reads three Kafka topics produced by the anonymised Python synthesizers under
- * {@code examples-bin/markets/}:
+ * data feed. Reads three Kafka topics produced by the anonymised Python synthesizers under {@code
+ * examples-bin/markets/}:
  *
  * <ul>
- *   <li>{@code fnd-inventory} — dealer bid/offer quotes (5K msg/s when synthesizers run)</li>
- *   <li>{@code fnd-securities} — security master (issuer, sector, ratings)</li>
- *   <li>{@code fnd-trades} — execution reports from the (anonymised) "VertexFi" platform</li>
+ *   <li>{@code fnd-inventory} — dealer bid/offer quotes (5K msg/s when synthesizers run)
+ *   <li>{@code fnd-securities} — security master (issuer, sector, ratings)
+ *   <li>{@code fnd-trades} — execution reports from the (anonymised) "VertexFi" platform
  * </ul>
  *
  * <p>Pipeline: enrich → top-5 per (instrument, side) → best-quote ⨝ latest trade → windowed
  * features → {@code MarketAgentFn} (band-pass on spread + rolling z-score + Claude adjudication).
  *
  * <p>Run with:
+ *
  * <pre>
  *   podman compose -f docker-compose-kafka.yml up -d
  *   python3 examples-bin/markets/bond_securities_producer.py &amp;

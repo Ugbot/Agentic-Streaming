@@ -15,18 +15,19 @@ import org.jagentic.core.LogEvent;
  * The spec's per-conversation event log stored in Flink keyed state.
  *
  * <p>Every instance is scoped to the key that is current when the operator hands it to the graph
- * (Flink scopes {@link ListState}/{@link ValueState} to the current key), so a single
- * {@link org.jagentic.core.RoutedGraph#handle} call only ever sees and appends to one
- * conversation's history. Sequences are dense and assigned from a checkpointed counter, so the
- * fold ({@link org.jagentic.core.ConversationState#fold}) over the restored log is identical to
- * the fold before the failure.
+ * (Flink scopes {@link ListState}/{@link ValueState} to the current key), so a single {@link
+ * org.jagentic.core.RoutedGraph#handle} call only ever sees and appends to one conversation's
+ * history. Sequences are dense and assigned from a checkpointed counter, so the fold ({@link
+ * org.jagentic.core.ConversationState#fold}) over the restored log is identical to the fold before
+ * the failure.
  */
 final class KeyedConversationLog implements ConversationLog {
   private final String conversationId;
   private final ListState<LogEvent> events;
   private final ValueState<Long> nextSequence;
 
-  KeyedConversationLog(String conversationId, ListState<LogEvent> events, ValueState<Long> nextSequence) {
+  KeyedConversationLog(
+      String conversationId, ListState<LogEvent> events, ValueState<Long> nextSequence) {
     this.conversationId = Objects.requireNonNull(conversationId, "conversationId");
     this.events = Objects.requireNonNull(events, "events");
     this.nextSequence = Objects.requireNonNull(nextSequence, "nextSequence");
@@ -72,8 +73,12 @@ final class KeyedConversationLog implements ConversationLog {
 
   private void requireCurrentKey(String cid) {
     if (!conversationId.equals(cid)) {
-      throw new IllegalStateException("keyed conversation log for " + conversationId
-          + " asked to operate on conversation " + cid + "; Flink keying guarantees single-writer per key");
+      throw new IllegalStateException(
+          "keyed conversation log for "
+              + conversationId
+              + " asked to operate on conversation "
+              + cid
+              + "; Flink keying guarantees single-writer per key");
     }
   }
 }

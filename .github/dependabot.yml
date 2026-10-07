@@ -1,0 +1,62 @@
+# Dependabot: weekly dependency updates for every build file in the repository, with minor and
+# patch bumps grouped into one pull request per ecosystem so the noise stays low. Major bumps
+# open one pull request each.
+#
+# Maven: every directory that holds a pom.xml is listed explicitly: the reactor
+# (reactor/pom.xml), each reactor module (the root pom is the Flink framework module), and the
+# standalone poms outside the reactor (a2a-gateway behind its profile, ports/experimental/*).
+# pip: the four Python distributions. github-actions: the workflows under .github/workflows.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directories:
+      - /reactor
+      - /
+      - /ports/jagentic-core
+      - /agentic-pekko
+      - /pyflink/java
+      - /tool-services/tool-services-packs
+      - /tool-services/tool-services-app
+      - /banking-job
+      - /a2a-gateway
+      - /ports/experimental/kafka-streams
+      - /ports/experimental/pulsar
+      - /ports/experimental/quarkus
+      - /ports/experimental/spring
+      - /ports/experimental/temporal
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      maven-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: pip
+    directories:
+      - /ports/pyagentic
+      - /python
+      - /pyflink
+      - /ports/agentic-pipeline
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      pip-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch

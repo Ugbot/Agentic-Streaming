@@ -6,8 +6,8 @@ import java.util.List;
  * Typed task view for regression / scoring models: input in, single numeric out.
  *
  * <p>Returned by {@link InferenceClient#asScorer()}. Used to plug a trained ranker, quality
- * estimator, or relevancy model into the framework — see
- * {@link org.agentic.flink.context.relevancy.RelevancyScorer}.
+ * estimator, or relevancy model into the framework — see {@link
+ * org.agentic.flink.context.relevancy.RelevancyScorer}.
  */
 public interface Scorer {
 
@@ -16,8 +16,8 @@ public interface Scorer {
 
   /**
    * Score one item against a reference (intent, query, hypothesis) — common for cross-encoder
-   * ranking models. Default falls back to {@link #score(String, InferenceSetup)} ignoring
-   * {@code reference}; backends with native pair-scoring support should override.
+   * ranking models. Default falls back to {@link #score(String, InferenceSetup)} ignoring {@code
+   * reference}; backends with native pair-scoring support should override.
    */
   default double scorePair(String input, String reference, InferenceSetup setup) {
     return score(input, setup);

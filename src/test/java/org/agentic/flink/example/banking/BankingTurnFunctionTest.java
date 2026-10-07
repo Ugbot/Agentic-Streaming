@@ -62,7 +62,8 @@ final class BankingTurnFunctionTest {
         };
 
     DataStream<A2ARequest> src =
-        env.addSource(new OneRequest("ctx-1", "please escalate"), A2AJsonTypeInfo.of(A2ARequest.class));
+        env.addSource(
+            new OneRequest("ctx-1", "please escalate"), A2AJsonTypeInfo.of(A2ARequest.class));
     src.keyBy((KeySelector<A2ARequest, String>) A2ARequest::getContextId)
         .process(new BankingTurnFunction("personal", runaway, cs, maxRoundTrips, 50, 240_000L, 8))
         .returns(A2AJsonTypeInfo.of(A2AResponse.class))

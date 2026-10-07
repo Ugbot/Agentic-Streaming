@@ -1,5 +1,4 @@
 package org.agentic.flink.example.banking;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import java.util.List;
 import org.agentic.flink.a2a.A2AArtifact;
@@ -9,9 +8,9 @@ import org.agentic.flink.example.banking.env.EnvSession;
 import org.agentic.flink.example.banking.safety.BankingScreening;
 import org.agentic.flink.example.banking.safety.RoutingBudget;
 import org.agentic.flink.screening.ScreeningResult;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 import org.slf4j.Logger;
@@ -22,16 +21,17 @@ import org.slf4j.LoggerFactory;
  * contextId}. Turns an inbound {@link A2ARequest} into an {@link A2AResponse} by:
  *
  * <ol>
- *   <li>binding the per-session {@link RoutingBudget} from keyed state (fresh sessions get defaults);
+ *   <li>binding the per-session {@link RoutingBudget} from keyed state (fresh sessions get
+ *       defaults);
  *   <li>screening the inbound message — {@code BLOCK} → safe refusal, never reaching the brain;
  *   <li>binding the {@code contextId} on the thread ({@link EnvSession}) and running the {@link
  *       TurnBrain} with a budget-gated {@link BankingTurnContext};
  *   <li>persisting the updated budget.
  * </ol>
  *
- * <p>Keying by {@code contextId} gives free per-session isolation (the harness's statelessness rule)
- * and lets the {@link RoutingBudget} bound the personal↔CS loop across turns — the anti-explosion
- * guarantee. The brain is pluggable (Gemini-backed in production, a stub in tests).
+ * <p>Keying by {@code contextId} gives free per-session isolation (the harness's statelessness
+ * rule) and lets the {@link RoutingBudget} bound the personal↔CS loop across turns — the
+ * anti-explosion guarantee. The brain is pluggable (Gemini-backed in production, a stub in tests).
  */
 public final class BankingTurnFunction
     extends KeyedProcessFunction<String, A2ARequest, A2AResponse> {
@@ -104,8 +104,7 @@ public final class BankingTurnFunction
     final long t = now;
     String replyText =
         EnvSession.withContext(
-            contextId,
-            () -> brain.respond(userText, new BankingTurnContext(contextId, b, t, cs)));
+            contextId, () -> brain.respond(userText, new BankingTurnContext(contextId, b, t, cs)));
 
     out.collect(reply(req, replyText));
     budgetState.update(budget);

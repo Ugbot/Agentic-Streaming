@@ -15,9 +15,9 @@ import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
 /**
- * ZeroMQ producer side, mirroring {@link ZeroMqChannel}. A native Flink 2.x
- * ({@link org.apache.flink.api.connector.sink2 FLIP-143}) sink: the factories return a
- * {@link ForEachSink} backed by a {@link ZmqWriteFn}; wire it with {@code stream.sinkTo(...)}.
+ * ZeroMQ producer side, mirroring {@link ZeroMqChannel}. A native Flink 2.x ({@link
+ * org.apache.flink.api.connector.sink2 FLIP-143}) sink: the factories return a {@link ForEachSink}
+ * backed by a {@link ZmqWriteFn}; wire it with {@code stream.sinkTo(...)}.
  *
  * <p>Static factories for every common sink pattern:
  *
@@ -31,14 +31,14 @@ import org.zeromq.ZMQ;
  *   <li>{@link #dealer(String)} — {@code DEALER} request side; load-balanced across peers.
  * </ul>
  *
- * <p>Bind-vs-connect defaults to the "server" side: PUSH connects (to a bound PULL), PUB binds
- * (so multiple SUBs can connect), XPUB binds, ROUTER binds, DEALER connects. Override with
- * {@link Builder#bind(boolean)}.
+ * <p>Bind-vs-connect defaults to the "server" side: PUSH connects (to a bound PULL), PUB binds (so
+ * multiple SUBs can connect), XPUB binds, ROUTER binds, DEALER connects. Override with {@link
+ * Builder#bind(boolean)}.
  *
  * <p>Wire format: JSON via Jackson by default; supply a custom {@link SerializationSchema} for
  * binary / Avro / Protobuf. The ZMQ socket is thread-affined, so the {@link ForEachSink} writer
- * opens/sends/closes it on a single subtask thread; keep parallelism at 1 ({@code setParallelism(1)})
- * since N>1 ZMQ sockets round-robin/duplicate in surprising ways.
+ * opens/sends/closes it on a single subtask thread; keep parallelism at 1 ({@code
+ * setParallelism(1)}) since N>1 ZMQ sockets round-robin/duplicate in surprising ways.
  */
 public final class ZeroMqSink<T> {
   private static final Logger LOG = LoggerFactory.getLogger(ZeroMqSink.class);
@@ -85,9 +85,9 @@ public final class ZeroMqSink<T> {
   }
 
   /**
-   * Variant of {@link #pub} that sends already-encoded {@code String} payloads as raw UTF-8
-   * bytes (no extra JSON wrapping). Use when upstream operators already emit JSON envelopes —
-   * the default Jackson serializer would otherwise double-encode the string.
+   * Variant of {@link #pub} that sends already-encoded {@code String} payloads as raw UTF-8 bytes
+   * (no extra JSON wrapping). Use when upstream operators already emit JSON envelopes — the default
+   * Jackson serializer would otherwise double-encode the string.
    */
   public static ForEachSink<String> pubRaw(String endpoint, String topic) {
     return new Builder<String>(Pattern.PUB, endpoint)

@@ -1,8 +1,8 @@
 package org.agentic.flink.storage;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Storage interface for short-term memory (hot tier).

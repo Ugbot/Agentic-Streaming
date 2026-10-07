@@ -17,10 +17,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the generic native-2.2 connector bases — {@link PollingSource} (FLIP-27) and
- * {@link ForEachSink} (FLIP-143) — move records end-to-end on a real MiniCluster, independent of any
- * specific transport (ZMQ, Redis, …). A {@link PollingSource.PollFn} emits a bounded run of integers
- * then idles; a {@link ForEachSink.WriteFn} collects them.
+ * Proves the generic native-2.2 connector bases — {@link PollingSource} (FLIP-27) and {@link
+ * ForEachSink} (FLIP-143) — move records end-to-end on a real MiniCluster, independent of any
+ * specific transport (ZMQ, Redis, …). A {@link PollingSource.PollFn} emits a bounded run of
+ * integers then idles; a {@link ForEachSink.WriteFn} collects them.
  */
 final class PollingSourceForEachSinkTest {
 
@@ -39,14 +39,19 @@ final class PollingSourceForEachSinkTest {
   }
 
   @Test
-  @DisplayName("PollingSource(PollFn) -> sinkTo(ForEachSink(WriteFn)) delivers every emitted record")
+  @DisplayName(
+      "PollingSource(PollFn) -> sinkTo(ForEachSink(WriteFn)) delivers every emitted record")
   void endToEnd() throws Exception {
     int n = 50;
     StreamExecutionEnvironment env =
         StreamExecutionEnvironment.createLocalEnvironment(1, new Configuration());
 
     PollingSource<Integer> source = new PollingSource<>(new CountingPollFn(n));
-    env.fromSource(source, WatermarkStrategy.noWatermarks(), "counting-source", TypeInformation.of(Integer.class))
+    env.fromSource(
+            source,
+            WatermarkStrategy.noWatermarks(),
+            "counting-source",
+            TypeInformation.of(Integer.class))
         .sinkTo(new ForEachSink<>(new CollectingWriteFn()))
         .name("collect-sink");
 

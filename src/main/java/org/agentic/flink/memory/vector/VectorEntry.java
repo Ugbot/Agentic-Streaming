@@ -1,8 +1,8 @@
 package org.agentic.flink.memory.vector;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * A single vectorized entry: an embedding plus the originating context item.

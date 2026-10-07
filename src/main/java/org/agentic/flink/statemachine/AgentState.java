@@ -8,26 +8,30 @@ package org.agentic.flink.statemachine;
  * transitions and timeout handling.
  *
  * <p><b>State Flow (Happy Path):</b>
+ *
  * <pre>
  * INITIALIZED → VALIDATING → EXECUTING → SUPERVISOR_REVIEW → COMPLETED
  * </pre>
  *
  * <p><b>State Flow (With Corrections):</b>
+ *
  * <pre>
  * INITIALIZED → VALIDATING → EXECUTING → VALIDATING (failed) → CORRECTING → EXECUTING → COMPLETED
  * </pre>
  *
  * <p><b>State Flow (With Compensation):</b>
+ *
  * <pre>
  * EXECUTING → FAILED → COMPENSATING → COMPENSATED
  * </pre>
  *
  * <p>Each state corresponds to specific AgentEventType values and can have:
+ *
  * <ul>
- *   <li>Entry actions (executed when entering the state)</li>
- *   <li>Exit actions (executed when leaving the state)</li>
- *   <li>Timeout conditions (automatic transitions after duration)</li>
- *   <li>Validation predicates (must be satisfied to enter)</li>
+ *   <li>Entry actions (executed when entering the state)
+ *   <li>Exit actions (executed when leaving the state)
+ *   <li>Timeout conditions (automatic transitions after duration)
+ *   <li>Validation predicates (must be satisfied to enter)
  * </ul>
  *
  * @author Agentic Flink Team
@@ -52,11 +56,12 @@ public enum AgentState {
    * <p>Entry conditions: VALIDATION_REQUESTED event
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>LLM-based validation of inputs</li>
-   *   <li>Schema validation</li>
-   *   <li>Business rule checking</li>
-   *   <li>Security checks</li>
+   *   <li>LLM-based validation of inputs
+   *   <li>Schema validation
+   *   <li>Business rule checking
+   *   <li>Security checks
    * </ul>
    *
    * <p>Typical duration: 1-5 seconds
@@ -64,8 +69,7 @@ public enum AgentState {
    * <p>Next states: EXECUTING (if valid), CORRECTING (if invalid), FAILED (if max attempts)
    */
   VALIDATING(
-      "validating",
-      "Agent is validating input or results using LLM or predefined validators"),
+      "validating", "Agent is validating input or results using LLM or predefined validators"),
 
   /**
    * Agent is executing its primary task (tool calls, LLM generation, etc.).
@@ -73,11 +77,12 @@ public enum AgentState {
    * <p>Entry conditions: LOOP_ITERATION_STARTED or VALIDATION_PASSED event
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>Tool execution (async, with retries)</li>
-   *   <li>LLM generation</li>
-   *   <li>External API calls</li>
-   *   <li>Data processing</li>
+   *   <li>Tool execution (async, with retries)
+   *   <li>LLM generation
+   *   <li>External API calls
+   *   <li>Data processing
    * </ul>
    *
    * <p>Typical duration: 5-30 seconds (depends on tool complexity)
@@ -92,10 +97,11 @@ public enum AgentState {
    * <p>Entry conditions: CORRECTION_REQUESTED event
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>LLM generates corrected output based on validation feedback</li>
-   *   <li>Applies transformation rules</li>
-   *   <li>Re-validates internally</li>
+   *   <li>LLM generates corrected output based on validation feedback
+   *   <li>Applies transformation rules
+   *   <li>Re-validates internally
    * </ul>
    *
    * <p>Typical duration: 3-10 seconds
@@ -104,8 +110,7 @@ public enum AgentState {
    *
    * <p>Next states: EXECUTING (retry with correction), FAILED (max attempts exceeded)
    */
-  CORRECTING(
-      "correcting", "Agent is attempting to correct a failed validation using LLM feedback"),
+  CORRECTING("correcting", "Agent is attempting to correct a failed validation using LLM feedback"),
 
   /**
    * Agent result is under supervisor review.
@@ -113,11 +118,12 @@ public enum AgentState {
    * <p>Entry conditions: SUPERVISOR_REVIEW_REQUESTED event
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>Supervisor agent validates quality</li>
-   *   <li>Security/compliance review</li>
-   *   <li>Manual approval (if configured)</li>
-   *   <li>Escalation to higher tier</li>
+   *   <li>Supervisor agent validates quality
+   *   <li>Security/compliance review
+   *   <li>Manual approval (if configured)
+   *   <li>Escalation to higher tier
    * </ul>
    *
    * <p>Typical duration: Variable (1 second to hours for manual review)
@@ -136,11 +142,12 @@ public enum AgentState {
    * <p>Terminal state (no outgoing transitions)
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>Emit final result</li>
-   *   <li>Update metrics</li>
-   *   <li>Archive to cold storage</li>
-   *   <li>Trigger completion events</li>
+   *   <li>Emit final result
+   *   <li>Update metrics
+   *   <li>Archive to cold storage
+   *   <li>Trigger completion events
    * </ul>
    */
   COMPLETED("completed", "Agent has successfully completed all tasks and validations"),
@@ -153,11 +160,12 @@ public enum AgentState {
    * <p>Terminal state (unless compensation is configured)
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>Log error details</li>
-   *   <li>Update failure metrics</li>
-   *   <li>Trigger alerts</li>
-   *   <li>May transition to COMPENSATING</li>
+   *   <li>Log error details
+   *   <li>Update failure metrics
+   *   <li>Trigger alerts
+   *   <li>May transition to COMPENSATING
    * </ul>
    *
    * <p>Next states: COMPENSATING (if compensation enabled), none (terminal)
@@ -167,15 +175,15 @@ public enum AgentState {
   /**
    * Agent is performing compensation/rollback actions.
    *
-   * <p>Entry conditions: FAILED state + compensation policy enabled, or explicit COMPENSATION
-   * event
+   * <p>Entry conditions: FAILED state + compensation policy enabled, or explicit COMPENSATION event
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>Reverse tool executions (where possible)</li>
-   *   <li>Undo state changes</li>
-   *   <li>Send compensation events</li>
-   *   <li>Restore previous consistent state</li>
+   *   <li>Reverse tool executions (where possible)
+   *   <li>Undo state changes
+   *   <li>Send compensation events
+   *   <li>Restore previous consistent state
    * </ul>
    *
    * <p>Borrowed from Saga pattern for distributed transaction rollback
@@ -184,8 +192,7 @@ public enum AgentState {
    *
    * <p>Next states: COMPENSATED (success), FAILED (compensation failed)
    */
-  COMPENSATING(
-      "compensating", "Agent is performing compensation/rollback actions (Saga pattern)"),
+  COMPENSATING("compensating", "Agent is performing compensation/rollback actions (Saga pattern)"),
 
   /**
    * Agent has successfully completed compensation.
@@ -198,7 +205,8 @@ public enum AgentState {
    * rolled back.
    */
   COMPENSATED(
-      "compensated", "Agent has successfully rolled back all changes due to failure (Saga pattern)"),
+      "compensated",
+      "Agent has successfully rolled back all changes due to failure (Saga pattern)"),
 
   /**
    * Agent execution is paused, waiting for external event.
@@ -206,11 +214,12 @@ public enum AgentState {
    * <p>Entry conditions: FLOW_PAUSED event or explicit pause command
    *
    * <p>Use cases:
+   *
    * <ul>
-   *   <li>Human-in-the-loop workflows</li>
-   *   <li>Waiting for external system</li>
-   *   <li>Rate limiting</li>
-   *   <li>Debug/inspection</li>
+   *   <li>Human-in-the-loop workflows
+   *   <li>Waiting for external system
+   *   <li>Rate limiting
+   *   <li>Debug/inspection
    * </ul>
    *
    * <p>Non-terminal (can resume)
@@ -225,11 +234,12 @@ public enum AgentState {
    * <p>Entry conditions: STATE_OFFLOAD_TRIGGERED event
    *
    * <p>Activities:
+   *
    * <ul>
-   *   <li>Move context from hot (Flink) to warm (Redis) storage</li>
-   *   <li>Archive conversation to cold (PostgreSQL) storage</li>
-   *   <li>Compress large payloads</li>
-   *   <li>Update state tier metadata</li>
+   *   <li>Move context from hot (Flink) to warm (Redis) storage
+   *   <li>Archive conversation to cold (PostgreSQL) storage
+   *   <li>Compress large payloads
+   *   <li>Update state tier metadata
    * </ul>
    *
    * <p>Typical duration: 50-200ms
@@ -237,8 +247,7 @@ public enum AgentState {
    * <p>Next states: Previous state (after offload complete)
    */
   OFFLOADING(
-      "offloading",
-      "Agent is offloading state to warm (Redis) or cold (PostgreSQL) storage tiers");
+      "offloading", "Agent is offloading state to warm (Redis) or cold (PostgreSQL) storage tiers");
 
   private final String stateId;
   private final String description;

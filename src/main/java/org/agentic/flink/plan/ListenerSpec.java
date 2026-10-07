@@ -6,8 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 
 /**
- * Listener flavour for the agent operator: a Java {@code AgentEventListener} resolved via FQN,
- * or a Python listener whose callable rides in the plan as cloudpickle bytes.
+ * Listener flavour for the agent operator: a Java {@code AgentEventListener} resolved via FQN, or a
+ * Python listener whose callable rides in the plan as cloudpickle bytes.
  */
 public final class ListenerSpec implements Serializable {
   private static final long serialVersionUID = 1L;

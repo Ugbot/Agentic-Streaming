@@ -46,7 +46,8 @@ class HotColdRetrievalTest {
     List<ScoredItem> hits = hot.search(target, 5);
     assertEquals(5, hits.size());
     assertEquals(targetId, hits.get(0).getId());
-    assertTrue(hits.get(0).getScore() > 0.99, "self-cosine should be ~1, was " + hits.get(0).getScore());
+    assertTrue(
+        hits.get(0).getScore() > 0.99, "self-cosine should be ~1, was " + hits.get(0).getScore());
     // Scores must be in descending order.
     for (int i = 1; i < hits.size(); i++) {
       assertTrue(hits.get(i - 1).getScore() >= hits.get(i).getScore(), "scores not descending");
@@ -117,7 +118,8 @@ class HotColdRetrievalTest {
     assertTrue(ids.contains("h1") && ids.contains("c1") && ids.contains("shared"));
     assertEquals(1, ids.stream().filter("shared"::equals).count(), "shared must be de-duplicated");
     // The retained "shared" is the hot copy (higher cosine score than the cold 0.10).
-    ScoredItem shared = merged.stream().filter(s -> s.getId().equals("shared")).findFirst().orElseThrow();
+    ScoredItem shared =
+        merged.stream().filter(s -> s.getId().equals("shared")).findFirst().orElseThrow();
     assertTrue(shared.getScore() > 0.10, "hot copy (higher score) must win the dedup");
     assertEquals("h1", merged.get(0).getId(), "the freshest exact match ranks first");
   }

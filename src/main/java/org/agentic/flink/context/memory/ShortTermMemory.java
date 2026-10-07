@@ -1,12 +1,11 @@
 package org.agentic.flink.context.memory;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.context.core.MemoryType;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.Data;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Short-term working memory Ephemeral, cleared on timeout, not persisted Used for: - Current

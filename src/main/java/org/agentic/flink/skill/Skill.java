@@ -6,14 +6,14 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A named bundle of agent capability — tools + system-prompt fragment + required facts —
- * borrowed in spirit from Apache Flink Agents' {@code @Skills} annotation, scaled down to fit
- * our builder DSL.
+ * A named bundle of agent capability — tools + system-prompt fragment + required facts — borrowed
+ * in spirit from Apache Flink Agents' {@code @Skills} annotation, scaled down to fit our builder
+ * DSL.
  *
- * <p>Skills are additive: {@code AgentBuilder.withSkill(...)} fans them out to {@link
- * #getTools()} (added to allowed tools) and {@link #getSystemPromptFragment()} (concatenated onto
- * the system prompt). {@link #getRequiredFacts()} are surfaced to the hydration layer as a hint
- * about which long-term facts to load eagerly.
+ * <p>Skills are additive: {@code AgentBuilder.withSkill(...)} fans them out to {@link #getTools()}
+ * (added to allowed tools) and {@link #getSystemPromptFragment()} (concatenated onto the system
+ * prompt). {@link #getRequiredFacts()} are surfaced to the hydration layer as a hint about which
+ * long-term facts to load eagerly.
  */
 public final class Skill implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -28,8 +28,7 @@ public final class Skill implements Serializable {
     this.name = Objects.requireNonNull(b.name, "name");
     this.description = b.description == null ? "" : b.description;
     this.tools = b.tools == null ? Collections.emptyList() : List.copyOf(b.tools);
-    this.systemPromptFragment =
-        b.systemPromptFragment == null ? "" : b.systemPromptFragment;
+    this.systemPromptFragment = b.systemPromptFragment == null ? "" : b.systemPromptFragment;
     this.requiredFacts =
         b.requiredFacts == null ? Collections.emptyList() : List.copyOf(b.requiredFacts);
   }

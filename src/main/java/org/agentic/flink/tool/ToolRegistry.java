@@ -1,26 +1,28 @@
 package org.agentic.flink.tool;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.tools.ToolExecutor;
 
 /**
  * Registry of available tools that agents can execute.
  *
- * <p>The ToolRegistry manages tool discovery, registration, and execution. It acts as the
- * central repository for all tools available to agents during job execution.
+ * <p>The ToolRegistry manages tool discovery, registration, and execution. It acts as the central
+ * repository for all tools available to agents during job execution.
  *
  * <p><b>Purpose:</b>
+ *
  * <ul>
- *   <li>Register tools (functions/APIs) that agents can call</li>
- *   <li>Validate that required tools are available</li>
- *   <li>Provide access to tool executors</li>
- *   <li>Handle tool metadata and schemas</li>
+ *   <li>Register tools (functions/APIs) that agents can call
+ *   <li>Validate that required tools are available
+ *   <li>Provide access to tool executors
+ *   <li>Handle tool metadata and schemas
  * </ul>
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * ToolRegistry registry = ToolRegistry.builder()
  *     .registerTool("calculator", new CalculatorTool())
@@ -35,10 +37,10 @@ import java.util.Optional;
  * }</pre>
  *
  * @author Agentic Flink Team
- * @deprecated tools bound to a workflow document are registered in the canonical core's
- *     {@link org.jagentic.core.ToolRegistry} (built by {@code GraphBuilder}) and invoked with
- *     structured arguments through {@code AgentContext.callTool}; this registry serves only the
- *     pre-spec {@link org.agentic.flink.dsl.Agent} DSL.
+ * @deprecated tools bound to a workflow document are registered in the canonical core's {@link
+ *     org.jagentic.core.ToolRegistry} (built by {@code GraphBuilder}) and invoked with structured
+ *     arguments through {@code AgentContext.callTool}; this registry serves only the pre-spec
+ *     {@link org.agentic.flink.dsl.Agent} DSL.
  */
 @Deprecated
 public class ToolRegistry implements Serializable {
@@ -101,26 +103,21 @@ public class ToolRegistry implements Serializable {
    * @return Optional containing the executor, or empty if not found
    */
   public Optional<ToolExecutor> getExecutor(String toolName) {
-    return Optional.ofNullable(tools.get(toolName))
-        .map(ToolDefinition::getExecutor);
+    return Optional.ofNullable(tools.get(toolName)).map(ToolDefinition::getExecutor);
   }
 
   public static ToolRegistryBuilder builder() {
     return new ToolRegistryBuilder();
   }
 
-  /**
-   * Creates an empty registry (for testing/dev).
-   */
+  /** Creates an empty registry (for testing/dev). */
   public static ToolRegistry empty() {
     return new ToolRegistryBuilder().build();
   }
 
   // ==================== Tool Definition ====================
 
-  /**
-   * Represents a tool available for agent use.
-   */
+  /** Represents a tool available for agent use. */
   public static class ToolDefinition implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -129,7 +126,8 @@ public class ToolRegistry implements Serializable {
     private final Map<String, Object> schema;
     private final ToolExecutor executor;
 
-    public ToolDefinition(String name, String description, Map<String, Object> schema, ToolExecutor executor) {
+    public ToolDefinition(
+        String name, String description, Map<String, Object> schema, ToolExecutor executor) {
       this.name = name;
       this.description = description;
       this.schema = schema;
@@ -140,10 +138,21 @@ public class ToolRegistry implements Serializable {
       this(name, description, new HashMap<>(), executor);
     }
 
-    public String getName() { return name; }
-    public String getDescription() { return description; }
-    public Map<String, Object> getSchema() { return schema; }
-    public ToolExecutor getExecutor() { return executor; }
+    public String getName() {
+      return name;
+    }
+
+    public String getDescription() {
+      return description;
+    }
+
+    public Map<String, Object> getSchema() {
+      return schema;
+    }
+
+    public ToolExecutor getExecutor() {
+      return executor;
+    }
   }
 
   // ==================== Builder ====================
@@ -172,7 +181,8 @@ public class ToolRegistry implements Serializable {
      * @param executor The tool executor implementation
      * @return this builder
      */
-    public ToolRegistryBuilder registerTool(String toolName, String description, ToolExecutor executor) {
+    public ToolRegistryBuilder registerTool(
+        String toolName, String description, ToolExecutor executor) {
       tools.put(toolName, new ToolDefinition(toolName, description, executor));
       return this;
     }

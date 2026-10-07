@@ -1,23 +1,25 @@
 package org.agentic.flink.statemachine;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
 import java.io.Serializable;
 import java.util.Objects;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
 
 /**
  * Represents a valid state transition in the agent state machine.
  *
  * <p>Each transition defines:
+ *
  * <ul>
- *   <li>Source state (where the transition starts)</li>
- *   <li>Target state (where the transition ends)</li>
- *   <li>Trigger event type (what causes the transition)</li>
- *   <li>Condition predicate (optional guard condition)</li>
- *   <li>Action (optional side effect to execute during transition)</li>
+ *   <li>Source state (where the transition starts)
+ *   <li>Target state (where the transition ends)
+ *   <li>Trigger event type (what causes the transition)
+ *   <li>Condition predicate (optional guard condition)
+ *   <li>Action (optional side effect to execute during transition)
  * </ul>
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * AgentTransition transition = AgentTransition.builder()
  *     .from(AgentState.VALIDATING)
@@ -41,9 +43,9 @@ public class AgentTransition implements Serializable {
   /**
    * Serializable predicate for guard conditions on transitions.
    *
-   * <p>Plain {@code java.util.function.Predicate} does not extend {@code Serializable},
-   * which causes {@code NotSerializableException} when Flink serializes the function graph.
-   * This interface combines both contracts so lambda conditions survive serialization.
+   * <p>Plain {@code java.util.function.Predicate} does not extend {@code Serializable}, which
+   * causes {@code NotSerializableException} when Flink serializes the function graph. This
+   * interface combines both contracts so lambda conditions survive serialization.
    */
   @FunctionalInterface
   public interface SerializablePredicate<T> extends Serializable {
@@ -63,8 +65,7 @@ public class AgentTransition implements Serializable {
   private AgentTransition(Builder builder) {
     this.fromState = Objects.requireNonNull(builder.fromState, "fromState cannot be null");
     this.toState = Objects.requireNonNull(builder.toState, "toState cannot be null");
-    this.triggerEvent =
-        Objects.requireNonNull(builder.triggerEvent, "triggerEvent cannot be null");
+    this.triggerEvent = Objects.requireNonNull(builder.triggerEvent, "triggerEvent cannot be null");
     this.condition = builder.condition != null ? builder.condition : ALWAYS_TRUE;
     this.action = builder.action;
     this.description = builder.description;
@@ -181,7 +182,9 @@ public class AgentTransition implements Serializable {
     /**
      * Sets an optional guard condition that must be true for the transition to occur.
      *
-     * <p>Example: <pre>{@code
+     * <p>Example:
+     *
+     * <pre>{@code
      * .when(event -> event.getData().get("iteration") < maxIterations)
      * }</pre>
      *
@@ -196,7 +199,9 @@ public class AgentTransition implements Serializable {
     /**
      * Sets an optional action to execute when the transition occurs.
      *
-     * <p>Example: <pre>{@code
+     * <p>Example:
+     *
+     * <pre>{@code
      * .action(event -> metricsCollector.recordTransition(fromState, toState))
      * }</pre>
      *

@@ -2,7 +2,6 @@ package org.agentic.flink.web;
 
 import java.io.Serializable;
 import java.time.Duration;
-import java.util.Objects;
 import org.agentic.flink.net.OutboundUrlPolicy;
 
 /** Tunables for the framework's web toolkit. Defaults are conservative and well-behaved. */

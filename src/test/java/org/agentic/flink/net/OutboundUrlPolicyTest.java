@@ -101,8 +101,7 @@ class OutboundUrlPolicyTest {
     String host = "h" + UUID.randomUUID().toString().substring(0, 8) + ".example";
     String pub = randomPublicV4();
     String priv = randomPrivateV4();
-    OutboundUrlPolicy p =
-        rnd.nextBoolean() ? pinned(host, pub, priv) : pinned(host, priv, pub);
+    OutboundUrlPolicy p = rnd.nextBoolean() ? pinned(host, pub, priv) : pinned(host, priv, pub);
     BlockedUrlException e =
         assertThrows(BlockedUrlException.class, () -> p.validate("http://" + host + "/"));
     assertTrue(e.getMessage().contains(priv), e.getMessage());
@@ -144,8 +143,17 @@ class OutboundUrlPolicyTest {
   @Test
   void ipv6PrivateFormsAreBlocked() {
     for (String a :
-        List.of("::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:10.0.0.1",
-            "::ffff:169.254.169.254", "::10.0.0.1", "64:ff9b::a00:1", "2002:c0a8:1::")) {
+        List.of(
+            "::1",
+            "::",
+            "fe80::1",
+            "fc00::1",
+            "fd12:3456::1",
+            "::ffff:10.0.0.1",
+            "::ffff:169.254.169.254",
+            "::10.0.0.1",
+            "64:ff9b::a00:1",
+            "2002:c0a8:1::")) {
       assertTrue(OutboundUrlPolicy.isForbiddenAddress(addr(a)), a);
       assertFalse(OutboundUrlPolicy.defaults().isAllowed("http://[" + a + "]/"), a);
     }
@@ -179,7 +187,8 @@ class OutboundUrlPolicyTest {
   void allowingPrivateAddressesIsExplicitOptIn() {
     String priv = randomPrivateV4();
     assertFalse(OutboundUrlPolicy.defaults().isAllowed("http://" + priv + "/"));
-    assertTrue(OutboundUrlPolicy.defaults().allowingPrivateAddresses().isAllowed("http://" + priv + "/"));
+    assertTrue(
+        OutboundUrlPolicy.defaults().allowingPrivateAddresses().isAllowed("http://" + priv + "/"));
     assertFalse(
         OutboundUrlPolicy.defaults().allowingPrivateAddresses().isAllowed("file:///" + priv),
         "scheme check still applies");

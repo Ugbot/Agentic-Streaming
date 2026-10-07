@@ -46,7 +46,9 @@ public final class A2ASkillMapper {
         .build();
   }
 
-  /** Build a richer skill from a discovered Agent Card. Falls back to {@link #fromSpec} if empty. */
+  /**
+   * Build a richer skill from a discovered Agent Card. Falls back to {@link #fromSpec} if empty.
+   */
   public static Skill fromCard(RemoteAgentSpec spec, A2AAgentCard card) {
     if (card == null || card.getSkills().isEmpty()) {
       return fromSpec(spec);

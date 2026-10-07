@@ -13,14 +13,15 @@ import org.agentic.flink.memory.vector.ScoredItem;
 
 /**
  * In-JVM {@link HotVectorIndex}: a capacity-bounded, brute-force cosine index over the most-recent
- * documents — the default hot tier for the embedded single-JVM deployment, where the ingest operator
- * and the query operator share a process.
+ * documents — the default hot tier for the embedded single-JVM deployment, where the ingest
+ * operator and the query operator share a process.
  *
  * <p>Backed by a <b>process-wide shared</b> window keyed by index name (like {@code
- * InMemoryConversationStore.shared()}), so a {@code new InMemoryHotVectorIndex("docs")} on the ingest
- * side and another on the query side address the same data after the config ships in the job graph
- * (see {@link #readResolve()}). Eviction is strict LRU by {@code maxEntries}: the hot tier is a small
- * moving window of fresh data, brute-forced exactly — accurate and fast while the window is small.
+ * InMemoryConversationStore.shared()}), so a {@code new InMemoryHotVectorIndex("docs")} on the
+ * ingest side and another on the query side address the same data after the config ships in the job
+ * graph (see {@link #readResolve()}). Eviction is strict LRU by {@code maxEntries}: the hot tier is
+ * a small moving window of fresh data, brute-forced exactly — accurate and fast while the window is
+ * small.
  */
 public final class InMemoryHotVectorIndex implements HotVectorIndex {
   private static final long serialVersionUID = 1L;
@@ -102,7 +103,8 @@ public final class InMemoryHotVectorIndex implements HotVectorIndex {
       this.entries =
           new LinkedHashMap<>(16, 0.75f, false) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<String, InMemoryHotVectorIndex.Entry> eldest) {
+            protected boolean removeEldestEntry(
+                Map.Entry<String, InMemoryHotVectorIndex.Entry> eldest) {
               return size() > Window.this.maxEntries;
             }
           };
@@ -110,7 +112,8 @@ public final class InMemoryHotVectorIndex implements HotVectorIndex {
 
     synchronized void upsert(String id, float[] embedding, String text, Map<String, String> meta) {
       entries.remove(id); // remove then put so the entry moves to the most-recent position
-      entries.put(id, new Entry(embedding, text, meta == null ? Map.of() : new LinkedHashMap<>(meta)));
+      entries.put(
+          id, new Entry(embedding, text, meta == null ? Map.of() : new LinkedHashMap<>(meta)));
     }
 
     synchronized int size() {
@@ -124,7 +127,8 @@ public final class InMemoryHotVectorIndex implements HotVectorIndex {
     synchronized List<ScoredItem> search(float[] query, int k) {
       double qNorm = norm(query);
       // Min-heap of size k by score.
-      PriorityQueue<ScoredItem> heap = new PriorityQueue<>(k, (a, b) -> Double.compare(a.getScore(), b.getScore()));
+      PriorityQueue<ScoredItem> heap =
+          new PriorityQueue<>(k, (a, b) -> Double.compare(a.getScore(), b.getScore()));
       for (Map.Entry<String, Entry> e : entries.entrySet()) {
         double score = cosine(query, qNorm, e.getValue().embedding);
         if (heap.size() < k) {
@@ -140,7 +144,9 @@ public final class InMemoryHotVectorIndex implements HotVectorIndex {
     }
 
     private static ScoredItem toScored(String id, Entry e, double score) {
-      ContextItem item = new ContextItem(e.text == null ? "" : e.text, ContextPriority.SHOULD, MemoryType.SHORT_TERM);
+      ContextItem item =
+          new ContextItem(
+              e.text == null ? "" : e.text, ContextPriority.SHOULD, MemoryType.SHORT_TERM);
       if (e.metadata != null) {
         for (Map.Entry<String, String> m : e.metadata.entrySet()) {
           item.addMetadata(m.getKey(), m.getValue());

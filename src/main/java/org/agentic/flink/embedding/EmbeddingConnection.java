@@ -6,8 +6,8 @@ import org.apache.flink.api.common.functions.RuntimeContext;
 /**
  * Serializable spec for an embedding-model transport.
  *
- * <p>Discovered via {@link java.util.ServiceLoader}. Default implementation is
- * {@code OllamaEmbeddingConnection} pointing at the local Ollama service.
+ * <p>Discovered via {@link java.util.ServiceLoader}. Default implementation is {@code
+ * OllamaEmbeddingConnection} pointing at the local Ollama service.
  */
 public interface EmbeddingConnection extends Serializable {
 

@@ -33,13 +33,12 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * {@link LocalWorkflowSession} on its own per-job local cluster: turns flow through the in-JVM
- * queue, a restart stops with a savepoint and restores it, and the restored conversation is
- * rebuilt from the log without calling the tool again.
+ * queue, a restart stops with a savepoint and restores it, and the restored conversation is rebuilt
+ * from the log without calling the tool again.
  */
 class LocalWorkflowSessionTest {
 
-  @TempDir
-  static Path savepoints;
+  @TempDir static Path savepoints;
 
   static HttpServer tools;
   static final AtomicInteger LOOKUPS = new AtomicInteger();
@@ -49,15 +48,17 @@ class LocalWorkflowSessionTest {
   static void startToolServer() throws Exception {
     balance = ThreadLocalRandom.current().nextInt(1, 10_000) / 100.0;
     tools = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    tools.createContext("/lookup", exchange -> {
-      LOOKUPS.incrementAndGet();
-      byte[] body = ("{\"value\":" + balance + "}").getBytes(StandardCharsets.UTF_8);
-      exchange.getResponseHeaders().add("Content-Type", "application/json");
-      exchange.sendResponseHeaders(200, body.length);
-      try (OutputStream out = exchange.getResponseBody()) {
-        out.write(body);
-      }
-    });
+    tools.createContext(
+        "/lookup",
+        exchange -> {
+          LOOKUPS.incrementAndGet();
+          byte[] body = ("{\"value\":" + balance + "}").getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().add("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, body.length);
+          try (OutputStream out = exchange.getResponseBody()) {
+            out.write(body);
+          }
+        });
     tools.start();
   }
 
@@ -78,18 +79,31 @@ class LocalWorkflowSessionTest {
     return out;
   }
 
-  /** {@link Workflows#billing()} with {@code lookup_charge} served over HTTP so calls can be counted. */
+  /**
+   * {@link Workflows#billing()} with {@code lookup_charge} served over HTTP so calls can be
+   * counted.
+   */
   private static Map<String, Object> billingOverHttp() {
     Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
     String url = "http://127.0.0.1:" + tools.getAddress().getPort() + "/lookup";
-    wf.put("tools", List.of(Map.of("id", "lookup_charge", "kind", "http", "description", "Last charge", "url", url)));
+    wf.put(
+        "tools",
+        List.of(
+            Map.of(
+                "id", "lookup_charge", "kind", "http", "description", "Last charge", "url", url)));
     return wf;
   }
 
   private static LocalWorkflowSession session(Map<String, Object> wf) {
     int parallelism = ThreadLocalRandom.current().nextInt(1, 3);
-    return new LocalWorkflowSession(wf, FlinkRuntimeOptions.fromSpec(wf), parallelism, null,
-        savepoints.resolve(rnd("sp")), Duration.ofSeconds(60), rnd("job"));
+    return new LocalWorkflowSession(
+        wf,
+        FlinkRuntimeOptions.fromSpec(wf),
+        parallelism,
+        null,
+        savepoints.resolve(rnd("sp")),
+        Duration.ofSeconds(60),
+        rnd("job"));
   }
 
   @Test
@@ -124,7 +138,9 @@ class LocalWorkflowSessionTest {
       assertEquals(TurnStatus.COMPLETED, second.status);
       assertEquals("general", second.path());
       assertTrue(second.toolCalls.isEmpty());
-      assertEquals(2, ((Number) second.state.get("turn_count")).intValue(),
+      assertEquals(
+          2,
+          ((Number) second.state.get("turn_count")).intValue(),
           "the conversation continues from the restored log");
       assertEquals(before + 1, LOOKUPS.get());
     }
@@ -142,7 +158,8 @@ class LocalWorkflowSessionTest {
 
       s.restart();
 
-      TurnResult done = s.submit(Event.resume(cid, tid, Map.of("kind", "approval", "approved", true)));
+      TurnResult done =
+          s.submit(Event.resume(cid, tid, Map.of("kind", "approval", "approved", true)));
       assertEquals(TurnStatus.COMPLETED, done.status);
       List<String> after = types(done);
       assertTrue(after.contains(EventType.TURN_RESUMED.wire()), after.toString());
@@ -155,7 +172,8 @@ class LocalWorkflowSessionTest {
     int n = ThreadLocalRandom.current().nextInt(3, 7);
     List<Event> events = new ArrayList<>();
     for (int i = 0; i < n; i++) {
-      events.add(Event.turn(rnd("c"), rnd("t"), "carol", i % 2 == 0 ? "what is my balance?" : "hello"));
+      events.add(
+          Event.turn(rnd("c"), rnd("t"), "carol", i % 2 == 0 ? "what is my balance?" : "hello"));
     }
     try (LocalWorkflowSession s = session(Workflows.billing())) {
       s.start();
@@ -178,13 +196,22 @@ class LocalWorkflowSessionTest {
       events.add(Event.turn(cid, rnd("t" + i), "erin", "hello"));
     }
     Map<String, Object> wf = Workflows.billing();
-    try (LocalWorkflowSession s = new LocalWorkflowSession(wf, FlinkRuntimeOptions.fromSpec(wf), 3, null,
-        savepoints.resolve(rnd("sp")), Duration.ofSeconds(60), rnd("job"))) {
+    try (LocalWorkflowSession s =
+        new LocalWorkflowSession(
+            wf,
+            FlinkRuntimeOptions.fromSpec(wf),
+            3,
+            null,
+            savepoints.resolve(rnd("sp")),
+            Duration.ofSeconds(60),
+            rnd("job"))) {
       s.start();
       List<TurnResult> results = s.submitAll(events);
       for (int i = 0; i < n; i++) {
         assertEquals(events.get(i).turnId(), results.get(i).turnId);
-        assertEquals(i + 1, ((Number) results.get(i).state.get("turn_count")).intValue(),
+        assertEquals(
+            i + 1,
+            ((Number) results.get(i).state.get("turn_count")).intValue(),
             "turn " + i + " must see every earlier turn of its conversation");
       }
     }
@@ -193,7 +220,8 @@ class LocalWorkflowSessionTest {
   @Test
   void lifecycleIsGuarded() throws Exception {
     LocalWorkflowSession s = session(Workflows.billing());
-    assertThrows(IllegalStateException.class, () -> s.submit(Event.turn(rnd("c"), rnd("t"), "dave", "hi")));
+    assertThrows(
+        IllegalStateException.class, () -> s.submit(Event.turn(rnd("c"), rnd("t"), "dave", "hi")));
     assertThrows(IllegalStateException.class, s::restart);
     s.start();
     assertThrows(IllegalStateException.class, s::start);

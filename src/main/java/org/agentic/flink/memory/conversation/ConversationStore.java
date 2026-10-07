@@ -8,8 +8,8 @@ import org.agentic.flink.llm.ChatMessage;
 
 /**
  * Per-conversation memory shared <b>across operators</b> — the multi-turn transcript (and small
- * scalar workflow attributes) for a conversation, keyed by a stable conversation identifier
- * (A2A {@code contextId}, an agent {@code flowId}, a session id, …).
+ * scalar workflow attributes) for a conversation, keyed by a stable conversation identifier (A2A
+ * {@code contextId}, an agent {@code flowId}, a session id, …).
  *
  * <p>This fills the gap between the two existing memory tiers:
  *
@@ -38,10 +38,10 @@ import org.agentic.flink.llm.ChatMessage;
  * implementations should degrade gracefully (log + return empty/no-op) rather than fail a turn.
  *
  * @deprecated on the spec runtime a conversation's state is the fold of its event log, held in
- *     Flink keyed state by {@link org.agentic.flink.runtime.WorkflowTurnFunction}; the transcript is
- *     {@link org.jagentic.core.ConversationState#transcript()} and the core's
- *     {@link org.jagentic.core.ConversationStore} is the materialized-view SPI. This store remains
- *     the memory layer of the deprecated {@link org.agentic.flink.dsl.Agent} DSL.
+ *     Flink keyed state by {@link org.agentic.flink.runtime.WorkflowTurnFunction}; the transcript
+ *     is {@link org.jagentic.core.ConversationState#transcript()} and the core's {@link
+ *     org.jagentic.core.ConversationStore} is the materialized-view SPI. This store remains the
+ *     memory layer of the deprecated {@link org.agentic.flink.dsl.Agent} DSL.
  */
 @Deprecated
 public interface ConversationStore extends Serializable {
@@ -96,8 +96,8 @@ public interface ConversationStore extends Serializable {
   /**
    * Associate a conversation with a user (idempotent), so it can be retrieved per-user via {@link
    * #conversationsForUser}. A conversation belongs to one user; associating a new user replaces the
-   * prior association. Lets the same conversation be addressed both by {@code conversationId} and by
-   * the owning user — e.g. to list or resume a user's conversations.
+   * prior association. Lets the same conversation be addressed both by {@code conversationId} and
+   * by the owning user — e.g. to list or resume a user's conversations.
    */
   void associateUser(String conversationId, String userId);
 

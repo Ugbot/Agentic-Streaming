@@ -1,15 +1,13 @@
 package org.agentic.flink.llm.langchain4j;
 
-import org.agentic.flink.config.ConfigKeys;
-import org.agentic.flink.llm.ChatConnection;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
@@ -18,6 +16,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.llm.ChatConnection;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,14 +26,13 @@ import org.slf4j.LoggerFactory;
  * Default {@link ChatConnection} that delegates to LangChain4J.
  *
  * <p>Picks the underlying LangChain4J model implementation based on the {@code provider} field:
- * {@code "ollama"} or {@code "openai"}. Other providers can be added by implementing
- * {@link ChatConnection} directly or by registering a different SPI via {@link
- * java.util.ServiceLoader}.
+ * {@code "ollama"} or {@code "openai"}. Other providers can be added by implementing {@link
+ * ChatConnection} directly or by registering a different SPI via {@link java.util.ServiceLoader}.
  *
- * <p>The actual {@link dev.langchain4j.model.chat.ChatModel} is constructed lazily inside
- * each {@link org.agentic.flink.llm.ChatSetup} call — model name / temperature live in
- * the setup, not the connection, so a single connection can serve many setups with different
- * model parameters. We cache a per-setup-signature client to avoid re-building on every event.
+ * <p>The actual {@link dev.langchain4j.model.chat.ChatModel} is constructed lazily inside each
+ * {@link org.agentic.flink.llm.ChatSetup} call — model name / temperature live in the setup, not
+ * the connection, so a single connection can serve many setups with different model parameters. We
+ * cache a per-setup-signature client to avoid re-building on every event.
  */
 public final class LangChain4jChatConnection implements ChatConnection {
   private static final long serialVersionUID = 1L;
@@ -74,12 +73,11 @@ public final class LangChain4jChatConnection implements ChatConnection {
   }
 
   /**
-   * Claude via the Anthropic API. The model name (e.g. {@code claude-sonnet-4-6}) is supplied
-   * per call through {@link org.agentic.flink.llm.ChatSetup}.
+   * Claude via the Anthropic API. The model name (e.g. {@code claude-sonnet-4-6}) is supplied per
+   * call through {@link org.agentic.flink.llm.ChatSetup}.
    */
   public static LangChain4jChatConnection anthropic(String apiKey) {
-    return new LangChain4jChatConnection(
-        Provider.ANTHROPIC, null, apiKey, Duration.ofSeconds(120));
+    return new LangChain4jChatConnection(Provider.ANTHROPIC, null, apiKey, Duration.ofSeconds(120));
   }
 
   /**
@@ -108,7 +106,9 @@ public final class LangChain4jChatConnection implements ChatConnection {
   public LangChain4jChatClient bind(RuntimeContext runtimeContext) {
     LOG.info(
         "Binding LangChain4jChatConnection: provider={}, baseUrl={}, timeout={}",
-        provider, baseUrl, timeout);
+        provider,
+        baseUrl,
+        timeout);
     return new ChatClientImpl(this);
   }
 
@@ -167,7 +167,6 @@ public final class LangChain4jChatConnection implements ChatConnection {
     }
   }
 
-
   /** Convert framework {@link org.agentic.flink.llm.ChatMessage} to LangChain4J form. */
   static dev.langchain4j.data.message.ChatMessage toLangChainMessage(
       org.agentic.flink.llm.ChatMessage m) {
@@ -210,7 +209,8 @@ public final class LangChain4jChatConnection implements ChatConnection {
         String raw = req.arguments();
         args = raw == null || raw.isBlank() ? Map.of() : JSON.readValue(raw, MAP_TYPE);
       } catch (java.io.IOException e) {
-        LOG.warn("Dropping tool request {} with unparseable arguments: {}", req.name(), e.getMessage());
+        LOG.warn(
+            "Dropping tool request {} with unparseable arguments: {}", req.name(), e.getMessage());
         continue;
       }
       out.add(new org.agentic.flink.llm.ChatToolCall(id, req.name(), args));

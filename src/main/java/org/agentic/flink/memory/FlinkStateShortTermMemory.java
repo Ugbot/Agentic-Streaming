@@ -1,12 +1,12 @@
 package org.agentic.flink.memory;
 
-import org.agentic.flink.context.core.AgentContext;
-import org.agentic.flink.context.core.ContextItem;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.agentic.flink.context.core.AgentContext;
+import org.agentic.flink.context.core.ContextItem;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -26,8 +26,8 @@ import org.apache.flink.api.common.state.ValueStateDescriptor;
  *
  * <p>If the spec declares a non-zero TTL, both descriptors are configured with {@link
  * StateTtlConfig#cleanupIncrementally(int, boolean)} and {@link
- * StateTtlConfig.UpdateType#OnCreateAndWrite}. Cleanup runs inline with state-backend
- * compaction (RocksDB) or scan (HashMap), so it costs nothing extra beyond a per-entry timestamp.
+ * StateTtlConfig.UpdateType#OnCreateAndWrite}. Cleanup runs inline with state-backend compaction
+ * (RocksDB) or scan (HashMap), so it costs nothing extra beyond a per-entry timestamp.
  */
 public final class FlinkStateShortTermMemory implements ShortTermMemory {
 

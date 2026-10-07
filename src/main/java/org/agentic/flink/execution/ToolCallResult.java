@@ -6,7 +6,6 @@ import java.io.Serializable;
  * Result of a tool execution.
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -44,27 +43,57 @@ public class ToolCallResult implements Serializable {
     return result;
   }
 
-  public String getToolCallId() { return toolCallId; }
-  public void setToolCallId(String toolCallId) { this.toolCallId = toolCallId; }
+  public String getToolCallId() {
+    return toolCallId;
+  }
 
-  public String getToolName() { return toolName; }
-  public void setToolName(String toolName) { this.toolName = toolName; }
+  public void setToolCallId(String toolCallId) {
+    this.toolCallId = toolCallId;
+  }
 
-  public Object getResult() { return result; }
-  public void setResult(Object result) { this.result = result; }
+  public String getToolName() {
+    return toolName;
+  }
 
-  public boolean isSuccess() { return success; }
-  public void setSuccess(boolean success) { this.success = success; }
+  public void setToolName(String toolName) {
+    this.toolName = toolName;
+  }
 
-  public String getError() { return error; }
-  public void setError(String error) { this.error = error; }
+  public Object getResult() {
+    return result;
+  }
 
-  public long getExecutionTimeMs() { return executionTimeMs; }
-  public void setExecutionTimeMs(long executionTimeMs) { this.executionTimeMs = executionTimeMs; }
+  public void setResult(Object result) {
+    this.result = result;
+  }
+
+  public boolean isSuccess() {
+    return success;
+  }
+
+  public void setSuccess(boolean success) {
+    this.success = success;
+  }
+
+  public String getError() {
+    return error;
+  }
+
+  public void setError(String error) {
+    this.error = error;
+  }
+
+  public long getExecutionTimeMs() {
+    return executionTimeMs;
+  }
+
+  public void setExecutionTimeMs(long executionTimeMs) {
+    this.executionTimeMs = executionTimeMs;
+  }
 
   @Override
   public String toString() {
-    return String.format("ToolCallResult[id=%s, tool=%s, success=%s]",
-        toolCallId, toolName, success);
+    return String.format(
+        "ToolCallResult[id=%s, tool=%s, success=%s]", toolCallId, toolName, success);
   }
 }

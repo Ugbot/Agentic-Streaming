@@ -13,6 +13,7 @@ import java.util.*;
  * <p><b>Example Structures:</b>
  *
  * <p><b>3-Tier (Like TieredAgentExample):</b>
+ *
  * <pre>
  * Tier 1: Validation Agent  → validates inputs
  * Tier 2: Execution Agent   → performs work
@@ -20,6 +21,7 @@ import java.util.*;
  * </pre>
  *
  * <p><b>4-Tier Security Review:</b>
+ *
  * <pre>
  * Tier 1: Executor      → performs task
  * Tier 2: QA Reviewer   → checks quality
@@ -28,6 +30,7 @@ import java.util.*;
  * </pre>
  *
  * <p><b>Usage Example:</b>
+ *
  * <pre>{@code
  * SupervisorChain chain = SupervisorChain.builder()
  *     .withId("research-chain")
@@ -46,7 +49,6 @@ import java.util.*;
  *
  * @author Agentic Flink Team
  * @see SupervisorChainBuilder
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -74,13 +76,33 @@ public class SupervisorChain implements Serializable {
     this.failOnMaxEscalations = builder.failOnMaxEscalations;
   }
 
-  public String getChainId() { return chainId; }
-  public String getChainName() { return chainName; }
-  public List<SupervisorTier> getTiers() { return tiers; }
-  public EscalationPolicy getEscalationPolicy() { return escalationPolicy; }
-  public double getAutoEscalateThreshold() { return autoEscalateThreshold; }
-  public int getMaxEscalations() { return maxEscalations; }
-  public boolean isFailOnMaxEscalations() { return failOnMaxEscalations; }
+  public String getChainId() {
+    return chainId;
+  }
+
+  public String getChainName() {
+    return chainName;
+  }
+
+  public List<SupervisorTier> getTiers() {
+    return tiers;
+  }
+
+  public EscalationPolicy getEscalationPolicy() {
+    return escalationPolicy;
+  }
+
+  public double getAutoEscalateThreshold() {
+    return autoEscalateThreshold;
+  }
+
+  public int getMaxEscalations() {
+    return maxEscalations;
+  }
+
+  public boolean isFailOnMaxEscalations() {
+    return failOnMaxEscalations;
+  }
 
   /**
    * Gets the number of tiers in this chain.
@@ -109,9 +131,7 @@ public class SupervisorChain implements Serializable {
    * @return Optional containing the tier, or empty if not found
    */
   public Optional<SupervisorTier> getTierByName(String tierName) {
-    return tiers.stream()
-        .filter(t -> t.getTierName().equals(tierName))
-        .findFirst();
+    return tiers.stream().filter(t -> t.getTierName().equals(tierName)).findFirst();
   }
 
   /**
@@ -168,15 +188,12 @@ public class SupervisorChain implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "SupervisorChain[id=%s, tiers=%d, policy=%s]",
-        chainId, tiers.size(), escalationPolicy);
+        "SupervisorChain[id=%s, tiers=%d, policy=%s]", chainId, tiers.size(), escalationPolicy);
   }
 
   // ==================== Supervisor Tier ====================
 
-  /**
-   * Represents one tier (level) in the supervisor chain.
-   */
+  /** Represents one tier (level) in the supervisor chain. */
   public static class SupervisorTier implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -199,11 +216,25 @@ public class SupervisorChain implements Serializable {
       this.qualityThreshold = qualityThreshold;
     }
 
-    public int getTierIndex() { return tierIndex; }
-    public String getTierName() { return tierName; }
-    public Agent getAgent() { return agent; }
-    public boolean isRequiresHumanApproval() { return requiresHumanApproval; }
-    public double getQualityThreshold() { return qualityThreshold; }
+    public int getTierIndex() {
+      return tierIndex;
+    }
+
+    public String getTierName() {
+      return tierName;
+    }
+
+    public Agent getAgent() {
+      return agent;
+    }
+
+    public boolean isRequiresHumanApproval() {
+      return requiresHumanApproval;
+    }
+
+    public double getQualityThreshold() {
+      return qualityThreshold;
+    }
 
     /**
      * Checks if this is the first tier (entry point).
@@ -224,9 +255,7 @@ public class SupervisorChain implements Serializable {
 
   // ==================== Escalation Policy ====================
 
-  /**
-   * Defines how escalation works when a tier rejects/fails.
-   */
+  /** Defines how escalation works when a tier rejects/fails. */
   public enum EscalationPolicy {
     /**
      * Escalate to the next tier in the chain.
@@ -256,9 +285,7 @@ public class SupervisorChain implements Serializable {
      */
     FAIL_FAST("Fail Fast", "Fail immediately on rejection"),
 
-    /**
-     * Custom escalation logic (user-defined).
-     */
+    /** Custom escalation logic (user-defined). */
     CUSTOM("Custom", "Custom user-defined escalation logic");
 
     private final String displayName;
@@ -269,7 +296,12 @@ public class SupervisorChain implements Serializable {
       this.description = description;
     }
 
-    public String getDisplayName() { return displayName; }
-    public String getDescription() { return description; }
+    public String getDisplayName() {
+      return displayName;
+    }
+
+    public String getDescription() {
+      return description;
+    }
   }
 }

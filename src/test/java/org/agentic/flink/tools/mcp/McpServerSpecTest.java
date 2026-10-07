@@ -59,8 +59,11 @@ class McpServerSpecTest {
   void stdioRequiresCommand() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> McpServerSpec.builder()
-            .withName("x").withTransport(McpServerSpec.Transport.STDIO).build());
+        () ->
+            McpServerSpec.builder()
+                .withName("x")
+                .withTransport(McpServerSpec.Transport.STDIO)
+                .build());
   }
 
   @Test
@@ -68,8 +71,11 @@ class McpServerSpecTest {
   void httpRequiresUrl() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> McpServerSpec.builder()
-            .withName("x").withTransport(McpServerSpec.Transport.HTTP).build());
+        () ->
+            McpServerSpec.builder()
+                .withName("x")
+                .withTransport(McpServerSpec.Transport.HTTP)
+                .build());
   }
 
   private static Object roundTrip(Object obj) throws Exception {
@@ -77,7 +83,8 @@ class McpServerSpecTest {
     try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
       oos.writeObject(obj);
     }
-    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
+    try (ObjectInputStream ois =
+        new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
       return ois.readObject();
     }
   }

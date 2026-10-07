@@ -42,16 +42,16 @@ import org.jagentic.core.pipeline.WorkflowValidator;
 
 /**
  * The Flink runtime adapter for an {@code agentic/v1} workflow: one keyed operator that turns
- * {@link Event}s into normalized {@link TurnResult}s using the canonical core graph
- * ({@link org.jagentic.core.RoutedGraph} built by {@link GraphBuilder}).
+ * {@link Event}s into normalized {@link TurnResult}s using the canonical core graph ({@link
+ * org.jagentic.core.RoutedGraph} built by {@link GraphBuilder}).
  *
  * <p>What Flink provides here, and how it maps onto the spec's primitives:
  *
  * <ul>
- *   <li><b>Event log as keyed state.</b> The per-conversation log is a {@link ListState} of
- *       {@link LogEvent} plus a dense sequence counter; the graph appends to it through
- *       {@link KeyedConversationLog}. Conversation state is never stored separately: it is
- *       {@link ConversationState#fold} over that list, computed when a turn arrives.
+ *   <li><b>Event log as keyed state.</b> The per-conversation log is a {@link ListState} of {@link
+ *       LogEvent} plus a dense sequence counter; the graph appends to it through {@link
+ *       KeyedConversationLog}. Conversation state is never stored separately: it is {@link
+ *       ConversationState#fold} over that list, computed when a turn arrives.
  *   <li><b>Ordering.</b> The stream must be {@code keyBy(conversation_id)}; Flink then serializes
  *       all turns of a conversation onto one task, one at a time.
  *   <li><b>Idempotency and recovery.</b> The log is checkpointed with the operator, so a turn id
@@ -60,29 +60,29 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *       processed turn is never checkpointed: after a failure the turn is either fully in the log
  *       (answered as duplicate) or not at all (executed once on redelivery).
  *   <li><b>Timers.</b> When {@link FlinkRuntimeOptions#resumeAfter()} is set, a suspended turn
- *       registers a Flink timer (processing or event time), appends {@code timer_scheduled}, and
- *       on firing appends {@code timer_fired} and resumes the turn with a
- *       {@code {kind: "timer"}} signal. Pending timers live in keyed state so they survive restore.
+ *       registers a Flink timer (processing or event time), appends {@code timer_scheduled}, and on
+ *       firing appends {@code timer_fired} and resumes the turn with a {@code {kind: "timer"}}
+ *       signal. Pending timers live in keyed state so they survive restore.
  *   <li><b>Workflow timers.</b> The document's {@code timers} (spec section 8) are handled by the
  *       core graph over the keyed log: {@code timer_scheduled} on a conversation's first turn,
  *       {@code timer_fired} plus the timer's tool call at the head of the first later turn whose
- *       clock reads at or past the deadline. Processing time comes from
- *       {@link FlinkRuntimeOptions#processingClock()} (the operator's processing time by default);
- *       event time is the conversation watermark folded from {@code metadata.event_time_ms}. The
- *       spec makes both clocks observable only through turns, so no Flink timer is registered for
- *       them; the log in keyed state is the timer registry, and a savepoint or checkpoint carries
- *       pending timers across a restore without re-scheduling or double-firing.
+ *       clock reads at or past the deadline. Processing time comes from {@link
+ *       FlinkRuntimeOptions#processingClock()} (the operator's processing time by default); event
+ *       time is the conversation watermark folded from {@code metadata.event_time_ms}. The spec
+ *       makes both clocks observable only through turns, so no Flink timer is registered for them;
+ *       the log in keyed state is the timer registry, and a savepoint or checkpoint carries pending
+ *       timers across a restore without re-scheduling or double-firing.
  *   <li><b>TTL.</b> {@link FlinkRuntimeOptions#stateTtl()} applies Flink state TTL to the log,
  *       counter and timer registry.
- *   <li><b>Serialization.</b> Log entries use {@link JsonTypeInfo}; results use
- *       {@link TurnResultTypeInfo}; nothing falls back to Kryo.
- *   <li><b>Metrics.</b> Per-status turn counters and a fired-timer counter on the operator's
- *       metric group.
+ *   <li><b>Serialization.</b> Log entries use {@link JsonTypeInfo}; results use {@link
+ *       TurnResultTypeInfo}; nothing falls back to Kryo.
+ *   <li><b>Metrics.</b> Per-status turn counters and a fired-timer counter on the operator's metric
+ *       group.
  * </ul>
  *
  * <p>The workflow document (a {@code Map}) is the only serialized configuration; the graph, tool
- * registry and retriever are rebuilt in {@link #open} on every (re)start. Tools declared as
- * {@code kind: failing} count attempts in-process, so their budget also restarts with the task.
+ * registry and retriever are rebuilt in {@link #open} on every (re)start. Tools declared as {@code
+ * kind: failing} count attempts in-process, so their budget also restarts with the task.
  */
 public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Event, TurnResult>
     implements ResultTypeQueryable<TurnResult> {
@@ -119,10 +119,10 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
 
   /**
    * @param chatClientFactory builds the {@link org.jagentic.core.llm.ChatClient} for paths with
-   *     {@code brain: llm}; it is serialized with the operator. With the default
-   *     {@link ChatClientFactories#failFast()} a spec that declares an {@code llm} brain is
-   *     rejected here, at job build time, unless its provider is the spec's deterministic
-   *     {@code stub}, which {@link GraphBuilder} resolves without a factory.
+   *     {@code brain: llm}; it is serialized with the operator. With the default {@link
+   *     ChatClientFactories#failFast()} a spec that declares an {@code llm} brain is rejected here,
+   *     at job build time, unless its provider is the spec's deterministic {@code stub}, which
+   *     {@link GraphBuilder} resolves without a factory.
    */
   public WorkflowTurnFunction(
       Map<String, Object> spec,
@@ -132,7 +132,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     this.options = Objects.requireNonNull(options, "options");
     this.chatClientFactory = Objects.requireNonNull(chatClientFactory, "chatClientFactory");
     Map<String, Object> copy = new HashMap<>(spec);
-    // on_match tool rules are the portable in-turn fold; the rest is wired natively by the job graph
+    // on_match tool rules are the portable in-turn fold; the rest is wired natively by the job
+    // graph
     List<Map<String, Object>> inTurnCep = SequencePattern.toolActions(cepRules(spec));
     if (inTurnCep.isEmpty()) {
       copy.remove("cep");
@@ -141,11 +142,14 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     }
     this.spec = copy;
     WorkflowValidator.validate(this.spec);
-    if (ChatClientFactories.isFailFast(chatClientFactory) && !GraphBuilder.usesScriptedLlm(this.spec)) {
+    if (ChatClientFactories.isFailFast(chatClientFactory)
+        && !GraphBuilder.usesScriptedLlm(this.spec)) {
       List<String> llmPaths = llmBrainPaths(this.spec);
       if (!llmPaths.isEmpty()) {
         throw new IllegalArgumentException(
-            "agent.paths " + llmPaths + " declare brain: llm but no ChatClientFactory was"
+            "agent.paths "
+                + llmPaths
+                + " declare brain: llm but no ChatClientFactory was"
                 + " configured; pass one to WorkflowTurnFunction(spec, options, factory)");
       }
     }
@@ -190,7 +194,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
 
     ListStateDescriptor<LogEvent> logDesc = new ListStateDescriptor<>(LOG_STATE, LOG_EVENT_TYPE);
     ValueStateDescriptor<Long> seqDesc = new ValueStateDescriptor<>(SEQUENCE_STATE, Types.LONG);
-    MapStateDescriptor<Long, String> timerDesc = new MapStateDescriptor<>(TIMER_STATE, Types.LONG, Types.STRING);
+    MapStateDescriptor<Long, String> timerDesc =
+        new MapStateDescriptor<>(TIMER_STATE, Types.LONG, Types.STRING);
     if (options.stateTtl() != null) {
       StateTtlConfig ttl = ttlConfig(options.stateTtl());
       logDesc.enableTimeToLive(ttl);
@@ -219,8 +224,11 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   public void processElement(Event event, Context ctx, Collector<TurnResult> out) throws Exception {
     String cid = ctx.getCurrentKey();
     if (!cid.equals(event.conversationId())) {
-      throw new IllegalStateException("stream must be keyed by Event::conversationId; key " + cid
-          + " carried event for " + event.conversationId());
+      throw new IllegalStateException(
+          "stream must be keyed by Event::conversationId; key "
+              + cid
+              + " carried event for "
+              + event.conversationId());
     }
     ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
     TurnResult result = handle(event, keyedLog, ctx.timerService());
@@ -233,7 +241,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   }
 
   @Override
-  public void onTimer(long timestamp, OnTimerContext ctx, Collector<TurnResult> out) throws Exception {
+  public void onTimer(long timestamp, OnTimerContext ctx, Collector<TurnResult> out)
+      throws Exception {
     String turnId = timers.get(timestamp);
     if (turnId == null) {
       return;
@@ -242,8 +251,12 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     String cid = ctx.getCurrentKey();
     ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
     String timerId = timerId(turnId, timestamp);
-    LogEvent fired = keyedLog.append(cid, turnId, EventType.TIMER_FIRED,
-        payload("timer_id", timerId, "turn_id", turnId, "fired_at", timestamp));
+    LogEvent fired =
+        keyedLog.append(
+            cid,
+            turnId,
+            EventType.TIMER_FIRED,
+            payload("timer_id", timerId, "turn_id", turnId, "fired_at", timestamp));
     timersFired.inc();
 
     ConversationState state = keyedLog.state(cid);
@@ -261,17 +274,28 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     for (ChatMessage m : before.transcript()) {
       store.append(event.conversationId(), m);
     }
-    AgentContext agentCtx = new AgentContext(event.conversationId(), event.turnId(), event.userId(),
-        store, new KeyedStateStore.InMemory(), built.tools(), built.retriever(), keyedLog,
-        built.graph().policies());
+    AgentContext agentCtx =
+        new AgentContext(
+            event.conversationId(),
+            event.turnId(),
+            event.userId(),
+            store,
+            new KeyedStateStore.InMemory(),
+            built.tools(),
+            built.retriever(),
+            keyedLog,
+            built.graph().policies());
     ProcessingClock clock = options.processingClock();
     agentCtx.clock = () -> clock.nowMs(timerService);
     return built.graph().handle(event, agentCtx);
   }
 
-  private LogEvent scheduleResume(String turnId, ConversationLog keyedLog, Context ctx) throws Exception {
-    long now = options.timerDomain() == TimeDomain.EVENT_TIME
-        ? requireTimestamp(ctx) : ctx.timerService().currentProcessingTime();
+  private LogEvent scheduleResume(String turnId, ConversationLog keyedLog, Context ctx)
+      throws Exception {
+    long now =
+        options.timerDomain() == TimeDomain.EVENT_TIME
+            ? requireTimestamp(ctx)
+            : ctx.timerService().currentProcessingTime();
     long fireAt = now + options.resumeAfter().toMillis();
     while (timers.contains(fireAt)) {
       fireAt++; // one timer per timestamp per key; keep distinct turns distinct
@@ -282,16 +306,27 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
       ctx.timerService().registerProcessingTimeTimer(fireAt);
     }
     timers.put(fireAt, turnId);
-    return keyedLog.append(ctx.getCurrentKey(), turnId, EventType.TIMER_SCHEDULED,
-        payload("timer_id", timerId(turnId, fireAt), "turn_id", turnId, "fire_at", fireAt,
-            "domain", options.timerDomain().name().toLowerCase()));
+    return keyedLog.append(
+        ctx.getCurrentKey(),
+        turnId,
+        EventType.TIMER_SCHEDULED,
+        payload(
+            "timer_id",
+            timerId(turnId, fireAt),
+            "turn_id",
+            turnId,
+            "fire_at",
+            fireAt,
+            "domain",
+            options.timerDomain().name().toLowerCase()));
   }
 
   private static long requireTimestamp(Context ctx) {
     Long ts = ctx.timestamp();
     if (ts == null) {
-      throw new IllegalStateException("runtime.flink.timer_domain=event_time requires event timestamps;"
-          + " assign a WatermarkStrategy to the source");
+      throw new IllegalStateException(
+          "runtime.flink.timer_domain=event_time requires event timestamps;"
+              + " assign a WatermarkStrategy to the source");
     }
     return ts;
   }
@@ -306,8 +341,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   }
 
   private static TurnResult withEvents(TurnResult r, List<LogEvent> events) {
-    return new TurnResult(r.conversationId, r.turnId, r.status, r.path, r.reply, r.error, r.calls,
-        events, r.state);
+    return new TurnResult(
+        r.conversationId, r.turnId, r.status, r.path, r.reply, r.error, r.calls, events, r.state);
   }
 
   private static List<LogEvent> append(List<LogEvent> events, LogEvent last) {

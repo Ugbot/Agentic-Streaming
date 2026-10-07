@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.ReaderOutput;
 import org.apache.flink.api.connector.source.Source;
@@ -29,8 +28,8 @@ import org.slf4j.LoggerFactory;
  * underlying transports are point-to-point pulls, not partitioned logs, so fan-in happens at the
  * transport, not via Flink split assignment. A background thread runs {@code pollFn.poll(timeout)}
  * and feeds a bounded queue; {@link SourceReader#pollNext} drains it, and availability is signalled
- * through a {@link CompletableFuture} so the runtime never busy-waits. Use it via
- * {@code env.fromSource(new PollingSource<>(fn, typeInfo-less), WatermarkStrategy.noWatermarks(), name)}.
+ * through a {@link CompletableFuture} so the runtime never busy-waits. Use it via {@code
+ * env.fromSource(new PollingSource<>(fn, typeInfo-less), WatermarkStrategy.noWatermarks(), name)}.
  *
  * @param <T> the produced element type
  */
@@ -297,7 +296,8 @@ public final class PollingSource<T> implements Source<T, PollingSource.PollingSp
         try {
           pollFn.close();
         } catch (Exception e) {
-          LOG.warn("PollingSource pollFn.close failed on subtask {}: {}", subtaskIndex, e.toString());
+          LOG.warn(
+              "PollingSource pollFn.close failed on subtask {}: {}", subtaskIndex, e.toString());
         }
       }
     }

@@ -109,8 +109,7 @@ public final class OutputSchema<T> implements Serializable {
       if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
       if (!first) b.append(',');
       first = false;
-      b.append('"').append(f.getName()).append("\":")
-          .append(jsonTypeFor(f.getType()));
+      b.append('"').append(f.getName()).append("\":").append(jsonTypeFor(f.getType()));
     }
     b.append("}}");
     return b.toString();
@@ -118,8 +117,12 @@ public final class OutputSchema<T> implements Serializable {
 
   private static String jsonTypeFor(Class<?> c) {
     if (c == String.class) return "{\"type\":\"string\"}";
-    if (c == int.class || c == Integer.class || c == long.class || c == Long.class
-        || c == short.class || c == Short.class) return "{\"type\":\"integer\"}";
+    if (c == int.class
+        || c == Integer.class
+        || c == long.class
+        || c == Long.class
+        || c == short.class
+        || c == Short.class) return "{\"type\":\"integer\"}";
     if (c == float.class || c == Float.class || c == double.class || c == Double.class)
       return "{\"type\":\"number\"}";
     if (c == boolean.class || c == Boolean.class) return "{\"type\":\"boolean\"}";

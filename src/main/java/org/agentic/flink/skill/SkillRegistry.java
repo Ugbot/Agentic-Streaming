@@ -10,9 +10,9 @@ import java.util.Optional;
 /**
  * In-process registry of {@link Skill}s addressable by name.
  *
- * <p>Parallel to {@code ToolRegistry}, but for the higher-level capability concept. Used by
- * agents that need to look skills up at runtime — e.g. to surface a list to the model or to
- * decide which sub-state-machine to enter.
+ * <p>Parallel to {@code ToolRegistry}, but for the higher-level capability concept. Used by agents
+ * that need to look skills up at runtime — e.g. to surface a list to the model or to decide which
+ * sub-state-machine to enter.
  */
 public final class SkillRegistry implements Serializable {
   private static final long serialVersionUID = 1L;

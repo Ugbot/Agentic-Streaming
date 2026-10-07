@@ -1,16 +1,17 @@
 package org.agentic.flink.example.markets.producer;
 
-import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 
 /**
  * Java twin of {@code examples-bin/markets/bond_inventory_producer.py}. Synthesizes anonymised
  * dealer bid/offer quotes and publishes JSON to the {@code fnd-inventory} Kafka topic.
  *
  * <p>Run with:
+ *
  * <pre>
  *   mvn -DskipTests package
  *   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \
@@ -26,11 +27,14 @@ public final class BondInventoryProducer {
   private static final List<String> MARKET_SEGMENTS = List.of("IG", "AA", "HY");
   private static final List<String> PRODUCT_CDS =
       List.of("FNDIG", "FNDAA", "FNDSC", "FNDHS", "FNDHY", "FNDPG");
-  private static final int[] LEVEL_CDF = {15, 35, 70, 90, 100}; // probs 0.15/0.20/0.35/0.20/0.10 cumulative
+  private static final int[] LEVEL_CDF = {
+    15, 35, 70, 90, 100
+  }; // probs 0.15/0.20/0.35/0.20/0.10 cumulative
   private static final Map<String, double[]> SEG_ANCHOR =
       Map.of("IG", new double[] {110, 8}, "AA", new double[] {112, 7}, "HY", new double[] {92, 10});
   private static final Map<String, double[]> SEG_BOUNDS =
-      Map.of("IG", new double[] {85, 140}, "AA", new double[] {90, 140}, "HY", new double[] {60, 120});
+      Map.of(
+          "IG", new double[] {85, 140}, "AA", new double[] {90, 140}, "HY", new double[] {60, 120});
 
   public static void main(String[] args) throws Exception {
     int rate = parseInt(args, "--rate", 500);
@@ -39,8 +43,8 @@ public final class BondInventoryProducer {
 
     try (MarketProducerSupport mp =
         new MarketProducerSupport(MarketProducerSupport.defaultBootstrap(), "bond-inventory")) {
-      System.out.printf(Locale.ROOT,
-          "producing ~%d rows/s to fnd-inventory (batch %d)%n", rate, batch);
+      System.out.printf(
+          Locale.ROOT, "producing ~%d rows/s to fnd-inventory (batch %d)%n", rate, batch);
       while (!Thread.currentThread().isInterrupted()) {
         for (int i = 0; i < batch; i++) {
           mp.send("fnd-inventory", randomRow());
@@ -57,7 +61,8 @@ public final class BondInventoryProducer {
     double[] anchor = SEG_ANCHOR.get(segment);
     double[] bounds = SEG_BOUNDS.get(segment);
     double nudge = "BID".equals(side) ? -0.6 : 0.6;
-    double price = clamp(round3(anchor[0] + nudge + rng.nextGaussian() * anchor[1]), bounds[0], bounds[1]);
+    double price =
+        clamp(round3(anchor[0] + nudge + rng.nextGaussian() * anchor[1]), bounds[0], bounds[1]);
     long instrumentId = rng.nextLong(10_000_000L, 40_000_000L);
     long size = sizeBucket(rng);
     double spread = rng.nextDouble() < 0.15 ? Math.max(0, rng.nextGaussian() * 30 + 120) : 0.0;
@@ -68,8 +73,18 @@ public final class BondInventoryProducer {
     String action = ACTIONS.get(rng.nextInt(ACTIONS.size()));
     return new Inventory(
         DEALER_POOL.get(rng.nextInt(DEALER_POOL.size())),
-        instrumentId, side, price, size, spread, level, tier, segment,
-        productCD, quoteType, action, System.currentTimeMillis());
+        instrumentId,
+        side,
+        price,
+        size,
+        spread,
+        level,
+        tier,
+        segment,
+        productCD,
+        quoteType,
+        action,
+        System.currentTimeMillis());
   }
 
   private static long sizeBucket(ThreadLocalRandom rng) {
@@ -98,7 +113,8 @@ public final class BondInventoryProducer {
   private static List<String> buildDealerPool() {
     String[] prefixes = {"NORTH", "OMNI", "KAPI", "ZENI", "AXIS", "HALO", "VERT", "QORE"};
     String[] countries = {"US", "UK"};
-    java.util.ArrayList<String> out = new java.util.ArrayList<>(prefixes.length * 5 * countries.length);
+    java.util.ArrayList<String> out =
+        new java.util.ArrayList<>(prefixes.length * 5 * countries.length);
     for (String p : prefixes) {
       for (int i = 1; i <= 5; i++) {
         for (String c : countries) {

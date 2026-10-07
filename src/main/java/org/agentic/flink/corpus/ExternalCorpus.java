@@ -1,10 +1,5 @@
 package org.agentic.flink.corpus;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.memory.vector.ScoredItem;
-import org.agentic.flink.storage.StorageFactory;
-import org.agentic.flink.storage.VectorStore;
-import org.agentic.flink.storage.VectorStore.VectorSearchResult;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -12,15 +7,20 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.context.core.ContextItem;
+import org.agentic.flink.memory.vector.ScoredItem;
+import org.agentic.flink.storage.StorageFactory;
+import org.agentic.flink.storage.VectorStore;
+import org.agentic.flink.storage.VectorStore.VectorSearchResult;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
- * Corpus flavour where vectors live in an external {@code VectorStore} — pgvector, Qdrant, or
- * any third-party impl registered via the framework's {@code ServiceLoader} path.
+ * Corpus flavour where vectors live in an external {@code VectorStore} — pgvector, Qdrant, or any
+ * third-party impl registered via the framework's {@code ServiceLoader} path.
  *
  * <p>Operators that hold an {@link ExternalCorpus} are essentially stateless: reads and writes
- * round-trip to the configured store. This is the right flavour for large corpora that don't
- * fit in keyed state or that must be shared across multiple Flink jobs.
+ * round-trip to the configured store. This is the right flavour for large corpora that don't fit in
+ * keyed state or that must be shared across multiple Flink jobs.
  */
 public final class ExternalCorpus implements Corpus {
 
@@ -113,8 +113,7 @@ public final class ExternalCorpus implements Corpus {
     Spec(String name, String backend, Map<String, String> backendConfig, int dimension) {
       this.name = Objects.requireNonNull(name, "name");
       this.backend = Objects.requireNonNull(backend, "backend");
-      this.backendConfig =
-          backendConfig == null ? Map.of() : new HashMap<>(backendConfig);
+      this.backendConfig = backendConfig == null ? Map.of() : new HashMap<>(backendConfig);
       this.dimension = dimension;
     }
 

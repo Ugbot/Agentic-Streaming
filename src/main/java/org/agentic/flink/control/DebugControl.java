@@ -8,13 +8,13 @@ import java.util.Objects;
  * Flips an operator's debug side-output on or off. The receiver applies passive TTL expiry — no
  * Flink timers required.
  *
- * <p>Static factories cover the common cases. Construct directly only if you need a non-default
- * TTL with the {@code enabled=true} state.
+ * <p>Static factories cover the common cases. Construct directly only if you need a non-default TTL
+ * with the {@code enabled=true} state.
  *
- * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters)
- * so Flink's {@code PojoSerializer} can carry it across the network without falling back to
- * Kryo. {@link #toString}, {@link #equals}, {@link #hashCode} mirror the record semantics this
- * type replaced.
+ * <p>Declared as a Flink-compatible POJO (public no-arg constructor, JavaBean getters/setters) so
+ * Flink's {@code PojoSerializer} can carry it across the network without falling back to Kryo.
+ * {@link #toString}, {@link #equals}, {@link #hashCode} mirror the record semantics this type
+ * replaced.
  */
 public final class DebugControl implements ControlMessage {
   private static final long serialVersionUID = 1L;

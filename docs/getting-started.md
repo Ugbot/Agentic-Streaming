@@ -1,55 +1,150 @@
 # Getting started
 
-This guide takes a fresh clone to a running agent. Every command on this page was run on a
-clean checkout with Java 21 and the committed Maven wrapper; the ones that do not work are
-listed as such rather than left out.
+This guide takes a fresh clone to a running agent. Every command in Parts 1, 2, 3, 5 and 6 was
+run on a clean checkout with Java 21, Python 3.12 and the committed Maven wrapper on
+2026-09-25; the ones that do not work are listed as such rather than left out. Part 4 needs
+Ollama or Podman on the machine and is the only part whose commands were not run for this
+revision of the page.
 
-> **Pick your runtime.** The fastest path (no JVM, no infrastructure) is the Python one:
-> ```bash
-> python -m pip install -e ports/pyagentic
-> PYTHONPATH=ports/agentic-pipeline \
-> python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
-> ```
-> For the same banking agent on Flink, Pekko, Clojure, Python and Go, and on the experimental
-> adapters under `ports/`, see [the banking agent on every runtime](examples/banking-everywhere.md).
-> The rest of this page is the JVM and Flink path.
+The first path needs no model, no model download, no vector store and no container. The
+workflow documents under `examples/pipelines/` describe a banking agent whose paths use either
+a `rule` brain (deterministic keyword routing and tool triggers) or an `llm` brain driven by the
+`stub` provider, which replays a scripted sequence of tool calls and text instead of calling a
+model. The same document runs unchanged on the pure Python runtime and on the JVM local
+runtime. Ollama, Qdrant and the compose stacks come later on this page and are optional.
 
-## What you will do
+## Part 1: A deterministic agent in two minutes
 
-- Install Java 21 and check the Maven wrapper.
-- Build `ports/jagentic-core` first, then the Flink module.
-- Run the shared conformance fixtures against the Flink binding.
-- Run a `pipeline.yaml` through the Flink runner from a test.
-- Know which example entry points work today and which do not.
+### The workflow document
 
-## Part 1: Setup
+`examples/pipelines/banking.yaml` uses `brain: rule` on every path:
 
-### Step 1: Java 21
+```yaml
+backend: local
+agent:
+  router:
+    kind: keyword
+    default: general
+    rules:
+      cards:    [card, crypto, cash-back, cashback]
+      payments: [balance, transfer, payment, dispute, charge, limit]
+  paths:
+    payments:
+      brain: rule
+      prompt: You answer payment questions.
+      tool_triggers: {balance: get_balance}
+  verifier:
+    kind: prefix
+tools:
+  - {id: get_balance, kind: constant, value: 1234.56}
+```
 
-The whole repository targets Java 21. Older JDKs fail at compile time; a JDK 17 box needs a
-21 install alongside it.
+`examples/pipelines/banking-llm.yaml` gives the `payments` path an `llm` brain and makes it
+deterministic with the scripted stub provider. The `script` key is only read by the `stub`
+provider; each step is either a tool call or the final text:
+
+```yaml
+llm:
+  provider: stub
+  model: qwen2.5:3b
+  script:
+    - {tool: get_balance, args: {user: demo}}
+    - {text: "Your balance is 1234.56."}
+agent:
+  paths:
+    payments: {brain: llm, prompt: You are a payments specialist., tools: [get_balance], verifier: {kind: none}}
+```
+
+Switching the same file to a real model is a two line change (`provider: ollama` or
+`provider: openai`, see Part 4), which is why the examples and the tests use the stub.
+
+### On the pure Python runtime
+
+Requires Python 3.11 or newer (the packages declare 3.9 and 3.10 as their minimum; see
+`docs/versioning.md`). No JVM is involved.
 
 ```bash
-java -version
+python -m venv .venv && . .venv/bin/activate
+python -m pip install -e ports/pyagentic -e ports/agentic-pipeline
+python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+python -m agentic_pipeline run examples/pipelines/banking-llm.yaml --text "what is my balance?"
+python -m agentic_pipeline run examples/pipelines/banking.yaml --text "which card types do you offer?"
 ```
 
-You should see `openjdk version "21.` or later. If not, install a JDK 21 from
-https://adoptium.net/ (or unpack the tarball from
-https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse and set
-`JAVA_HOME` to it).
-
-### Step 2: Maven
-
-Do not install Maven; use the committed wrapper. The root `pom.xml` runs the Enforcer plugin
-and rejects Maven older than 3.9, so a distribution-packaged `mvn` (3.6.3 on Ubuntu 22.04)
-fails with:
+Output of the three runs:
 
 ```
-Use the committed wrapper (./mvnw) or Maven 3.9+.
+backend=local path=payments ok=True
+reply: [payments] get_balance returned 1234.56
+tools: ['get_balance']
+
+backend=local path=payments ok=True
+reply: [payments] Your balance is 1234.56.
+tools: ['get_balance']
+
+backend=local path=cards ok=True
+reply: [cards] We offer three card types: classic, gold, and platinum, each with different fees.
 ```
 
-`./mvnw` downloads the pinned Maven on first use. If `repo.maven.apache.org` is unreachable
-or rate limited, point the wrapper and the build at the Google mirror:
+The first reply comes from the `rule` brain firing the `balance` tool trigger; the second from
+the `llm` brain replaying the script (tool call, then text); the third from the retrieval block
+of the same file, answered from the in-memory hashing embedder.
+
+### On the JVM local runtime
+
+Requires JDK 21 (`java -version` must print `21` or later). Nothing else: the wrapper
+downloads Maven, and the runner script installs `ports/jagentic-core` into your local Maven
+repository the first time.
+
+```bash
+bash examples-bin/run-pipeline.sh examples/pipelines/banking.yaml --runtime jvm --text "what is my balance?"
+bash examples-bin/run-pipeline.sh examples/pipelines/banking-llm.yaml --runtime jvm --text "what is my balance?"
+```
+
+```
+ok: java 21.0.12.1
+ok: jagentic-core 1.0.0-SNAPSHOT is installed
+.. jvm-core PipelineCli: .../examples/pipelines/banking.yaml
+backend=local path=payments ok=true
+reply: [payments] get_balance returned 1234.56
+tools: [get_balance]
+
+backend=local path=payments ok=true
+reply: Your balance is 1234.56.
+tools: [get_balance]
+```
+
+The script wraps `org.jagentic.core.pipeline.PipelineCli`; the same script runs the file on the
+Pekko runtime with `--runtime pekko` and on Python with `--runtime python` (set `PYTHON` to the
+interpreter of the virtual environment above). `docs/examples/banking-everywhere.md` shows the
+same agent on Flink, Clojure and Go, and on the experimental adapters under `ports/`.
+
+### The specification behind the file
+
+The workflow documents are instances of the `agentic/v1` specification. Its reference runtime
+is pure Python and its 24 conformance fixtures run in about a second, also without a model:
+
+```bash
+python spec/tools/validate_spec.py        # checked 33 document(s), 0 failure(s)
+python spec/tools/run_conformance.py      # 24 passed, 0 failed, 0 skipped
+```
+
+Which runtime passes which fixture is the generated table in [capabilities.md](capabilities.md).
+
+## Part 2: The JVM build
+
+### Java 21 and the Maven wrapper
+
+The whole repository targets Java 21; older JDKs fail at compile time. A JDK 21 tarball is at
+https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse; unpack
+it and set `JAVA_HOME`.
+
+Do not install Maven; use the committed wrapper. The build runs the Enforcer plugin and rejects
+Maven older than 3.9, so a distribution-packaged `mvn` (3.6.3 on Ubuntu 22.04) fails with
+`Use the committed wrapper (./mvnw) or Maven 3.9+.`
+
+`./mvnw` downloads the pinned Maven on first use. If `repo.maven.apache.org` is unreachable or
+rate limited (HTTP 429), point the wrapper and the build at the Google mirror:
 
 ```bash
 export MVNW_REPOURL=https://maven-central.storage-download.googleapis.com/maven2
@@ -59,109 +154,52 @@ export MVNW_REPOURL=https://maven-central.storage-download.googleapis.com/maven2
 where the settings file declares one mirror with `<mirrorOf>central</mirrorOf>` and the same
 URL. The repository does not ship that file; write it locally when you need it.
 
-### Step 3: Ollama (optional)
+### The reactor
 
-The unit tests, the conformance fixtures, and the Python one-liner use stub brains and need
-no model. Ollama is only needed for the examples that call a live LLM.
-
-```bash
-ollama serve
-ollama pull llama3.1:latest
-ollama pull nomic-embed-text
-```
-
-`SimpleAgentExample` and `QuickStartExample` are configured for `llama3.1:latest` at
-`http://localhost:11434`, but neither reaches Ollama on a fresh clone; see Part 4.
-
-### Step 4: Qdrant, Postgres, Valkey (optional)
-
-Only the RAG and storage examples and the integration tests need them. Use Podman:
+`reactor/pom.xml` is the parent and aggregator of every first-class JVM module:
+`ports/jagentic-core`, the Flink framework (the root `pom.xml`, artifact `agentic-flink`),
+`agentic-pekko`, `pyflink/java`, `tool-services/*` and `banking-job`. One command builds and
+tests all of them in dependency order, with one groupId (`org.jagentic`) and one version
+(`1.0.0-SNAPSHOT`):
 
 ```bash
-podman run -d -p 6333:6333 qdrant/qdrant
-podman run -d -p 5432:5432 -e POSTGRES_PASSWORD=agentic postgres:16
-podman run -d -p 6379:6379 valkey/valkey
-```
-
-Tests that need these skip cleanly when they are not running. In CI they are not allowed to:
-the workflow provisions the services and `tools/ci/skip_audit.py` fails the job for any skip
-whose reason is not listed in `tools/ci/skip-allowlist.txt`; every entry there states why
-(declared conformance capability gaps, Ollama, Fluss, and the two `AGENTIC_PEKKO_INTEGRATION`
-tests the workflow explains). To run the service-backed tests locally, start the services and
-export the same variables the `core` job in `.github/workflows/ci.yml` sets
-(`AGENTIC_TEST_PG_URL`, `AGENTIC_TEST_REDIS_URL`, `AGENTIC_KAFKA_BOOTSTRAP`, ...).
-
-The Testcontainers suites (`./mvnw test -P integration-tests`: `Postgres*Test`, `Redis*IT`)
-start their own containers through the Docker API. With Podman, start the compatibility
-socket and point Testcontainers at it; `src/test/resources/testcontainers.properties`
-already disables the startup checks Podman does not implement:
-
-```bash
-systemctl --user enable --now podman.socket        # or: podman system service --time=0 &
-export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
-export TESTCONTAINERS_RYUK_DISABLED=true           # Ryuk needs a privileged container and Docker Hub short names; the tests stop their containers themselves
-./mvnw test -P integration-tests
-```
-
-GitHub-hosted runners provide Docker, which Testcontainers finds without configuration; both
-runtimes run the same tests.
-
-## Part 2: Build
-
-### Step 1: The reactor
-
-`reactor/pom.xml` is the parent and aggregator of every first-class JVM module: `ports/jagentic-core`,
-the Flink framework (the root `pom.xml`), `agentic-pekko`, `pyflink/java`, `tool-services/*`
-and `banking-job`. One command builds and tests all of them in dependency order, with one
-groupId (`org.jagentic`) and one version (`1.0.0-SNAPSHOT`):
-
-```bash
+./mvnw -f reactor/pom.xml install -DskipTests       # compile and install, no tests
 ./mvnw -f reactor/pom.xml verify                    # everything CI gates on
 ./mvnw -f reactor/pom.xml verify -P a2a-gateway     # plus the Quarkus A2A gateway (slow, opt-in)
-./mvnw -f reactor/pom.xml install -DskipTests       # compile and install, no tests
 ```
 
-The root `pom.xml` stays the Flink module, so every `./mvnw ...` command run from the
-repository root below still addresses the framework. The adapters under `ports/experimental/`
-are not part of the reactor; each has its own `pom.xml` and is built on its own.
-
-### Step 1b: Building one module at a time
+`package` and later phases also attach a `-sources.jar` and a `-javadoc.jar` next to every
+module jar (`banking-job` has no Java sources and gets only the former). The adapters under
+`ports/experimental/` are not part of the reactor; each has its own `pom.xml` and is built on
+its own.
 
 A single module builds with `-f <module>/pom.xml` once the modules it depends on are in the
 local repository. The Flink module and Pekko both depend on `ports/jagentic-core`, so install
-it first (this also installs the reactor parent pom the module refers to):
+it first (this also installs the reactor parent the module refers to):
 
 ```bash
 ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -q clean package -DskipTests                 # the Flink module, from the repository root
 ```
 
-### Step 2: Build the Flink module
-
-```bash
-./mvnw -q clean package -DskipTests
-```
-
-This produces two jars under `target/`:
+The second command produces two jars under `target/`:
 
 - `agentic-flink-1.0.0-SNAPSHOT.jar`: the thin jar of framework classes that other Maven
   modules depend on.
 - `agentic-flink-1.0.0-SNAPSHOT-uber.jar`: the shaded jar for `flink run`. It does not contain
   Flink itself: `flink-streaming-java` and `flink-clients` are `provided` scope and are
   excluded from the shade, because a Flink cluster supplies them. That is why running it
-  with a bare `java -cp` fails (Part 4).
+  with a bare `java -cp` fails (Part 5).
 
-### Step 3: Run the tests
+### The Flink tests
 
 ```bash
 ./mvnw test
 ```
 
-Result on a fresh clone (2026-09-14):
-
-```
-Tests run: 818, Failures: 0, Errors: 0, Skipped: 0
-BUILD SUCCESS
-```
+Runs the framework's unit tests inside the Flink MiniCluster; the suite uses stub brains and
+needs no model or service. Formatting is checked in the `verify` phase, not here; run
+`./mvnw spotless:apply` before committing Java changes (see `CONTRIBUTING.md`).
 
 ## Part 3: Run an agent on Flink
 
@@ -174,12 +212,14 @@ MiniCluster with the test classpath.
 ./mvnw -q test -Dtest=FlinkConformanceTest
 ```
 
+Result on `main` on 2026-09-25 (the class runs the 24 fixtures plus two checks of its own):
+
 ```
-Tests run: 24, Failures: 0, Errors: 0, Skipped: 7
+Tests run: 26, Failures: 0, Errors: 0, Skipped: 3
 ```
 
-The 7 skips are the fixtures whose capabilities the Flink binding declares `unsupported`
-(`docs/capabilities.md` lists them). A skip is never a pass.
+The skips are the fixtures whose capabilities the Flink binding declares `unsupported`; the
+generated [capabilities.md](capabilities.md) lists which. A skip is never a pass.
 
 ### A `pipeline.yaml` through the Flink runner
 
@@ -208,16 +248,83 @@ and a registered timer surviving a savepoint restart):
 ./mvnw -q test -Dtest=WorkflowTurnFunctionMiniClusterTest
 ```
 
-## Part 4: Example entry points that do not work from a fresh clone
+```
+Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
+```
 
-These are the commands earlier versions of this page told you to run. Each was tried on a
-fresh clone on 2026-09-14 and each fails. They are listed so nobody wastes time on them; the
+## Part 4: Optional: a real model, a vector store, containers
+
+Nothing above needs any of this. Skip the section until you want a live LLM or the RAG and
+storage examples.
+
+### Ollama
+
+Ollama is only needed for the examples that call a live model, and for `provider: ollama` in a
+workflow document.
+
+```bash
+ollama serve
+ollama pull llama3.1:latest
+ollama pull nomic-embed-text
+```
+
+`SimpleAgentExample` and `QuickStartExample` are configured for `llama3.1:latest` at
+`http://localhost:11434`, but neither reaches Ollama on a fresh clone; see Part 5. To point
+`examples/pipelines/banking-llm.yaml` at a model instead of the script, change the `llm` block
+to `provider: ollama` and `model: qwen2.5:3b` (pull that model first); `provider: openai` reads
+`OPENAI_API_KEY`. [configuration.md](configuration.md) lists the provider keys.
+
+### Qdrant, Postgres, Valkey
+
+Only the RAG and storage examples and the integration tests need them. Use Podman:
+
+```bash
+podman run -d -p 6333:6333 qdrant/qdrant
+podman run -d -p 5432:5432 -e POSTGRES_PASSWORD=agentic postgres:16
+podman run -d -p 6379:6379 valkey/valkey
+```
+
+Tests that need these skip cleanly when they are not running. In CI they are not allowed to:
+the workflow provisions the services and `tools/ci/skip_audit.py` fails the job for any skip
+whose reason is not listed in `tools/ci/skip-allowlist.txt`; every entry there states why
+(declared conformance capability gaps, Ollama, Fluss, and the two `AGENTIC_PEKKO_INTEGRATION`
+tests the workflow explains). To run the service-backed tests locally, start the services and
+export the same variables the `core` job in `.github/workflows/ci.yml` sets
+(`AGENTIC_TEST_PG_URL`, `AGENTIC_TEST_REDIS_URL`, `AGENTIC_KAFKA_BOOTSTRAP`, ...).
+
+### Testcontainers through Podman
+
+The Testcontainers suites (`./mvnw test -P integration-tests`: `Postgres*Test`, `Redis*IT`)
+start their own containers through the Docker API. With Podman, start the compatibility
+socket and point Testcontainers at it; `src/test/resources/testcontainers.properties`
+already disables the startup checks Podman does not implement:
+
+```bash
+systemctl --user enable --now podman.socket        # or: podman system service --time=0 &
+export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+export TESTCONTAINERS_RYUK_DISABLED=true           # Ryuk needs a privileged container and Docker Hub short names; the tests stop their containers themselves
+./mvnw test -P integration-tests
+```
+
+GitHub-hosted runners provide Docker, which Testcontainers finds without configuration; both
+runtimes run the same tests.
+
+### Compose stacks
+
+The end-to-end examples (RAG, markets, incident) run as `podman compose` stacks started by the
+scripts under `examples-bin/`; [compose.md](compose.md) describes them and
+`tools/smoke-examples.sh` runs every one of them in no-key mode.
+
+## Part 5: Example entry points that do not work from a fresh clone
+
+These are the commands earlier versions of this page told you to run. Each was tried again on
+a fresh clone on 2026-09-25 and each fails. They are listed so nobody wastes time on them; the
 failures are tracked in [`docs/audit-backlog.md`](audit-backlog.md) under AGS-40.
 
 | Command | Failure |
 |---|---|
 | `java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample` | `NoClassDefFoundError: org/apache/flink/configuration/ReadableConfig`. The uber jar excludes the provided Flink runtime. |
-| `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `NoClassDefFoundError: org/apache/flink/connector/datagen/source/GeneratorFunction`. `flink-connector-datagen` is test scope. |
+| `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `Invalid classpath scope: provided` from exec-maven-plugin 3.2.0, which accepts only `compile`, `runtime` and `test`. |
 | the same with `test-compile` and `-Dexec.classpathScope=test` | `Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable` during job graph construction. |
 | `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample -Dexec.classpathScope=test` | `Initial state has no outgoing transitions` from `AgentBuilder.build()`, before any Ollama call. |
 | `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner -Dexec.classpathScope=test -Dexec.args=examples/pipelines/banking.yaml` | `Could not deserialize stream node 4: ... SimpleUdfStreamOperatorFactory` at job submission. The same runner passes inside `FlinkPipelineRunnerTest`. |
@@ -226,9 +333,10 @@ There is no `MyFirstAgentExample` in the repository; an earlier version of this 
 it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem
 as `SimpleAgentExample`.
 
-## Part 5: The other first-class runtimes
+## Part 6: The other first-class runtimes
 
-Pekko, after the core install from Part 2:
+Pekko, after the core install from Part 2 (or through `examples-bin/run-pipeline.sh ...
+--runtime pekko`, which does the same):
 
 ```bash
 ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
@@ -248,10 +356,10 @@ cd agentic-clj && clojure -M:run
 This runs the banking demo (`agentic.main`) against the in-process Datomic store; `clojure -X:test`
 runs the suite, including the conformance fixtures.
 
-Python is the block at the top of this page. `ports/agentic-pipeline` has no package metadata,
-so it is not pip-installable and must be on `PYTHONPATH`; `ports/pyagentic` is installable.
-The two levels of the Python API (high-level `run(runtime=...)` and full-control
-`Runtime.deploy(spec)`) on pure Python, the JVM facade and PyFlink are in [python.md](python.md).
+Python beyond the pipeline CLI: the two levels of the Python API (high-level `run(runtime=...)`
+and full-control `Runtime.deploy(spec)`) on pure Python, the JVM facade (`pip install -e python`,
+needs the uber jar from Part 2) and PyFlink (`pip install -e pyflink`) are in
+[python.md](python.md).
 
 What each of these runtimes is made of, and what they all guarantee for an `agentic/v1`
 workflow, is one page each under [runtimes/](runtimes/README.md).
@@ -274,7 +382,7 @@ workflow, is one page each under [runtimes/](runtimes/README.md).
 3. Did you run the `ports/jagentic-core` install first? Without it a `./mvnw` run at the
    repository root fails to resolve `org.jagentic:jagentic-core`. `./mvnw -f reactor/pom.xml verify`
    needs no such step.
-4. Maven downloads dependencies on first use; see the mirror note in Part 1 if Central is
+4. Maven downloads dependencies on first use; see the mirror note in Part 2 if Central is
    unreachable.
 
 ### Can I use OpenAI instead of Ollama?

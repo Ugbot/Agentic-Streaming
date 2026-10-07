@@ -35,8 +35,7 @@ class ManualProcessingClockTest {
 
   private static final ThreadLocalRandom RND = ThreadLocalRandom.current();
 
-  @TempDir
-  static Path savepoints;
+  @TempDir static Path savepoints;
 
   private static String rnd(String prefix) {
     return prefix + "-" + UUID.randomUUID();
@@ -75,7 +74,10 @@ class ManualProcessingClockTest {
       long more = RND.nextLong(0L, 100_000L);
       b.advance(more);
       assertEquals(step + more, a.nowMs(null));
-      assertEquals(step + more, ManualProcessingClock.named(id).nowMs(), "named() never resets a registered clock");
+      assertEquals(
+          step + more,
+          ManualProcessingClock.named(id).nowMs(),
+          "named() never resets a registered clock");
     } finally {
       a.release();
     }
@@ -114,15 +116,18 @@ class ManualProcessingClockTest {
         out.writeObject(FlinkRuntimeOptions.DEFAULTS.withManualClock(clock.clockId()));
       }
       FlinkRuntimeOptions restored;
-      try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      try (ObjectInputStream in =
+          new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
         restored = (FlinkRuntimeOptions) in.readObject();
       }
-      ManualProcessingClock copy = assertInstanceOf(ManualProcessingClock.class, restored.processingClock());
+      ManualProcessingClock copy =
+          assertInstanceOf(ManualProcessingClock.class, restored.processingClock());
       assertEquals(clock, copy);
       assertEquals(before, copy.nowMs(null), "the reading is not part of the serialized form");
       long after = RND.nextLong(1L, 1_000_000L);
       clock.advance(after);
-      assertEquals(before + after, copy.nowMs(null), "the copy follows advances made through the original");
+      assertEquals(
+          before + after, copy.nowMs(null), "the copy follows advances made through the original");
       assertEquals(before + after, restored.processingClock().nowMs(null));
     } finally {
       clock.release();
@@ -178,9 +183,15 @@ class ManualProcessingClockTest {
     String cid = rnd("c");
     int parallelism = RND.nextInt(1, 4);
     ManualProcessingClock clock = ManualProcessingClock.create();
-    try (LocalWorkflowSession s = new LocalWorkflowSession(wf,
-        FlinkRuntimeOptions.fromSpec(wf).withManualClock(clock.clockId()), parallelism, null,
-        savepoints.resolve(rnd("sp")), Duration.ofSeconds(60), rnd("job"))) {
+    try (LocalWorkflowSession s =
+        new LocalWorkflowSession(
+            wf,
+            FlinkRuntimeOptions.fromSpec(wf).withManualClock(clock.clockId()),
+            parallelism,
+            null,
+            savepoints.resolve(rnd("sp")),
+            Duration.ofSeconds(60),
+            rnd("job"))) {
       s.start();
       TurnResult first = s.submit(Event.turn(cid, rnd("t1"), "u", "hello"));
       assertTrue(types(first).contains("timer_scheduled"), types(first).toString());
@@ -192,9 +203,13 @@ class ManualProcessingClockTest {
 
       TurnResult notYet = s.submit(Event.turn(cid, rnd("t2"), "u", "hello"));
       assertTrue(notYet.calls.isEmpty(), "the deadline has not been reached: " + notYet.calls);
-      assertFalse(types(notYet).contains("timer_scheduled"), "restore never re-schedules: " + types(notYet));
+      assertFalse(
+          types(notYet).contains("timer_scheduled"),
+          "restore never re-schedules: " + types(notYet));
       assertFalse(types(notYet).contains("timer_fired"));
-      assertEquals(beforeRestart, ((Number) notYet.events.get(0).payload().get("processing_time_ms")).longValue());
+      assertEquals(
+          beforeRestart,
+          ((Number) notYet.events.get(0).payload().get("processing_time_ms")).longValue());
 
       clock.advance(after - beforeRestart);
       TurnResult fired = s.submit(Event.turn(cid, rnd("t3"), "u", "hello"));
@@ -207,7 +222,9 @@ class ManualProcessingClockTest {
       TurnResult again = s.submit(Event.turn(cid, rnd("t4"), "u", "hello"));
       assertTrue(again.calls.isEmpty(), "a fired timer never fires again: " + again.calls);
       assertEquals(List.of("followup"), again.state.get("fired_timers"));
-      assertTrue(types(again).stream().noneMatch(t -> t.equals("timer_scheduled") || t.equals("timer_fired")),
+      assertTrue(
+          types(again).stream()
+              .noneMatch(t -> t.equals("timer_scheduled") || t.equals("timer_fired")),
           types(again).toString());
       assertEquals(2, s.restarts());
     } finally {

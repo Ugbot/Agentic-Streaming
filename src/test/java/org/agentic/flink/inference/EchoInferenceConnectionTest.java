@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.agentic.flink.embedding.EmbeddingSetup;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.embedding.EmbeddingSetup;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,8 +25,7 @@ class EchoInferenceConnectionTest {
     assertTrue(client.supports(InferenceClient.TaskKind.EMBEDDER));
     assertTrue(client.supports(InferenceClient.TaskKind.GENERIC));
 
-    InferenceSetup setup =
-        InferenceSetup.builder().withModelName("m").withModelUri("u").build();
+    InferenceSetup setup = InferenceSetup.builder().withModelName("m").withModelUri("u").build();
 
     ClassificationResult cls = client.asClassifier().classify("anything", setup);
     assertEquals("unsafe", cls.getLabel());
@@ -39,8 +38,7 @@ class EchoInferenceConnectionTest {
     float[] emb = client.asEmbedder().embed("xyz", EmbeddingSetup.of("echo", 16));
     assertEquals(16, emb.length);
 
-    Map<String, Object> generic =
-        client.asGeneric().infer(Map.of("k", "v"), setup);
+    Map<String, Object> generic = client.asGeneric().infer(Map.of("k", "v"), setup);
     assertEquals(Boolean.TRUE, generic.get("_echo"));
     assertEquals("v", generic.get("k"));
 
@@ -52,8 +50,7 @@ class EchoInferenceConnectionTest {
   void batchClassifyDefaults() throws Exception {
     EchoInferenceConnection conn = EchoInferenceConnection.withLabel("ok");
     InferenceClient client = conn.bind(null);
-    InferenceSetup setup =
-        InferenceSetup.builder().withModelName("m").withModelUri("u").build();
+    InferenceSetup setup = InferenceSetup.builder().withModelName("m").withModelUri("u").build();
     List<ClassificationResult> results =
         client.asClassifier().classifyBatch(List.of("a", "b", "c"), setup);
     assertEquals(3, results.size());

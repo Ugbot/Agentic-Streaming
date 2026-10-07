@@ -14,9 +14,9 @@ import org.zeromq.ZMQ;
 /**
  * ZeroMQ {@link A2ABridge} — the default distributed/localhost transport. No broker required.
  *
- * <p>Flink binds a {@code PULL} socket for requests ({@link ZeroMqChannel#pull}) and {@code
- * PUSH}es responses ({@link ZeroMqSink#push}); the gateway connects a {@code PUSH} for requests and
- * binds a {@code PULL} for responses. Envelopes are JSON via {@link A2AWireSerde}/{@link A2AJson}.
+ * <p>Flink binds a {@code PULL} socket for requests ({@link ZeroMqChannel#pull}) and {@code PUSH}es
+ * responses ({@link ZeroMqSink#push}); the gateway connects a {@code PUSH} for requests and binds a
+ * {@code PULL} for responses. Envelopes are JSON via {@link A2AWireSerde}/{@link A2AJson}.
  */
 public final class ZeroMqA2ABridge implements A2ABridge {
   private static final long serialVersionUID = 1L;

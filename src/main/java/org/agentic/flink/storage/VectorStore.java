@@ -1,8 +1,8 @@
 package org.agentic.flink.storage;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.util.List;
 import java.util.Map;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Storage interface for vector embeddings and semantic search.
@@ -64,8 +64,7 @@ public interface VectorStore extends StorageProvider<String, float[]> {
    * @param metadata Associated metadata (original text, source, timestamp, etc.)
    * @throws Exception if storage operation fails
    */
-  void storeEmbedding(String id, float[] embedding, Map<String, Object> metadata)
-      throws Exception;
+  void storeEmbedding(String id, float[] embedding, Map<String, Object> metadata) throws Exception;
 
   /**
    * Store multiple embeddings in batch for efficiency.
@@ -77,8 +76,7 @@ public interface VectorStore extends StorageProvider<String, float[]> {
    * @throws Exception if batch storage fails
    */
   void storeEmbeddingsBatch(
-      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata)
-      throws Exception;
+      Map<String, float[]> embeddings, Map<String, Map<String, Object>> metadata) throws Exception;
 
   /**
    * Search for similar embeddings using vector similarity.

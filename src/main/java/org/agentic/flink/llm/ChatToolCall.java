@@ -7,8 +7,8 @@ import java.util.Map;
 /**
  * A tool invocation requested by the model, in vendor-neutral form.
  *
- * <p>The runtime resolves {@link #getName()} against the agent's {@code ToolRegistry} and feeds
- * the resulting {@code ContextItem} back as a {@link ChatRole#TOOL} message.
+ * <p>The runtime resolves {@link #getName()} against the agent's {@code ToolRegistry} and feeds the
+ * resulting {@code ContextItem} back as a {@link ChatRole#TOOL} message.
  */
 public final class ChatToolCall implements Serializable {
   private static final long serialVersionUID = 1L;

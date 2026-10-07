@@ -27,10 +27,11 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
  * outputs merge into the rule-based {@link BankingVerifierFunction}, which advances the cross-turn
  * {@link BankingPhase} and emits the {@link A2AResponse} back onto the bridge's response sink.
  *
- * <p>One A2A turn = Router → Path → Verifier (a clean DAG, no Flink cycle); multi-step <em>chaining</em>
- * happens across turns via the shared {@link PhaseStore}/{@link ConversationMemory}. All operators
- * are keyed by A2A {@code contextId} so concurrent sessions are isolated. Reserving the LLM for the
- * path brains (router/verifier are rule-based) keeps the model-call count per turn flat.
+ * <p>One A2A turn = Router → Path → Verifier (a clean DAG, no Flink cycle); multi-step
+ * <em>chaining</em> happens across turns via the shared {@link PhaseStore}/{@link
+ * ConversationMemory}. All operators are keyed by A2A {@code contextId} so concurrent sessions are
+ * isolated. Reserving the LLM for the path brains (router/verifier are rule-based) keeps the
+ * model-call count per turn flat.
  */
 public final class BankingAgentGraph {
 
@@ -43,7 +44,8 @@ public final class BankingAgentGraph {
    * Wire the role's graph from {@code bridge.requestChannel()} to {@code bridge.responseSink()} on
    * {@code env}. Call {@code env.execute(...)} afterwards to run it.
    */
-  public static void wire(StreamExecutionEnvironment env, A2ABridge bridge, BankingAgentSetup setup) {
+  public static void wire(
+      StreamExecutionEnvironment env, A2ABridge bridge, BankingAgentSetup setup) {
     wire(
         env,
         bridge,
@@ -57,7 +59,8 @@ public final class BankingAgentGraph {
 
   /**
    * Brain-provider overload — the wiring of record, decoupled from {@link BankingAgentSetup} so
-   * tests can inject deterministic per-path {@link TurnBrain} stubs (and so any brain source works).
+   * tests can inject deterministic per-path {@link TurnBrain} stubs (and so any brain source
+   * works).
    *
    * @param brains path → brain ({@code null} brain = pass-through, e.g. REFUSE)
    */

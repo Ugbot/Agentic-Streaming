@@ -1,23 +1,22 @@
 package org.agentic.flink.python;
 
-import org.agentic.flink.tools.ToolExecutor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link ToolExecutor} that delegates to a cloudpickled Python callable running inside the
- * embedded {@link PythonExecutor}. The Python function is registered lazily on first invocation
- * (so the operator's {@code open()} doesn't pay deserialization cost up-front for tools that may
- * never be called).
+ * {@link ToolExecutor} that delegates to a cloudpickled Python callable running inside the embedded
+ * {@link PythonExecutor}. The Python function is registered lazily on first invocation (so the
+ * operator's {@code open()} doesn't pay deserialization cost up-front for tools that may never be
+ * called).
  *
- * <p>Argument binding: when {@code paramNames} is non-empty, the executor extracts values from
- * the {@code parameters} map in declared order and passes them positionally; remaining
- * parameters are passed as kwargs. When {@code paramNames} is empty, the entire map is passed as
- * kwargs.
+ * <p>Argument binding: when {@code paramNames} is non-empty, the executor extracts values from the
+ * {@code parameters} map in declared order and passes them positionally; remaining parameters are
+ * passed as kwargs. When {@code paramNames} is empty, the entire map is passed as kwargs.
  */
 public final class PythonToolExecutor implements ToolExecutor {
 

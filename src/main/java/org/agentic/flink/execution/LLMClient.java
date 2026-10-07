@@ -1,17 +1,5 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.config.ConfigKeys;
-import org.agentic.flink.inference.Guardrail;
-import org.agentic.flink.inference.GuardrailDecision;
-import org.agentic.flink.listener.AgentEventListener;
-import org.agentic.flink.llm.ChatClient;
-import org.agentic.flink.llm.ChatConnection;
-import org.agentic.flink.llm.ChatMessage;
-import org.agentic.flink.llm.ChatResponse;
-import org.agentic.flink.llm.ChatRole;
-import org.agentic.flink.llm.ChatSetup;
-import org.agentic.flink.llm.ChatToolCall;
-import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -25,6 +13,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.inference.Guardrail;
+import org.agentic.flink.inference.GuardrailDecision;
+import org.agentic.flink.listener.AgentEventListener;
+import org.agentic.flink.llm.ChatClient;
+import org.agentic.flink.llm.ChatConnection;
+import org.agentic.flink.llm.ChatMessage;
+import org.agentic.flink.llm.ChatResponse;
+import org.agentic.flink.llm.ChatRole;
+import org.agentic.flink.llm.ChatSetup;
+import org.agentic.flink.llm.ChatToolCall;
+import org.agentic.flink.llm.langchain4j.LangChain4jChatConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,27 +32,29 @@ import org.slf4j.LoggerFactory;
  * Client wrapper for LangChain4J LLM integration.
  *
  * <p>Real implementation using LangChain4J for:
+ *
  * <ul>
- *   <li>Chat completions with Ollama, OpenAI, etc.</li>
- *   <li>Message history management</li>
- *   <li>Tool calling support</li>
- *   <li>Temperature and token control</li>
+ *   <li>Chat completions with Ollama, OpenAI, etc.
+ *   <li>Message history management
+ *   <li>Tool calling support
+ *   <li>Temperature and token control
  * </ul>
  *
  * <p><b>Supported Models:</b>
+ *
  * <ul>
- *   <li>Ollama (local): qwen2.5:3b, qwen2.5:7b, llama3:8b, etc.</li>
- *   <li>OpenAI: gpt-5.5, gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano</li>
+ *   <li>Ollama (local): qwen2.5:3b, qwen2.5:7b, llama3:8b, etc.
+ *   <li>OpenAI: gpt-5.5, gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano
  * </ul>
  *
  * <p><b>Tool calls.</b> Tool calls come from the provider's structured tool execution requests
- * ({@code AiMessage.toolExecutionRequests()} surfaced as {@link ChatResponse#getToolCalls()}),
- * with arguments parsed by Jackson. Only when a response carries no structured requests does
- * {@link #parseToolCallsFromText} apply the text protocol ({@code TOOL_CALL: name {json}} or
- * {@code TOOL_CALL: name(k=v, ...)}) for providers without tool support.
+ * ({@code AiMessage.toolExecutionRequests()} surfaced as {@link ChatResponse#getToolCalls()}), with
+ * arguments parsed by Jackson. Only when a response carries no structured requests does {@link
+ * #parseToolCallsFromText} apply the text protocol ({@code TOOL_CALL: name {json}} or {@code
+ * TOOL_CALL: name(k=v, ...)}) for providers without tool support.
  *
- * <p><b>Serialization.</b> The listener is process-local and transient; after Java
- * deserialization it is re-resolved to a no-op until {@link #withGuardrails} attaches one again.
+ * <p><b>Serialization.</b> The listener is process-local and transient; after Java deserialization
+ * it is re-resolved to a no-op until {@link #withGuardrails} attaches one again.
  *
  * @author Agentic Flink Team
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
@@ -111,7 +113,8 @@ public class LLMClient implements Serializable {
     this.chatConnection =
         chatConnection != null
             ? chatConnection
-            : LangChain4jChatConnection.ollama(baseUrl == null ? ConfigKeys.DEFAULT_OLLAMA_BASE_URL : baseUrl);
+            : LangChain4jChatConnection.ollama(
+                baseUrl == null ? ConfigKeys.DEFAULT_OLLAMA_BASE_URL : baseUrl);
   }
 
   /** Returns the underlying {@link ChatClient}, binding it lazily on first call. */
@@ -220,7 +223,8 @@ public class LLMClient implements Serializable {
 
       LOG.debug(
           "LLM response received: {} characters, {} tool calls",
-          responseText.length(), toolCalls.size());
+          responseText.length(),
+          toolCalls.size());
       return llmResponse;
 
     } catch (Exception e) {
@@ -242,9 +246,9 @@ public class LLMClient implements Serializable {
   }
 
   /**
-   * Replaces the most recent user message with the guardrail's rewritten payload, keeping the
-   * rest of the conversation (system prompt, earlier turns, tool results) intact. When the
-   * conversation has no user message the rewrite is appended as one.
+   * Replaces the most recent user message with the guardrail's rewritten payload, keeping the rest
+   * of the conversation (system prompt, earlier turns, tool results) intact. When the conversation
+   * has no user message the rewrite is appended as one.
    */
   static List<ChatMessage> replaceLastUserMessage(List<ChatMessage> messages, String rewritten) {
     List<ChatMessage> out = new ArrayList<>(messages);
@@ -271,9 +275,9 @@ public class LLMClient implements Serializable {
   }
 
   /**
-   * Text fallback for providers without structured tool support. Recognizes
-   * {@code TOOL_CALL: name {json}} (arguments parsed by Jackson) and, when no JSON form is
-   * present, {@code TOOL_CALL: name(k=v, ...)}. Unparseable calls are skipped with a warning.
+   * Text fallback for providers without structured tool support. Recognizes {@code TOOL_CALL: name
+   * {json}} (arguments parsed by Jackson) and, when no JSON form is present, {@code TOOL_CALL:
+   * name(k=v, ...)}. Unparseable calls are skipped with a warning.
    */
   static List<ToolCall> parseToolCallsFromText(String responseText) {
     List<ToolCall> toolCalls = new ArrayList<>();
@@ -295,7 +299,10 @@ public class LLMClient implements Serializable {
         Map<String, Object> parameters = JSON.readValue(jsonParams, MAP_TYPE);
         toolCalls.add(new ToolCall("call_" + (callCount++), toolName, parameters));
       } catch (IOException e) {
-        LOG.warn("Text tool call {} has invalid JSON arguments {}: {}", toolName, jsonParams,
+        LOG.warn(
+            "Text tool call {} has invalid JSON arguments {}: {}",
+            toolName,
+            jsonParams,
             e.getMessage());
       }
     }
@@ -312,8 +319,8 @@ public class LLMClient implements Serializable {
   }
 
   /**
-   * Index of the brace closing the JSON object that opens at {@code open}, honouring braces
-   * inside quoted strings; {@code -1} when the object is unterminated.
+   * Index of the brace closing the JSON object that opens at {@code open}, honouring braces inside
+   * quoted strings; {@code -1} when the object is unterminated.
    */
   private static int closingBrace(String text, int open) {
     int depth = 0;
@@ -337,9 +344,7 @@ public class LLMClient implements Serializable {
     return -1;
   }
 
-  /**
-   * Parses key=value parameter format.
-   */
+  /** Parses key=value parameter format. */
   private static Map<String, Object> parseKeyValueParameters(String paramsStr) {
     Map<String, Object> params = new HashMap<>();
 
@@ -368,8 +373,8 @@ public class LLMClient implements Serializable {
   }
 
   /**
-   * Converts the loose {@code Map<String,Object>} message format used by older call sites into
-   * the strongly-typed {@link ChatMessage} list the new SPI takes.
+   * Converts the loose {@code Map<String,Object>} message format used by older call sites into the
+   * strongly-typed {@link ChatMessage} list the new SPI takes.
    */
   private List<ChatMessage> convertMessages(List<Map<String, Object>> messages) {
     List<ChatMessage> chatMessages = new ArrayList<>(messages.size());
@@ -407,26 +412,27 @@ public class LLMClient implements Serializable {
     return chatMessages;
   }
 
-  /**
-   * Creates a default LLM client with Ollama.
-   */
+  /** Creates a default LLM client with Ollama. */
   public static LLMClient createDefault(String modelName, double temperature) {
-    return new LLMClientBuilder()
-        .withModel(modelName)
-        .withTemperature(temperature)
-        .build();
+    return new LLMClientBuilder().withModel(modelName).withTemperature(temperature).build();
   }
 
-  /**
-   * Creates a builder for custom configuration.
-   */
+  /** Creates a builder for custom configuration. */
   public static LLMClientBuilder builder() {
     return new LLMClientBuilder();
   }
 
-  public String getModelName() { return modelName; }
-  public double getTemperature() { return temperature; }
-  public int getMaxTokens() { return maxTokens; }
+  public String getModelName() {
+    return modelName;
+  }
+
+  public double getTemperature() {
+    return temperature;
+  }
+
+  public int getMaxTokens() {
+    return maxTokens;
+  }
 
   // ==================== Builder ====================
 

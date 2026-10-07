@@ -28,10 +28,11 @@ import redis.clients.jedis.JedisPool;
  *   hot:{name}:order  -&gt; List  (ids in insertion order; FIFO-evicted past maxEntries)
  * </pre>
  *
- * Search reads the whole (bounded) window with one {@code HGETALL} and brute-forces cosine locally —
- * accurate and fast while the window is small, and a single round trip per query. Eviction is FIFO:
- * pushing past {@code maxEntries} pops the oldest id and drops its vector. {@link java.io.Serializable}
- * (host/port config); the {@link JedisPool} + mapper are transient and built lazily on the task side.
+ * Search reads the whole (bounded) window with one {@code HGETALL} and brute-forces cosine locally
+ * — accurate and fast while the window is small, and a single round trip per query. Eviction is
+ * FIFO: pushing past {@code maxEntries} pops the oldest id and drops its vector. {@link
+ * java.io.Serializable} (host/port config); the {@link JedisPool} + mapper are transient and built
+ * lazily on the task side.
  */
 public final class RedisHotVectorIndex implements HotVectorIndex {
   private static final long serialVersionUID = 1L;

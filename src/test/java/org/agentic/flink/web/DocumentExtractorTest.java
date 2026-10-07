@@ -34,8 +34,7 @@ class DocumentExtractorTest {
   @Test
   @DisplayName("HTML extraction resolves relative links against the base URL")
   void resolvesRelativeLinks() {
-    String html =
-        "<html><body><a href=\"/about\">About</a><a href=\"docs/x\">X</a></body></html>";
+    String html = "<html><body><a href=\"/about\">About</a><a href=\"docs/x\">X</a></body></html>";
     DocumentExtractor ex = new DocumentExtractor();
     DocumentExtractor.ExtractedDocument doc =
         ex.extract("https://example.com/", html.getBytes(StandardCharsets.UTF_8), "text/html");
@@ -48,7 +47,8 @@ class DocumentExtractorTest {
   void tikaExtractsPlainText() throws Exception {
     DocumentExtractor ex = new DocumentExtractor();
     DocumentExtractor.ExtractedDocument doc =
-        ex.extractBytes("hello world from the corpus".getBytes(StandardCharsets.UTF_8), "text/plain");
+        ex.extractBytes(
+            "hello world from the corpus".getBytes(StandardCharsets.UTF_8), "text/plain");
     assertNotNull(doc);
     assertTrue(doc.getText().contains("hello world"));
   }

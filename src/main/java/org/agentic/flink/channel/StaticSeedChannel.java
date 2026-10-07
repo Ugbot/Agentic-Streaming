@@ -11,9 +11,9 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * Channel that emits a fixed list of elements. Useful for seeding the crawler frontier with
  * starting URLs and for tests where a controlled input stream is needed.
  *
- * <p>Wraps {@link StreamExecutionEnvironment#fromCollection(java.util.Collection,
- * TypeInformation)} so the source preserves the supplied {@link TypeInformation} for downstream
- * keyBy / state operations.
+ * <p>Wraps {@link StreamExecutionEnvironment#fromCollection(java.util.Collection, TypeInformation)}
+ * so the source preserves the supplied {@link TypeInformation} for downstream keyBy / state
+ * operations.
  */
 public final class StaticSeedChannel<T> implements Channel<T> {
   private static final long serialVersionUID = 1L;

@@ -6,10 +6,10 @@ import java.util.function.LongSupplier;
  * A minimal, thread-safe circuit breaker scoped to a single A2A peer.
  *
  * <p>Used by {@link ResilientA2AClient} to stop hammering a peer that is repeatedly failing: after
- * {@code threshold} consecutive failures the breaker trips {@link State#OPEN OPEN} and short-circuits
- * calls (they fail fast without touching the network) for {@code openMs}. The first call after that
- * window is admitted as a {@link State#HALF_OPEN HALF_OPEN} trial — its success closes the breaker,
- * its failure re-opens it for another window.
+ * {@code threshold} consecutive failures the breaker trips {@link State#OPEN OPEN} and
+ * short-circuits calls (they fail fast without touching the network) for {@code openMs}. The first
+ * call after that window is admitted as a {@link State#HALF_OPEN HALF_OPEN} trial — its success
+ * closes the breaker, its failure re-opens it for another window.
  *
  * <p>A non-positive {@code threshold} disables the breaker entirely ({@link #allowRequest()} always
  * returns {@code true}). The breaker is a runtime object built on the task side; it is not
@@ -30,7 +30,8 @@ final class CircuitBreaker {
   private State state = State.CLOSED;
   private int consecutiveFailures = 0;
   private long openedAt = 0L;
-  // Guards the single in-flight probe while HALF_OPEN, so concurrent callers don't all rush the peer.
+  // Guards the single in-flight probe while HALF_OPEN, so concurrent callers don't all rush the
+  // peer.
   private boolean probeInFlight = false;
 
   CircuitBreaker(int threshold, long openMs) {

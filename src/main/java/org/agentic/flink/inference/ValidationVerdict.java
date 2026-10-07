@@ -7,8 +7,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Parsed outcome of a validator/judge model response of the form
- * {@code VALID|INVALID [score] [reason]}.
+ * Parsed outcome of a validator/judge model response of the form {@code VALID|INVALID [score]
+ * [reason]}.
  *
  * <p>The verdict is decided by whole-word matching, so {@code INVALID} never reads as {@code
  * VALID}. The first verdict word in the response wins; a response with no verdict word is {@link

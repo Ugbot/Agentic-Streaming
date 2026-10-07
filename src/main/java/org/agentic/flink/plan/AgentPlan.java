@@ -14,9 +14,8 @@ import java.util.Map;
 
 /**
  * Declarative description of an agent operator. Python builds this from decorated user classes;
- * Java's {@code CompileUtils} consumes the JSON form via the PyFlink gateway and uses
- * {@link PlanReader} to instantiate the underlying SPIs and assemble an
- * {@link AgentPlanProcessFunction}.
+ * Java's {@code CompileUtils} consumes the JSON form via the PyFlink gateway and uses {@link
+ * PlanReader} to instantiate the underlying SPIs and assemble an {@link AgentPlanProcessFunction}.
  *
  * <p>Mirrors the upstream Apache Flink Agents plan shape but is keyed to this framework's SPIs.
  */

@@ -1,23 +1,22 @@
 package org.agentic.flink.corpus;
 
-import org.agentic.flink.memory.vector.VectorMemorySpec;
 import java.util.Objects;
+import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.apache.flink.api.common.functions.RuntimeContext;
 
 /**
- * Corpus flavour where ingest happens in a single operator and reads happen in any number of
- * read operators, each holding a per-subtask replica.
+ * Corpus flavour where ingest happens in a single operator and reads happen in any number of read
+ * operators, each holding a per-subtask replica.
  *
- * <p>The framework gives you the per-operator vector memory (rebuilt from broadcast updates);
- * the job-graph wiring — turning the ingest output into a {@code BroadcastStream} and
- * connecting it into the read operators' {@code BroadcastProcessFunction} — lives in the user's
- * pipeline. See {@code docs/corpus.md} for the canonical wiring snippet.
+ * <p>The framework gives you the per-operator vector memory (rebuilt from broadcast updates); the
+ * job-graph wiring — turning the ingest output into a {@code BroadcastStream} and connecting it
+ * into the read operators' {@code BroadcastProcessFunction} — lives in the user's pipeline. See
+ * {@code docs/corpus.md} for the canonical wiring snippet.
  *
- * <p>Under the hood each replica is just a {@link SingleOperatorCorpus} backed by the same
- * {@link VectorMemorySpec}. Updates arrive through the broadcast stream as
- * {@code (id, embedding, item)} triples; the operator calls {@link Corpus#upsert} on each
- * replica's view. There is no shared mutable state between subtasks beyond what Flink broadcast
- * state replicates for you.
+ * <p>Under the hood each replica is just a {@link SingleOperatorCorpus} backed by the same {@link
+ * VectorMemorySpec}. Updates arrive through the broadcast stream as {@code (id, embedding, item)}
+ * triples; the operator calls {@link Corpus#upsert} on each replica's view. There is no shared
+ * mutable state between subtasks beyond what Flink broadcast state replicates for you.
  */
 public final class BroadcastCorpus {
 

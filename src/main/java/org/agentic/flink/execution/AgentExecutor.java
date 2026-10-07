@@ -1,10 +1,5 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.core.AgentEvent;
-import org.agentic.flink.core.AgentEventType;
-import org.agentic.flink.dsl.Agent;
-import org.agentic.flink.statemachine.AgentState;
-import org.agentic.flink.tool.ToolRegistry;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,6 +18,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongUnaryOperator;
+import org.agentic.flink.core.AgentEvent;
+import org.agentic.flink.core.AgentEventType;
+import org.agentic.flink.dsl.Agent;
+import org.agentic.flink.statemachine.AgentState;
+import org.agentic.flink.tool.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,23 +30,26 @@ import org.slf4j.LoggerFactory;
  * Core agent execution engine that orchestrates the agentic loop.
  *
  * <p>The AgentExecutor runs the full agent lifecycle:
+ *
  * <ol>
- *   <li><b>Initialization</b> - Sets up agent context with system prompt</li>
- *   <li><b>Validation</b> - Validates input (if enabled)</li>
- *   <li><b>Execution</b> - LLM reasoning + tool calling loop</li>
- *   <li><b>Correction</b> - Fixes validation failures (if enabled)</li>
- *   <li><b>Supervision</b> - Routes to supervisor for review (if configured)</li>
+ *   <li><b>Initialization</b> - Sets up agent context with system prompt
+ *   <li><b>Validation</b> - Validates input (if enabled)
+ *   <li><b>Execution</b> - LLM reasoning + tool calling loop
+ *   <li><b>Correction</b> - Fixes validation failures (if enabled)
+ *   <li><b>Supervision</b> - Routes to supervisor for review (if configured)
  * </ol>
  *
  * <p>This executor integrates with:
+ *
  * <ul>
- *   <li><b>LLMClient</b> - For LangChain4J LLM calls</li>
- *   <li><b>ToolExecutionEngine</b> - For async tool execution</li>
- *   <li><b>ValidationExecutor</b> - For input/output validation</li>
- *   <li><b>CorrectionExecutor</b> - For correction loops</li>
+ *   <li><b>LLMClient</b> - For LangChain4J LLM calls
+ *   <li><b>ToolExecutionEngine</b> - For async tool execution
+ *   <li><b>ValidationExecutor</b> - For input/output validation
+ *   <li><b>CorrectionExecutor</b> - For correction loops
  * </ul>
  *
  * <p><b>Agentic Loop Example:</b>
+ *
  * <pre>
  * 1. User: "Analyze sales data for Q3"
  * 2. Agent LLM: "I need to call the database-query tool"
@@ -57,6 +60,7 @@ import org.slf4j.LoggerFactory;
  * </pre>
  *
  * <p><b>Usage:</b>
+ *
  * <pre>{@code
  * AgentExecutor executor = AgentExecutor.builder()
  *     .withAgent(myAgent)
@@ -67,15 +71,15 @@ import org.slf4j.LoggerFactory;
  * CompletableFuture<ExecutionResult> result = executor.execute(inputEvent);
  * }</pre>
  *
- * <p><b>Cancellation.</b> The returned future supports {@code cancel(true)}: the worker thread
- * is interrupted, in-flight tool futures are cancelled and the loop stops before the next LLM
- * or tool call, so a caller that times out does not leave side effects running.
+ * <p><b>Cancellation.</b> The returned future supports {@code cancel(true)}: the worker thread is
+ * interrupted, in-flight tool futures are cancelled and the loop stops before the next LLM or tool
+ * call, so a caller that times out does not leave side effects running.
  *
- * <p><b>Idempotency.</b> Turns are identified by {@link #turnIdOf(AgentEvent)}. A completed turn
- * is recorded in the {@link TurnResultStore}; a redelivered turn returns the recorded result.
- * Tool results are recorded per {@code (turnId, callIndex)} so a retried iteration reuses
- * results instead of re-running side-effecting tools. Retries back off exponentially with
- * full jitter and the last error is carried into the failure result and its events.
+ * <p><b>Idempotency.</b> Turns are identified by {@link #turnIdOf(AgentEvent)}. A completed turn is
+ * recorded in the {@link TurnResultStore}; a redelivered turn returns the recorded result. Tool
+ * results are recorded per {@code (turnId, callIndex)} so a retried iteration reuses results
+ * instead of re-running side-effecting tools. Retries back off exponentially with full jitter and
+ * the last error is carried into the failure result and its events.
  *
  * @author Agentic Flink Team
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
@@ -101,7 +105,8 @@ public class AgentExecutor implements Serializable, AutoCloseable {
   private final long backoffCapMillis;
 
   private transient volatile ExecutorService workers;
-  private transient volatile ConcurrentHashMap<String, CompletableFuture<ExecutionResult>> inFlightTurns;
+  private transient volatile ConcurrentHashMap<String, CompletableFuture<ExecutionResult>>
+      inFlightTurns;
   private transient LongUnaryOperator sleeper;
 
   private AgentExecutor(AgentExecutorBuilder builder) {
@@ -117,8 +122,8 @@ public class AgentExecutor implements Serializable, AutoCloseable {
   }
 
   /**
-   * Identity of a turn for deduplication: {@code turn_id} in event data, then in metadata,
-   * then the correlation id, then {@code flowId/iterationNumber}.
+   * Identity of a turn for deduplication: {@code turn_id} in event data, then in metadata, then the
+   * correlation id, then {@code flowId/iterationNumber}.
    */
   public static String turnIdOf(AgentEvent event) {
     Object fromData = event.getData("turn_id");
@@ -136,9 +141,7 @@ public class AgentExecutor implements Serializable, AutoCloseable {
     return event.getFlowId() + "/" + (iteration == null ? 0 : iteration);
   }
 
-  /**
-   * Exponential backoff with full jitter: uniform in {@code [0, min(cap, base * 2^attempt)]}.
-   */
+  /** Exponential backoff with full jitter: uniform in {@code [0, min(cap, base * 2^attempt)]}. */
   public static long backoffMillis(int attempt, long baseMillis, long capMillis, double unit) {
     if (attempt < 0 || baseMillis <= 0 || capMillis <= 0) {
       return 0L;
@@ -226,8 +229,10 @@ public class AgentExecutor implements Serializable, AutoCloseable {
     String turnId = turnIdOf(inputEvent);
     Optional<ExecutionResult> recorded = turnResultStore.getTurnResult(turnId);
     if (recorded.isPresent()) {
-      LOG.info("Turn {} already executed for flow: {}, returning recorded result",
-          turnId, inputEvent.getFlowId());
+      LOG.info(
+          "Turn {} already executed for flow: {}, returning recorded result",
+          turnId,
+          inputEvent.getFlowId());
       return CompletableFuture.completedFuture(recorded.get());
     }
 
@@ -236,13 +241,17 @@ public class AgentExecutor implements Serializable, AutoCloseable {
     CancellableResult result = new CancellableResult(execution);
     CompletableFuture<ExecutionResult> running = inFlightTurns().putIfAbsent(turnId, result);
     if (running != null) {
-      LOG.info("Turn {} already in flight for flow: {}, joining it", turnId, inputEvent.getFlowId());
+      LOG.info(
+          "Turn {} already in flight for flow: {}, joining it", turnId, inputEvent.getFlowId());
       return running.thenApply(r -> r);
     }
     result.whenComplete((r, e) -> inFlightTurns().remove(turnId, result));
 
-    LOG.info("Starting agent execution for flow: {}, agent: {}, turn: {}",
-        inputEvent.getFlowId(), agent.getAgentId(), turnId);
+    LOG.info(
+        "Starting agent execution for flow: {}, agent: {}, turn: {}",
+        inputEvent.getFlowId(),
+        agent.getAgentId(),
+        turnId);
 
     execution.worker =
         workers()
@@ -330,6 +339,7 @@ public class AgentExecutor implements Serializable, AutoCloseable {
    * Runs the core agentic loop (LLM reasoning + tool calling).
    *
    * <p>Flow:
+   *
    * <pre>
    * 1. Initialize agent context with system prompt
    * 2. Add user message from input event
@@ -364,8 +374,11 @@ public class AgentExecutor implements Serializable, AutoCloseable {
 
     // Agentic loop - iterate until completion or max iterations
     for (int iteration = 0; iteration < agent.getMaxIterations(); iteration++) {
-      LOG.debug("Agentic loop iteration {}/{} for flow: {}",
-          iteration + 1, agent.getMaxIterations(), context.getFlowId());
+      LOG.debug(
+          "Agentic loop iteration {}/{} for flow: {}",
+          iteration + 1,
+          agent.getMaxIterations(),
+          context.getFlowId());
 
       try {
         execution.checkCancelled();
@@ -377,12 +390,14 @@ public class AgentExecutor implements Serializable, AutoCloseable {
 
         // Check if LLM wants to call tools
         if (llmResponse.hasToolCalls()) {
-          LOG.info("LLM requested {} tool calls for flow: {}",
-              llmResponse.getToolCalls().size(), context.getFlowId());
+          LOG.info(
+              "LLM requested {} tool calls for flow: {}",
+              llmResponse.getToolCalls().size(),
+              context.getFlowId());
 
           // Execute tool calls
-          List<ToolCallResult> toolResults = executeToolCalls(
-              llmResponse.getToolCalls(), context, execution, callIndex.get());
+          List<ToolCallResult> toolResults =
+              executeToolCalls(llmResponse.getToolCalls(), context, execution, callIndex.get());
           callIndex.addAndGet(toolResults.size());
           consecutiveErrors = 0;
 
@@ -399,8 +414,10 @@ public class AgentExecutor implements Serializable, AutoCloseable {
         }
 
         // LLM returned final answer - complete successfully
-        LOG.info("Agent completed successfully for flow: {} after {} iterations",
-            context.getFlowId(), iteration + 1);
+        LOG.info(
+            "Agent completed successfully for flow: {} after {} iterations",
+            context.getFlowId(),
+            iteration + 1);
 
         return ExecutionResult.success(
             context.getFlowId(),
@@ -418,8 +435,8 @@ public class AgentExecutor implements Serializable, AutoCloseable {
         execution.checkCancelled();
         lastError = e;
         consecutiveErrors++;
-        LOG.error("Error in agentic loop iteration {} for flow: {}",
-            iteration, context.getFlowId(), e);
+        LOG.error(
+            "Error in agentic loop iteration {} for flow: {}", iteration, context.getFlowId(), e);
         context.addEvent(createErrorEvent(context, e, iteration));
 
         // If not last iteration, back off and continue
@@ -445,27 +462,22 @@ public class AgentExecutor implements Serializable, AutoCloseable {
     }
 
     // Max iterations reached without completion
-    LOG.warn("Agent reached max iterations ({}) for flow: {}",
-        agent.getMaxIterations(), context.getFlowId());
+    LOG.warn(
+        "Agent reached max iterations ({}) for flow: {}",
+        agent.getMaxIterations(),
+        context.getFlowId());
 
     String message =
         lastError == null
             ? "Max iterations reached"
             : "Max iterations reached, last error: " + describe(lastError);
     return ExecutionResult.maxIterations(
-        context.getFlowId(),
-        agent.getAgentId(),
-        message,
-        context.getEvents(),
-        toolCallHistory);
+        context.getFlowId(), agent.getAgentId(), message, context.getEvents(), toolCallHistory);
   }
 
-  /**
-   * Calls the LLM with the current conversation context.
-   */
+  /** Calls the LLM with the current conversation context. */
   private LLMResponse callLLM(List<Map<String, Object>> messages, ExecutionContext context) {
-    LOG.debug("Calling LLM for flow: {} with {} messages",
-        context.getFlowId(), messages.size());
+    LOG.debug("Calling LLM for flow: {} with {} messages", context.getFlowId(), messages.size());
 
     try {
       // Call LLM via LangChain4J
@@ -481,9 +493,7 @@ public class AgentExecutor implements Serializable, AutoCloseable {
     }
   }
 
-  /**
-   * Executes multiple tool calls concurrently.
-   */
+  /** Executes multiple tool calls concurrently. */
   private List<ToolCallResult> executeToolCalls(
       List<ToolCall> toolCalls, ExecutionContext context, Execution execution, int firstIndex)
       throws InterruptedException {
@@ -497,8 +507,11 @@ public class AgentExecutor implements Serializable, AutoCloseable {
       ToolCall toolCall = toolCalls.get(i);
       Optional<ToolCallResult> recorded = turnResultStore.getToolResult(execution.turnId, index);
       if (recorded.isPresent()) {
-        LOG.info("Reusing recorded result for tool {} (turn {}, call {})",
-            toolCall.getToolName(), execution.turnId, index);
+        LOG.info(
+            "Reusing recorded result for tool {} (turn {}, call {})",
+            toolCall.getToolName(),
+            execution.turnId,
+            index);
         futures.add(CompletableFuture.completedFuture(recorded.get()));
         continue;
       }
@@ -560,8 +573,8 @@ public class AgentExecutor implements Serializable, AutoCloseable {
   // ==================== Event Creation ====================
 
   private AgentEvent createLLMEvent(ExecutionContext context, LLMResponse response, int iteration) {
-    AgentEvent event = context.getInputEvent()
-        .withEventType(AgentEventType.LOOP_ITERATION_COMPLETED);
+    AgentEvent event =
+        context.getInputEvent().withEventType(AgentEventType.LOOP_ITERATION_COMPLETED);
     event.setIterationNumber(iteration);
     event.putMetadata("state", AgentState.EXECUTING.name());
     event.getData().put("llm_response", response.getText());
@@ -582,10 +595,13 @@ public class AgentExecutor implements Serializable, AutoCloseable {
   }
 
   private AgentEvent createToolResultEvent(ExecutionContext context, ToolCallResult result) {
-    AgentEvent event = context.getInputEvent()
-        .withEventType(result.isSuccess()
-            ? AgentEventType.TOOL_CALL_COMPLETED
-            : AgentEventType.TOOL_CALL_FAILED);
+    AgentEvent event =
+        context
+            .getInputEvent()
+            .withEventType(
+                result.isSuccess()
+                    ? AgentEventType.TOOL_CALL_COMPLETED
+                    : AgentEventType.TOOL_CALL_FAILED);
     event.putMetadata("state", AgentState.EXECUTING.name());
     event.getData().put("tool_name", result.getToolName());
     event.getData().put("result", result.getResult());

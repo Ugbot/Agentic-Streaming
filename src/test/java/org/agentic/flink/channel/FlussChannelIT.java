@@ -81,7 +81,8 @@ class FlussChannelIT {
     }
     writeEnv
         .fromElements(recs)
-        .sinkTo(FlussSink.of(bootstrap, db, table, (FlussSink.SerializableKeySelector<Rec>) r -> r.id))
+        .sinkTo(
+            FlussSink.of(bootstrap, db, table, (FlussSink.SerializableKeySelector<Rec>) r -> r.id))
         .setParallelism(1);
     writeEnv.execute("fluss-write-stage");
 
@@ -104,11 +105,14 @@ class FlussChannelIT {
       poll.close();
     }
 
-    assertTrue(seen.size() >= n, "expected " + n + " records tailed from the Fluss log, got " + seen.size());
+    assertTrue(
+        seen.size() >= n,
+        "expected " + n + " records tailed from the Fluss log, got " + seen.size());
     for (int i = 0; i < n; i++) {
       assertTrue(seen.contains("r-" + i), "missing record r-" + i + " in the Fluss log");
     }
-    assertTrue(maxValue == n - 1, "payload values must survive the round trip; maxValue=" + maxValue);
+    assertTrue(
+        maxValue == n - 1, "payload values must survive the round trip; maxValue=" + maxValue);
   }
 
   /** Quiet "unused" guard for the imports used only when the cluster is present. */

@@ -7,10 +7,10 @@ import java.util.function.Consumer;
  * Service-provider interface for calling a remote A2A agent.
  *
  * <p>This is the single seam between Agentic-Flink and the A2A protocol implementation. The default
- * production binding is {@code SdkA2AClient} (wraps the official {@code a2a-java} SDK client); tests
- * use an in-memory fake. Everything else in the codebase — the outbound tool, the explicit pipeline
- * step, the DSL — depends only on this interface and the {@code A2A*} value types, so swapping SDK
- * versions (or dropping the SDK entirely) is a one-class change.
+ * production binding is {@code SdkA2AClient} (wraps the official {@code a2a-java} SDK client);
+ * tests use an in-memory fake. Everything else in the codebase — the outbound tool, the explicit
+ * pipeline step, the DSL — depends only on this interface and the {@code A2A*} value types, so
+ * swapping SDK versions (or dropping the SDK entirely) is a one-class change.
  *
  * <p>A client is bound to a single {@link RemoteAgentSpec} and built on the task side from that
  * (serializable) spec, since the underlying transport/SDK objects are not {@link
@@ -95,7 +95,9 @@ public interface A2AClient extends AutoCloseable {
       }
     }
     throw new A2AClientException(
-        "A2A task " + taskId + " did not reach a final state within "
+        "A2A task "
+            + taskId
+            + " did not reach a final state within "
             + Duration.ofMillis(timeoutMs));
   }
 

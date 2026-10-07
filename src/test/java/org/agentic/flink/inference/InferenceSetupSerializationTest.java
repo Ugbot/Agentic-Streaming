@@ -52,21 +52,19 @@ class InferenceSetupSerializationTest {
   @Test
   @DisplayName("InferenceSetup rejects non-positive threads / batch")
   void rejectsBadInts() {
-    InferenceSetup.Builder b =
-        InferenceSetup.builder().withModelName("m").withModelUri("u");
+    InferenceSetup.Builder b = InferenceSetup.builder().withModelName("m").withModelUri("u");
     assertThrows(IllegalArgumentException.class, () -> b.withThreads(0).build());
-    assertThrows(IllegalArgumentException.class, () -> b.withThreads(1).withMaxBatchSize(0).build());
+    assertThrows(
+        IllegalArgumentException.class, () -> b.withThreads(1).withMaxBatchSize(0).build());
   }
 
   @Test
   @DisplayName("InferenceSetup requires modelName and modelUri")
   void requiresIdentifiers() {
     assertThrows(
-        NullPointerException.class,
-        () -> InferenceSetup.builder().withModelUri("u").build());
+        NullPointerException.class, () -> InferenceSetup.builder().withModelUri("u").build());
     assertThrows(
-        NullPointerException.class,
-        () -> InferenceSetup.builder().withModelName("m").build());
+        NullPointerException.class, () -> InferenceSetup.builder().withModelName("m").build());
   }
 
   @Test

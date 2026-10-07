@@ -1,5 +1,4 @@
 package org.agentic.flink.typeinfo;
-import org.apache.flink.api.common.functions.OpenContext;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -20,6 +19,7 @@ import org.agentic.flink.example.banking.TurnBrain;
 import org.agentic.flink.example.banking.graph.BankingAgentGraph;
 import org.agentic.flink.example.banking.graph.BankingPath;
 import org.agentic.flink.llm.ChatMessage;
+import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
@@ -58,12 +58,14 @@ final class KryoDisabledPipelineTest {
     // Flink 2.x: ExecutionConfig.disableGenericTypes() is gone; the Kryo-fallback guard is now a
     // pipeline option set on the cluster Configuration.
     Configuration conf = new Configuration();
-    conf.set(PipelineOptions.GENERIC_TYPES, false); // any Kryo fallback now throws at job build/submit
+    conf.set(
+        PipelineOptions.GENERIC_TYPES, false); // any Kryo fallback now throws at job build/submit
     return StreamExecutionEnvironment.createLocalEnvironment(1, conf);
   }
 
   @Test
-  @DisplayName("banking graph runs with generic types disabled (A2A*, BankingTurn, RoutingBudget state are Kryo-free)")
+  @DisplayName(
+      "banking graph runs with generic types disabled (A2A*, BankingTurn, RoutingBudget state are Kryo-free)")
   void bankingGraphKryoFree() throws Exception {
     InProcA2ABridge bridge =
         new InProcA2ABridge("req-" + UUID.randomUUID(), "resp-" + UUID.randomUUID());
@@ -98,7 +100,8 @@ final class KryoDisabledPipelineTest {
   }
 
   @Test
-  @DisplayName("AgentEvent + AgentContext/AgentExecutionState/ChatMessage state run with generic types disabled")
+  @DisplayName(
+      "AgentEvent + AgentContext/AgentExecutionState/ChatMessage state run with generic types disabled")
   void agentEventStateKryoFree() throws Exception {
     StreamExecutionEnvironment env = strictEnv();
     AgentEvent ev = new AgentEvent();
@@ -123,11 +126,14 @@ final class KryoDisabledPipelineTest {
 
     @Override
     public void open(OpenContext openContext) {
-      ctxState = getRuntimeContext().getState(new ValueStateDescriptor<>("ctx", AgentContext.class));
+      ctxState =
+          getRuntimeContext().getState(new ValueStateDescriptor<>("ctx", AgentContext.class));
       execState =
-          getRuntimeContext().getState(new ValueStateDescriptor<>("exec", AgentExecutionState.class));
+          getRuntimeContext()
+              .getState(new ValueStateDescriptor<>("exec", AgentExecutionState.class));
       transcript =
-          getRuntimeContext().getListState(new ListStateDescriptor<>("transcript", ChatMessage.class));
+          getRuntimeContext()
+              .getListState(new ListStateDescriptor<>("transcript", ChatMessage.class));
     }
 
     @Override

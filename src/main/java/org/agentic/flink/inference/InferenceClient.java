@@ -3,14 +3,13 @@ package org.agentic.flink.inference;
 import org.agentic.flink.embedding.EmbeddingClient;
 
 /**
- * Runtime handle for one or more loaded inference models, returned by
- * {@link InferenceConnection#bind}.
+ * Runtime handle for one or more loaded inference models, returned by {@link
+ * InferenceConnection#bind}.
  *
- * <p>Mirrors {@link org.agentic.flink.llm.ChatClient}: live, not serialized, held by an
- * operator for the duration of a Flink task. The client exposes typed task views via
- * {@code as*()} accessors; backends that don't support a given task throw
- * {@link UnsupportedOperationException} from the corresponding view. Callers can probe with
- * {@link #supports(TaskKind)} first.
+ * <p>Mirrors {@link org.agentic.flink.llm.ChatClient}: live, not serialized, held by an operator
+ * for the duration of a Flink task. The client exposes typed task views via {@code as*()}
+ * accessors; backends that don't support a given task throw {@link UnsupportedOperationException}
+ * from the corresponding view. Callers can probe with {@link #supports(TaskKind)} first.
  */
 public interface InferenceClient extends AutoCloseable {
 

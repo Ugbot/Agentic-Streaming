@@ -6,13 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.agentic.flink.embedding.HashEmbeddingConnection;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.llm.EchoChatConnection;
 import org.agentic.flink.storage.vector.InMemoryVectorStore;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -44,7 +44,8 @@ class KnowledgeBaseTest {
     int chunks = kb.ingestText(src, body, Map.of("title", "Intro"));
     assertTrue(chunks >= 1, "expected at least one chunk");
 
-    List<KnowledgeBase.Passage> hits = kb.search("Apache Flink is a distributed stream processing engine.", 3);
+    List<KnowledgeBase.Passage> hits =
+        kb.search("Apache Flink is a distributed stream processing engine.", 3);
     assertFalse(hits.isEmpty(), "search should return passages");
     // Deterministic hash embedder: the exact ingested chunk text ranks first.
     assertTrue(

@@ -38,8 +38,12 @@ public final class Answer implements Serializable {
 
   @Override
   public String toString() {
-    return "Answer[" + question + " → "
+    return "Answer["
+        + question
+        + " → "
         + (text.length() > 100 ? text.substring(0, 97) + "..." : text)
-        + " (" + citations.size() + " citations)]";
+        + " ("
+        + citations.size()
+        + " citations)]";
   }
 }

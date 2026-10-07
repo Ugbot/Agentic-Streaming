@@ -6,9 +6,9 @@ import java.util.Objects;
 /**
  * Per-use embedding configuration.
  *
- * <p>The connection/setup split mirrors {@link org.agentic.flink.llm.ChatConnection}:
- * one long-lived {@link EmbeddingConnection} (Ollama service, OpenAI account) serves many call
- * sites with different model names and dimensions.
+ * <p>The connection/setup split mirrors {@link org.agentic.flink.llm.ChatConnection}: one
+ * long-lived {@link EmbeddingConnection} (Ollama service, OpenAI account) serves many call sites
+ * with different model names and dimensions.
  */
 public final class EmbeddingSetup implements Serializable {
   private static final long serialVersionUID = 1L;

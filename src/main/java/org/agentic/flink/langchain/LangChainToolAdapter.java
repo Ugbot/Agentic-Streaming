@@ -1,20 +1,20 @@
 package org.agentic.flink.langchain;
 
-import org.agentic.flink.core.ToolDefinition;
-import org.agentic.flink.tools.ToolExecutor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.agentic.flink.core.ToolDefinition;
+import org.agentic.flink.tools.ToolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Adapter that bridges LangChain4j @Tool annotated methods with the Flink Agent framework.
  *
- * <p>This adapter allows methods annotated with @Tool to be invoked as ToolExecutor implementations,
- * enabling seamless integration with the existing CEP saga orchestration.
+ * <p>This adapter allows methods annotated with @Tool to be invoked as ToolExecutor
+ * implementations, enabling seamless integration with the existing CEP saga orchestration.
  *
  * <p>Example:
  *
@@ -116,8 +116,7 @@ public class LangChainToolAdapter implements ToolExecutor {
       Object value = parameters.get(paramName);
 
       if (value == null) {
-        LOG.warn(
-            "Parameter '{}' not found in input parameters for tool '{}'", paramName, toolId);
+        LOG.warn("Parameter '{}' not found in input parameters for tool '{}'", paramName, toolId);
         // Try to provide a default value based on type
         value = getDefaultValue(param.getType());
       } else {

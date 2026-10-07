@@ -6,12 +6,13 @@ import java.util.Map;
 import org.agentic.flink.memory.vector.ScoredItem;
 
 /**
- * The <b>hot</b> tier of a live RAG retrieval stack: a low-latency, recency-bounded vector index over
- * just-ingested documents, queried in parallel with the durable <b>cold</b> tier (a {@link
- * org.agentic.flink.corpus.Corpus} / {@link org.agentic.flink.storage.vector.VectorStore}) and merged
- * by {@link TwoTierRetriever}.
+ * The <b>hot</b> tier of a live RAG retrieval stack: a low-latency, recency-bounded vector index
+ * over just-ingested documents, queried in parallel with the durable <b>cold</b> tier (a {@link
+ * org.agentic.flink.corpus.Corpus} / {@link org.agentic.flink.storage.vector.VectorStore}) and
+ * merged by {@link TwoTierRetriever}.
  *
- * <p>The contract is deliberately small so it can sit on different backends with the same semantics:
+ * <p>The contract is deliberately small so it can sit on different backends with the same
+ * semantics:
  *
  * <ul>
  *   <li><b>in-JVM</b> ({@link InMemoryHotVectorIndex}) — a process-wide shared, capacity-bounded
@@ -36,7 +37,9 @@ public interface HotVectorIndex extends Serializable {
    */
   void upsert(String id, float[] embedding, String text, Map<String, String> metadata);
 
-  /** Top-{@code k} nearest documents to {@code query} by cosine similarity (highest score first). */
+  /**
+   * Top-{@code k} nearest documents to {@code query} by cosine similarity (highest score first).
+   */
   List<ScoredItem> search(float[] query, int k);
 
   /** Current number of documents held in the hot window. */

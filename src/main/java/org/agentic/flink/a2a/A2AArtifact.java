@@ -35,7 +35,9 @@ public final class A2AArtifact implements Serializable {
     this.name = name;
     this.description = description;
     this.parts =
-        parts == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(parts));
+        parts == null
+            ? Collections.emptyList()
+            : Collections.unmodifiableList(new ArrayList<>(parts));
     this.metadata = metadata == null ? null : Collections.unmodifiableMap(metadata);
   }
 
@@ -100,6 +102,12 @@ public final class A2AArtifact implements Serializable {
 
   @Override
   public String toString() {
-    return "A2AArtifact{artifactId=" + artifactId + ", name=" + name + ", parts=" + parts.size() + '}';
+    return "A2AArtifact{artifactId="
+        + artifactId
+        + ", name="
+        + name
+        + ", parts="
+        + parts.size()
+        + '}';
   }
 }

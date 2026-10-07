@@ -1,19 +1,19 @@
 package org.agentic.flink.storage;
 
-import org.agentic.flink.context.core.ContextItem;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Reads and writes {@link MemorySet}s through an underlying {@link LongTermMemoryStore} by
  * namespacing the fact-map keys with {@code "${setName}::${itemId}"}.
  *
- * <p>This is a thin typed view over the existing {@code saveFacts} / {@code loadFacts} surface;
- * no storage-layer change is required. When upstream Apache Flink Agents stabilizes its
- * {@code BaseLongTermMemory.MemorySet} API, this class is the natural bridge — its public
- * surface mirrors the upstream concept vocabulary.
+ * <p>This is a thin typed view over the existing {@code saveFacts} / {@code loadFacts} surface; no
+ * storage-layer change is required. When upstream Apache Flink Agents stabilizes its {@code
+ * BaseLongTermMemory.MemorySet} API, this class is the natural bridge — its public surface mirrors
+ * the upstream concept vocabulary.
  */
 public final class MemorySetAccessor {
 

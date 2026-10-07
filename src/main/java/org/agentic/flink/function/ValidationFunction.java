@@ -1,5 +1,12 @@
 package org.agentic.flink.function;
 
+import dev.langchain4j.model.input.Prompt;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ServiceLoader;
+import java.util.concurrent.CompletableFuture;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -10,13 +17,6 @@ import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
 import org.agentic.flink.serde.ValidationResult;
-import dev.langchain4j.model.input.Prompt;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ServiceLoader;
-import java.util.concurrent.CompletableFuture;
 import org.apache.flink.api.common.functions.OpenContext;
 import org.apache.flink.streaming.api.functions.async.ResultFuture;
 import org.apache.flink.streaming.api.functions.async.RichAsyncFunction;
@@ -37,9 +37,7 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
   private transient ChatSetup chatSetup;
   private final String customTemplateId;
 
-  /**
-   * Creates a ValidationFunction using the default validation template.
-   */
+  /** Creates a ValidationFunction using the default validation template. */
   public ValidationFunction() {
     this(null);
   }
@@ -66,10 +64,7 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
     this.promptManager = PromptTemplateManager.getInstance();
     // Validation should be deterministic.
     this.chatSetup =
-        ChatSetup.builder()
-            .withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL)
-            .withTemperature(0.1)
-            .build();
+        ChatSetup.builder().withModel(ConfigKeys.DEFAULT_OLLAMA_MODEL).withTemperature(0.1).build();
   }
 
   @Override
@@ -130,12 +125,10 @@ public class ValidationFunction extends RichAsyncFunction<AgentEvent, AgentEvent
           boolean isValid = validationResponse.toUpperCase().contains("VALID");
           double score = isValid ? 1.0 : 0.0;
 
-          LOG.info(
-              "Validation completed for flow: {}, isValid: {}", event.getFlowId(), isValid);
+          LOG.info("Validation completed for flow: {}, isValid: {}", event.getFlowId(), isValid);
 
           AgentEvent validationEvent =
-              createValidationEvent(
-                  event, isValid, score, isValid ? null : validationResponse);
+              createValidationEvent(event, isValid, score, isValid ? null : validationResponse);
           resultFuture.complete(Collections.singleton(validationEvent));
         });
   }

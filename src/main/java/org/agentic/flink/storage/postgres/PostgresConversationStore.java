@@ -3,8 +3,11 @@ package org.agentic.flink.storage.postgres;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.introspect.VisibilityChecker;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+import java.sql.*;
+import java.util.*;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.context.core.AgentContext;
 import org.agentic.flink.context.core.ContextItem;
@@ -12,10 +15,6 @@ import org.agentic.flink.storage.LongTermMemoryStore;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageProvider;
 import org.agentic.flink.storage.StorageTier;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-import java.sql.*;
-import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,12 +98,11 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
 
   @Override
   protected void open(Map<String, String> config) throws Exception {
-    this.jdbcUrl = config.getOrDefault(
-        ConfigKeys.POSTGRES_URL, ConfigKeys.DEFAULT_POSTGRES_URL);
+    this.jdbcUrl = config.getOrDefault(ConfigKeys.POSTGRES_URL, ConfigKeys.DEFAULT_POSTGRES_URL);
     this.username = config.getOrDefault(ConfigKeys.POSTGRES_USER, ConfigKeys.DEFAULT_POSTGRES_USER);
     this.password = config.get("postgres.password");
-    this.autoCreateTables = Boolean.parseBoolean(
-        config.getOrDefault("postgres.auto.create.tables", "true"));
+    this.autoCreateTables =
+        Boolean.parseBoolean(config.getOrDefault("postgres.auto.create.tables", "true"));
 
     int maxPoolSize = Integer.parseInt(config.getOrDefault("postgres.pool.max.size", "10"));
     int minIdle = Integer.parseInt(config.getOrDefault("postgres.pool.min.idle", "2"));
@@ -119,7 +117,8 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
 
     // Configure visibility to use fields (works best with Lombok @Data classes)
     this.objectMapper.setVisibility(
-        objectMapper.getSerializationConfig()
+        objectMapper
+            .getSerializationConfig()
             .getDefaultVisibilityChecker()
             .withFieldVisibility(JsonAutoDetect.Visibility.ANY)
             .withGetterVisibility(JsonAutoDetect.Visibility.PUBLIC_ONLY)
@@ -142,8 +141,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
 
     this.dataSource = new HikariDataSource(hikariConfig);
 
-    LOG.info("PostgresConversationStore initialized: url={}, maxPoolSize={}",
-        jdbcUrl, maxPoolSize);
+    LOG.info("PostgresConversationStore initialized: url={}, maxPoolSize={}", jdbcUrl, maxPoolSize);
 
     // Create tables if auto-create is enabled
     if (autoCreateTables) {
@@ -161,12 +159,10 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     return objectMapper;
   }
 
-  /**
-   * Create database tables if they don't exist.
-   */
+  /** Create database tables if they don't exist. */
   private void createTablesIfNotExist() throws SQLException {
     try (Connection conn = dataSource.getConnection();
-         Statement stmt = conn.createStatement()) {
+        Statement stmt = conn.createStatement()) {
 
       // Create agent_contexts table
       stmt.execute(
@@ -191,8 +187,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
 
       // Create indexes
       stmt.execute(
-          "CREATE INDEX IF NOT EXISTS idx_agent_contexts_user_id "
-              + "ON agent_contexts(user_id)");
+          "CREATE INDEX IF NOT EXISTS idx_agent_contexts_user_id " + "ON agent_contexts(user_id)");
       stmt.execute(
           "CREATE INDEX IF NOT EXISTS idx_agent_contexts_updated "
               + "ON agent_contexts(last_updated_at)");
@@ -233,7 +228,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
             + "last_updated_at = EXCLUDED.last_updated_at";
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
       pstmt.setString(2, contextJson);
@@ -256,7 +251,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     String sql = "SELECT context_json FROM agent_contexts WHERE flow_id = ?";
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
 
@@ -282,7 +277,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     String sql = "SELECT 1 FROM agent_contexts WHERE flow_id = ? LIMIT 1";
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
 
@@ -372,7 +367,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     Map<String, ContextItem> facts = new HashMap<>();
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
 
@@ -401,7 +396,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     Timestamp now = new Timestamp(System.currentTimeMillis());
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(UPSERT_FACT)) {
+        PreparedStatement pstmt = conn.prepareStatement(UPSERT_FACT)) {
 
       pstmt.setString(1, flowId);
       pstmt.setString(2, factId);
@@ -422,7 +417,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     String sql = "DELETE FROM agent_facts WHERE flow_id = ? AND fact_id = ?";
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
       pstmt.setString(2, factId);
@@ -438,8 +433,8 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     List<String> flowIds = new ArrayList<>();
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql);
-         ResultSet rs = pstmt.executeQuery()) {
+        PreparedStatement pstmt = conn.prepareStatement(sql);
+        ResultSet rs = pstmt.executeQuery()) {
 
       while (rs.next()) {
         flowIds.add(rs.getString("flow_id"));
@@ -460,7 +455,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     List<String> flowIds = new ArrayList<>();
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, userId);
 
@@ -485,7 +480,7 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
             + "FROM agent_contexts WHERE flow_id = ?";
 
     try (Connection conn = dataSource().getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
       pstmt.setString(1, flowId);
 
@@ -511,7 +506,8 @@ public class PostgresConversationStore extends ReopenableStore implements LongTe
     // This is a no-op, but could be implemented using a cleanup job
     LOG.debug(
         "setConversationTTL called for flow {} with TTL {} - PostgreSQL doesn't support automatic TTL",
-        flowId, ttlSeconds);
+        flowId,
+        ttlSeconds);
   }
 
   @Override

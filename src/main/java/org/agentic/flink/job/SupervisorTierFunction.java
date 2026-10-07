@@ -1,5 +1,14 @@
 package org.agentic.flink.job;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -11,15 +20,6 @@ import org.agentic.flink.execution.ExecutionResult;
 import org.agentic.flink.execution.LLMClient;
 import org.agentic.flink.statemachine.AgentState;
 import org.agentic.flink.tool.ToolRegistry;
-import java.time.Duration;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.flink.cep.functions.PatternProcessFunction;
 import org.apache.flink.cep.functions.TimedOutPartialMatchHandler;
 import org.apache.flink.util.Collector;
@@ -31,15 +31,17 @@ import org.slf4j.LoggerFactory;
  * CEP PatternProcessFunction for executing a supervisor tier with escalation logic.
  *
  * <p>Extends agent execution with supervisor-specific capabilities:
+ *
  * <ul>
- *   <li>Quality score evaluation against tier thresholds</li>
- *   <li>Escalation to next tier based on quality/failure</li>
- *   <li>Escalation policy enforcement (NEXT_TIER, SKIP_TO_TOP, RETRY_CURRENT, FAIL_FAST)</li>
- *   <li>Human approval handling (pause/resume)</li>
- *   <li>Max escalation limits</li>
+ *   <li>Quality score evaluation against tier thresholds
+ *   <li>Escalation to next tier based on quality/failure
+ *   <li>Escalation policy enforcement (NEXT_TIER, SKIP_TO_TOP, RETRY_CURRENT, FAIL_FAST)
+ *   <li>Human approval handling (pause/resume)
+ *   <li>Max escalation limits
  * </ul>
  *
  * <p><b>Escalation Flow Example (NEXT_TIER policy):</b>
+ *
  * <pre>
  * Tier 0 (Executor) → Quality < 0.7? → Escalate to Tier 1 (QA Review)
  * Tier 1 (QA Review) → Quality < 0.8? → Escalate to Tier 2 (Final Approval)
@@ -47,6 +49,7 @@ import org.slf4j.LoggerFactory;
  * </pre>
  *
  * <p><b>Escalation Metadata:</b>
+ *
  * <pre>
  * event.metadata:
  *   - current_tier: 0
@@ -56,14 +59,14 @@ import org.slf4j.LoggerFactory;
  *   - quality_score: 0.65
  * </pre>
  *
- * <p><b>Checkpoint impact.</b> The tier agent runs synchronously inside this keyed CEP
- * operator because the escalation decision needs the result in the same {@code processMatch}
- * call. While a tier executes, this subtask cannot process other flows or align checkpoint
- * barriers, so checkpoints of the whole job are delayed by up to the tier timeout. The timeout
- * is {@link Agent#getTimeout()} of the tier agent or {@link #DEFAULT_TIMEOUT}; keep it short.
- * When it fires, the in-flight execution is cancelled with {@code cancel(true)} so the LLM loop
- * and tool futures stop instead of running orphaned. Flows that need long agent turns should
- * use the event-sourced runtime instead of a supervisor chain.
+ * <p><b>Checkpoint impact.</b> The tier agent runs synchronously inside this keyed CEP operator
+ * because the escalation decision needs the result in the same {@code processMatch} call. While a
+ * tier executes, this subtask cannot process other flows or align checkpoint barriers, so
+ * checkpoints of the whole job are delayed by up to the tier timeout. The timeout is {@link
+ * Agent#getTimeout()} of the tier agent or {@link #DEFAULT_TIMEOUT}; keep it short. When it fires,
+ * the in-flight execution is cancelled with {@code cancel(true)} so the LLM loop and tool futures
+ * stop instead of running orphaned. Flows that need long agent turns should use the event-sourced
+ * runtime instead of a supervisor chain.
  *
  * @author Agentic Flink Team
  * @see SupervisorChain
@@ -88,10 +91,8 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
   private final long timeoutMillis;
 
   // Side output tags
-  private static final OutputTag<AgentEvent> ESCALATION_TAG =
-      AgentJobGenerator.ESCALATION_TAG;
-  private static final OutputTag<AgentEvent> TIMEOUT_TAG =
-      AgentJobGenerator.TIMEOUT_TAG;
+  private static final OutputTag<AgentEvent> ESCALATION_TAG = AgentJobGenerator.ESCALATION_TAG;
+  private static final OutputTag<AgentEvent> TIMEOUT_TAG = AgentJobGenerator.TIMEOUT_TAG;
   private static final OutputTag<AgentEvent> VALIDATION_FAILURES_TAG =
       AgentJobGenerator.VALIDATION_FAILURES_TAG;
 
@@ -99,16 +100,27 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
 
   /** Regex for explicit score patterns like "Score: 0.9" or "Quality: 85%". */
   private static final Pattern SCORE_PATTERN =
-      Pattern.compile("(?:score|quality|rating|confidence)[:\\s]+([0-9]+(?:\\.[0-9]+)?)[\\s]*(%)?",
+      Pattern.compile(
+          "(?:score|quality|rating|confidence)[:\\s]+([0-9]+(?:\\.[0-9]+)?)[\\s]*(%)?",
           Pattern.CASE_INSENSITIVE);
 
   private static final String[] POSITIVE_KEYWORDS = {
-      "good", "excellent", "correct", "complete", "accurate", "valid", "approved",
-      "satisfactory", "well", "proper", "thorough", "comprehensive"
+    "good",
+    "excellent",
+    "correct",
+    "complete",
+    "accurate",
+    "valid",
+    "approved",
+    "satisfactory",
+    "well",
+    "proper",
+    "thorough",
+    "comprehensive"
   };
   private static final String[] NEGATIVE_KEYWORDS = {
-      "poor", "incorrect", "incomplete", "error", "invalid", "rejected",
-      "unsatisfactory", "wrong", "missing", "failure", "failed", "bad"
+    "poor", "incorrect", "incomplete", "error", "invalid", "rejected",
+    "unsatisfactory", "wrong", "missing", "failure", "failed", "bad"
   };
 
   public SupervisorTierFunction(
@@ -121,7 +133,9 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
    *     selects {@link #DEFAULT_TIMEOUT}
    */
   public SupervisorTierFunction(
-      SupervisorTier tier, SupervisorChain chain, ToolRegistry toolRegistry,
+      SupervisorTier tier,
+      SupervisorChain chain,
+      ToolRegistry toolRegistry,
       Duration defaultTimeout) {
     this(tier, chain, toolRegistry, defaultTimeout, null);
   }
@@ -131,8 +145,11 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
    *     the agent's model settings
    */
   public SupervisorTierFunction(
-      SupervisorTier tier, SupervisorChain chain, ToolRegistry toolRegistry,
-      Duration defaultTimeout, LLMClient llmClient) {
+      SupervisorTier tier,
+      SupervisorChain chain,
+      ToolRegistry toolRegistry,
+      Duration defaultTimeout,
+      LLMClient llmClient) {
     this.tier = tier;
     this.chain = chain;
     this.toolRegistry = toolRegistry;
@@ -164,11 +181,12 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
 
   private AgentExecutor getOrCreateExecutor() {
     if (executor == null) {
-      executor = AgentExecutor.builder()
-          .withAgent(tier.getAgent())
-          .withToolRegistry(toolRegistry)
-          .withLlmClient(llmClient)
-          .build();
+      executor =
+          AgentExecutor.builder()
+              .withAgent(tier.getAgent())
+              .withToolRegistry(toolRegistry)
+              .withLlmClient(llmClient)
+              .build();
     }
     return executor;
   }
@@ -179,8 +197,11 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
       throws Exception {
 
     Agent agent = tier.getAgent();
-    LOG.debug("Processing tier {} ({}) for agent: {}",
-        tier.getTierIndex(), tier.getTierName(), agent.getAgentId());
+    LOG.debug(
+        "Processing tier {} ({}) for agent: {}",
+        tier.getTierIndex(),
+        tier.getTierName(),
+        agent.getAgentId());
 
     List<AgentEvent> startEvents = match.get("initial");
     if (startEvents == null || startEvents.isEmpty()) {
@@ -194,19 +215,26 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
     // Get escalation count from metadata
     int escalationCount = getEscalationCount(startEvent);
 
-    LOG.info("Processing tier {} for flow: {} (escalation count: {})",
-        tier.getTierIndex(), flowId, escalationCount);
+    LOG.info(
+        "Processing tier {} for flow: {} (escalation count: {})",
+        tier.getTierIndex(),
+        flowId,
+        escalationCount);
 
     // Check max escalations
     if (escalationCount >= chain.getMaxEscalations()) {
       if (chain.isFailOnMaxEscalations()) {
-        LOG.error("Max escalations ({}) reached for flow: {}, failing",
-            chain.getMaxEscalations(), flowId);
+        LOG.error(
+            "Max escalations ({}) reached for flow: {}, failing",
+            chain.getMaxEscalations(),
+            flowId);
         handleMaxEscalationsReached(startEvent, ctx, out);
         return;
       } else {
-        LOG.warn("Max escalations ({}) reached for flow: {}, allowing completion",
-            chain.getMaxEscalations(), flowId);
+        LOG.warn(
+            "Max escalations ({}) reached for flow: {}, allowing completion",
+            chain.getMaxEscalations(),
+            flowId);
         // Continue processing at final tier
       }
     }
@@ -221,8 +249,11 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
       tierResult.getData().put("tier_index", tier.getTierIndex());
       tierResult.getData().put("tier_name", tier.getTierName());
 
-      LOG.debug("Tier {} quality score: {} (threshold: {})",
-          tier.getTierIndex(), qualityScore, tier.getQualityThreshold());
+      LOG.debug(
+          "Tier {} quality score: {} (threshold: {})",
+          tier.getTierIndex(),
+          qualityScore,
+          tier.getQualityThreshold());
 
       // Check if escalation is needed
       if (shouldEscalate(qualityScore)) {
@@ -265,8 +296,8 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
   /**
    * Executes this supervisor tier by delegating to the {@link AgentExecutor}.
    *
-   * <p>The executor runs the full agentic loop for the tier's agent, then the result
-   * is packaged as a SUPERVISOR_REVIEW_COMPLETED event for quality evaluation.
+   * <p>The executor runs the full agentic loop for the tier's agent, then the result is packaged as
+   * a SUPERVISOR_REVIEW_COMPLETED event for quality evaluation.
    *
    * @throws TimeoutException if execution exceeds the agent's configured timeout
    */
@@ -282,8 +313,13 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
     } catch (TimeoutException e) {
       pending.cancel(true);
       throw new TimeoutException(
-          "Tier " + tier.getTierIndex() + " agent " + agent.getAgentId()
-              + " exceeded " + timeoutMillis + " ms; execution cancelled");
+          "Tier "
+              + tier.getTierIndex()
+              + " agent "
+              + agent.getAgentId()
+              + " exceeded "
+              + timeoutMillis
+              + " ms; execution cancelled");
     }
 
     AgentEvent result = startEvent.withEventType(AgentEventType.SUPERVISOR_REVIEW_COMPLETED);
@@ -308,14 +344,15 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
    * Evaluates a quality score from the tier's execution result.
    *
    * <p>Scoring strategy (ordered by priority):
+   *
    * <ol>
-   *   <li>If the event data already contains a numeric {@code quality_score}, use it directly.</li>
-   *   <li>If the event was marked as a failed execution, return 0.0.</li>
-   *   <li>Parse the LLM review output for explicit score patterns such as
-   *       "Score: 0.9" or "Quality: 85%".</li>
-   *   <li>Fall back to keyword analysis: count positive vs negative quality indicators
-   *       in the review text and derive a score between 0.0 and 1.0.</li>
-   *   <li>If no review output is available at all, default to 0.5 (uncertain).</li>
+   *   <li>If the event data already contains a numeric {@code quality_score}, use it directly.
+   *   <li>If the event was marked as a failed execution, return 0.0.
+   *   <li>Parse the LLM review output for explicit score patterns such as "Score: 0.9" or "Quality:
+   *       85%".
+   *   <li>Fall back to keyword analysis: count positive vs negative quality indicators in the
+   *       review text and derive a score between 0.0 and 1.0.
+   *   <li>If no review output is available at all, default to 0.5 (uncertain).
    * </ol>
    */
   private double evaluateQualityScore(AgentEvent tierResult) {
@@ -386,9 +423,7 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
     return Math.max(0.0, Math.min(1.0, score));
   }
 
-  /**
-   * Checks if escalation should occur based on quality score and tier config.
-   */
+  /** Checks if escalation should occur based on quality score and tier config. */
   private boolean shouldEscalate(double qualityScore) {
     // Check tier-specific threshold
     if (tier.getQualityThreshold() > 0 && qualityScore < tier.getQualityThreshold()) {
@@ -404,28 +439,28 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
     if (tier.isRequiresHumanApproval()) {
       // Phase 3 (not yet implemented): Human approval logic
       LOG.info("Tier {} requires human approval", tier.getTierIndex());
-      return false;  // For now, don't escalate (assume approved)
+      return false; // For now, don't escalate (assume approved)
     }
 
     return false;
   }
 
-  /**
-   * Handles escalation to next tier based on escalation policy.
-   */
+  /** Handles escalation to next tier based on escalation policy. */
   private void handleEscalation(
-      AgentEvent tierResult,
-      int currentEscalationCount,
-      Context ctx,
-      Collector<AgentEvent> out) {
+      AgentEvent tierResult, int currentEscalationCount, Context ctx, Collector<AgentEvent> out) {
 
     int newEscalationCount = currentEscalationCount + 1;
     EscalationPolicy policy = chain.getEscalationPolicy();
 
-    LOG.info("Escalating flow {} from tier {} (policy: {}, escalation count: {})",
-        tierResult.getFlowId(), tier.getTierIndex(), policy, newEscalationCount);
+    LOG.info(
+        "Escalating flow {} from tier {} (policy: {}, escalation count: {})",
+        tierResult.getFlowId(),
+        tier.getTierIndex(),
+        policy,
+        newEscalationCount);
 
-    AgentEvent escalationEvent = tierResult.withEventType(AgentEventType.SUPERVISOR_REVIEW_REJECTED);
+    AgentEvent escalationEvent =
+        tierResult.withEventType(AgentEventType.SUPERVISOR_REVIEW_REJECTED);
     escalationEvent.incrementIteration();
     escalationEvent.putMetadata("state", AgentState.SUPERVISOR_REVIEW.name());
 
@@ -444,9 +479,7 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
     LOG.info("Escalated flow {} to tier {}", tierResult.getFlowId(), targetTier);
   }
 
-  /**
-   * Determines target tier based on escalation policy.
-   */
+  /** Determines target tier based on escalation policy. */
   private int determineTargetTier(EscalationPolicy policy) {
     switch (policy) {
       case NEXT_TIER:
@@ -469,20 +502,20 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
       case CUSTOM:
         // Phase 3 (not yet implemented): Custom escalation logic
         LOG.warn("Custom escalation policy not yet implemented, using NEXT_TIER");
-        return chain.getNextTier(tier.getTierIndex())
+        return chain
+            .getNextTier(tier.getTierIndex())
             .map(SupervisorTier::getTierIndex)
             .orElse(tier.getTierIndex());
 
       default:
-        return chain.getNextTier(tier.getTierIndex())
+        return chain
+            .getNextTier(tier.getTierIndex())
             .map(SupervisorTier::getTierIndex)
             .orElse(tier.getTierIndex());
     }
   }
 
-  /**
-   * Handles max escalations reached.
-   */
+  /** Handles max escalations reached. */
   private void handleMaxEscalationsReached(
       AgentEvent event, Context ctx, Collector<AgentEvent> out) {
 
@@ -497,9 +530,7 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
     ctx.output(VALIDATION_FAILURES_TAG, failureEvent);
   }
 
-  /**
-   * Gets escalation count from event metadata.
-   */
+  /** Gets escalation count from event metadata. */
   private int getEscalationCount(AgentEvent event) {
     Object countObj = event.getMetadata("escalation_count");
     if (countObj instanceof Integer) {
@@ -509,8 +540,8 @@ public class SupervisorTierFunction extends PatternProcessFunction<AgentEvent, A
   }
 
   @Override
-  public void processTimedOutMatch(
-      Map<String, List<AgentEvent>> match, Context ctx) throws Exception {
+  public void processTimedOutMatch(Map<String, List<AgentEvent>> match, Context ctx)
+      throws Exception {
 
     LOG.warn("Pattern match timed out for tier: {}", tier.getTierName());
 

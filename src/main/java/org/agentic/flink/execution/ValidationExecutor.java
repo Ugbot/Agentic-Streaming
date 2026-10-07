@@ -1,7 +1,7 @@
 package org.agentic.flink.execution;
 
-import org.agentic.flink.core.AgentEvent;
 import java.io.Serializable;
+import org.agentic.flink.core.AgentEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,24 +9,25 @@ import org.slf4j.LoggerFactory;
  * Executes validation of agent outputs.
  *
  * <p>Validates agent responses against:
+ *
  * <ul>
- *   <li>Output format/schema</li>
- *   <li>Business rules</li>
- *   <li>Quality thresholds</li>
- *   <li>Custom validation prompts</li>
+ *   <li>Output format/schema
+ *   <li>Business rules
+ *   <li>Quality thresholds
+ *   <li>Custom validation prompts
  * </ul>
  *
- * <p><b>Placeholder Implementation:</b>
- * This is a stub for Phase 3. Full implementation will include:
+ * <p><b>Placeholder Implementation:</b> This is a stub for Phase 3. Full implementation will
+ * include:
+ *
  * <ul>
- *   <li>LLM-based validation (using a validator prompt)</li>
- *   <li>Rule-based validation (JSON schema, regex)</li>
- *   <li>Quality scoring</li>
- *   <li>Validation retries</li>
+ *   <li>LLM-based validation (using a validator prompt)
+ *   <li>Rule-based validation (JSON schema, regex)
+ *   <li>Quality scoring
+ *   <li>Validation retries
  * </ul>
  *
  * @author Agentic Flink Team
- *
  * @deprecated Part of the legacy Flink DSL execution path. Prefer the event-sourced runtime in
  *     {@link org.agentic.flink.runtime.WorkflowTurnFunction}.
  */
@@ -79,16 +80,20 @@ public class ValidationExecutor implements Serializable {
 
   private String buildValidationPrompt(String output, String customPrompt) {
     if (customPrompt != null && !customPrompt.isEmpty()) {
-      return customPrompt + "\n\nOutput to validate:\n" + output +
-          "\n\nRespond with: VALID or INVALID, followed by a score (0.0-1.0) and reason.";
+      return customPrompt
+          + "\n\nOutput to validate:\n"
+          + output
+          + "\n\nRespond with: VALID or INVALID, followed by a score (0.0-1.0) and reason.";
     }
 
-    return "You are a validator. Review the following output and determine if it is valid.\n\n" +
-        "Output:\n" + output + "\n\n" +
-        "Respond in this format:\n" +
-        "VALID or INVALID\n" +
-        "Score: 0.0-1.0\n" +
-        "Reason: <your reason>";
+    return "You are a validator. Review the following output and determine if it is valid.\n\n"
+        + "Output:\n"
+        + output
+        + "\n\n"
+        + "Respond in this format:\n"
+        + "VALID or INVALID\n"
+        + "Score: 0.0-1.0\n"
+        + "Reason: <your reason>";
   }
 
   private ValidationResult parseValidationResponse(String llmResponse) {
@@ -118,9 +123,7 @@ public class ValidationExecutor implements Serializable {
     return result;
   }
 
-  /**
-   * Validates an agent event.
-   */
+  /** Validates an agent event. */
   public ValidationResult validate(AgentEvent event, String validationPrompt) {
     Object output = event.getData("result");
     if (output == null) {
@@ -140,13 +143,28 @@ public class ValidationExecutor implements Serializable {
     private double score;
     private String message;
 
-    public boolean isValid() { return valid; }
-    public void setValid(boolean valid) { this.valid = valid; }
+    public boolean isValid() {
+      return valid;
+    }
 
-    public double getScore() { return score; }
-    public void setScore(double score) { this.score = score; }
+    public void setValid(boolean valid) {
+      this.valid = valid;
+    }
 
-    public String getMessage() { return message; }
-    public void setMessage(String message) { this.message = message; }
+    public double getScore() {
+      return score;
+    }
+
+    public void setScore(double score) {
+      this.score = score;
+    }
+
+    public String getMessage() {
+      return message;
+    }
+
+    public void setMessage(String message) {
+      this.message = message;
+    }
   }
 }

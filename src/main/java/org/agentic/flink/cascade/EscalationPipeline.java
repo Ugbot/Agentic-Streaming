@@ -1,8 +1,13 @@
 package org.agentic.flink.cascade;
 
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.function.Predicate;
 import org.agentic.flink.config.ConfigKeys;
-import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.ClassificationResult;
+import org.agentic.flink.inference.Classifier;
 import org.agentic.flink.inference.InferenceConnection;
 import org.agentic.flink.inference.InferenceSetup;
 import org.agentic.flink.inference.LexiconInferenceConnection;
@@ -11,11 +16,6 @@ import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.llm.ChatResponse;
 import org.agentic.flink.llm.ChatSetup;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,11 +28,11 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li><b>FILTER</b> — substring pre-screen (no model). No trigger term present → {@code CLEAN}.
- *   <li><b>ML</b> — {@link Classifier} score; below {@code mlThreshold} → {@code CLEAN} (the
- *       filter was a false positive). At/above threshold → escalate.
- *   <li><b>LLM</b> — a {@link ChatConnection} (Claude by default) returns the final verdict
- *       ({@code ALLOW} / {@code REVIEW} / {@code BLOCK}) with a rationale. If no chat model is
- *       configured the cascade stops at ML with verdict {@code REVIEW} (human-in-the-loop).
+ *   <li><b>ML</b> — {@link Classifier} score; below {@code mlThreshold} → {@code CLEAN} (the filter
+ *       was a false positive). At/above threshold → escalate.
+ *   <li><b>LLM</b> — a {@link ChatConnection} (Claude by default) returns the final verdict ({@code
+ *       ALLOW} / {@code REVIEW} / {@code BLOCK}) with a rationale. If no chat model is configured
+ *       the cascade stops at ML with verdict {@code REVIEW} (human-in-the-loop).
  * </ul>
  *
  * <p>In-JVM and synchronous so it is easy to drive from a notebook or wrap in a Flink operator.
@@ -72,22 +72,47 @@ public final class EscalationPipeline {
   public Decision evaluate(String input) {
     // Tier 1 — cheap filter.
     if (!filter.test(input == null ? "" : input)) {
-      return new Decision(input, Tier.FILTER, "CLEAN", false, null, 0.0, null,
+      return new Decision(
+          input,
+          Tier.FILTER,
+          "CLEAN",
+          false,
+          null,
+          0.0,
+          null,
           "No trigger terms present; not screened further");
     }
 
     // Tier 2 — ML confirmation.
     ClassificationResult ml = classifier.classify(input, inferenceSetup);
     if (ml.getScore() < mlThreshold) {
-      return new Decision(input, Tier.ML, "CLEAN", false, ml.getLabel(), ml.getScore(), null,
-          String.format(Locale.ROOT,
-              "Filter matched but ML score %.2f < threshold %.2f", ml.getScore(), mlThreshold));
+      return new Decision(
+          input,
+          Tier.ML,
+          "CLEAN",
+          false,
+          ml.getLabel(),
+          ml.getScore(),
+          null,
+          String.format(
+              Locale.ROOT,
+              "Filter matched but ML score %.2f < threshold %.2f",
+              ml.getScore(),
+              mlThreshold));
     }
 
     // Tier 3 — LLM action. If no chat model, stop at ML and ask for human review.
     if (chat == null) {
-      return new Decision(input, Tier.ML, "REVIEW", true, ml.getLabel(), ml.getScore(), null,
-          String.format(Locale.ROOT,
+      return new Decision(
+          input,
+          Tier.ML,
+          "REVIEW",
+          true,
+          ml.getLabel(),
+          ml.getScore(),
+          null,
+          String.format(
+              Locale.ROOT,
               "ML confirmed suspicious (%.2f) — no LLM configured, routing to human review",
               ml.getScore()));
     }
@@ -97,16 +122,27 @@ public final class EscalationPipeline {
             + "flagged the item below as potentially suspicious. Decide the action. Begin your "
             + "reply with exactly one of ALLOW, REVIEW, or BLOCK, then a one-sentence rationale.";
     String user =
-        String.format(Locale.ROOT,
-            "ML label: %s (score %.2f)\nItem:\n%s", ml.getLabel(), ml.getScore(), input);
+        String.format(
+            Locale.ROOT,
+            "ML label: %s (score %.2f)\nItem:\n%s",
+            ml.getLabel(),
+            ml.getScore(),
+            input);
     List<ChatMessage> messages = new ArrayList<>();
     messages.add(ChatMessage.system(system));
     messages.add(ChatMessage.user(user));
     ChatResponse resp = chat.chat(messages, chatSetup);
     String text = resp.getText() == null ? "" : resp.getText().trim();
     String verdict = parseVerdict(text);
-    return new Decision(input, Tier.LLM, verdict, !"ALLOW".equals(verdict),
-        ml.getLabel(), ml.getScore(), text, "LLM adjudicated the ML-confirmed case");
+    return new Decision(
+        input,
+        Tier.LLM,
+        verdict,
+        !"ALLOW".equals(verdict),
+        ml.getLabel(),
+        ml.getScore(),
+        text,
+        "LLM adjudicated the ML-confirmed case");
   }
 
   private static String parseVerdict(String text) {
@@ -117,9 +153,18 @@ public final class EscalationPipeline {
     int allow = upper.indexOf("ALLOW");
     String best = "REVIEW";
     int bestPos = Integer.MAX_VALUE;
-    if (block >= 0 && block < bestPos) { bestPos = block; best = "BLOCK"; }
-    if (review >= 0 && review < bestPos) { bestPos = review; best = "REVIEW"; }
-    if (allow >= 0 && allow < bestPos) { bestPos = allow; best = "ALLOW"; }
+    if (block >= 0 && block < bestPos) {
+      bestPos = block;
+      best = "BLOCK";
+    }
+    if (review >= 0 && review < bestPos) {
+      bestPos = review;
+      best = "REVIEW";
+    }
+    if (allow >= 0 && allow < bestPos) {
+      bestPos = allow;
+      best = "ALLOW";
+    }
     return best;
   }
 
@@ -198,8 +243,15 @@ public final class EscalationPipeline {
     public final String llmRationale; // null if LLM not reached
     public final String reason;
 
-    public Decision(String input, Tier decidedBy, String verdict, boolean suspicious,
-        String mlLabel, double mlScore, String llmRationale, String reason) {
+    public Decision(
+        String input,
+        Tier decidedBy,
+        String verdict,
+        boolean suspicious,
+        String mlLabel,
+        double mlScore,
+        String llmRationale,
+        String reason) {
       this.input = input;
       this.decidedBy = decidedBy;
       this.verdict = verdict;
@@ -212,8 +264,8 @@ public final class EscalationPipeline {
 
     @Override
     public String toString() {
-      return String.format(Locale.ROOT, "[%s] %s (mlScore=%.2f) — %s",
-          decidedBy, verdict, mlScore, reason);
+      return String.format(
+          Locale.ROOT, "[%s] %s (mlScore=%.2f) — %s", decidedBy, verdict, mlScore, reason);
     }
   }
 }

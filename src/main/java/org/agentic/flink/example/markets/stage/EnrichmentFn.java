@@ -5,15 +5,15 @@ import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
 import org.apache.flink.api.common.state.BroadcastState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.state.ReadOnlyBroadcastState;
 import org.apache.flink.streaming.api.functions.co.BroadcastProcessFunction;
 import org.apache.flink.util.Collector;
 
 /**
  * Stage 1 — enrich inventory rows with the security master (broadcast join).
  *
- * <p>Mirrors {@code 1_base_enrichment.sql}: looks up the security by {@code MOD(instrumentId, 50_000)}
- * and emits {@link EnrichedInventory}. Filters out {@code DELETE} actions and non-positive prices.
+ * <p>Mirrors {@code 1_base_enrichment.sql}: looks up the security by {@code MOD(instrumentId,
+ * 50_000)} and emits {@link EnrichedInventory}. Filters out {@code DELETE} actions and non-positive
+ * prices.
  */
 public final class EnrichmentFn
     extends BroadcastProcessFunction<Inventory, Security, EnrichedInventory> {
@@ -26,8 +26,8 @@ public final class EnrichmentFn
   private static final long ID_MODULUS = 50_000L;
 
   @Override
-  public void processElement(
-      Inventory inv, ReadOnlyContext ctx, Collector<EnrichedInventory> out) throws Exception {
+  public void processElement(Inventory inv, ReadOnlyContext ctx, Collector<EnrichedInventory> out)
+      throws Exception {
     if (inv == null || "DELETE".equalsIgnoreCase(inv.action()) || inv.price() <= 0) {
       return;
     }
@@ -36,8 +36,8 @@ public final class EnrichmentFn
   }
 
   @Override
-  public void processBroadcastElement(
-      Security sec, Context ctx, Collector<EnrichedInventory> out) throws Exception {
+  public void processBroadcastElement(Security sec, Context ctx, Collector<EnrichedInventory> out)
+      throws Exception {
     if (sec == null) return;
     BroadcastState<Long, Security> state = ctx.getBroadcastState(SECURITIES);
     state.put(sec.id(), sec);

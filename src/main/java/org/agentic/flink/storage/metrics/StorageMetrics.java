@@ -1,12 +1,12 @@
 package org.agentic.flink.storage.metrics;
 
-import org.agentic.flink.storage.StorageTier;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
+import org.agentic.flink.storage.StorageTier;
 
 /**
  * Metrics tracking for storage operations.
@@ -356,8 +356,7 @@ public class StorageMetrics implements Serializable {
   public String toString() {
     return String.format(
         "StorageMetrics[tier=%s, backend=%s, ops=%d, hitRate=%.2f, avgLatency=%.2fms, errors=%d]",
-        tier, backend, getTotalOperations(), getHitRate(), getAverageLatencyMs(),
-        errorCount.sum());
+        tier, backend, getTotalOperations(), getHitRate(), getAverageLatencyMs(), errorCount.sum());
   }
 
   // Private helper methods

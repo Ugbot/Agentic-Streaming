@@ -7,9 +7,9 @@ import java.util.List;
 /**
  * Result of a {@link ChatClient#chat(java.util.List, ChatSetup)} call.
  *
- * <p>Carries the raw assistant text, any parsed tool calls, and token usage if the provider
- * reports it. A typed view of the response is available through {@link #as(OutputSchema)} when
- * the originating {@link ChatSetup} declared an output schema.
+ * <p>Carries the raw assistant text, any parsed tool calls, and token usage if the provider reports
+ * it. A typed view of the response is available through {@link #as(OutputSchema)} when the
+ * originating {@link ChatSetup} declared an output schema.
  */
 public final class ChatResponse implements Serializable {
   private static final long serialVersionUID = 1L;

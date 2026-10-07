@@ -1,22 +1,14 @@
 package org.agentic.flink.plugins.flintagents.examples;
 
-import org.agentic.flink.context.core.ContextItem;
-import org.agentic.flink.context.inverse.InverseRagResult;
-import org.agentic.flink.context.inverse.QdrantAsyncFunction;
+import java.util.HashMap;
+import java.util.Map;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.plugins.flintagents.action.ContextManagementAction;
 import org.agentic.flink.plugins.flintagents.adapter.FlinkAgentsEventAdapter;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import org.apache.flink.agents.api.Event;
-import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
-import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -84,12 +76,14 @@ public class ProductionFlinkAgentsJob {
 
     // Phase 2: Convert to Flink Agents events
     DataStream<Event> flinkEvents =
-        agentEvents.map(
-            event -> {
-              Event flinkEvent = FlinkAgentsEventAdapter.toFlinkAgentEvent(event);
-              System.out.println("Converted AgentEvent to Flink Agents Event: " + event.getFlowId());
-              return flinkEvent;
-            })
+        agentEvents
+            .map(
+                event -> {
+                  Event flinkEvent = FlinkAgentsEventAdapter.toFlinkAgentEvent(event);
+                  System.out.println(
+                      "Converted AgentEvent to Flink Agents Event: " + event.getFlowId());
+                  return flinkEvent;
+                })
             .name("agent-event-adapter");
 
     // Phase 3: Apply stateful context management
@@ -105,7 +99,8 @@ public class ProductionFlinkAgentsJob {
         .filter(event -> "ContextCompacted".equals(event.getAttr("eventType")))
         .map(
             event -> {
-              System.out.println("Compaction complete: " + event.getAttr("tokensSaved") + " tokens saved");
+              System.out.println(
+                  "Compaction complete: " + event.getAttr("tokensSaved") + " tokens saved");
               return event;
             })
         .name("log-compaction-results");
@@ -205,7 +200,7 @@ public class ProductionFlinkAgentsJob {
           RestartStrategies.fixedDelayRestart(
               3, // 3 restart attempts
               org.apache.flink.api.common.time.Time.seconds(10) // 10 second delay
-          ));
+              ));
 
       // ===================================================================
       // PARALLELISM: Set based on your cluster

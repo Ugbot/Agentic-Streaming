@@ -10,10 +10,11 @@ import org.slf4j.LoggerFactory;
  * loaders.
  *
  * <p>{@link #discover()} returns the first {@link ConversationStore} registered via {@link
- * ServiceLoader} (a {@code META-INF/services/org.agentic.flink.memory.conversation.ConversationStore}
- * entry — e.g. a Redis-backed store on the classpath for a distributed cluster); if none is
- * registered it falls back to the process-wide {@link InMemoryConversationStore#shared() in-JVM
- * store}, which is the correct default for the embedded single-JVM deployment.
+ * ServiceLoader} (a {@code
+ * META-INF/services/org.agentic.flink.memory.conversation.ConversationStore} entry — e.g. a
+ * Redis-backed store on the classpath for a distributed cluster); if none is registered it falls
+ * back to the process-wide {@link InMemoryConversationStore#shared() in-JVM store}, which is the
+ * correct default for the embedded single-JVM deployment.
  */
 public final class ConversationStores {
 

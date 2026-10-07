@@ -10,8 +10,8 @@ import java.util.List;
  * about. Discovered via {@link java.util.ServiceLoader}; users may also register listeners
  * programmatically via {@code AgentBuilder.withListener(...)}.
  *
- * <p>Implementations must be {@link Serializable} — they ride along with the agent operator in
- * the Flink job graph.
+ * <p>Implementations must be {@link Serializable} — they ride along with the agent operator in the
+ * Flink job graph.
  */
 public interface AgentEventListener extends Serializable {
 

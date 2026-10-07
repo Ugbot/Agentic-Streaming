@@ -8,8 +8,8 @@ import java.util.function.BiPredicate;
  * equality — e.g. the same payment submitted three times in a row.
  *
  * <p>Default equality is key-identity (all recent items share the key, which they do by
- * construction), so the default effectively means "n consecutive items on this key". Pass a stricter
- * {@link BiPredicate} (e.g. same value AND same merchant) to detect true duplicates.
+ * construction), so the default effectively means "n consecutive items on this key". Pass a
+ * stricter {@link BiPredicate} (e.g. same value AND same merchant) to detect true duplicates.
  */
 public final class RepeatDetector implements Detector {
   private static final long serialVersionUID = 1L;
@@ -43,7 +43,9 @@ public final class RepeatDetector implements Detector {
       if (!sameAs.test(recent.get(i), last)) return null;
     }
     return new Signal(
-        name(), Phase.REPEAT, weight,
+        name(),
+        Phase.REPEAT,
+        weight,
         String.format("%d identical items in a row for key '%s'", n, item.key()));
   }
 

@@ -1,9 +1,9 @@
 package org.agentic.flink.memory;
 
-import org.agentic.flink.context.core.AgentContext;
-import org.agentic.flink.context.core.ContextItem;
 import java.util.List;
 import java.util.Optional;
+import org.agentic.flink.context.core.AgentContext;
+import org.agentic.flink.context.core.ContextItem;
 
 /**
  * Per-operator short-term memory abstraction backed by Flink keyed state.
@@ -13,9 +13,9 @@ import java.util.Optional;
  * from a serializable {@link ShortTermMemorySpec} in {@code open()}, where they obtain access to
  * the runtime's keyed state via {@code RuntimeContext}.
  *
- * <p>All methods operate on the operator's <i>current key</i> — there is no {@code flowId}
- * argument because Flink supplies the key. This is the operational consequence of making Flink
- * state canonical: short-term memory is implicitly scoped to whatever the upstream {@code keyBy}
+ * <p>All methods operate on the operator's <i>current key</i> — there is no {@code flowId} argument
+ * because Flink supplies the key. This is the operational consequence of making Flink state
+ * canonical: short-term memory is implicitly scoped to whatever the upstream {@code keyBy}
  * selected.
  *
  * <p>Default implementation: {@link FlinkStateShortTermMemory}.
@@ -47,8 +47,8 @@ public interface ShortTermMemory {
   void clearItems() throws Exception;
 
   /**
-   * Sum of {@link ContextItem#getTokenCount()} across all active items. Used by compaction logic
-   * to decide when to evict.
+   * Sum of {@link ContextItem#getTokenCount()} across all active items. Used by compaction logic to
+   * decide when to evict.
    */
   int totalTokens() throws Exception;
 }

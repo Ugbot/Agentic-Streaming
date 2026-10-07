@@ -60,7 +60,8 @@ public final class PostgresA2ATaskStore extends ReopenableStore implements A2ATa
     if (password != null) {
       hikari.setPassword(password);
     }
-    hikari.setMaximumPoolSize(Integer.parseInt(config.getOrDefault("postgres.pool.max.size", "10")));
+    hikari.setMaximumPoolSize(
+        Integer.parseInt(config.getOrDefault("postgres.pool.max.size", "10")));
     hikari.setMinimumIdle(Integer.parseInt(config.getOrDefault("postgres.pool.min.idle", "2")));
     hikari.setPoolName("a2a-task-store");
     hikari.setInitializationFailTimeout(1);
@@ -143,7 +144,8 @@ public final class PostgresA2ATaskStore extends ReopenableStore implements A2ATa
 
   @Override
   public List<A2ATask> listTasksByState(A2ATaskState state) throws Exception {
-    return query("SELECT task_json FROM a2a_tasks WHERE state = ? ORDER BY updated_at", state.wire());
+    return query(
+        "SELECT task_json FROM a2a_tasks WHERE state = ? ORDER BY updated_at", state.wire());
   }
 
   private List<A2ATask> query(String sql, String param) throws Exception {
