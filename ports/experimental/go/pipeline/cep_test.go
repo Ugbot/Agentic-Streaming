@@ -4,10 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
-const incidentYAML = "../../../examples/pipelines/incident.yaml"
+const incidentYAML = "../../../../examples/pipelines/incident.yaml"
 
 // recordingRuntime is a core.Runtime that records every submitted event so a test can
 // assert exactly what a CEP submit action injected (and that the recursion guard holds).
@@ -177,7 +177,7 @@ func TestCepConditionMiniLanguage(t *testing.T) {
 // conversation onto the escalate path (recorded in the conversation store's path attribute).
 func TestIncidentYamlEscalates(t *testing.T) {
 	if _, err := os.Stat(incidentYAML); err != nil {
-		t.Skipf("shared %s not found: %v", incidentYAML, err)
+		t.Fatalf("shared %s not found: %v", incidentYAML, err)
 	}
 	sys, err := Load(incidentYAML, "local")
 	if err != nil {

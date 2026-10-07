@@ -7,7 +7,7 @@
 package temporal
 
 import (
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -74,7 +74,7 @@ func MakeConversationWorkflow(graph *core.RoutedGraph, tools *core.ToolRegistry,
 				Retriever:      retriever,
 			}
 			// === The engine seam: the portable router->path->verifier graph ===
-			res := graph.Handle(core.NewEvent(conversationID, req.UserID, req.Text), actx)
+			res := graph.Handle(core.Event{ConversationID: conversationID, UserID: req.UserID, Text: req.Text}, actx)
 			calls := res.ToolCalls
 			if calls == nil {
 				calls = []string{}

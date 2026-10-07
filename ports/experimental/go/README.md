@@ -1,4 +1,8 @@
-# goagentic: Agentic-Flink essence in Go
+# Agentic-Flink essence in Go
+
+Module path: `github.com/Ugbot/Agentic-Streaming/ports/experimental/go`. Import the packages
+as `github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core`,
+`.../pipeline`, `.../gateway`, `.../engines/natsjs`, `.../engines/temporal` and `.../stores`.
 
 > Status: experimental adapter, not conformance tested. This adapter predates the `agentic/v1`
 > spec, does not run the fixtures under `spec/conformance/v1`, and is not on the acceptance path
@@ -20,9 +24,12 @@ ports/experimental/go/
   gateway/              stdlib net/http A2A-style gateway over a Runtime  (+ tests)
   engines/natsjs/       NATS JetStream engine: KV-backed state + stream transport (+ test)
   engines/temporal/     Temporal engine: entity workflow per conversation  (+ test)
+  pipeline/             YAML workflow loader and builder (+ tests against the shared examples)
+  stores/               Postgres, Redis, Qdrant and MCP adapters behind the core SPIs (+ tests)
   cmd/demo/             run the banking graph on the LocalRuntime
   cmd/gateway/          run the HTTP gateway
   cmd/natsdemo/         run the streamed NATS JetStream round-trip
+  cmd/pipeline/         run one turn of a pipeline.yaml on a backend
 ```
 
 The `core` package is the single source of truth: `gateway`, `natsjs`, and `temporal`
@@ -34,13 +41,33 @@ engine's seam is injectable (`natsjs.New(graph, tools, retriever)`,
 runs unchanged, the extensibility tests prove a new `freeze_card` tool + `fraud` path
 flow through both the NATS KV seam and the Temporal workflow.
 
+## Workflow loading and routing order
+
+`pipeline.Parse` decodes a workflow document. YAML mappings become Go maps except the two
+whose order the spec makes normative: `agent.router.rules` becomes `[]pipeline.Rule` and
+each path's `tool_triggers` becomes `[]pipeline.Trigger`, both in declaration order. The
+keyword router evaluates rules in that order and the first path whose keyword appears in
+the turn text wins, which is what `spec/v1/workflow.schema.json` requires and what the
+Python reference runtime does. A spec built in Go code from plain maps has no declaration
+order, so its rules are evaluated in sorted key order instead.
+
+`pipeline/routing_test.go` covers this: a two-route spec in both declaration orders, a
+two-trigger path, `examples/pipelines/banking.yaml` turns whose route is compared with
+`spec/tools/reference_runtime.py` (that test prints a skip reason when `python3` or PyYAML
+is missing), and a check that an `Event` built with keyed fields hands the user id, not the
+turn text, to the tool. Adapter call sites build events as keyed struct literals
+(`core.Event{ConversationID: ..., UserID: ..., Text: ...}`) so no call depends on argument
+position; `go vet` rejects unkeyed literals of `core.Event` outside the `core` package.
+
 ## Run
 
 ```bash
 cd ports/experimental/go
 
-go test ./...                 # core + gateway + temporal always; natsjs runs if a
-                              # JetStream server is reachable (else its test skips)
+go vet ./... && go test ./...  # core, gateway, temporal, pipeline, stores always; natsjs runs
+                              # if a JetStream server is reachable (else its test skips)
+
+go run ./cmd/pipeline ../../../examples/pipelines/banking.yaml --text "what is my balance?"
 
 go run ./cmd/demo             # banking router->path->verifier on the LocalRuntime
 

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jagentic/goagentic/engines/natsjs"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/engines/natsjs"
 )
 
 func main() {

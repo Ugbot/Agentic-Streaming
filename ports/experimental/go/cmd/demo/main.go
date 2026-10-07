@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 
 	fmt.Println("=== Agentic-Flink :: Banking RoutedGraph on the Go core (LocalRuntime) ===")
 	for _, t := range turns {
-		res := rt.Submit(core.NewEvent(t[0], "demo", t[1]))
+		res := rt.Submit(core.Event{ConversationID: t[0], UserID: "demo", Text: t[1]})
 		fmt.Printf("[%s] path=%s ok=%v reply=%q tools=%v\n", res.ConversationID, res.Path, res.OK, res.Reply, res.ToolCalls)
 	}
 	fmt.Printf("\nc1 message count = %d (state kept across turns)\n", rt.Store().MessageCount("c1"))

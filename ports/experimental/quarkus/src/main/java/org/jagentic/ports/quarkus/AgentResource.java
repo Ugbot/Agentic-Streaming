@@ -52,9 +52,11 @@ public class AgentResource {
   private AgentReply runTurn(AgentRequest request) {
     String cid = request.conversationId();
     String userId = request.userId();
-    conversations.associateUser(cid, userId);
-
-    Event event = new Event(cid, userId, request.text());
+    Event event = EventBuilder.turn()
+        .conversationId(cid)
+        .userId(userId)
+        .text(request.text())
+        .build();
     AgentContext ctx =
         new AgentContext(cid, userId, conversations, shortTerm, tools, retriever);
 

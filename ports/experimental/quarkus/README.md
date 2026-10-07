@@ -8,7 +8,7 @@
 > experimental adapters and how each one runs.
 
 A minimal, standalone Quarkus (reactive) port of the Agentic-Flink essence onto the
-shared pure-Java core `org.jagentic:jagentic-core`. **no Flink dependency**. It maps the
+shared pure-Java core `org.jagentic:jagentic-core:1.0.0-SNAPSHOT`. **no Flink dependency**. It maps the
 engine SPIs from [`docs/portability/quarkus.md`](../../../docs/portability/quarkus.md) onto
 idiomatic Quarkus: the engine-agnostic `RoutedGraph` (`Banking.buildGraph()`,
 `router -> path -> verifier`) runs verbatim; **C1 durable keyed state** comes from the
@@ -20,18 +20,47 @@ topic is keyed by `conversationId`, so one partition = one consumer = one writer
 the `@Incoming("requests")`/`@Outgoing("replies")` streaming agent over Kafka. This module
 **complements** the existing `a2a-gateway/` Quarkus module (the inbound A2A/RAG proxy), it
 is a separate, self-contained demonstration of the agent-on-Quarkus pattern and does not
-touch that gateway.
+touch that gateway. Both edges build the core `Event` through the adapter's `EventBuilder`
+(named fields), so no call site depends on the positional order of `userId` and `text` in
+the core constructors, and neither edge writes to the `ConversationStore` itself: the core
+appends the user and assistant messages of a completed turn, so one turn adds exactly two
+transcript messages.
 
-## Build / compile
+## Build, test and package
 
 ```
-mvn -f ports/experimental/quarkus/pom.xml compile
+./mvnw -f reactor/pom.xml -DskipTests install      # installs jagentic-core 1.0.0-SNAPSHOT into ~/.m2
+./mvnw -f ports/experimental/quarkus/pom.xml test    # @QuarkusTest suites, no broker needed
+./mvnw -f ports/experimental/quarkus/pom.xml verify  # plus the Quarkus build and the packaging check
 ```
+
+The module is not part of the reactor, so it carries its own enforcer rule (JDK 21 or newer,
+Maven 3.9 or newer). `quarkus-maven-plugin` builds the runnable application into
+`target/quarkus-app/` in the `package` phase, and an enforcer `requireFilesExist` rule in the
+`verify` phase fails the build unless `target/quarkus-app/quarkus-run.jar` and the bundled
+`jagentic-core` jar exist. Run the packaged application with
+`java -jar ports/experimental/quarkus/target/quarkus-app/quarkus-run.jar`.
+
+Tests boot the real application with `@QuarkusTest`. `AgentResourceTest` posts randomized
+banking turns to `POST /agent` with RestAssured and checks the route, tool call and reply, that
+each turn appends exactly one user and one assistant message, and the `EventBuilder` field
+mapping. `BankingStreamTest` pushes requests into the `requests` channel and reads the replies
+from the `replies` channel; the `%test` profile in `application.properties` binds both channels
+to the SmallRye in-memory connector, so the same `BankingStream` bean runs without Kafka. Its
+multi-turn case sends between eight and sixteen alternating turns to one conversation and checks
+that the replies come back in request order: `BankingStream.onTurn` is `@Blocking` (ordered
+worker pool) rather than `@RunOnVirtualThread`, because Quarkus runs virtual-thread mediators
+unordered and concurrently, which lets two turns of one conversation interleave. Outside
+the test profile the channels use the Kafka connector as configured below; the `requests` value
+deserializer is `AgentRequestDeserializer`, a concrete `ObjectMapperDeserializer<AgentRequest>`
+(the abstract class itself cannot be instantiated by the Kafka client), and
+`AgentRequestDeserializerTest` checks that the Kafka client can instantiate it and that it
+round-trips a request.
 
 ## Run
 
 ```
-mvn -f ports/experimental/quarkus/pom.xml quarkus:dev
+./mvnw -f ports/experimental/quarkus/pom.xml quarkus:dev
 ```
 
 REST turn (no Kafka required):

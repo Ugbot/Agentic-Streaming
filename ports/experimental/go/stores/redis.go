@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 	"github.com/redis/go-redis/v9"
 )
 

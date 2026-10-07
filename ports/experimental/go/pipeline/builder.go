@@ -10,11 +10,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/jagentic/goagentic/core"
-	"github.com/jagentic/goagentic/stores"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/stores"
 )
 
 // embedFunc turns text into a query vector. Default is the deterministic FNV hashing
@@ -25,16 +26,16 @@ type embedFunc func(text string) []float64
 type keywordBrain struct {
 	name         string
 	embed        embedFunc
-	toolTriggers map[string]string
+	toolTriggers []Trigger
 	threshold    float64
 }
 
 func (b keywordBrain) Turn(userText string, ctx *core.AgentContext) string {
 	low := strings.ToLower(userText)
-	for kw, tool := range b.toolTriggers {
-		if strings.Contains(low, strings.ToLower(kw)) {
-			r := ctx.CallTool(tool, map[string]any{"user": ctx.UserID})
-			return fmt.Sprintf("[%s] %s returned %v", b.name, tool, r)
+	for _, trigger := range b.toolTriggers {
+		if strings.Contains(low, strings.ToLower(trigger.Keyword)) {
+			r := ctx.CallTool(trigger.Tool, map[string]any{"user": ctx.UserID})
+			return fmt.Sprintf("[%s] %s returned %v", b.name, trigger.Tool, r)
 		}
 	}
 	if ctx.Retriever != nil {
@@ -124,11 +125,7 @@ func Build(spec map[string]any, chatClientFactory ChatClientFactory) (Built, err
 			}
 			brain = lb
 		case "rule":
-			triggers := map[string]string{}
-			for k, v := range asMap(ps["tool_triggers"]) {
-				triggers[k] = fmt.Sprint(v)
-			}
-			brain = keywordBrain{name: name, embed: embed, toolTriggers: triggers, threshold: asFloat(ps["threshold"], 0.15)}
+			brain = keywordBrain{name: name, embed: embed, toolTriggers: asTriggers(ps["tool_triggers"]), threshold: asFloat(ps["threshold"], 0.15)}
 		default:
 			return Built{}, fmt.Errorf("unknown brain kind %q for path %q", brainKind, name)
 		}
@@ -374,20 +371,29 @@ func resolveEnv(value string) string {
 	return value
 }
 
+// buildRouter compiles agent.router. Rules are evaluated in declaration order and the
+// first path whose keyword appears in the turn text wins (workflow.schema.json, router.rules).
+// Without a default, the alphabetically first path is the last resort so the choice is
+// stable across runs.
 func buildRouter(spec map[string]any, paths map[string]*core.Agent) core.Router {
 	def := asString(spec["default"], "")
 	if def == "" {
-		for k := range paths { // any path as a last resort
-			def = k
+		names := make([]string, 0, len(paths))
+		for k := range paths {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		if len(names) > 0 {
+			def = names[0]
 		}
 	}
-	rules := asMap(spec["rules"])
+	rules := asRules(spec["rules"])
 	return func(event core.Event, ctx *core.AgentContext) string {
 		low := strings.ToLower(event.Text)
-		for path, kws := range rules {
-			for _, kw := range asList(kws) {
-				if strings.Contains(low, strings.ToLower(fmt.Sprint(kw))) {
-					return path
+		for _, rule := range rules {
+			for _, kw := range rule.Keywords {
+				if strings.Contains(low, strings.ToLower(kw)) {
+					return rule.Path
 				}
 			}
 		}

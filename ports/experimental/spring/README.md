@@ -8,12 +8,16 @@
 > experimental adapters and how each one runs.
 
 The **Spring** port of the Agentic-Flink essence. It reuses the pure-Java
-`org.jagentic:jagentic-core:0.1.0` (no Flink dependency) byte-for-byte and supplies the
+`org.jagentic:jagentic-core:1.0.0-SNAPSHOT` (no Flink dependency) byte-for-byte and supplies the
 enterprise wiring: Spring exposes the inbound REST edge and expresses the core
 `router -> path -> verifier` graph as a Spring Integration EIP topology. Concretely,
 `AgentController` (`POST /agent {conversationId,userId,text}`) builds a per-turn
 `AgentContext` over a singleton `ConversationStore.InMemory` + `Banking.retriever()` and
-runs `Banking.buildGraph().handle(...)`, returning the verified reply; `RoutedFlow` shows
+runs `Banking.buildGraph().handle(...)`, returning the verified reply. The core appends the
+user and assistant messages of a completed turn itself, so the controller does not write to
+the store and one turn adds exactly two transcript messages. Events are built through the
+adapter's `EventBuilder` (named fields), so no call site depends on the positional order of
+`userId` and `text` in the core constructors. `RoutedFlow` shows
 the equivalent integration wiring, a Content-Based Router (`Banking.router`) dispatching
 to per-path channels (`cards|payments|general`), each a service activator that delegates
 the turn to the shared `RoutedGraph` and forwards to a final verify endpoint, while
@@ -21,18 +25,23 @@ the turn to the shared `RoutedGraph` and forwards to a final verify endpoint, wh
 state story replaces Flink's checkpointed keyed state). See
 `docs/portability/spring.md` for the full design.
 
-## Build
+## Build and test
 
 ```
-mvn -f ports/experimental/spring/pom.xml compile
+./mvnw -f reactor/pom.xml -DskipTests install      # installs jagentic-core 1.0.0-SNAPSHOT into ~/.m2
+./mvnw -f ports/experimental/spring/pom.xml test
 ```
 
-(Dependencies download online. `jagentic-core` must be installed in the local `~/.m2`.)
+The module is not part of the reactor, so it carries its own enforcer rule (JDK 21 or newer,
+Maven 3.9 or newer). `AgentControllerTest` is a `@SpringBootTest` on a random port that posts
+randomized banking turns to `POST /agent`, checks the route, tool calls and reply, verifies that
+each turn appends exactly one user and one assistant message to the `ConversationStore`, sends a
+turn through the `RoutedFlow` channels to the verifier, and checks the `EventBuilder` field mapping.
 
 ## Run
 
 ```
-mvn -f ports/experimental/spring/pom.xml spring-boot:run
+./mvnw -f ports/experimental/spring/pom.xml spring-boot:run
 ```
 
 Then drive one turn:

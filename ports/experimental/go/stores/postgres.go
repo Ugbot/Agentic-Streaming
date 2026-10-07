@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
 // PostgresLongTermStore is a real core.LongTermStore backed by Postgres (pgx) —

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
 const stubMCPServer = `

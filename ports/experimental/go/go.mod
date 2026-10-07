@@ -1,4 +1,4 @@
-module github.com/jagentic/goagentic
+module github.com/Ugbot/Agentic-Streaming/ports/experimental/go
 
 go 1.25.5
 

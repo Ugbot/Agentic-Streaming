@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jagentic/goagentic/core"
+	"github.com/Ugbot/Agentic-Streaming/ports/experimental/go/core"
 )
 
 // Runtime is anything that can process a turn — core.LocalRuntime satisfies it, as do
@@ -145,7 +145,7 @@ func (g *Gateway) handleAgent(w http.ResponseWriter, r *http.Request) {
 	if req.UserID == "" {
 		req.UserID = "anonymous"
 	}
-	res := g.rt.Submit(core.NewEvent(req.ConversationID, req.UserID, req.Text))
+	res := g.rt.Submit(core.Event{ConversationID: req.ConversationID, UserID: req.UserID, Text: req.Text})
 	calls := res.ToolCalls
 	if calls == nil {
 		calls = []string{}
