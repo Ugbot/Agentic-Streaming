@@ -75,9 +75,10 @@ path.
 ### Agent
 
 `dsl.Agent` is an immutable specification of behaviour: name, type, prompt,
-chat backend, embedder, inference connections, tool registry, guardrails,
-memory backends, listeners, skills, MCP servers. Built once via
-`AgentBuilder` and serialized into the job graph.
+chat backend, tools, guardrails, memory stores, listeners, skills, MCP servers
+and remote A2A peers. Built once via `AgentBuilder` and serialized into the
+job graph. The DSL is the supported pure-Flink flavour of the framework; it
+sits outside the agentic/v1 conformance path.
 
 ```java
 Agent agent = Agent.builder()
@@ -87,12 +88,16 @@ Agent agent = Agent.builder()
     .withChatSetup(ChatSetup.builder()
         .withModel("qwen2.5:7b").withTemperature(0.3).withMaxResponseTokens(2048)
         .build())
-    .withEmbeddingConnection(DjlEmbeddingConnection.of("djl://huggingface/MiniLM-L6-v2"))
-    .withVectorMemory(FlinkStateVectorMemory.spec(384))
+    .withTools("search", "fetch")
+    .withRequiredTools("search")
+    .withToolDefaults("search", Map.of("max_results", 5))
+    .withToolTimeout(Duration.ofSeconds(20))
+    .withCompensatingTool("fetch", "purge_cache")
+    .withShortTermTtl(Duration.ofHours(1))
+    .withConversationStore(new InMemoryConversationStore())
     .withLongTermStore(StorageFactory.createLongTermStore("postgres", pgConfig))
     .withMcpServer(McpServerSpec.stdio("calc", "npx", "-y", "mcp-server-calculator"))
-    .withInferenceConnection("toxicity",
-        DjlInferenceConnection.classification("djl://huggingface/toxic-bert"))
+    .withInferenceTool(toxicityAdapter)
     .withGuardrail(guardrailInstance)
     .withSkill(researchSkill)
     .withListener(new LoggingAgentEventListener(), new MetricsAgentEventListener())
@@ -101,7 +106,29 @@ Agent agent = Agent.builder()
 ```
 
 Every `with*` method is optional. The minimum viable agent is
-`Agent.builder().withId(...).withSystemPrompt(...).build()`.
+`Agent.builder().withId(...).withSystemPrompt(...).build()`; it gets the
+default state machine, chat setup and an in-memory conversation store.
+
+Each builder method is read by an operator of the legacy job graph, and
+`src/test/java/org/agentic/flink/dsl/AgentBuilderTest` asserts the effect of
+every one of them:
+
+| Builder methods | Consumer |
+|-----------------|----------|
+| `withId`, `withName`, `withDescription`, `withType` | identity on every emitted event; `withType` picks the default budgets and `ChatSetup` |
+| `withSystemPrompt`, `withSkill` | the system message of every LLM call (skill prompt fragments are appended) |
+| `withChatConnection`, `withChatSetup`, `withOutputSchema` | the `LLMClient` built in `stream.AgentExecutionFunction.open()` |
+| `withTools`, `withRequiredTools`, `withToolDefaults`, `withToolTimeout`, `withMcpServer`, `withRemoteAgent`, `withA2AClientFactory`, `withInferenceTool` | the effective `ToolRegistry` of the execution operator; a missing required tool fails `open()`, defaults are merged under the model's arguments, every call is bounded by the tool timeout |
+| `withMaxIterations`, `withTimeout` | loop and async operator bounds |
+| `withMaxValidationAttempts`, `withMaxCorrectionAttempts`, `withStateMachine` | the default `AgentStateMachine` (or your own) that drives the CEP pattern |
+| `withCompensationEnabled`, `withCompensatingTool` | a failed turn lists the compensating tools of the completed steps; `stream.CompensationFunction` runs them in reverse call order |
+| `withShortTermTtl` | TTL of the keyed dispatch state in `AgentTurnDispatcher` |
+| `withConversationStore`, `withLongTermStore` | history appended per turn; the turn is archived as a fact and `onLongTermSync` fires |
+| `withGuardrail`, `withListener` | installed on the `LLMClient`; blocked calls return the guardrail's reason |
+
+Vector memory, embedding connections, named inference connections and memory
+channels are wired on the pipeline builders (`retrieve.RetrievalPipeline`,
+`ingest.IngestionPipeline`, `ChannelRegistry`) rather than on `AgentBuilder`.
 
 ### Memory
 
@@ -167,7 +194,7 @@ Inference models slot into the agent in four ways:
 
 | Integration | API |
 |-------------|-----|
-| Standalone | `withInferenceConnection(name, conn)` + `agent.getInferenceConnection(name)` |
+| Standalone | bind the connection in your operator's `open()`: `InferenceClient client = conn.bind(getRuntimeContext())` |
 | As a tool | `withInferenceTool(InferenceToolAdapter)` |
 | As a guardrail | `withGuardrail(new ClassifierGuardrail(...))` |
 | As `RelevancyScorer`'s backend | `new RelevancyScorer(scorer, setup)` |
@@ -228,8 +255,9 @@ Two complementary models:
   bounded by `Agent.getMaxIterations()`. Pair with the RAG example.
 
 The framework also ships `statemachine/AgentStateMachine` for transition-
-based workflows when CEP and ReAct don't fit. Compensation logic for sagas
-lives in `compensation/`.
+based workflows when CEP and ReAct don't fit. Saga rollback lives in
+`compensation/` and runs inside the legacy job graph through
+`stream.CompensationFunction`.
 
 ## Putting it together
 
@@ -303,7 +331,7 @@ src/main/java/org/agentic/flink/
   or programmatically with `AgentBuilder.withListener(...)`.
 - **New channel transport** → implement `Channel<T>` (or
   `Channel<KeyedContextItem>` for the memory-feed shape). Wire programmatically
-  via `AgentBuilder.withMemoryChannel(...)` or `ChannelRegistry`.
+  via `ChannelRegistry`.
 - **New vector store** → implement `VectorStore` and register via
   `META-INF/services/org.agentic.flink.storage.VectorStore`.
 - **New corpus flavour** → implement `CorpusSpec` (and the matching `Corpus`

@@ -188,14 +188,11 @@ Agent agent = Agent.builder()
 Every `with*` method is optional; defaults are discovered via `ServiceLoader`. The minimum
 viable agent is `Agent.builder().withId(...).withSystemPrompt(...).build()`.
 
-Four builder methods exist but are not read by any operator in this repository:
-`withShortTermTtl`, `withVectorMemory`, `withLongTermStore`, and `withMemoryChannel`. They
-store a value on `Agent` that nothing consumes, so calling them changes nothing at runtime.
-They are omitted from the example above until they are wired or removed (see
-[`docs/audit-backlog.md`](docs/audit-backlog.md), AGS-32). To use Flink-state short-term
-memory today, bind `FlinkStateShortTermMemory.spec()` inside your `RichFunction.open()`;
-for vector memory use `FlinkStateVectorMemory` or `FlinkStateHnswVectorMemory` directly in
-the operator.
+Every public `with*` method is consumed by an operator of the job graph and asserted in
+`src/test/java/org/agentic/flink/dsl/AgentBuilderTest`; see
+[`docs/reference/agent-framework.md`](docs/reference/agent-framework.md) for the method to
+operator table. Vector memory is not an `AgentBuilder` option: use `FlinkStateVectorMemory`
+or `FlinkStateHnswVectorMemory` directly in the operator, or the retrieval pipeline.
 
 </details>
 

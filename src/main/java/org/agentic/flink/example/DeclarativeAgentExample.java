@@ -1,7 +1,8 @@
 package org.agentic.flink.example;
 
-import java.time.Duration;
 import org.agentic.flink.annotation.Internal;
+
+import java.time.Duration;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -84,7 +85,6 @@ public class DeclarativeAgentExample {
             .withTools("web-search", "document-analysis", "synthesis")
             .withMaxIterations(10)
             .withTimeout(Duration.ofMinutes(5))
-            .withValidationEnabled(true)
             .withMaxValidationAttempts(3)
             .build();
 

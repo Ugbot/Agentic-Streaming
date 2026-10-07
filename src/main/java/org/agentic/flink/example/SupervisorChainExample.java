@@ -1,6 +1,7 @@
 package org.agentic.flink.example;
 
 import org.agentic.flink.annotation.Internal;
+
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
@@ -104,7 +105,6 @@ public class SupervisorChainExample {
                     + "- Test coverage\n"
                     + "Reject if quality score < 0.8")
             .withChatSetup(ChatSetup.builder().withModel("qwen2.5:3b").withTemperature(0.2).build())
-            .withValidationEnabled(true)
             .build();
 
     // Tier 2: Security Checker - Validates security

@@ -1,9 +1,10 @@
 package org.agentic.flink.statemachine;
 
+import org.agentic.flink.annotation.Public;
+
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
-import org.agentic.flink.annotation.Public;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.apache.flink.cep.pattern.Pattern;
@@ -216,8 +217,7 @@ public class AgentStateMachine implements Serializable {
                         || event.getEventType() == AgentEventType.TOOL_CALL_FAILED;
                   }
                 })
-            .oneOrMore()
-            .greedy();
+            .oneOrMore();
 
     // Add correction step (optional, may repeat)
     pattern =
@@ -486,11 +486,20 @@ public class AgentStateMachine implements Serializable {
      *   <li>Correction transitions
      *   <li>Execution completion
      *   <li>Supervisor approval/rejection
-     *   <li>Compensation (if enabled)
+     *   <li>Flow start, pause/resume and state offloading
+     *   <li>Failure: compensation when enabled, otherwise terminal failure
      * </ul>
      */
     public Builder withStandardTransitions() {
+      // Flow start, pause/resume and state offloading
+      addTransition(AgentTransition.flowStarted());
+      addTransition(AgentTransition.flowPaused());
+      addTransition(AgentTransition.flowResumed());
+      addTransition(AgentTransition.offloadTriggered());
+      addTransition(AgentTransition.offloadCompleted());
+
       // Validation transitions
+      addTransition(AgentTransition.validationRequested());
       addTransition(AgentTransition.validationPassed());
       addTransition(AgentTransition.validationFailedWithRetry(maxValidationAttempts));
       addTransition(AgentTransition.validationFailedFinal(maxValidationAttempts));
@@ -507,11 +516,14 @@ public class AgentStateMachine implements Serializable {
       addTransition(AgentTransition.supervisorRejectedWithRetry(maxCorrectionAttempts));
       addTransition(AgentTransition.supervisorRejectedFinal(maxCorrectionAttempts));
 
-      // Compensation transitions (if enabled)
+      // Failure: roll back when compensation is enabled, otherwise fail terminally
       if (enableCompensation) {
         addTransition(AgentTransition.failureWithCompensation());
-        addTransition(AgentTransition.compensationCompleted());
+      } else {
+        addTransition(AgentTransition.executionFailed());
       }
+      addTransition(AgentTransition.compensationCompleted());
+      addTransition(AgentTransition.flowCompensated());
 
       return this;
     }

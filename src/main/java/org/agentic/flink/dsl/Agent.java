@@ -1,24 +1,16 @@
 package org.agentic.flink.dsl;
 
+import org.agentic.flink.annotation.Public;
+
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.*;
-import org.agentic.flink.annotation.Public;
-import org.agentic.flink.channel.Channel;
-import org.agentic.flink.channel.KeyedContextItem;
-import org.agentic.flink.completion.TaskList;
-import org.agentic.flink.context.manager.ContextWindowManager;
-import org.agentic.flink.embedding.EmbeddingConnection;
-import org.agentic.flink.embedding.EmbeddingSetup;
 import org.agentic.flink.inference.Guardrail;
-import org.agentic.flink.inference.InferenceConnection;
 import org.agentic.flink.inference.InferenceToolAdapter;
 import org.agentic.flink.listener.AgentEventListener;
 import org.agentic.flink.llm.ChatConnection;
 import org.agentic.flink.llm.ChatSetup;
-import org.agentic.flink.memory.ShortTermMemorySpec;
 import org.agentic.flink.memory.conversation.ConversationStore;
-import org.agentic.flink.memory.vector.VectorMemorySpec;
 import org.agentic.flink.skill.Skill;
 import org.agentic.flink.skill.SkillRegistry;
 import org.agentic.flink.statemachine.AgentStateMachine;
@@ -28,17 +20,11 @@ import org.agentic.flink.tools.mcp.McpServerSpec;
 /**
  * Immutable agent definition created via the declarative builder API.
  *
- * <p>An Agent represents a complete specification of an AI agent's behavior, including:
- *
- * <ul>
- *   <li>LLM configuration (model, prompt, temperature)
- *   <li>Tool access (which tools this agent can call)
- *   <li>Validation & correction settings
- *   <li>Supervisor chain integration
- *   <li>Context management configuration
- *   <li>State machine behavior
- *   <li>Completion tracking (task lists)
- * </ul>
+ * <p>An Agent is the configuration record consumed by the legacy pure-Flink execution graph ({@link
+ * org.agentic.flink.job.AgentJobGenerator}): the CEP dispatcher reads the state machine and the
+ * short-term TTL, the async execution operator ({@link
+ * org.agentic.flink.stream.AgentExecutionFunction}) reads everything else. Every value stored here
+ * is read by one of those operators or by {@link org.agentic.flink.execution.AgentExecutor}.
  *
  * <p><b>Usage Example:</b>
  *
@@ -48,13 +34,11 @@ import org.agentic.flink.tools.mcp.McpServerSpec;
  *     .withName("Research Specialist")
  *     .withSystemPrompt("You are a research specialist. Gather and synthesize information.")
  *     .withTools("web-search", "document-analysis", "synthesis")
- *     .withLlmModel("qwen2.5:7b")
- *     .withTemperature(0.3)
+ *     .withRequiredTools("web-search")
  *     .withMaxIterations(10)
  *     .withTimeout(Duration.ofMinutes(5))
- *     .withValidationEnabled(true)
- *     .withSupervisor("quality-supervisor")
- *     .withMaxTokens(8000)
+ *     .withToolTimeout(Duration.ofSeconds(20))
+ *     .withCompensatingTool("book-flight", "cancel-flight")
  *     .build();
  * }</pre>
  *
@@ -83,71 +67,42 @@ public class Agent implements Serializable {
   // ==================== LLM Configuration ====================
 
   private final String systemPrompt;
-  private final int maxTokens;
 
   // ==================== Tool Configuration ====================
 
   private final Set<String> allowedTools;
   private final Set<String> requiredTools;
-  private final Map<String, Object> toolDefaults;
+  private final Map<String, Map<String, Object>> toolDefaults;
 
   // ==================== Execution Configuration ====================
 
   private final int maxIterations;
   private final Duration timeout;
   private final Duration toolTimeout;
-  private final int maxRetries;
 
-  // ==================== Validation & Correction ====================
+  // ==================== Validation & Correction (state machine retry budgets) ====================
 
-  private final boolean validationEnabled;
   private final int maxValidationAttempts;
-  private final boolean correctionEnabled;
   private final int maxCorrectionAttempts;
-  private final String validationPrompt;
-  private final String correctionPrompt;
-
-  // ==================== Supervision ====================
-
-  private final String supervisorId;
-  private final boolean supervisorReviewRequired;
-  private final double supervisorThreshold;
-
-  // ==================== Context Management ====================
-
-  private final ContextWindowManager.ContextWindowConfig contextConfig;
-  private final boolean contextCompressionEnabled;
 
   // ==================== State Machine ====================
 
   private final AgentStateMachine stateMachine;
 
-  // ==================== Completion Tracking ====================
-
-  private final TaskList taskList;
-  private final boolean autoDetectTaskCompletion;
-
   // ==================== Saga Integration ====================
 
   private final boolean compensationEnabled;
-  private final Map<String, Object> compensationConfig;
+  private final Map<String, String> compensatingTools;
 
-  // ==================== Memory (Flink-state-first) ====================
+  // ==================== Memory ====================
 
   private final Duration shortTermTtl;
-  private final ShortTermMemorySpec shortTermMemorySpec;
   private final LongTermMemoryStore longTermStore;
-  private final List<Channel<KeyedContextItem>> memoryChannels;
-  private final VectorMemorySpec vectorMemorySpec;
   private final ConversationStore conversationStore;
 
   // Chat
   private final ChatConnection chatConnection;
   private final ChatSetup chatSetup;
-
-  // Embeddings
-  private final EmbeddingConnection embeddingConnection;
-  private final EmbeddingSetup embeddingSetup;
 
   // Listeners
   private final List<AgentEventListener> listeners;
@@ -161,82 +116,47 @@ public class Agent implements Serializable {
   private final org.agentic.flink.a2a.A2AClientFactory a2aClientFactory;
 
   // Inference
-  private final Map<String, InferenceConnection> inferenceConnections;
   private final List<InferenceToolAdapter> inferenceTools;
   private final List<Guardrail> guardrails;
 
   // Package-private constructor - use builder
   Agent(AgentBuilder builder) {
-    // Core identity
     this.agentId = builder.agentId;
     this.agentName = builder.agentName;
     this.description = builder.description;
     this.agentType = builder.agentType;
 
-    // LLM configuration
     this.systemPrompt = builder.systemPrompt;
-    this.maxTokens = builder.maxTokens;
 
-    // Tool configuration
     this.allowedTools = Collections.unmodifiableSet(new HashSet<>(builder.allowedTools));
     this.requiredTools = Collections.unmodifiableSet(new HashSet<>(builder.requiredTools));
-    this.toolDefaults = Collections.unmodifiableMap(new HashMap<>(builder.toolDefaults));
+    Map<String, Map<String, Object>> defaults = new HashMap<>();
+    builder.toolDefaults.forEach(
+        (tool, values) -> defaults.put(tool, Collections.unmodifiableMap(new HashMap<>(values))));
+    this.toolDefaults = Collections.unmodifiableMap(defaults);
 
-    // Execution configuration
     this.maxIterations = builder.maxIterations;
     this.timeout = builder.timeout;
     this.toolTimeout = builder.toolTimeout;
-    this.maxRetries = builder.maxRetries;
 
-    // Validation & correction
-    this.validationEnabled = builder.validationEnabled;
     this.maxValidationAttempts = builder.maxValidationAttempts;
-    this.correctionEnabled = builder.correctionEnabled;
     this.maxCorrectionAttempts = builder.maxCorrectionAttempts;
-    this.validationPrompt = builder.validationPrompt;
-    this.correctionPrompt = builder.correctionPrompt;
 
-    // Supervision
-    this.supervisorId = builder.supervisorId;
-    this.supervisorReviewRequired = builder.supervisorReviewRequired;
-    this.supervisorThreshold = builder.supervisorThreshold;
-
-    // Context management
-    this.contextConfig = builder.contextConfig;
-    this.contextCompressionEnabled = builder.contextCompressionEnabled;
-
-    // State machine
     this.stateMachine = builder.stateMachine;
 
-    // Completion tracking
-    this.taskList = builder.taskList;
-    this.autoDetectTaskCompletion = builder.autoDetectTaskCompletion;
-
-    // Saga integration
     this.compensationEnabled = builder.compensationEnabled;
-    this.compensationConfig =
-        Collections.unmodifiableMap(new HashMap<>(builder.compensationConfig));
+    this.compensatingTools =
+        Collections.unmodifiableMap(new LinkedHashMap<>(builder.compensatingTools));
 
-    // Memory
     this.shortTermTtl = builder.shortTermTtl;
-    this.shortTermMemorySpec = builder.shortTermMemorySpec;
     this.longTermStore = builder.longTermStore;
-    this.memoryChannels = Collections.unmodifiableList(new ArrayList<>(builder.memoryChannels));
-    this.vectorMemorySpec = builder.vectorMemorySpec;
     this.conversationStore = builder.conversationStore;
 
-    // Chat
     this.chatConnection = builder.chatConnection;
     this.chatSetup = builder.chatSetup;
 
-    // Embeddings
-    this.embeddingConnection = builder.embeddingConnection;
-    this.embeddingSetup = builder.embeddingSetup;
-
-    // Listeners
     this.listeners = Collections.unmodifiableList(new ArrayList<>(builder.listeners));
 
-    // Skills + MCP
     SkillRegistry.Builder rb = SkillRegistry.builder();
     for (Skill s : builder.skills) {
       rb.register(s);
@@ -249,9 +169,6 @@ public class Agent implements Serializable {
             ? org.agentic.flink.a2a.A2AClientFactory.discovering()
             : builder.a2aClientFactory;
 
-    // Inference
-    this.inferenceConnections =
-        Collections.unmodifiableMap(new LinkedHashMap<>(builder.inferenceConnections));
     this.inferenceTools = Collections.unmodifiableList(new ArrayList<>(builder.inferenceTools));
     this.guardrails = Collections.unmodifiableList(new ArrayList<>(builder.guardrails));
   }
@@ -286,10 +203,6 @@ public class Agent implements Serializable {
     return chatSetup.getTemperature();
   }
 
-  public int getMaxTokens() {
-    return maxTokens;
-  }
-
   public int getMaxResponseTokens() {
     return chatSetup.getMaxResponseTokens();
   }
@@ -302,7 +215,8 @@ public class Agent implements Serializable {
     return requiredTools;
   }
 
-  public Map<String, Object> getToolDefaults() {
+  /** Default parameters per tool name, merged under the arguments the model supplies. */
+  public Map<String, Map<String, Object>> getToolDefaults() {
     return toolDefaults;
   }
 
@@ -318,104 +232,41 @@ public class Agent implements Serializable {
     return toolTimeout;
   }
 
-  public int getMaxRetries() {
-    return maxRetries;
-  }
-
-  public boolean isValidationEnabled() {
-    return validationEnabled;
-  }
-
   public int getMaxValidationAttempts() {
     return maxValidationAttempts;
-  }
-
-  public boolean isCorrectionEnabled() {
-    return correctionEnabled;
   }
 
   public int getMaxCorrectionAttempts() {
     return maxCorrectionAttempts;
   }
 
-  public String getValidationPrompt() {
-    return validationPrompt;
-  }
-
-  public String getCorrectionPrompt() {
-    return correctionPrompt;
-  }
-
-  public String getSupervisorId() {
-    return supervisorId;
-  }
-
-  public boolean isSupervisorReviewRequired() {
-    return supervisorReviewRequired;
-  }
-
-  public double getSupervisorThreshold() {
-    return supervisorThreshold;
-  }
-
-  public ContextWindowManager.ContextWindowConfig getContextConfig() {
-    return contextConfig;
-  }
-
-  public boolean isContextCompressionEnabled() {
-    return contextCompressionEnabled;
-  }
-
   public AgentStateMachine getStateMachine() {
     return stateMachine;
-  }
-
-  public TaskList getTaskList() {
-    return taskList;
-  }
-
-  public boolean isAutoDetectTaskCompletion() {
-    return autoDetectTaskCompletion;
   }
 
   public boolean isCompensationEnabled() {
     return compensationEnabled;
   }
 
-  public Map<String, Object> getCompensationConfig() {
-    return compensationConfig;
+  /** Tool name to compensating tool name, in registration order. */
+  public Map<String, String> getCompensatingTools() {
+    return compensatingTools;
   }
 
   public Duration getShortTermTtl() {
     return shortTermTtl;
   }
 
-  public ShortTermMemorySpec getShortTermMemorySpec() {
-    return shortTermMemorySpec;
-  }
-
   public LongTermMemoryStore getLongTermStore() {
     return longTermStore;
   }
 
-  public List<Channel<KeyedContextItem>> getMemoryChannels() {
-    return memoryChannels;
-  }
-
-  public VectorMemorySpec getVectorMemorySpec() {
-    return vectorMemorySpec;
-  }
-
-  public boolean hasVectorMemory() {
-    return vectorMemorySpec != null;
+  public boolean hasLongTermStore() {
+    return longTermStore != null;
   }
 
   public ConversationStore getConversationStore() {
     return conversationStore;
-  }
-
-  public boolean hasLongTermStore() {
-    return longTermStore != null;
   }
 
   public ChatConnection getChatConnection() {
@@ -424,14 +275,6 @@ public class Agent implements Serializable {
 
   public ChatSetup getChatSetup() {
     return chatSetup;
-  }
-
-  public EmbeddingConnection getEmbeddingConnection() {
-    return embeddingConnection;
-  }
-
-  public EmbeddingSetup getEmbeddingSetup() {
-    return embeddingSetup;
   }
 
   public List<AgentEventListener> getListeners() {
@@ -466,14 +309,6 @@ public class Agent implements Serializable {
     return !remoteAgents.isEmpty();
   }
 
-  public Map<String, InferenceConnection> getInferenceConnections() {
-    return inferenceConnections;
-  }
-
-  public InferenceConnection getInferenceConnection(String name) {
-    return inferenceConnections.get(name);
-  }
-
   public List<InferenceToolAdapter> getInferenceTools() {
     return inferenceTools;
   }
@@ -499,46 +334,47 @@ public class Agent implements Serializable {
   }
 
   /**
-   * Checks if this agent has a supervisor configured.
-   *
-   * @return true if supervisorId is set
-   */
-  public boolean hasSupervisor() {
-    return supervisorId != null && !supervisorId.isEmpty();
-  }
-
-  /**
-   * Checks if this agent requires completion tracking.
-   *
-   * @return true if taskList is configured
-   */
-  public boolean requiresCompletionTracking() {
-    return taskList != null;
-  }
-
-  /**
    * Creates a builder initialized with this agent's configuration.
    *
-   * <p>Useful for creating modified copies of agents.
+   * <p>Useful for creating modified copies of agents. Listeners, MCP servers, inference tools and
+   * guardrails are carried over. Skills and remote agents are not re-registered because their
+   * prompt fragments and tool ids are already folded into the copied system prompt and allowed
+   * tools. The state machine is rebuilt from the copied retry budgets unless {@link
+   * AgentBuilder#withStateMachine} is called again.
    *
    * @return builder pre-populated with this agent's settings
    */
   public AgentBuilder toBuilder() {
-    return new AgentBuilder()
-        .withId(this.agentId)
-        .withName(this.agentName)
-        .withDescription(this.description)
-        .withType(this.agentType)
-        .withSystemPrompt(this.systemPrompt)
-        .withChatSetup(this.chatSetup)
-        .withMaxTokens(this.maxTokens)
-        .withTools(this.allowedTools.toArray(new String[0]))
-        .withMaxIterations(this.maxIterations)
-        .withTimeout(this.timeout)
-        .withValidationEnabled(this.validationEnabled)
-        .withCorrectionEnabled(this.correctionEnabled)
-        .withSupervisor(this.supervisorId)
-        .withCompensationEnabled(this.compensationEnabled);
+    AgentBuilder b =
+        new AgentBuilder()
+            .withId(this.agentId)
+            .withName(this.agentName)
+            .withDescription(this.description)
+            .withType(this.agentType)
+            .withSystemPrompt(this.systemPrompt)
+            .withChatConnection(this.chatConnection)
+            .withChatSetup(this.chatSetup)
+            .withTools(this.allowedTools.toArray(new String[0]))
+            .withRequiredTools(this.requiredTools.toArray(new String[0]))
+            .withMaxIterations(this.maxIterations)
+            .withTimeout(this.timeout)
+            .withToolTimeout(this.toolTimeout)
+            .withMaxValidationAttempts(this.maxValidationAttempts)
+            .withMaxCorrectionAttempts(this.maxCorrectionAttempts)
+            .withCompensationEnabled(this.compensationEnabled)
+            .withShortTermTtl(this.shortTermTtl)
+            .withLongTermStore(this.longTermStore)
+            .withConversationStore(this.conversationStore)
+            .withA2AClientFactory(this.a2aClientFactory)
+            .withListener(this.listeners.toArray(new AgentEventListener[0]))
+            .withMcpServer(this.mcpServers.toArray(new McpServerSpec[0]))
+            .withGuardrail(this.guardrails.toArray(new Guardrail[0]));
+    this.toolDefaults.forEach(b::withToolDefaults);
+    this.compensatingTools.forEach(b::withCompensatingTool);
+    for (InferenceToolAdapter adapter : this.inferenceTools) {
+      b.withInferenceTool(adapter);
+    }
+    return b;
   }
 
   /**
@@ -553,13 +389,8 @@ public class Agent implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Agent[id=%s, name=%s, type=%s, model=%s, tools=%d, supervisor=%s]",
-        agentId,
-        agentName,
-        agentType,
-        chatSetup.getModelName(),
-        allowedTools.size(),
-        hasSupervisor() ? supervisorId : "none");
+        "Agent[id=%s, name=%s, type=%s, model=%s, tools=%d]",
+        agentId, agentName, agentType, chatSetup.getModelName(), allowedTools.size());
   }
 
   // ==================== Agent Types ====================
@@ -589,7 +420,7 @@ public class Agent implements Serializable {
     RESEARCHER("Researcher", "Gathers and synthesizes information"),
 
     /**
-     * ReAct agent — reason / act / observe loop. Pair with {@link
+     * ReAct agent: reason / act / observe loop. Pair with {@link
      * org.agentic.flink.function.ReActProcessFunction} for the canonical scaffolding.
      */
     REACT("ReAct", "Reason/Act/Observe loop with bounded iteration budget"),

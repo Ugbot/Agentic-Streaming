@@ -200,49 +200,46 @@ class AgentBuilder:
         self._b = self._b.withToolTimeout(Duration.ofMillis(int(duration.total_seconds() * 1000)))
         return self
 
-    def with_max_retries(self, n: int) -> "AgentBuilder":
-        self._b = self._b.withMaxRetries(n)
+    def with_tool_defaults(self, tool_name: str, **defaults: Any) -> "AgentBuilder":
+        """Default parameters merged under the model-provided arguments of
+        ``tool_name`` on every call."""
+        HashMap = jclass("java.util.HashMap")
+        java_defaults = HashMap()
+        for key, value in defaults.items():
+            java_defaults.put(key, value)
+        self._b = self._b.withToolDefaults(tool_name, java_defaults)
+        return self
+
+    # ---- compensation ---------------------------------------------------
+
+    def with_compensation_enabled(self, enabled: bool = True) -> "AgentBuilder":
+        self._b = self._b.withCompensationEnabled(bool(enabled))
+        return self
+
+    def with_compensating_tool(self, tool_name: str, compensating_tool: str) -> "AgentBuilder":
+        """Register ``compensating_tool`` as the rollback for ``tool_name``.
+        Implies :meth:`with_compensation_enabled`."""
+        self._b = self._b.withCompensatingTool(tool_name, compensating_tool)
         return self
 
     # ---- memory ---------------------------------------------------------
 
     def with_short_term_ttl(self, ttl: timedelta) -> "AgentBuilder":
+        """TTL of the keyed dispatch state that deduplicates redelivered turns."""
         Duration = jclass("java.time.Duration")
         self._b = self._b.withShortTermTtl(
             Duration.ofMillis(int(ttl.total_seconds() * 1000))
         )
         return self
 
-    def with_short_term_memory(self, spec) -> "AgentBuilder":
-        java = spec._to_java() if hasattr(spec, "_to_java") else spec
-        self._b = self._b.withShortTermMemory(java)
-        return self
-
     def with_long_term_store(self, store) -> "AgentBuilder":
+        """Archive every terminal turn outcome as a fact in ``store``."""
         self._b = self._b.withLongTermStore(store)
         return self
 
-    def with_memory_channel(self, *channels) -> "AgentBuilder":
-        java_channels = [c._to_java() if hasattr(c, "_to_java") else c for c in channels]
-        if java_channels:
-            self._b = self._b.withMemoryChannel(*java_channels)
-        return self
-
-    def with_vector_memory(self, spec) -> "AgentBuilder":
-        java = spec._to_java() if hasattr(spec, "_to_java") else spec
-        self._b = self._b.withVectorMemory(java)
-        return self
-
-    # ---- embedding ------------------------------------------------------
-
-    def with_embedding_connection(self, connection) -> "AgentBuilder":
-        java = connection._to_java() if hasattr(connection, "_to_java") else connection
-        self._b = self._b.withEmbeddingConnection(java)
-        return self
-
-    def with_embedding_setup(self, setup) -> "AgentBuilder":
-        java = setup._to_java() if hasattr(setup, "_to_java") else setup
-        self._b = self._b.withEmbeddingSetup(java)
+    def with_conversation_store(self, store) -> "AgentBuilder":
+        java = store._to_java() if hasattr(store, "_to_java") else store
+        self._b = self._b.withConversationStore(java)
         return self
 
     # ---- listeners + skills + MCP --------------------------------------
@@ -267,9 +264,11 @@ class AgentBuilder:
 
     # ---- inference / guardrails ----------------------------------------
 
-    def with_inference_connection(self, name: str, connection) -> "AgentBuilder":
-        java = connection._to_java() if hasattr(connection, "_to_java") else connection
-        self._b = self._b.withInferenceConnection(name, java)
+    def with_inference_tool(self, *adapters) -> "AgentBuilder":
+        """Expose traditional DL models (``InferenceToolAdapter``) as tools."""
+        for adapter in adapters:
+            java = adapter._to_java() if hasattr(adapter, "_to_java") else adapter
+            self._b = self._b.withInferenceTool(java)
         return self
 
     def with_guardrail(self, *guardrails) -> "AgentBuilder":

@@ -1,10 +1,11 @@
 package org.agentic.flink.job;
 
+import org.agentic.flink.annotation.Internal;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.core.AgentEvent;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -32,9 +33,9 @@ import org.slf4j.LoggerFactory;
  * or tool latency and checkpoints are not stalled by agent execution.
  *
  * <p>Dispatched turns are recorded in keyed state ({@code legacy.dispatched-turns}, keyed by flow
- * id, TTL {@link #DEFAULT_DEDUP_TTL} by default) so that a match redelivered after a restore does
- * not dispatch the same turn twice. Duplicates are dropped and counted by the {@code
- * duplicate_turns_dropped} metric.
+ * id) so that a match redelivered after a restore does not dispatch the same turn twice. The state
+ * TTL is {@link Agent#getShortTermTtl()} when positive, else {@link #DEFAULT_DEDUP_TTL}. Duplicates
+ * are dropped and counted by the {@code duplicate_turns_dropped} metric.
  *
  * <p>Pattern timeouts and compensation requests are still emitted through side outputs here; {@link
  * AgentResultRouter} routes execution results and these events to the same tags at the end of the
@@ -48,11 +49,11 @@ import org.slf4j.LoggerFactory;
  */
 @Deprecated(since = "1.0.0")
 @Internal
-public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, AgentEvent>
+public class AgentTurnDispatcher extends PatternProcessFunction<AgentEvent, AgentEvent>
     implements TimedOutPartialMatchHandler<AgentEvent> {
 
   private static final long serialVersionUID = 2L;
-  private static final Logger LOG = LoggerFactory.getLogger(AgentExecutionFunction.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AgentTurnDispatcher.class);
 
   public static final Duration DEFAULT_DEDUP_TTL = Duration.ofHours(24);
   public static final String DISPATCHED_TURNS_STATE = "legacy.dispatched-turns";
@@ -72,11 +73,16 @@ public class AgentExecutionFunction extends PatternProcessFunction<AgentEvent, A
   private transient Counter duplicatesDropped;
   private transient Counter dispatched;
 
-  public AgentExecutionFunction(Agent agent, ToolRegistry toolRegistry) {
-    this(agent, toolRegistry, DEFAULT_DEDUP_TTL);
+  public AgentTurnDispatcher(Agent agent, ToolRegistry toolRegistry) {
+    this(agent, toolRegistry, dedupTtlOf(agent));
   }
 
-  public AgentExecutionFunction(Agent agent, ToolRegistry toolRegistry, Duration dedupTtl) {
+  private static Duration dedupTtlOf(Agent agent) {
+    Duration ttl = Objects.requireNonNull(agent, "agent").getShortTermTtl();
+    return ttl == null || ttl.isZero() || ttl.isNegative() ? DEFAULT_DEDUP_TTL : ttl;
+  }
+
+  public AgentTurnDispatcher(Agent agent, ToolRegistry toolRegistry, Duration dedupTtl) {
     this.agent = Objects.requireNonNull(agent, "agent");
     this.toolRegistry = toolRegistry;
     if (dedupTtl == null || dedupTtl.isZero() || dedupTtl.isNegative()) {

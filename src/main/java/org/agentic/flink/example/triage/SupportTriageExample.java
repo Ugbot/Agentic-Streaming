@@ -1,9 +1,10 @@
 package org.agentic.flink.example.triage;
 
+import org.agentic.flink.annotation.Internal;
+
 import dev.langchain4j.model.chat.ChatModel;
 import java.util.List;
 import java.util.Set;
-import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEventType;
 import org.agentic.flink.dsl.Agent;
@@ -77,8 +78,8 @@ public class SupportTriageExample {
   /**
    * Single-shot triage flow: INITIALIZED starts execution, execution either completes or goes
    * through supervisor review, and every non-terminal state has a way out so the machine validates.
-   * {@code AgentStateMachine.Builder#withStandardTransitions()} has no transition out of
-   * INITIALIZED, PAUSED or OFFLOADING, so the builder default cannot be used here.
+   * The builder default ({@code AgentStateMachine.Builder#withStandardTransitions()}) would also
+   * work; this machine is narrower because triage never offloads or compensates.
    */
   static AgentStateMachine triageStateMachine() {
     return AgentStateMachine.builder()
@@ -199,7 +200,6 @@ public class SupportTriageExample {
             .withChatConnection(chatConn)
             .withChatSetup(chatSetup)
             .withInferenceTool(intentTool)
-            .withInferenceConnection("reranker", reranker)
             .withGuardrail(abuseFilter)
             .withListener(logger, metrics)
             .withMaxIterations(2)

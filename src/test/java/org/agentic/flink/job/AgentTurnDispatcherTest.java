@@ -18,11 +18,11 @@ import org.apache.flink.cep.functions.TimedOutPartialMatchHandler;
 import org.junit.jupiter.api.*;
 
 /**
- * Unit tests for {@link AgentExecutionFunction}.
+ * Unit tests for {@link AgentTurnDispatcher}.
  *
- * <p>Because {@code AgentExecutionFunction} is a CEP {@link PatternProcessFunction}, full
- * integration testing requires a Flink MiniCluster with CEP infrastructure. These tests focus on
- * verifiable unit-level properties:
+ * <p>Because {@code AgentTurnDispatcher} is a CEP {@link PatternProcessFunction}, full integration
+ * testing requires a Flink MiniCluster with CEP infrastructure. These tests focus on verifiable
+ * unit-level properties:
  *
  * <ul>
  *   <li>Construction with Agent and ToolRegistry
@@ -34,9 +34,9 @@ import org.junit.jupiter.api.*;
  * <p>All test data uses randomized identifiers via {@link UUID#randomUUID()}.
  *
  * @author Agentic Flink Team
- * @see AgentExecutionFunction
+ * @see AgentTurnDispatcher
  */
-class AgentExecutionFunctionTest {
+class AgentTurnDispatcherTest {
 
   // ==================== Helpers ====================
 
@@ -208,9 +208,6 @@ class AgentExecutionFunctionTest {
         .withTools("web-search", "calculator", "database-query")
         .withMaxIterations(10)
         .withTimeout(Duration.ofMinutes(5))
-        .withValidationEnabled(true)
-        .withCorrectionEnabled(true)
-        .withSupervisor("supervisor-" + UUID.randomUUID().toString().substring(0, 6))
         .withCompensationEnabled(true)
         .withStateMachine(buildValidStateMachine(id + "-sm", 300, true))
         .build();
@@ -228,7 +225,7 @@ class AgentExecutionFunctionTest {
       Agent agent = randomAgent();
       ToolRegistry registry = ToolRegistry.empty();
 
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
       assertNotNull(function);
     }
 
@@ -243,7 +240,7 @@ class AgentExecutionFunctionTest {
               .registerTool("database-query", "Query a database")
               .build();
 
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
       assertNotNull(function);
     }
   }
@@ -259,7 +256,7 @@ class AgentExecutionFunctionTest {
     void implementsPatternProcessFunction() {
       Agent agent = randomAgent();
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
 
       assertInstanceOf(PatternProcessFunction.class, function);
     }
@@ -269,7 +266,7 @@ class AgentExecutionFunctionTest {
     void implementsTimedOutPartialMatchHandler() {
       Agent agent = randomAgent();
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
 
       assertInstanceOf(TimedOutPartialMatchHandler.class, function);
     }
@@ -279,7 +276,7 @@ class AgentExecutionFunctionTest {
     void isSerializableType() {
       Agent agent = randomAgent();
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
 
       assertInstanceOf(Serializable.class, function);
     }
@@ -296,12 +293,12 @@ class AgentExecutionFunctionTest {
     void serializeWithMinimalAgent() throws Exception {
       Agent agent = randomAgent();
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction original = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher original = new AgentTurnDispatcher(agent, registry);
 
       byte[] bytes = serialize(original);
       assertTrue(bytes.length > 0, "Serialized bytes should not be empty");
 
-      AgentExecutionFunction deserialized = deserialize(bytes);
+      AgentTurnDispatcher deserialized = deserialize(bytes);
       assertNotNull(deserialized);
       assertInstanceOf(PatternProcessFunction.class, deserialized);
       assertInstanceOf(TimedOutPartialMatchHandler.class, deserialized);
@@ -317,12 +314,12 @@ class AgentExecutionFunctionTest {
               .registerTool("calculator", "Perform calculations")
               .build();
 
-      AgentExecutionFunction original = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher original = new AgentTurnDispatcher(agent, registry);
 
       byte[] bytes = serialize(original);
       assertTrue(bytes.length > 0);
 
-      AgentExecutionFunction deserialized = deserialize(bytes);
+      AgentTurnDispatcher deserialized = deserialize(bytes);
       assertNotNull(deserialized);
     }
 
@@ -342,8 +339,8 @@ class AgentExecutionFunctionTest {
               .build();
       ToolRegistry registry = ToolRegistry.empty();
 
-      AgentExecutionFunction func1 = new AgentExecutionFunction(agent, registry);
-      AgentExecutionFunction func2 = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher func1 = new AgentTurnDispatcher(agent, registry);
+      AgentTurnDispatcher func2 = new AgentTurnDispatcher(agent, registry);
 
       byte[] bytes1 = serialize(func1);
       byte[] bytes2 = serialize(func2);
@@ -354,7 +351,7 @@ class AgentExecutionFunctionTest {
           "Same configuration should produce same serialization size");
     }
 
-    private byte[] serialize(AgentExecutionFunction function) throws IOException {
+    private byte[] serialize(AgentTurnDispatcher function) throws IOException {
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
       try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
         oos.writeObject(function);
@@ -362,10 +359,10 @@ class AgentExecutionFunctionTest {
       return bos.toByteArray();
     }
 
-    private AgentExecutionFunction deserialize(byte[] bytes)
+    private AgentTurnDispatcher deserialize(byte[] bytes)
         throws IOException, ClassNotFoundException {
       try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
-        return (AgentExecutionFunction) ois.readObject();
+        return (AgentTurnDispatcher) ois.readObject();
       }
     }
   }
@@ -392,7 +389,6 @@ class AgentExecutionFunctionTest {
               .withMaxIterations(maxIter)
               .withTimeout(Duration.ofMinutes(3))
               .withTools("tool-a", "tool-b")
-              .withValidationEnabled(true)
               .withStateMachine(sm)
               .build();
 
@@ -402,16 +398,16 @@ class AgentExecutionFunctionTest {
               .registerTool("tool-b", "Tool B description")
               .build();
 
-      AgentExecutionFunction original = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher original = new AgentTurnDispatcher(agent, registry);
 
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
       try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
         oos.writeObject(original);
       }
-      AgentExecutionFunction deserialized;
+      AgentTurnDispatcher deserialized;
       try (ObjectInputStream ois =
           new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()))) {
-        deserialized = (AgentExecutionFunction) ois.readObject();
+        deserialized = (AgentTurnDispatcher) ois.readObject();
       }
 
       assertNotNull(deserialized);
@@ -434,7 +430,7 @@ class AgentExecutionFunctionTest {
               .build();
 
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
 
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
       try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
@@ -463,7 +459,7 @@ class AgentExecutionFunctionTest {
               .build();
 
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
       assertNotNull(function);
     }
 
@@ -491,7 +487,7 @@ class AgentExecutionFunctionTest {
               .build();
 
       ToolRegistry registry = ToolRegistry.empty();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
 
       ByteArrayOutputStream bos = new ByteArrayOutputStream();
       try (ObjectOutputStream oos = new ObjectOutputStream(bos)) {
@@ -523,7 +519,7 @@ class AgentExecutionFunctionTest {
               .build();
 
       ToolRegistry registry = registryBuilder.build();
-      AgentExecutionFunction function = new AgentExecutionFunction(agent, registry);
+      AgentTurnDispatcher function = new AgentTurnDispatcher(agent, registry);
       assertNotNull(function);
     }
   }
