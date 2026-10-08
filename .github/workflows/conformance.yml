@@ -83,7 +83,7 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Install Clojure CLI
-        uses: DeLaGuardo/setup-clojure@13.4
+        uses: DeLaGuardo/setup-clojure@13.7.0
         with:
           cli: latest
       - name: Install the Python binding when the package is in the checkout
