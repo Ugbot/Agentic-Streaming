@@ -35,6 +35,10 @@ updates:
           - patch
 
   - package-ecosystem: pip
+    # Widen the range to admit the new release instead of raising the floor: these are libraries
+    # with requires-python >= 3.9, and a raised floor (pytest 9, mypy 2, jsonschema 4.26 are all
+    # 3.10+) would silently drop the older interpreters the classifiers still promise.
+    versioning-strategy: widen
     directories:
       - /ports/pyagentic
       - /python

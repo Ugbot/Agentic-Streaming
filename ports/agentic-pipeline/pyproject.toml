@@ -40,8 +40,8 @@ dependencies = [
 celery = ["celery>=5,<6"]
 nats = ["nats-py>=2,<3"]
 ray = ["ray>=2.9"]
-redis = ["redis>=5,<7"]
-test = ["pytest>=7,<9"]
+redis = ["redis>=5,<9"]
+test = ["pytest>=7,<10"]
 
 [project.scripts]
 agentic-pipeline = "agentic_pipeline.__main__:main"
@@ -53,7 +53,7 @@ Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/ports/agen
 # Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
 # install or use the wheel.
 [dependency-groups]
-dev = ["pytest>=7,<9", "build>=1.2", "twine>=5"]
+dev = ["pytest>=7,<10", "build>=1.2", "twine>=5"]
 
 # The name `pyagentic` on PyPI is an unrelated project; uv resolves the core from the checkout.
 [tool.uv.sources]
