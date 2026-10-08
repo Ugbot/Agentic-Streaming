@@ -205,7 +205,7 @@ jobs:
 
       - name: Collect test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: core-test-reports
           path: |
@@ -218,7 +218,7 @@ jobs:
           retention-days: 7
 
       - name: Shaded framework jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agentic-flink-uber-jar
           path: |
