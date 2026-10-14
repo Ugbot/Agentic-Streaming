@@ -46,7 +46,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
           # setuptools-scm derives the version from the tag, so it needs the tags and the history.
