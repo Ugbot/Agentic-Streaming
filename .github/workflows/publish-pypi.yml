@@ -65,7 +65,7 @@ jobs:
         run: python tools/check_release_version.py "$RELEASE_TAG"
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
