@@ -138,7 +138,7 @@ jobs:
             echo "::error::docs/capabilities.md is stale for this checkout; regenerate with spec/tools/conformance_matrix.py --write-docs docs/capabilities.md"
             exit 1
           fi
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: conformance-matrix
