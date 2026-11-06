@@ -475,6 +475,9 @@ class ReferenceRuntime:
             if budget is None or seen <= budget:
                 raise ToolError(f"{tool_id} failed")
             return spec.get("value")
+        if kind == "hanging":
+            # never answers; the reference has no wall clock, so the limit is reached at once
+            raise ToolError(f"{tool_id} timed out after {spec.get('timeout_ms', 10000)} ms")
         raise SpecError(f"the reference runtime does not implement tool kind {kind}")
 
     # -- bookkeeping -------------------------------------------------------

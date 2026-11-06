@@ -161,6 +161,14 @@ written only when every compensation succeeded. When any failed it is absent, an
 `failed` with class `fatal` whatever the failed step's class was, because the saga is partly
 applied and needs repair by hand.
 
+Time limits. Every tool attempt and every model call has a limit. A tool's `timeout_ms` bounds
+one attempt, default 10000; a peer's bounds one delegation, default 30000; `llm.timeout_ms`
+bounds one model call, default 60000. A tool that reaches its limit fails that attempt like any
+other tool failure, so it is recorded and retried under `policies.retry` and then has class
+`tool`. A timeout means the answer did not arrive, not that nothing happened: the effect may
+have landed. Tool kind `hanging` never answers and exists so that a fixture can prove the limit
+is enforced.
+
 A timer's tool that fails ends the turn that observed the deadline as `failed` with class
 `tool`, before `turn_received`. `timer_fired` stays on the log, so the timer does not fire
 again.

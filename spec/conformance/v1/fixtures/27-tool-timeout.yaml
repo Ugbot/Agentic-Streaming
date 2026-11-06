@@ -1,0 +1,31 @@
+id: tool-timeout
+description: "A tool that does not answer within timeout_ms fails that attempt. Each attempt is recorded and retried under policies.retry like any other tool failure, the turn ends failed with error class tool, and the conversation keeps working. The hanging tool kind never returns, so the only way this fixture can pass is a limit the runtime actually enforces."
+requires: [tools, retry]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: slow
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: rule, prompt: You look things up., tool_triggers: {lookup: stuck_service}}
+    verifier: {kind: none}
+  policies:
+    on_tool_error: fail
+    retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, max_delay_ms: 0, jitter: false}
+  tools:
+    - {id: stuck_service, kind: hanging, timeout_ms: 20, description: Never answers}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "lookup my order"}
+  - {conversation_id: c1, turn_id: t2, text: "hello again"}
+expect:
+  - turn_id: t1
+    status: failed
+    error_class: tool
+    tool_calls:
+      - {tool: stuck_service, index: 0, attempt: 1, failed: true}
+      - {tool: stuck_service, index: 0, attempt: 2, failed: true}
+    events_include: [tool_failed, tool_failed, turn_failed]
+  - turn_id: t2
+    status: completed
+    tool_calls: []

@@ -14,6 +14,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.jagentic.core.Deadlines;
 import org.jagentic.core.ToolRegistry;
 
 /** Pure-Java MCP client over the stdio transport: launches an MCP server process and speaks
@@ -91,12 +92,22 @@ public final class McpStdioClient implements AutoCloseable {
 
   /** Register every MCP tool into {@code reg} (optionally id-prefixed); returns the ids. */
   public List<String> register(ToolRegistry reg, String prefix) {
+    return register(reg, prefix, Deadlines.DEFAULT_TOOL_TIMEOUT_MS);
+  }
+
+  /**
+   * As above, each call limited to {@code timeoutMs}. A blocking pipe read cannot be interrupted
+   * and the protocol has no way to skip a late answer, so a server that misses the limit is killed:
+   * that call and every later one fail, rather than a stuck reader holding the client's lock.
+   */
+  public List<String> register(ToolRegistry reg, String prefix, long timeoutMs) {
     List<String> ids = new ArrayList<>();
     String p = prefix == null ? "" : prefix;
     for (Map<String, String> spec : specs) {
       String name = spec.get("name");
       String id = p + name;
-      reg.register(id, spec.getOrDefault("description", ""), params -> callTool(name, params));
+      reg.register(id, spec.getOrDefault("description", ""),
+          Deadlines.bound(id, timeoutMs, params -> callTool(name, params), process::destroyForcibly));
       ids.add(id);
     }
     return ids;

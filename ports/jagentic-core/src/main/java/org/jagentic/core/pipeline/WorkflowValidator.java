@@ -52,7 +52,7 @@ public final class WorkflowValidator {
   private static final Set<String> GUARDRAIL = Set.of("name", "kind", "stage", "deny", "allow", "reason",
       "classifier", "lexicon", "blocked", "threshold");
   private static final Set<String> LLM = Set.of("provider", "model", "base_url", "temperature",
-      "max_tokens", "script");
+      "max_tokens", "timeout_ms", "script");
   private static final Set<String> LLM_SCRIPT_STEP = Set.of("text", "tool", "args");
   private static final Set<String> EMBEDDINGS = Set.of("provider", "model", "dim", "base_url");
   private static final Set<String> RETRIEVAL = Set.of("dim", "top_k", "embedder", "kb", "vector_store");

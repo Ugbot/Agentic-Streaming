@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +22,7 @@ import org.jagentic.core.AgentContext;
 import org.jagentic.core.Brain;
 import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ContextWindowManager;
+import org.jagentic.core.Deadlines;
 import org.jagentic.core.Event;
 import org.jagentic.core.Guardrail;
 import org.jagentic.core.HnswVectorStore;
@@ -169,7 +171,9 @@ public final class GraphBuilder {
         if (!scripted && chatClientFactory == null) {
           throw new IllegalArgumentException("spec uses an llm brain but no ChatClientFactory was provided");
         }
-        ChatClient client = scripted ? ScriptedChatClient.fromSpec(llmSpec) : chatClientFactory.create(llmSpec);
+        ChatClient client = scripted ? ScriptedChatClient.fromSpec(llmSpec)
+            : Deadlines.bound("model call", Deadlines.timeoutOf(llmSpec, Deadlines.DEFAULT_MODEL_TIMEOUT_MS),
+                chatClientFactory.create(llmSpec));
         List<String> pathTools = new ArrayList<>();
         if (ps.get("tools") instanceof List<?> declared) {
           for (Object t : declared) pathTools.add(String.valueOf(t));
@@ -274,13 +278,17 @@ public final class GraphBuilder {
           throw new WorkflowValidator.WorkflowValidationException("tools[" + id + "].url",
               kind + " tools need a url");
         }
-        reg.register(id, desc, parameters, httpTool(url));
+        long timeout = Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS);
+        reg.register(id, desc, parameters, Deadlines.bound(id, timeout, httpTool(id, url, timeout)));
       } else if ("failing".equals(kind)) {
         reg.register(id, desc, parameters, failingTool(id, t));
+      } else if ("hanging".equals(kind)) {
+        reg.register(id, desc, parameters,
+            Deadlines.bound(id, Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), hangingTool(id)));
       } else {
         throw new WorkflowValidator.WorkflowValidationException("tools[" + id + "].kind",
             "tool kind " + kind + " cannot be bound from a document by this runtime"
-                + " (constant|http|agent|failing)");
+                + " (constant|http|agent|failing|hanging)");
       }
     }
     return reg;
@@ -304,23 +312,52 @@ public final class GraphBuilder {
     };
   }
 
-  private static Function<Map<String, Object>, Object> httpTool(String url) {
-    HttpClient http = HttpClient.newHttpClient();
+  /** The spec's deterministic timeout tool: never answers, so only an enforced limit ends it. */
+  private static Function<Map<String, Object>, Object> hangingTool(String id) {
+    return params -> {
+      try {
+        new java.util.concurrent.CountDownLatch(1).await();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      throw new IllegalStateException(id + " was interrupted");
+    };
+  }
+
+  /**
+   * A POST of the arguments. Anything but a 2xx is a tool failure, and a body that is not JSON is
+   * the result as text, as in the Python runtime.
+   */
+  private static Function<Map<String, Object>, Object> httpTool(String id, String url, long timeoutMs) {
+    Duration timeout = Duration.ofMillis(timeoutMs);
+    HttpClient http = HttpClient.newBuilder().connectTimeout(timeout).build();
     return params -> {
       try {
         String body = JSON.writeValueAsString(params == null ? Map.of() : params);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+            .timeout(timeout)
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-        return JSON.readValue(resp.body(), Map.class);
+        if (resp.statusCode() / 100 != 2) {
+          throw new IllegalStateException(id + " failed: HTTP " + resp.statusCode());
+        }
+        return parseBody(resp.body());
       } catch (IOException e) {
-        throw new UncheckedIOException(e);
+        throw new UncheckedIOException(id + " failed: " + e.getMessage(), e);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        throw new RuntimeException(e);
+        throw new IllegalStateException(id + " was interrupted", e);
       }
     };
+  }
+
+  private static Object parseBody(String body) {
+    try {
+      return JSON.readValue(body, Object.class);
+    } catch (IOException notJson) {
+      return body;
+    }
   }
 
   /** Resolve the embed function + dim (mirrors pyagentic's {@code _build_embedder}). An
@@ -458,7 +495,8 @@ public final class GraphBuilder {
       }
       try {
         McpStdioClient client = new McpStdioClient(command);
-        client.register(tools, m.getOrDefault("name", "mcp") + "_");
+        client.register(tools, m.getOrDefault("name", "mcp") + "_",
+            Deadlines.timeoutOf(m, Deadlines.DEFAULT_TOOL_TIMEOUT_MS));
       } catch (java.io.IOException e) {
         throw new java.io.UncheckedIOException(e);
       }
@@ -486,13 +524,15 @@ public final class GraphBuilder {
             throw new WorkflowValidator.WorkflowValidationException("a2a[" + name + "].url",
                 "http peers need a url");
           }
-          tools.registerPeer(name, desc,
-              org.jagentic.core.A2AClient.peerTool(url, ((Number) a.getOrDefault("retries", 2)).intValue()));
+          tools.registerPeer(name, desc, Deadlines.bound(name,
+              Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
+              org.jagentic.core.A2AClient.peerTool(url, ((Number) a.getOrDefault("retries", 2)).intValue())));
           break;
         case "inproc":
           Runtime peer = inprocPeers == null ? null : inprocPeers.get(name);
           tools.registerPeer(name, desc, peer == null ? params -> "[" + name + "] delegated"
-              : inprocPeer(name, peer));
+              : Deadlines.bound(name, Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
+                  inprocPeer(name, peer)));
           break;
         default:
           throw new WorkflowValidator.WorkflowValidationException("a2a[" + name + "].transport",

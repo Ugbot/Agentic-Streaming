@@ -157,12 +157,12 @@
       "required": ["id"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
-        "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing"], "default": "constant" },
+        "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing", "hanging"], "default": "constant" },
         "description": { "type": "string" },
         "value": {},
         "url": { "type": "string" },
         "method": { "enum": ["GET", "POST"], "default": "POST" },
-        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "timeout_ms": { "type": "integer", "minimum": 1, "description": "limit on one attempt; default 10000" },
         "parameters": {
           "description": "JSON Schema for the tool's arguments. Arguments are structured objects; a runtime must not parse them out of reply text.",
           "type": "object"
@@ -212,6 +212,7 @@
         "base_url": { "type": "string" },
         "temperature": { "type": "number" },
         "max_tokens": { "type": "integer", "minimum": 1 },
+        "timeout_ms": { "type": "integer", "minimum": 1, "description": "limit on one model call; default 60000" },
         "script": {
           "description": "stub provider only. A deterministic scripted turn sequence: either a tool call or a final text.",
           "type": "array",
