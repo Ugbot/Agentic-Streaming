@@ -202,6 +202,10 @@ public class Agent implements Serializable {
     return chatSetup.getTemperature();
   }
 
+  public Double getDeclaredTemperature() {
+    return chatSetup.getDeclaredTemperature();
+  }
+
   public int getMaxResponseTokens() {
     return chatSetup.getMaxResponseTokens();
   }

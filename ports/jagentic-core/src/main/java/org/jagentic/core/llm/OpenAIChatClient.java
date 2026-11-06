@@ -57,7 +57,7 @@ public final class OpenAIChatClient extends AbstractHttpChatClient {
     body.put("model", model);
     body.put("messages", messages);
     body.put("response_format", Map.of("type", "json_object"));
-    if (temperature != null) {
+    if (temperature != null && !ModelRules.isOpenAiReasoning(model)) {
       body.put("temperature", temperature);
     }
     if (maxTokens != null) {

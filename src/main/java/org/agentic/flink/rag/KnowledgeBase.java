@@ -39,7 +39,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Defaults: Ollama {@code nomic-embed-text} at {@code localhost:11434} (768-dim), {@link
  * InMemoryVectorStore}, recursive 800-char chunks with 100-char overlap, Claude {@code
- * claude-sonnet-4-6} for answers. Override any piece via {@link Builder}.
+ * claude-sonnet-5-5} for answers. Override any piece via {@link Builder}.
  */
 @Experimental
 public final class KnowledgeBase {

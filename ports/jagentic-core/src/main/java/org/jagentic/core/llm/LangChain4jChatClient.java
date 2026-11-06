@@ -35,7 +35,7 @@ public final class LangChain4jChatClient implements ChatClient {
     if ("openai".equals(provider)) {
       OpenAiChatModel.OpenAiChatModelBuilder b = OpenAiChatModel.builder()
           .apiKey(envOr("OPENAI_API_KEY", "no-key"))
-          .modelName(modelName == null || modelName.isBlank() ? "gpt-4o-mini" : modelName)
+          .modelName(modelName == null || modelName.isBlank() ? "gpt-6-luna" : modelName)
           .responseFormat("json_object")
           .maxRetries(0); // policies.retry decides
       if (baseUrl != null && !baseUrl.isBlank()) {

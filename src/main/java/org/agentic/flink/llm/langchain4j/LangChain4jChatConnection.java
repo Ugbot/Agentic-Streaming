@@ -20,6 +20,7 @@ import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.llm.ChatConnection;
 import org.apache.flink.api.common.functions.RuntimeContext;
+import org.jagentic.core.llm.ModelRules;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,7 +76,7 @@ public final class LangChain4jChatConnection implements ChatConnection {
   }
 
   /**
-   * Claude via the Anthropic API. The model name (e.g. {@code claude-sonnet-4-6}) is supplied per
+   * Claude via the Anthropic API. The model name (e.g. {@code claude-sonnet-5-5}) is supplied per
    * call through {@link org.agentic.flink.llm.ChatSetup}.
    */
   public static LangChain4jChatConnection anthropic(String apiKey) {
@@ -84,7 +85,7 @@ public final class LangChain4jChatConnection implements ChatConnection {
 
   /**
    * Google Gemini via the Google AI API key ({@code GOOGLE_API_KEY}). The model name (e.g. {@code
-   * gemini-3.5-flash}, required by the A2A banking demo) is supplied per call through {@link
+   * gemini-3.6-flash}) is supplied per call through {@link
    * org.agentic.flink.llm.ChatSetup}. Generous default timeout to stay under the harness's per-turn
    * limit while tolerating Vertex rate-limiting.
    */
@@ -126,23 +127,23 @@ public final class LangChain4jChatConnection implements ChatConnection {
    * downcast a {@link ChatConnection} to this type may want to construct a model directly without
    * going through {@link #bind} / {@code chat}.
    */
-  public ChatModel buildModel(String modelName, double temperature, int maxTokens) {
+  public ChatModel buildModel(String modelName, Double temperature, int maxTokens) {
+    Double sampled = acceptedTemperature(modelName, temperature);
     switch (provider) {
       case OLLAMA:
         return OllamaChatModel.builder()
             .baseUrl(baseUrl)
             .modelName(modelName)
-            .temperature(temperature)
+            .temperature(sampled)
             .timeout(timeout)
             .build();
       case OPENAI:
         OpenAiChatModel.OpenAiChatModelBuilder b =
             OpenAiChatModel.builder().apiKey(apiKey).modelName(modelName).timeout(timeout);
-        // OpenAI reasoning models (gpt-5*, o1/o3/o4*) reject `max_tokens` (they require
-        // `max_completion_tokens`, which langchain4j 0.35.0 can't send) and only allow the default
-        // temperature. Omit both for those models so the request is accepted; send them otherwise.
-        if (!org.agentic.flink.llm.OpenAiModels.isReasoning(modelName)) {
-          b.temperature(temperature).maxTokens(maxTokens);
+        if (org.agentic.flink.llm.OpenAiModels.isReasoning(modelName)) {
+          b.maxCompletionTokens(maxTokens);
+        } else {
+          b.temperature(sampled).maxTokens(maxTokens);
         }
         if (baseUrl != null && !baseUrl.isEmpty()) {
           b.baseUrl(baseUrl);
@@ -150,9 +151,10 @@ public final class LangChain4jChatConnection implements ChatConnection {
         return b.build();
       case ANTHROPIC:
         return AnthropicChatModel.builder()
+            .baseUrl(baseUrl)
             .apiKey(apiKey)
             .modelName(modelName)
-            .temperature(temperature)
+            .temperature(sampled)
             .maxTokens(maxTokens)
             .timeout(timeout)
             .build();
@@ -160,13 +162,34 @@ public final class LangChain4jChatConnection implements ChatConnection {
         return GoogleAiGeminiChatModel.builder()
             .apiKey(apiKey)
             .modelName(modelName)
-            .temperature(temperature)
+            .temperature(sampled)
             .maxOutputTokens(maxTokens)
             .timeout(timeout)
             .build();
       default:
         throw new IllegalStateException("Unknown provider: " + provider);
     }
+  }
+
+  /**
+   * The temperature to send: none unless one was declared, and none for a model that answers it
+   * with a 400. Dropping a declared one is logged, because the caller asked for it.
+   */
+  private Double acceptedTemperature(String modelName, Double temperature) {
+    if (temperature == null) {
+      return null;
+    }
+    boolean refused =
+        switch (provider) {
+          case ANTHROPIC -> !ModelRules.claudeAcceptsSampling(modelName);
+          case OPENAI -> ModelRules.isOpenAiReasoning(modelName);
+          default -> false;
+        };
+    if (refused) {
+      LOG.warn("Not sending temperature {} to {}, which refuses it", temperature, modelName);
+      return null;
+    }
+    return temperature;
   }
 
   /** Convert framework {@link org.agentic.flink.llm.ChatMessage} to LangChain4J form. */

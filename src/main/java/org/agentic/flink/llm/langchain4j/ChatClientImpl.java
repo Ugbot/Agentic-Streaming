@@ -64,13 +64,19 @@ final class ChatClientImpl implements LangChain4jChatClient {
 
   private ChatModel modelFor(ChatSetup setup) {
     String signature =
-        setup.getModelName() + "|" + setup.getTemperature() + "|" + setup.getMaxResponseTokens();
+        setup.getModelName()
+            + "|"
+            + setup.getDeclaredTemperature()
+            + "|"
+            + setup.getMaxResponseTokens();
     ChatModel m =
         modelCache.computeIfAbsent(
             signature,
             sig ->
                 connection.buildModel(
-                    setup.getModelName(), setup.getTemperature(), setup.getMaxResponseTokens()));
+                    setup.getModelName(),
+                    setup.getDeclaredTemperature(),
+                    setup.getMaxResponseTokens()));
     lastModel = m;
     return m;
   }

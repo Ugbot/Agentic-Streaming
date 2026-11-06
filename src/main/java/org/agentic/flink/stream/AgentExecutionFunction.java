@@ -150,7 +150,7 @@ public class AgentExecutionFunction extends RichAsyncFunction<AgentEvent, AgentE
             ? llmClient
             : LLMClient.builder()
                 .withModel(agent.getLlmModel())
-                .withTemperature(agent.getTemperature())
+                .withTemperature(agent.getDeclaredTemperature())
                 .withMaxTokens(agent.getMaxResponseTokens())
                 .build(agent.getChatConnection());
     client.withGuardrails(agent.getGuardrails(), agent.getAgentId(), listener);

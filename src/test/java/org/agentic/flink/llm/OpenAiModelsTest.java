@@ -21,12 +21,18 @@ class OpenAiModelsTest {
     assertTrue(OpenAiModels.isReasoning("o1-mini"));
     assertTrue(OpenAiModels.isReasoning("o3"));
     assertTrue(OpenAiModels.isReasoning("O4-MINI")); // case-insensitive
+    assertTrue(OpenAiModels.isReasoning("gpt-6-luna"));
+    assertTrue(OpenAiModels.isReasoning("gpt-6.1-terra"));
+    assertTrue(OpenAiModels.isReasoning("gpt-7-anything"), "a later generation is not exempt");
   }
 
   @Test
   @DisplayName("non gpt-5 / non o-series names are NOT reasoning models")
   void notReasoning() {
     assertFalse(OpenAiModels.isReasoning("qwen2.5:7b"));
+    assertFalse(OpenAiModels.isReasoning("gpt-4.1"));
+    assertFalse(OpenAiModels.isReasoning("gpt-4o-mini"));
+    assertFalse(OpenAiModels.isReasoning("omni-moderation-latest"));
     assertFalse(OpenAiModels.isReasoning("gemini-3.5-flash"));
     assertFalse(OpenAiModels.isReasoning("claude-sonnet-4-6"));
     assertFalse(OpenAiModels.isReasoning(null));

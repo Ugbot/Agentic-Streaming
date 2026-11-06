@@ -283,7 +283,7 @@ public class AgentJobGenerator implements Serializable {
     if (agent.getLlmModel() != null) {
       builder.withModel(agent.getLlmModel());
     }
-    return builder.withTemperature(agent.getTemperature()).build(connection);
+    return builder.withTemperature(agent.getDeclaredTemperature()).build(connection);
   }
 
   // ==================== Multi-Agent Pipeline ====================

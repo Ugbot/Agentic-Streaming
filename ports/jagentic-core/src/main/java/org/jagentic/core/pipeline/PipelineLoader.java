@@ -204,7 +204,7 @@ public final class PipelineLoader {
         return new OllamaChatClient((String) spec.getOrDefault("model", "qwen2.5:3b"), baseUrl,
             temperature, maxTokens);
       case "openai":
-        return new OpenAIChatClient((String) spec.getOrDefault("model", "gpt-5.4-mini"), baseUrl,
+        return new OpenAIChatClient((String) spec.getOrDefault("model", "gpt-6-luna"), baseUrl,
             temperature, maxTokens);
       default:
         return ScriptedChatClient.fromSpec(spec);
