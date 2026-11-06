@@ -36,7 +36,7 @@ TTL is set on the spec (`FlinkStateShortTermMemory.spec(Duration)`); `Duration.Z
 LongTermMemoryStore postgres = StorageFactory.createLongTermStore("postgres", postgresConfig);
 ```
 
-`AgentBuilder.withLongTermStore(store)` stores the reference on the `Agent` but no operator in the default build reads it. The operator that performs hydration and write-behind today is `ContextManagementActionWithStorage` in `plugins/flintagents` (compiled only with `-P flink-agents`): on the first event for a cold key it reads the conversation context and facts from the long-term store into Flink state, after which reads and writes hit Flink state directly; sync back is write-behind, triggered on event-count intervals and on successful MoSCoW compaction, and checkpoint barriers do not block on store acks.
+`AgentBuilder.withLongTermStore(store)` stores the reference on the `Agent` but no operator in the default build reads it. Nothing in the default build performs hydration or write-behind today.
 
 Redis is supported via `org.agentic.flink.storage.redis.RedisConversationStore` but is not the default. Select it with `StorageFactory.createLongTermStore("redis", redisConfig)`; the factory resolves the name through `ServiceLoader`. The Jedis client is an optional dependency and must be on the job classpath.
 

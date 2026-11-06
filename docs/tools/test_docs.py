@@ -5,9 +5,7 @@
 * every relative link resolves to a file in the repository, and a `#fragment` on a Markdown target
   names a heading of that file (GitHub heading slugs);
 * every `<!-- snippet: path -->` fenced block on docs/python.md is byte-identical to the file under
-  docs/ it names, so the documented code is the code that was run;
-* every `<!-- matrix: binding -->` block on docs/runtimes/*.md matches what
-  docs/tools/matrix_excerpt.py derives from the generated docs/capabilities.md.
+  docs/ it names, so the documented code is the code that was run.
 """
 from __future__ import annotations
 
@@ -16,18 +14,15 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from matrix_excerpt import BLOCK, RUNTIME_PAGES, load_matrix, render
 
 REPO = Path(__file__).resolve().parents[2]
 DOCS = REPO / "docs"
+RUNTIME_PAGES = sorted((DOCS / "runtimes").glob("*.md"))
 EXTRA_PAGES = [
     REPO / "README.md",
     REPO / "agentic-pekko" / "README.md",
-    REPO / "agentic-clj" / "README.md",
     REPO / "ports" / "jagentic-core" / "README.md",
     REPO / "ports" / "pyagentic" / "README.md",
-    REPO / "pyflink" / "README.md",
-    REPO / "python" / "README.md",
 ]
 PAGES = sorted(DOCS.rglob("*.md")) + [p for p in EXTRA_PAGES if p.exists()]
 
@@ -114,23 +109,14 @@ def test_python_snippets_match_files() -> None:
 
 
 def test_runtime_pages_exist() -> None:
-    expected = {"common-primitives", "flink", "pekko", "clojure", "python", "python-facade", "pyflink", "experimental"}
+    expected = {"common-primitives", "flink", "pekko", "python", "experimental"}
     assert expected <= {p.stem for p in RUNTIME_PAGES}
-
-
-@pytest.mark.parametrize("page", RUNTIME_PAGES, ids=lambda p: p.name)
-def test_matrix_blocks_are_derived_from_capabilities(page: Path) -> None:
-    matrix = load_matrix()
-    text = page.read_text(encoding="utf-8")
-    for m in BLOCK.finditer(text):
-        bindings = [b.strip() for b in m.group(1).split(",")]
-        assert m.group(2) == render(matrix, bindings), f"{page.name}: run python docs/tools/matrix_excerpt.py --write"
 
 
 def test_no_dashes_in_new_prose() -> None:
     """The runtime pages and the Python page use plain hyphens only."""
     offenders = []
-    for page in [*RUNTIME_PAGES, DOCS / "python.md", DOCS / "pyflink.md"]:
+    for page in [*RUNTIME_PAGES, DOCS / "python.md"]:
         for number, line in _outside_fences(page.read_text(encoding="utf-8")):
             if "\u2013" in line or "\u2014" in line:
                 offenders.append(f"{page.relative_to(REPO)}:{number}")

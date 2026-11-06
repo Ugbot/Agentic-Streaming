@@ -22,9 +22,8 @@ precisely, (b) name exactly what Flink was providing, and (c) honestly map each
 target engine: what fits cleanly, what fits awkwardly, and what simply doesn't
 belong on that engine.
 
-For the Python engines (Ray, Dask, Airflow, Faust) the target is **pure Python**,
-no JVM, no JPype bridge. The Java engines (Kafka Streams, Spring, Quarkus) stay on
-the JVM and can reuse the existing core types.
+The Python target is **pure Python**, with no JVM. The Java engines stay on the JVM and reuse the
+core types.
 
 ## 2. The essence: what this project fundamentally *is*
 

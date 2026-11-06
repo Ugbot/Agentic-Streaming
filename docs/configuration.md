@@ -116,8 +116,8 @@ System properties use the prefix `agentic.flink.` followed by the key verbatim (
 
 Every job entry point in the framework applies `org.agentic.flink.job.FlinkJobDefaults` to its
 `StreamExecutionEnvironment`: `AgentJobGenerator` (legacy `AgentJob` builder DSL),
-`ResearchPipelineJob`, `LocalWorkflowSession` and the `FlinkPipelineRunner` main (agentic/v1),
-`SessionJobLauncher`, and the banking job main. The defaults configure exactly-once checkpointing
+`ResearchPipelineJob`, and `LocalWorkflowSession` and the `FlinkPipelineRunner` main (agentic/v1).
+The defaults configure exactly-once checkpointing
 with the values below. `AgentJob.builder().withJobDefaults(...)` overrides them per job; otherwise
 they are read from the job's `AgenticFlinkConfig` or, when none is set, from the process
 environment.

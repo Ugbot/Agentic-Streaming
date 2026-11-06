@@ -46,7 +46,7 @@ ShortTermMemory memory = spec.bind(getRuntimeContext());
 
 When the spec carries a non-zero TTL, both descriptors get a `StateTtlConfig` with `OnCreateAndWrite` updates, `ReturnExpiredIfNotCleanedUp` visibility, and incremental cleanup of ten entries per access. `FlinkStateShortTermMemory.spec()` with no argument means no TTL.
 
-`AgentBuilder.withShortTermTtl(Duration)` and `AgentBuilder.withShortTermMemory(ShortTermMemorySpec)` record a spec on the built `Agent`, but no operator in this repository reads those fields yet; treat them as unwired. The operator that binds a spec today is `ContextManagementActionWithStorage` under `plugins/flintagents`, which receives the spec through its constructor and calls `bind` in `open()`. That package is excluded from the default build and compiles only with `-P flink-agents`.
+`AgentBuilder.withShortTermTtl(Duration)` and `AgentBuilder.withShortTermMemory(ShortTermMemorySpec)` record a spec on the built `Agent`, but no operator in this repository reads those fields yet; treat them as unwired.
 
 There is no `RedisShortTermStore`, no `CaffeineShortTermStore`, and no other short-term backend. `StorageFactory.createShortTermStore(backend, config)` accepts only `"memory"` and returns an `InMemoryShortTermStore`; for any other name it throws `IllegalArgumentException` with a message that directs the caller to `FlinkStateShortTermMemory.spec()`. `InMemoryShortTermStore` is kept for tests and for the legacy `StorageIntegratedFlinkJob` example.
 
@@ -158,7 +158,7 @@ StorageConfiguration storage = StorageConfiguration.builder()
 
 ## Long-term hydration and write-behind
 
-`AgentBuilder.withLongTermStore(...)` stores a `LongTermMemoryStore` on the `Agent` that no operator in the default build reads, so setting it has no runtime effect today. The hydration and write-behind logic exists in `ContextManagementActionWithStorage` (`plugins/flintagents`, opt-in with `-P flink-agents`): it binds the short-term spec in `open()`, creates the WARM store from its `StorageConfiguration` when `isTierConfigured(WARM)` is true, loads context and facts for a key from that store on first access, and syncs back on an event-count interval or after a successful compaction. `StorageHydrationIntegrationTest` in the default build exercises the store-level round trip (save to `InMemoryLongTermStore`, load, copy into `InMemoryShortTermStore`) without a Flink operator.
+`AgentBuilder.withLongTermStore(...)` stores a `LongTermMemoryStore` on the `Agent` that no operator in the default build reads, so setting it has no runtime effect today. `StorageHydrationIntegrationTest` in the default build exercises the store-level round trip (save to `InMemoryLongTermStore`, load, copy into `InMemoryShortTermStore`) without a Flink operator.
 
 ## Metrics
 

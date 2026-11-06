@@ -3,8 +3,8 @@
 `agentic-pekko` (`org.jagentic:agentic-pekko`, module directory `agentic-pekko/`) runs `agentic/v1`
 workflows on Apache Pekko: one persistent actor per conversation, Pekko Persistence as the event
 log, Cluster Sharding as the distributed single writer. It reuses `ports/jagentic-core` for the
-graph, tools, guardrails and memory, so the `pekko` column of the
-[matrix](../capabilities.md) measures the same `RoutedGraph` as `jvm-core` and `flink`, hosted
+graph, tools, guardrails and memory, so the `pekko` binding of the
+[conformance runner](README.md#conformance-results) measures the same `RoutedGraph` as `jvm-core` and `flink`, hosted
 in actors. The module README (`agentic-pekko/README.md`) has the class table, build and demo
 commands; this page is about how the primitives map.
 
@@ -17,7 +17,7 @@ conversation state is nothing but `ConversationState.fold(journal)`. `entity/Sta
 sequences continue densely, persisted atomically when the turn finishes. Recovery replays the
 journal without re-invoking brains, tools, guardrails or memory; `ConversationEntityTest` fails if
 it does. A redelivered `turn_id` is answered from the fold as `duplicate`, appends nothing and runs
-nothing. The conformance verb `restart_runtime` passivates the entities, so the `pekko` column's
+nothing. The conformance verb `restart_runtime` passivates the entities, so the `pekko` binding's
 `replay-after-restart` and `suspend-resume` passes are journal replays.
 
 ## One entity, one writer
@@ -45,8 +45,7 @@ from the fold after recovery, so a restart or a passivation cannot lose one
 The spec's declared `timers` block uses the same journal path: due timers fire before the turn
 that observes the deadline, `timer_fired` is journaled, event-time timers read the conversation
 watermark folded from `event_time_ms`, and pending timers plus the logical clock are rebuilt from
-the journal on recovery. The `pekko` binding passes the three timer fixtures
-([pekko notes](../capabilities.md#pekko)).
+the journal on recovery. The `pekko` binding runs the three timer fixtures.
 
 ## Journals: memory, Postgres, Cassandra, Redis
 
@@ -81,28 +80,11 @@ lose up to about one second of acknowledged events, `no` is OS dependent. Run th
 `redis-server --appendonly yes --appendfsync always`. `agentic-redis-journal.durability-check = off`
 exists for managed deployments that forbid `CONFIG` and is logged at WARN on every start.
 
-## Where it stands
-
-<!-- matrix: pekko -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
-`docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
-[supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
-
-Binding `pekko`: 24 passed, 0 failed, 0 skipped.
-
-| Capability | pekko |
-|---|---|
-<!-- /matrix -->
-
-Pekko is also reachable from Python through the facade's `pekko` runtime name, but that path is
-`not_tested` and unsupported because of a Jackson version conflict with the shaded Flink jar; see
-the [Python facade page](python-facade.md#pekko-unsupported).
-
 ## Running it
 
 ```bash
 ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # always first
-./mvnw -f agentic-pekko/pom.xml test                        # includes PekkoConformanceTest, the pekko column
+./mvnw -f agentic-pekko/pom.xml test                        # includes PekkoConformanceTest
 ./mvnw -f agentic-pekko/pom.xml compile exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
   -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
 ```

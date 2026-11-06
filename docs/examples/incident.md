@@ -10,15 +10,15 @@
 ## Running it
 
 ```bash
-bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
-bash examples-bin/run-incident.sh
+podman compose up -d ollama && podman compose exec ollama ollama pull qwen2.5:3b
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.incident.IncidentAgentExample
 ```
 
 Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama). No API key. The script checks
 each prerequisite and stops with the command that fixes it. On the first run it installs
 `ports/jagentic-core`, compiles the Flink module and resolves the provided-scope Flink
 dependencies into `target/example-classpath.txt`; the example then runs in a forked JVM with
-the reflective-access opens Flink needs (`examples-bin/jvm-opts.sh`). `OLLAMA_URL` and
+the reflective-access opens Flink needs (the `examples` profile in `pom.xml`). `OLLAMA_URL` and
 `OLLAMA_MODEL` override the defaults.
 
 The input is a bounded synthetic stream (18 normal latency samples followed by three spikes on

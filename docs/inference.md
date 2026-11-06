@@ -229,8 +229,6 @@ platform-matched CPU native + JNI on first model load (cached under
 
 ```bash
 mvn test -P djl-native -Dtest=DjlRecallIT     # live embed → recall → micro-benchmark
-# or the wrapper:
-bash examples-bin/run-djl-embed.sh
 ```
 
 `DjlRecallIT` loads `sentence-transformers/all-MiniLM-L6-v2`, embeds a small

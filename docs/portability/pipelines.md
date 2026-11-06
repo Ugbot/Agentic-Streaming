@@ -144,7 +144,7 @@ Every external service sits **behind an interface**, selected by a **connection 
 
 ## What each backend supports
 
-See the generated **[capability matrix](../capabilities.md)** for what each runtime supports and
+See the **[conformance results](../runtimes/README.md#conformance-results)** for what each runtime passes and
 **[choosing a backend](choosing-a-backend.md)** for the decision guide.
 
 ## Loaders

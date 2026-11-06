@@ -2,11 +2,10 @@
 
 `ports/` holds three things: the conformance tested cores [`jagentic-core/`](jagentic-core/)
 (JVM) and [`pyagentic/`](pyagentic/) (Python), and the portable `pipeline.yaml` CLI
-[`agentic-pipeline/`](agentic-pipeline/). The conformance tested bindings are the ones listed in
-the generated [`docs/capabilities.md`](../docs/capabilities.md).
+[`agentic-pipeline/`](agentic-pipeline/). See [conformance results](../docs/runtimes/README.md#conformance-results).
 
 The experimental engine adapters were moved out of this repository. The code as it stood is
-available at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
+at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
 
 ```
 ports/

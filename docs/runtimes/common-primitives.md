@@ -3,7 +3,7 @@
 What every `agentic/v1` runtime guarantees, and where the normative text lives. The normative
 document is [spec/v1/primitives.md](../../spec/v1/primitives.md); this page is a map of it, not a
 copy. When the two disagree, the spec wins. Each guarantee names the conformance fixtures under
-`spec/conformance/v1/fixtures/` that check it, and the [matrix](../capabilities.md#fixtures) shows
+`spec/conformance/v1/fixtures/` that check it, and the [conformance run](README.md#conformance-results) shows
 which binding passed which fixture.
 
 ## The event log is the source of truth
@@ -25,7 +25,7 @@ Fixture: `duplicate-turn`.
 
 Per conversation, turns are processed one at a time in arrival order. Across conversations,
 concurrency is unbounded. The runtime supplies the ordering (Flink `keyBy`, a Pekko mailbox
-behind cluster sharding, a Clojure agent, a per-key lock in the pure Python engine); a runtime
+behind cluster sharding, a per-key lock in the pure Python engine); a runtime
 that cannot guarantee it must declare `ordering` unsupported rather than approximate it.
 [Section 3](../../spec/v1/primitives.md#3-ordering). Fixtures: `ordered-concurrent-turns`,
 `parallel-conversations`.
@@ -46,8 +46,7 @@ written by a newer minor version still replays on an older one.
 [section 7](../../spec/v1/primitives.md#7-versioning). No shared fixture writes an unknown type;
 the cores test it directly: `SpecPrimitivesTest.foldRejectsGapsAndIgnoresUnknownEventTypes`
 (`ports/jagentic-core`), `test_file_event_log_survives_a_new_instance_and_preserves_unknown_types`
-(`ports/pyagentic/tests/test_agentic_runtime.py`) and
-`unknown-events-are-preserved-and-ignored-by-the-fold` (`agentic-clj/test/agentic/runtime_test.clj`).
+(`ports/pyagentic/tests/test_agentic_runtime.py`).
 
 ## Timers and watermarks
 
@@ -57,8 +56,7 @@ watermark is the highest `event_time_ms` seen, reduced into `state.watermark_ms`
 processed in arrival order and does not move the watermark. `checkpoint_recovery` means pending
 timers and the logical clock survive a restart, rebuilt from the log.
 [Clocks](../../spec/v1/primitives.md#clocks) and [Timers](../../spec/v1/primitives.md#timers).
-Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`. In the current matrix every
-binding passes them ([capabilities](../capabilities.md#capabilities)).
+Fixtures: `timer-fires`, `event-time-timer`, `timer-survives-restart`.
 
 ## CEP fold
 
@@ -96,33 +94,20 @@ and restore, a passivated Pekko entity). Fixtures: `replay-after-restart`, `susp
 
 `supported`, `partial`, `unsupported` and `not_tested` are defined in
 [section 6](../../spec/v1/primitives.md#6-capability-terminology), and
-[capabilities.md](../capabilities.md) derives each cell from fixture outcomes, never from a
-declaration. A runtime's own `capabilities()` method is what it claims; the matrix is what it
+The conformance runner derives each cell from fixture outcomes, never from a
+declaration. A runtime's own `capabilities()` method is what it claims; the fixtures are what it
 proved.
 
 ## The cores
 
 Three cores implement these primitives once each, and the runtimes reuse them:
 
-| Core | Language | Used by | Matrix column |
+| Core | Language | Used by | Conformance binding |
 |---|---|---|---|
 | `spec/tools/reference_runtime.py` | Python | the conformance runner, as the oracle | `reference` |
-| `ports/jagentic-core` (`org.jagentic.core`) | Java 21 | [Flink](flink.md), [Pekko](pekko.md), [Python facade](python-facade.md), [PyFlink](pyflink.md) | `jvm-core` |
+| `ports/jagentic-core` (`org.jagentic.core`) | Java 21 | [Flink](flink.md), [Pekko](pekko.md) | `jvm-core` |
 | `ports/pyagentic` (`agentic`) | Python | [pure Python](python.md) | `python` |
 
-`agentic-clj` reimplements the primitives in Clojure over Datomic and has its own column,
-`clojure`. The `jvm-core` binding runs `RoutedGraph` on `org.jagentic.core.LocalRuntime` with
+The `jvm-core` binding runs `RoutedGraph` on `org.jagentic.core.LocalRuntime` with
 in-memory stores; it is the floor for every JVM runtime's results.
 
-<!-- matrix: reference, jvm-core -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
-`docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
-[supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
-
-Binding `reference`: 24 passed, 0 failed, 0 skipped.
-
-Binding `jvm-core`: 24 passed, 0 failed, 0 skipped.
-
-| Capability | reference | jvm-core |
-|---|---|---|
-<!-- /matrix -->

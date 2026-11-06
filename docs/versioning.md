@@ -6,24 +6,24 @@ versions of the toolchain and the main dependencies the current `main` is built 
 against. Every number below is read from a build file named next to it; when a build file
 changes, this page changes in the same pull request.
 
-Nothing is published yet (no tags, no Maven Central, PyPI or Clojars artifacts). The release
-mechanics, tag format and per-artifact version sources are in `docs/release.md`.
+Nothing is published: there are no releases on Maven Central or PyPI, and no publish workflow. Tag
+`pre-cornerstone` marks the repository before it was narrowed, not a release. The PyPI name
+`pyagentic` belongs to someone else, so the Python core cannot be published under that name.
 
 ## Artifact versions: semantic versioning
 
 The artifacts are versioned with Semantic Versioning 2.0.0 (`MAJOR.MINOR.PATCH`):
 
-- `MAJOR` changes when a public API is removed or changes incompatibly (a Java or Clojure
+- `MAJOR` changes when a public API is removed or changes incompatibly (a Java
   signature, a Python function or class, a YAML key that a runtime accepted, a CLI flag).
 - `MINOR` changes when public API is added, or when an API is deprecated, in a backward
   compatible way.
 - `PATCH` changes for bug fixes that neither add nor remove public API.
 
 One version applies to all artifacts of one release. The JVM modules carry it in
-`reactor/pom.xml` (`1.0.0-SNAPSHOT` on `main`, inherited by every module); the four Python
-distributions and the Clojure library derive it from the release tag (`v` plus a canonical
-PEP 440 version) as described in `docs/release.md`. Between tags they build as development
-versions and are not releasable.
+`reactor/pom.xml` (`1.0.0-SNAPSHOT` on `main`, inherited by every module); the two Python
+distributions derive it from the git tag through setuptools-scm, and between tags they build as
+development versions.
 
 Which classes, functions and keys count as public API is defined by the API stability
 annotations documented in `docs/api-stability.md`. Anything not marked stable there and the
@@ -65,7 +65,6 @@ A deprecation ships with all of the following:
   replacement.
 - Python: a `DeprecationWarning` raised on use, naming the replacement, and a note in the
   docstring.
-- Clojure: `:deprecated "X.Y.0"` in the var metadata and a docstring naming the replacement.
 - Workflow document keys: the runtime accepts the old key, emits a warning naming the new key,
   and the schema documents both.
 - A `CHANGELOG.md` entry under `Deprecated` that names the API, the version and the
@@ -73,9 +72,8 @@ A deprecation ships with all of the following:
 
 A replacement must exist and be documented before an API is deprecated. Deprecating without a
 replacement is not allowed; if a feature is being dropped entirely, the deprecation entry says
-so and states what users should do instead. The legacy Flink `AgentBuilder` DSL is a supported
-pure-Flink API outside the conformance path and is subject to this policy like every other
-public API.
+so and states what users should do instead. The legacy Flink `AgentBuilder` DSL is outside the
+conformance path. It is deprecated and stays until the next cleanup.
 
 ## Compatibility matrix
 
@@ -91,19 +89,12 @@ All versions are taken from the build files listed in the second column.
 | Flink Kafka connector | root `pom.xml` | 5.0.0-2.2 |
 | LangChain4J | `reactor/pom.xml` `langchain4j.version` (via `langchain4j-bom`) | 1.16.3 |
 | Apache Pekko | `agentic-pekko/pom.xml` `pekko.version`, Scala binary `2.13` | 1.1.3 |
-| Quarkus platform (tool services, A2A gateway) | `reactor/pom.xml` `quarkus.platform.version` | 3.30.6 |
 | JUnit | `reactor/pom.xml` `junit.version` | 5.10.2 |
 | Testcontainers | `reactor/pom.xml` `testcontainers.version` | 1.21.4 |
 | Python, `pyagentic` (`ports/pyagentic`) | `requires-python` | `>=3.9`; classifiers 3.9 to 3.13 |
-| Python, `agentic-flink` (`python/`) | `requires-python` | `>=3.10`; classifiers 3.10 to 3.13 |
-| Python, `agentic-pyflink` (`pyflink/`) | `requires-python` | `>=3.10`; classifiers 3.10 to 3.12 |
 | Python, `agentic-pipeline` (`ports/agentic-pipeline`) | `requires-python` | `>=3.9`; classifiers 3.9 to 3.13 |
-| apache-flink (PyFlink wheel) | `pyflink/pyproject.toml`, `python/pyproject.toml` extras | `>=2.0,<3` (pyflink); `>=2.0` (agentic-flink extras) |
-| JPype | `python/pyproject.toml` | `JPype1>=1.5.0` |
-| Clojure | `agentic-clj/deps.edn` | 1.12.0 |
-| Datomic local | `agentic-clj/deps.edn` | 1.0.291 |
 
 The CI workflows (`.github/workflows/ci.yml`) exercise the Python packages on Python 3.12; the
 `requires-python` lower bounds above are what the packages declare, not what is tested on every
-commit. The runtimes that pass each conformance fixture are listed in the generated
-`docs/capabilities.md`, never here.
+commit. For which runtime passes which fixture, see
+[conformance results](runtimes/README.md#conformance-results).

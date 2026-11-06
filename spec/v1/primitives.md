@@ -183,7 +183,7 @@ Every runtime declares each capability as exactly one of:
 | `unsupported` | not available; the runtime rejects specs that require it, loudly |
 | `not_tested` | implemented but unproven; may not be described as supported in documentation |
 
-The capability matrix (`docs/capabilities.md`) is generated from fixture outcomes by
+The capability matrix is generated from fixture outcomes by
 `spec/tools/conformance_matrix.py`. A capability may not be called native in documentation
 without a test that proves it.
 

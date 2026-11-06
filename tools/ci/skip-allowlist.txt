@@ -5,7 +5,7 @@
 
 # Conformance fixtures whose `requires` names a capability the runtime does not declare. The
 # harness asserts the reason names the undeclared capability, so this is a declared gap that
-# shows up in the generated docs/capabilities.md, not a missing service.
+# shows up in the conformance matrix, not a missing service.
 ^skip [\w-]+: requires \[  # jvm-core, pekko and flink JUnit conformance suites
 ^requires \[  # pyagentic conformance runner
 

@@ -10,8 +10,8 @@
 ## Running it
 
 ```bash
-bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
-bash examples-bin/run-moderation.sh
+podman compose up -d ollama && podman compose exec ollama ollama pull qwen2.5:3b
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.moderation.ContentModerationExample
 ```
 
 Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama), and outbound internet on the
@@ -19,8 +19,8 @@ first run: DJL downloads `unitary/toxic-bert` from Hugging Face plus the PyTorch
 runtime (about 700 MB) into its cache directory (`DJL_CACHE_DIR`, or `.djl.ai` under the home
 directory). No API key. `AUDIT_ENDPOINT` (default `http://localhost:8081/audit`) receives the
 blocked posts; when nothing listens there the POST failure is logged and the job continues.
-The script resolves the provided-scope Flink dependencies and runs the example in a forked JVM,
-see `examples-bin/_common.sh`.
+The command resolves the provided-scope Flink dependencies and runs the example in a forked JVM,
+see the `examples` profile in `pom.xml`.
 
 The input is a fixed list of four posts. Safe posts print one `id | user | summary` line each on
 the main output (`safe-output`); toxic posts print from the side output as
@@ -112,10 +112,10 @@ Zookeeper on the shared `agentic-flink-network`, advertised to the host as `loca
 and to other containers as `kafka:29092`. Boot it with Podman:
 
 ```bash
-bash examples-bin/setup-network.sh
+podman network create agentic-flink-network
 export POSTGRES_PASSWORD=... REDIS_PASSWORD=...     # required by the services in docker-compose.yml
 podman-compose -f docker-compose.yml -f docker-compose-kafka.yml up -d
 ```
 
 Use `podman compose` instead of `podman-compose` where the compose provider plugin is
-installed. `bash examples-bin/down-all.sh` stops everything.
+installed. `podman compose -f docker-compose.yml -f docker-compose-kafka.yml down` stops everything.

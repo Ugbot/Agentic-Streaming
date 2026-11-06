@@ -39,8 +39,7 @@ test-scope classpath (Flink included):
 **Status:** this command compiles and submits the job but currently fails before any event is processed with
 `InvalidProgramException: Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable`
 (`AgentExecutionStream` registers a lambda that captures the non-serializable stream builder). The walk-through
-below describes the intended flow of the legacy `AgentExecutionStream` DSL; the failure is tracked in
-[`docs/audit-backlog.md`](../audit-backlog.md) under AGS-40. For an example that runs end to end see
+below describes the intended flow of the legacy `AgentExecutionStream` DSL. For an example that runs end to end see
 [Building Your Own](#4-building-your-own) or the storage job in
 [`docs/guides/storage-quickstart.md`](../guides/storage-quickstart.md).
 
@@ -409,8 +408,7 @@ AgentEvent embeddingEvent = createEmbeddingEvent(
 **Status:** this command compiles and submits the job but currently fails at job graph construction with
 `IllegalStateException: Auto generated UIDs have been disabled but no UID or hash has been assigned to operator
 compaction-requests` (the example disables `PipelineOptions.AUTO_GENERATE_UIDS` and then omits a `uid` on one
-source). The walk-through below describes the intended flow; the failure is tracked in
-[`docs/audit-backlog.md`](../audit-backlog.md) under AGS-40.
+source). The walk-through below describes the intended flow.
 
 ### What Happens (Step-by-Step)
 

@@ -32,17 +32,17 @@ Whichever you choose, the durable store is **hot-swappable behind the SPI**
 
 | You want... | Use |
 |-----------|-----|
-| The richest, battle-tested streaming agent platform | **Flink** (first-class) |
+| Agents over a stream, with Flink state and CEP | **Flink** (the primary runtime) |
 | Actor entity per conversation on the JVM | **Pekko** |
 | Durable multi-step / HITL workflows | **Pekko** |
 | Embed in a service / quickest start | **Local** |
 
-See the generated **[capability matrix](../capabilities.md)** for what each runtime supports,
+See the **[conformance results](../runtimes/README.md#conformance-results)** for what each runtime passes,
 and **[pipelines](pipelines.md)** for the YAML.
 
 ## Don't lock into Flink
 
-Flink is the first-class runtime, but the agent, prompts, tools, calls to other agents,
+Flink is the primary runtime, but the agent, prompts, tools, calls to other agents,
 retrieval, memory, guardrails, is engine-agnostic. Prototype on **Local**, take the same file to
-Pekko or Flink for production, and keep external services (Redis/Valkey, Kafka/Fluss, Postgres)
+Pekko or Flink, and keep external services (Redis/Valkey, Kafka/Fluss, Postgres)
 behind their interfaces so they swap without touching agent code.

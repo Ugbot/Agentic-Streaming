@@ -1,15 +1,29 @@
 # Flink runtime
 
-Apache Flink 2.2.1 is the first-class runtime. The main module (root `pom.xml`, artifact
+Apache Flink 2.2.1 is the primary runtime. The main module (root `pom.xml`, artifact
 `org.jagentic:agentic-flink`) carries two things that must not be confused:
 
-| Surface | Package | Contract | Matrix column |
+| Surface | Package | Contract | Conformance binding |
 |---|---|---|---|
-| `agentic/v1` event-sourced runtime | `org.agentic.flink.runtime` | `spec/v1`, one workflow document, normalized results | `flink` (and `python-flink` through the [Python facade](python-facade.md)) |
+| `agentic/v1` event-sourced runtime | `org.agentic.flink.runtime` | `spec/v1`, one workflow document, normalized results | `flink` |
 | Legacy Flink DSL | `org.agentic.flink.dsl`, `execution`, `job`, `statemachine` | `Agent.builder()`, `ToolExecutor`, Flink-state memory | none |
 
-The first is described here. The second is a kept, supported, pure-Flink API and has its
+The first is described here. The second is deprecated legacy code, kept for now, and has its
 [own section](#legacy-flink-dsl-pure-flink-flavor) at the end.
+
+## What this runtime does not do yet
+
+- **It blocks.** `WorkflowTurnFunction.processElement` runs the whole turn synchronously on the Flink
+  task thread, including model calls, tool calls and retry sleeps. One slow call stalls every key on
+  that subtask and delays checkpoint barriers. Size parallelism accordingly.
+- **Tool calls re-run after a restore.** The log is checkpointed keyed state, so it rolls back up to
+  one checkpoint interval while the outside world does not. A turn that ran after the last completed
+  checkpoint runs again on restore, tools included, and the tool receives no idempotency key. Do not
+  use this for payments or other non-idempotent actions.
+- **A workflow document cannot declare a real model on Flink.** Only the scripted stub runs on the
+  canonical path.
+- **There is no supported way to run a `pipeline.yaml` from Kafka on a cluster.** `FlinkPipelineRunner`
+  has no Kafka source.
 
 ## How a turn runs
 
@@ -19,7 +33,7 @@ Flink's per-key ordering is the single writer of
 [common primitives](common-primitives.md#one-writer-per-conversation). The function holds the
 workflow document as its only serialized configuration and rebuilds the routed graph, tool
 registry and retriever from `ports/jagentic-core` in `open()` on every start and restore. The graph
-is `org.jagentic.core.RoutedGraph`, the same code the `jvm-core` and `pekko` columns run.
+is `org.jagentic.core.RoutedGraph`, the same code the `jvm-core` and `pekko` bindings run.
 
 ## The event log is keyed state
 
@@ -31,22 +45,23 @@ suspension and memory are all folds over the list, recomputed when the key is ne
 entries are serialized with `JsonTypeInfo`, results with `TurnResultTypeInfo`; nothing falls back
 to Kryo (`RuntimeSerializationTest`).
 
-A redelivered `turn_id` is found in the log and answered as `duplicate` without running the graph
-(`WorkflowTurnFunctionMiniClusterTest.savepointRestartRestoresLogAndKeepsIdempotency`).
+A redelivered `turn_id` whose turn is in the log is answered as `duplicate` without running the
+graph (`WorkflowTurnFunctionMiniClusterTest.savepointRestartRestoresLogAndKeepsIdempotency`). That
+holds only for a turn that was checkpointed; see above.
 
 ## Savepoint restore is the restart
 
 A restart on Flink is stop-with-savepoint followed by a new job restored from that savepoint.
 `LocalWorkflowSession` (`LocalWorkflowSession.java`) does exactly this for the embedded, turn by
-turn driver used by the Python facade's `flink-jvm` runtime and by tests: `restart()` stops the
+turn driver used by tests: `restart()` stops the
 running job with a savepoint, shuts the local cluster down, and starts a fresh job from the
 savepoint. Only checkpointed keyed state survives, which is the point: the next turn on a
 conversation rebuilds it from `KeyedConversationLog` without re-running brains or tools
 (`LocalWorkflowSessionTest.restartRestoresTheLogAndDoesNotCallToolsAgain`,
 `suspendedTurnSurvivesRestartAndResumes`). The conformance binding (`FlinkConformanceTest` on a
 `MiniCluster`) maps the fixture verb `restart_runtime` onto the same sequence, so the `flink`
-column's `replay-after-restart` and `suspend-resume` passes in the
-[matrix](../capabilities.md#fixtures) are savepoint restores.
+binding's `replay-after-restart` and `suspend-resume` passes are savepoint restores. Savepoints are
+taken between turns, so these do not exercise a failure in the window after the last checkpoint.
 
 ## State TTL
 
@@ -80,46 +95,25 @@ due timer before processing the turn that observes the deadline, appends `timer_
 processing time from a pluggable `ProcessingClock` (Flink's clock in production, a fixture clock
 in the harness) and event time from the conversation watermark folded from `event_time_ms`.
 Pending timers and the clock reading are rebuilt from keyed state after a savepoint restore, so a
-timer fires exactly once across a restart. The `flink` binding passes the three timer fixtures;
-see the [flink notes](../capabilities.md#flink).
-
-## Where it stands
-
-<!-- matrix: flink -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
-`docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
-[supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
-
-Binding `flink`: 24 passed, 0 failed, 0 skipped.
-
-| Capability | flink |
-|---|---|
-<!-- /matrix -->
+timer fires exactly once across a restart. The `flink` binding runs the three timer fixtures.
 
 ## Running it
 
 ```bash
 ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # always first
 ./mvnw package -DskipTests
-./mvnw test -Dtest=FlinkConformanceTest                     # the flink column of the matrix
+./mvnw test -Dtest=FlinkConformanceTest                     # the flink conformance binding
 ```
-
-From Python, the same operator is reached through the facade's `flink-jvm` runtime
-(`FlinkRuntime(...).deploy(spec)`), documented on the [Python facade page](python-facade.md) and
-in [docs/python.md](../python.md). The PyFlink binding (`agentic-pyflink`) places the same operator
-inside a PyFlink job through a bridge jar and is described on the [PyFlink page](pyflink.md).
 
 ## Legacy Flink DSL (pure-Flink flavor)
 
 The `AgentBuilder` DSL (`Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`
-under `org.agentic.flink.dsl`, with `execution`, `job` and `statemachine`) is a supported, kept API
-for writing agents as Flink jobs directly: LangChain4J chat models, `ToolExecutor` tools,
-Flink-state short-term memory, the conversation store SPI, CEP, sagas and the A2A gateway.
+under `org.agentic.flink.dsl`, with `execution`, `job` and `statemachine`) is deprecated legacy
+code, kept for now, for writing agents as Flink jobs directly: LangChain4J chat models, `ToolExecutor`
+tools, Flink-state short-term memory, the conversation store SPI, CEP, sagas and outbound A2A.
 [docs/getting-started.md](../getting-started.md), [docs/memory.md](../memory.md) and the Flink-runtime
-showcases under `docs/examples/` describe it. The Python facade exposes it as
-`agentic_flink.Agent.builder()` with `@tool` ([docs/python.md](../python.md#the-legacy-flink-dsl-pure-flink-flavor)),
-and [docs/pyflink-integration.md](../pyflink-integration.md) describes its PyFlink plan integration.
+showcases under `docs/examples/` describe it.
 
 It is a different contract from `agentic/v1`: no workflow document, no `spec/v1` event set, no
-normalized result, and no column in the [matrix](../capabilities.md). Nothing on this page above
-this section applies to it, and nothing in the matrix measures it.
+normalized result, and no conformance binding. Nothing on this page above this section applies to
+it, and no fixture measures it.

@@ -1,33 +1,16 @@
 # A2A (Agent2Agent) support
 
-Agentic-Flink speaks the **A2A protocol v1.0** in both directions:
+The Flink framework's legacy DSL has outbound A2A: a Flink agent calls a remote A2A agent as a step in
+its workflow, either as an LLM-selectable tool or as an explicit, deterministic pipeline step.
 
-- **Outbound**: a Flink agent calls a remote A2A agent as a step in its workflow, either as an
-  LLM-selectable tool or as an explicit, deterministic pipeline step.
-- **Inbound**: a standalone Quarkus **gateway** exposes the agents running in a Flink job to any
-  external A2A client over Agent Card discovery plus JSON-RPC, with `message/stream` served as
-  SSE. JSON-RPC and SSE are the only inbound transports implemented; there is no gRPC server and
-  no A2A REST binding (see `a2a-gateway/README.md`).
-
-The two sides are connected to the Flink job by a pluggable **bridge** (`inproc` / `zeromq` /
-`redis`). A2A is built on the official [`a2a-java` SDK](https://github.com/a2aproject/a2a-java)
+The inbound Quarkus gateway moved out of this repository; the code as it stood is at
+[tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/a2a-gateway). The `a2a` package still holds the **bridge**
+(`inproc` / `zeromq` / `redis`) a gateway connects through. A2A is built on the official [`a2a-java` SDK](https://github.com/a2aproject/a2a-java)
 (`io.github.a2asdk`, pinned `1.0.0.Alpha3`), isolated behind our own `A2AClient` SPI so all SDK
-usage is confined to one adapter and the gateway.
-
-```
- EXTERNAL A2A CLIENT                                   REMOTE A2A AGENT (peer)
-        │ JSON-RPC + SSE                                        ▲
-        ▼                                                       │ a2a-java SDK client (outbound)
- ┌──────────────────────┐      bridge (Channel)        ┌────────┴───────────────────────┐
- │  Quarkus A2A Gateway  │  inproc / zeromq / redis     │       Flink Agent Job          │
- │  AgentCard + Executor │ ── A2ARequest ─────────────▶ │  A2AToolExecutor (tool)        │
- │  SSE + push           │ ◀─ A2AResponse ───────────── │  A2AStep (explicit step)       │
- └──────────────────────┘                              └────────────────────────────────┘
-```
+usage is confined to one adapter.
 
 The SDK is an **optional** dependency of the core library; `mvn clean test` builds and passes
-without it. The outbound path needs `a2a-java-sdk-client` on the runtime classpath; the gateway
-module pulls everything it needs.
+without it. The outbound path needs `a2a-java-sdk-client` on the runtime classpath.
 
 ---
 
@@ -90,36 +73,6 @@ Outbound uses the official SDK via `SdkA2AClient` (JSON-RPC binding), discovered
 
 ---
 
-## Inbound: the Quarkus gateway
-
-A standalone module under `a2a-gateway/` (built separately, see its `README.md`). It serves the
-Agent Card at `/.well-known/agent-card.json` and the JSON-RPC methods (`message/send`,
-`message/stream` as SSE, `tasks/get`, `tasks/cancel`, and the push notification config methods),
-bridging each request into the Flink job and driving SSE + push from the job's responses. The
-Agent Card names only that transport (`preferredTransport: JSONRPC`, one `additionalInterfaces`
-entry at `a2a.gateway.public.url`, SSE as `capabilities.streaming`); `a2a.gateway.grpc.url` and
-`a2a.gateway.rest.url` are rejected at startup because nothing serves them.
-
-```bash
-./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests   # install jagentic-core
-./mvnw -q install -DskipTests              # install core
-./mvnw -f a2a-gateway/pom.xml package      # build the gateway
-java -jar a2a-gateway/target/quarkus-app/quarkus-run.jar
-curl http://localhost:9999/.well-known/agent-card.json
-```
-
-The Flink job participates by unioning the bridge request channel into its agent input and writing
-results to the bridge response sink:
-
-```java
-A2ABridge bridge = A2ABridgeFactory.create(config);            // zeromq by default
-DataStream<A2ARequest> requests = bridge.requestChannel().open(env);
-DataStream<A2AResponse> responses = /* run agents on requests, emit A2AResponse */;
-responses.addSink(bridge.responseSink());
-```
-
----
-
 ## Bridge transports
 
 | Transport | When | Notes |
@@ -163,8 +116,6 @@ default). See `config/ConfigKeys.java`.
 
 ## Versioning note
 
-The A2A 1.0 protocol line is published on Maven Central only as alphas (`1.0.0.Alpha3`); the newest
-stable `Final` is `0.3.x`. We pin `1.0.0.Alpha3` to match the v1.0 spec and isolate all SDK types
-behind the `A2AClient` SPI / gateway, so a later `Final` bump (or 0.3 fallback) is contained to
-`SdkA2AClient` + the gateway pom. The SDK `groupId` is `io.github.a2asdk` (not the
-`org.a2aproject.sdk` some 2026 blog posts mention).
+`pom.xml` pins the SDK at `io.github.a2asdk` `1.0.0.Alpha3`, an alpha. Upstream has since moved to the
+`org.a2aproject.sdk` coordinates. All SDK types sit behind the `A2AClient` SPI, so an upgrade is
+contained to `SdkA2AClient`.

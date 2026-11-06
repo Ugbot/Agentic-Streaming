@@ -583,10 +583,10 @@ The framework handles all the Flink complexity:
 The sections above describe the Flink framework's `Agent.builder()` API. Beside it, the
 repository has a runtime-neutral contract, `agentic/v1` ([spec/v1/primitives.md](../spec/v1/primitives.md)):
 an agent is a workflow document (YAML or JSON) with a router, paths, tools and policies, and its
-state is an ordered log of events per conversation. The same document runs on Flink, on Pekko, on
-Clojure, on pure Python and on PyFlink, and the shared conformance fixtures check that each of
-them produces the same normalized result. The generated [capability matrix](capabilities.md) says
-what each runtime has proven; the pages under [runtimes/](runtimes/README.md) say what each
+state is an ordered log of events per conversation. The same document runs on Flink, on Pekko and
+on pure Python, and the shared conformance fixtures check that each of them produces the same
+normalized result. The [conformance results](runtimes/README.md#conformance-results) say what each
+runtime has proven; the pages under [runtimes/](runtimes/README.md) say what each
 runtime is made of, starting with the guarantees they all share
 ([common primitives](runtimes/common-primitives.md)). From Python, both the high-level and the
 full-control API for that contract are in [python.md](python.md).

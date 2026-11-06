@@ -68,7 +68,7 @@
     </modules>
 
     <properties>
-        <!-- Java 21 is the baseline for every JVM module (AGS-13). -->
+        <!-- Java 21 is the baseline for every JVM module. -->
         <java.version>21</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -261,7 +261,7 @@
                             <rules>
                                 <requireJavaVersion>
                                     <version>[21,22)</version>
-                                    <message>This project builds on JDK 21 (the baseline; see docs/audit-backlog.md, AGS-13/AGS-14). Newer JDKs are not part of the tested baseline yet.</message>
+                                    <message>This project builds on JDK 21 (the baseline). Newer JDKs are not part of the tested baseline yet.</message>
                                 </requireJavaVersion>
                                 <requireMavenVersion>
                                     <version>[3.9,)</version>

@@ -9,7 +9,7 @@ Selection rules for a ```java fence:
 * the info string carries the word ``complete`` (```java complete): always compiled;
 * the info string carries the word ``fragment`` (```java fragment): never compiled, even when the
   body looks like a compilation unit (used for listings that depend on classes outside the default
-  build, for example the flink-agents plugin);
+  build, for example an optional profile);
 * otherwise the block is compiled when its first non-blank line starts with ``package`` or
   ``import`` and it declares a top-level ``class``, ``interface``, ``enum`` or ``record``, which is
   how a reader recognises a full source file rather than an excerpt.

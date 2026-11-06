@@ -105,7 +105,7 @@ inside the channel.
 ## Running it
 
 ```bash
-bash examples-bin/run-live-research.sh
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.research.LiveResearchExample
 ```
 
 The script exits with status 2 and an explanation. The composition above is the target shape,
@@ -125,7 +125,7 @@ than example changes:
 
 Set `AGENTIC_RUN_LIVE_RESEARCH=1` to run the example anyway and observe the first failure. That
 path needs JDK 21, the Maven wrapper, Ollama at `OLLAMA_URL` with `qwen2.5:3b`
-(`bash examples-bin/run-ollama.sh`), and outbound internet for the Wikipedia seeds and the
+(`podman compose up -d ollama && podman compose exec ollama ollama pull qwen2.5:3b`), and outbound internet for the Wikipedia seeds and the
 first-run DJL downloads of `sentence-transformers/all-MiniLM-L6-v2`,
 `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` and the PyTorch CPU native runtime.
 
@@ -137,5 +137,4 @@ first-run DJL downloads of `sentence-transformers/all-MiniLM-L6-v2`,
 - URLs pushed through an external `KafkaChannel<UrlRequest>` joining the same crawler frontier,
   with the corpus growing on the fly.
 
-None of that output is produced today. `tools/smoke-examples.sh` lists this example as a skip
-with the reason above.
+None of that output is produced today.

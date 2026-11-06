@@ -1,18 +1,10 @@
 """High-level builder: the same support workflow written in Python, with a Python function as a tool.
 
-    python docs/snippets/python/builder_tools.py local        # agentic.Agent, pure Python
-    python docs/snippets/python/builder_tools.py local-jvm    # agentic_flink.WorkflowAgent, JVM core
-    python docs/snippets/python/builder_tools.py flink-jvm    # raises CapabilityError (see docs/python.md)
+    python docs/snippets/python/builder_tools.py
 """
 import json
-import sys
 
-runtime = sys.argv[1] if len(sys.argv) > 1 else "local"
-
-if runtime == "local":
-    from agentic import Agent
-else:
-    from agentic_flink import WorkflowAgent as Agent
+from agentic import Agent
 
 
 def lookup_charge(user: str) -> float:
@@ -31,5 +23,5 @@ spec = (
     .build()
 )
 
-result = spec.run(runtime=runtime, text="what is my balance?", conversation_id="c1", turn_id="t1")
+result = spec.run(runtime="local", text="what is my balance?", conversation_id="c1", turn_id="t1")
 print(json.dumps({k: result[k] for k in ("status", "path", "reply")}, sort_keys=True))
