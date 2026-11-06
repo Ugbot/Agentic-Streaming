@@ -303,6 +303,36 @@ public class AgentExecutorTest {
     }
   }
 
+  /**
+   * Full jitter draws from {@code [0, cap]}, so a zero wait is a legal draw. It is still a backoff
+   * decision, and {@code maxIterationsCarriesLastErrorAndBacksOffBetweenRetries} used to lose one
+   * about once in a hundred draws. A zero base makes that draw certain.
+   */
+  @Test
+  void everyRetriedIterationBacksOffEvenWhenTheJitterDrawsZero() throws Exception {
+    List<ChatResponse> script = new ArrayList<>();
+    script.add(null);
+    int iterations = ThreadLocalRandom.current().nextInt(2, 5);
+    List<Long> sleeps = new CopyOnWriteArrayList<>();
+    try (AgentExecutor ex =
+        AgentExecutor.builder()
+            .withAgent(agent(iterations))
+            .withLlmClient(LLMClient.builder().withModel("m").build(new ScriptedConnection(script)))
+            .withToolRegistry(ToolRegistry.empty())
+            .withTurnResultStore(new InMemoryTurnResultStore())
+            .withRetryBackoff(Duration.ZERO, Duration.ZERO)
+            .build()) {
+      ex.setSleeper(
+          ms -> {
+            sleeps.add(ms);
+            return 0L;
+          });
+      ExecutionResult r = ex.execute(turn("t-" + UUID.randomUUID())).get(10, TimeUnit.SECONDS);
+      assertFalse(r.isSuccess());
+      assertEquals(iterations - 1, sleeps.size(), "one backoff per retried iteration");
+    }
+  }
+
   @Test
   void backoffIsExponentialWithFullJitterAndCapped() {
     long base = ThreadLocalRandom.current().nextLong(10, 100);

@@ -196,17 +196,19 @@ public class AgentExecutor implements Serializable, AutoCloseable {
   }
 
   private void sleep(long millis) throws InterruptedException {
-    if (millis <= 0) {
-      return;
-    }
     if (sleeper != null) {
       sleeper.applyAsLong(millis);
       return;
     }
-    Thread.sleep(millis);
+    if (millis > 0) {
+      Thread.sleep(millis);
+    }
   }
 
-  /** Test hook: replaces {@link Thread#sleep(long)} for backoff waits. */
+  /**
+   * Test hook: replaces {@link Thread#sleep(long)} for backoff waits. It sees every backoff,
+   * including the zero wait that full jitter can draw.
+   */
   void setSleeper(LongUnaryOperator sleeper) {
     this.sleeper = sleeper;
   }
