@@ -85,6 +85,34 @@ start until they are set in `.env`. Provider API keys (`OPENAI_API_KEY`, `GOOGLE
 
 ## Dependencies
 
-The outbound A2A client is built on the `a2a-java` SDK at an alpha version (`1.0.0.Alpha3`). Tika
-(2.9.2) and DJL (0.30.0) in the root module carry known critical CVEs (CVE-2025-66516, CVE-2025-54988,
-CVE-2025-0851) and have not been upgraded yet.
+The outbound A2A client is built on the `a2a-java` SDK at an alpha version (`1.0.0.Alpha3`). No
+advisory names it, but upstream has moved to `org.a2aproject.sdk`, and `SdkA2AClient` has no test
+against a real peer to prove the move.
+
+The resolved test-scope trees of `ports/jagentic-core`, the Flink module and `agentic-pekko`, and both
+`uv.lock` files, have no open advisory in [OSV](https://osv.dev) at any severity. Transitive versions
+are pinned in `dependencyManagement`, so read `./mvnw dependency:tree` rather than the declared
+versions. The two `uv.lock` files cover Python 3.10 and later, because the dev tools have no patched
+release for 3.9. The packages still declare `>=3.9`: at runtime they need only PyYAML and jsonschema,
+neither of which has an advisory, but `pip install ".[test]"` on 3.9 gets a pytest with
+CVE-2025-71176.
+
+OSV matches coordinates, so it cannot see into a shaded jar. The table below is what that leaves.
+
+### Known dependency advisories
+
+Flink stays on 2.2.1 because the Kafka connector does not support 2.3. Everything in the first five
+rows is in Flink's own jars on the cluster. The build marks them `provided`, and the floors in
+`reactor/pom.xml` reach only the test classpath, so they cannot be overridden from here.
+
+| Package, as shipped | Arrives through | Advisories | Reachable? |
+| --- | --- | --- | --- |
+| Netty 4.1.100 (`flink-shaded-netty` 4.1.100.Final-20.0) | Flink, relocated | Critical CVE-2026-75595, and 36 others in `netty-handler`, `netty-codec`, `netty-codec-http`, `netty-codec-http2` and `netty-common` (15 high, 20 moderate, 1 low) | Yes, by anything that can reach the JobManager REST port or the TaskManager data ports. Not by agent input: events, tool results and model output never touch these servers. Keep those ports on a private network, which the compose stacks do. |
+| Jackson 2.18.2 (`flink-shaded-jackson` 2.18.2-20.0) | Flink, relocated | 17 in `jackson-core` and `jackson-databind`, including CVE-2026-89425, CVE-2026-89407, CVE-2026-91777 and CVE-2026-91776, mostly denial of service | Only through Flink's REST API and internal plan handling, so the same boundary as Netty. The framework parses JSON with its own Jackson 2.22.4. |
+| Guava 33.4.0 (`flink-shaded-guava` 33.4.0-jre-20.0) | Flink, relocated | CVE-2026-102554, high: memory exhaustion on Java deserialisation of some collections | Only if an attacker can feed Flink's Java deserialisation, at which point this is the lesser problem. |
+| ZooKeeper 3.7.2 (`flink-shaded-zookeeper-3` 3.7.2-20.0) | Flink, relocated | CVE-2024-23944, moderate: information disclosure in persistent watchers | Only with ZooKeeper HA, which no stack here configures. The advisory is on the server side of watch handling. |
+| snappy-java 1.1.10.7 and lz4-java 1.10.3 | Flink, unshaded | snappy: CVE-2026-93451, CVE-2026-108106 (high), CVE-2026-116590. lz4: CVE-2026-106451 (high), CVE-2026-106449, -106450, -106452, -106453, CVE-2026-59949 | Flink feeds them its own state and network buffers, not attacker-chosen bytes, so the decompression bugs need the checkpoint store or the data plane to be compromised first. CVE-2026-106451 replaces the native library in a shared temp directory and needs a local user on the TaskManager host. Job code that bundles the uber jar gets the patched versions (1.1.10.12, 1.13.0) only where the job's classloader wins. |
+| Netty 4.1.100, Jackson 2.15.3, Guava 32.1.3, lz4 1.8.0 (`com.alibaba.fluss:fluss-client` 0.7.0) | Fluss client, relocated, optional but carried in the uber jar | As for the rows above, plus CVE-2025-66566 and CVE-2025-12183 in lz4 1.8.0 | Only when the Fluss backend is selected, and then the client talks only to the operator's Fluss cluster, so a hostile response needs a hostile cluster. `org.apache.fluss:fluss-client` 1.0.0 does not help: it shades Netty 4.1.104, Jackson 2.15.3 and Guava 32.1.3. |
+
+Quarkus (CVE-2026-50559, CVE-2026-39852) left with the A2A gateway and the tool services, so no
+manifest here resolves it.

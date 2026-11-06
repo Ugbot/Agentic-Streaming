@@ -17,7 +17,7 @@ Add to your downstream pom:
 <dependency>
   <groupId>org.jsoup</groupId>
   <artifactId>jsoup</artifactId>
-  <version>1.18.1</version>
+  <version>1.24.1</version>
 </dependency>
 <dependency>
   <groupId>com.github.crawler-commons</groupId>
@@ -27,18 +27,18 @@ Add to your downstream pom:
 <dependency>
   <groupId>org.apache.tika</groupId>
   <artifactId>tika-core</artifactId>
-  <version>2.9.2</version>
+  <version>3.3.3</version>
 </dependency>
 <dependency>
   <groupId>org.apache.tika</groupId>
   <artifactId>tika-parsers-standard-package</artifactId>
-  <version>2.9.2</version>
+  <version>3.3.3</version>
 </dependency>
 <!-- Tika needs commons-io 2.15+; older versions on the Flink classpath break it. -->
 <dependency>
   <groupId>commons-io</groupId>
   <artifactId>commons-io</artifactId>
-  <version>2.16.1</version>
+  <version>2.22.0</version>
 </dependency>
 ```
 
