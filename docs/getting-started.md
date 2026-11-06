@@ -117,7 +117,7 @@ tools: [get_balance]
 The script wraps `org.jagentic.core.pipeline.PipelineCli`; the same script runs the file on the
 Pekko runtime with `--runtime pekko` and on Python with `--runtime python` (set `PYTHON` to the
 interpreter of the virtual environment above). `docs/examples/banking-everywhere.md` shows the
-same agent on Flink, Clojure and Go, and on the experimental adapters under `ports/`.
+same agent on Flink and Clojure.
 
 ### The specification behind the file
 
@@ -169,9 +169,7 @@ tests all of them in dependency order, with one groupId (`org.jagentic`) and one
 ```
 
 `package` and later phases also attach a `-sources.jar` and a `-javadoc.jar` next to every
-module jar (`banking-job` has no Java sources and gets only the former). The adapters under
-`ports/experimental/` are not part of the reactor; each has its own `pom.xml` and is built on
-its own.
+module jar (`banking-job` has no Java sources and gets only the former).
 
 A single module builds with `-f <module>/pom.xml` once the modules it depends on are in the
 local repository. The Flink module and Pekko both depend on `ports/jagentic-core`, so install

@@ -1,13 +1,12 @@
 # External services for Agentic Streaming pipelines — bring up only what your
-# pipeline.yaml references, then point the `stores:` / `backend_config:` connection
-# links at them. Everything is behind an SPI, so these are hot-swappable
+# pipeline.yaml references, then point the `stores:` connection links at them.
+# Everything is behind an SPI, so these are hot-swappable
 # (Redis<->Valkey, Kafka<->Fluss, etc.) without touching agent code.
 #
-#   podman compose -f examples/compose/externals.yml up -d valkey nats
+#   podman compose -f examples/compose/externals.yml up -d valkey
 #
 # Then, in a pipeline.yaml:
 #   stores: {conversation: {kind: redis, url: "redis://localhost:6379/0"}}
-#   backend: nats        # backend_config.url: "nats://localhost:4222"
 
 services:
   # Redis-compatible KV (Valkey is a drop-in fork of Redis). Used by the Redis
@@ -15,13 +14,6 @@ services:
   valkey:
     image: docker.io/valkey/valkey:latest
     ports: ["6379:6379"]
-
-  # NATS with JetStream — used by the `nats` backend (durable KV + persistent stream).
-  # AGENTIC_NATS_URL=nats://localhost:4222
-  nats:
-    image: docker.io/library/nats:latest
-    command: ["-js"]
-    ports: ["4222:4222", "8222:8222"]
 
   # PostgreSQL — long-term store / pgvector cold tier (AGENTIC_POSTGRES_URL).
   postgres:
@@ -32,8 +24,8 @@ services:
       POSTGRES_DB: agentic
     ports: ["5432:5432"]
 
-  # Redpanda — Kafka-API broker for the Kafka Streams / Faust / Quarkus backends
-  # (swap for real Kafka or Fluss behind the same Channel SPI). bootstrap: localhost:9092
+  # Redpanda — Kafka-API broker (swap for real Kafka or Fluss behind the same Channel
+  # SPI). bootstrap: localhost:9092
   redpanda:
     image: docker.io/redpandadata/redpanda:latest
     command:

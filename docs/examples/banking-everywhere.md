@@ -11,7 +11,7 @@ covers the example pipelines under `examples/pipelines/`.
 The definition is [`examples/pipelines/banking.yaml`](../../examples/pipelines/banking.yaml):
 
 ```yaml
-backend: local                      # Python loader: local | celery | nats. JVM loader: local, or pekko via the BackendProvider SPI
+backend: local                      # Python loader: local. JVM loader: local, or pekko via the BackendProvider SPI
 agent:
   router:   { kind: keyword, default: general,
               rules: { cards: [card, crypto, cash-back], payments: [balance, transfer, dispute] } }
@@ -48,10 +48,8 @@ Set `PYTHON=/path/to/venv/bin/python` when the packages live in a virtual enviro
 underlying commands, for running them by hand:
 
 ```bash
-# Python core. Both packages have package metadata and install in editable mode. The registered
-# backend names are local, celery, and nats; any other value raises ValueError. celery and nats
-# are experimental adapters under ports/experimental/ and need their engine package plus a
-# running broker (nats: a JetStream server on 127.0.0.1:4222, otherwise ConnectionRefusedError).
+# Python core. Both packages have package metadata and install in editable mode. local is the
+# only backend; any other value raises ValueError.
 python -m pip install -e ports/pyagentic -e ports/agentic-pipeline
 python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
 
@@ -75,9 +73,6 @@ cd agentic-clj && clojure -X:test :nses '[agentic.pipeline-test]'
 ./mvnw -q test -Dtest=FlinkPipelineRunnerTest -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
-The Go port under `ports/experimental/go` also hosts the banking graph (`go run ./cmd/pipeline`),
-but it is experimental and not conformance tested, so it is not part of the claim on this page.
-
 ## Verified on this pipeline
 
 Each row was run from a clean checkout with JDK 21, the Maven wrapper, Python 3.12 and the Clojure
@@ -95,19 +90,18 @@ tool and reply.
 `banking-mcp.yaml`, `tools-mcp.yaml` and `multiagent.yaml` are covered on the Python and jvm-core
 runners only; they need the Tool Services stdio server and, for the A2A escalations, a peer at
 `AGENTIC_PEER_AGENT_URL`. Their YAML headers list the exact prerequisites. Nothing on this page
-claims a result for PyFlink, the JPype facade, or the experimental adapters; the generated matrix
-is the source of truth for those bindings.
+claims a result for PyFlink or the JPype facade; the generated matrix is the source of truth for
+those bindings.
 
 ## What runs where
 
 | Runtime | How the spec runs | Delivery | Durability / ordering |
 |---------|-------------------|----------|-----------------------|
-| pyagentic (Python) | `agentic_pipeline run` (`--backend local`, `celery`, or `nats`; nothing else is registered) | online | per backend |
+| pyagentic (Python) | `agentic_pipeline run` (`--backend local`; nothing else is registered) | online | in-memory / Redis |
 | jvm-core (JVM) | `PipelineCli`, or `PipelineLoader.load(yaml, "local")` as a library | online | in-memory / Redis |
 | Agentic Pekko | `PipelineMain`, `backend: pekko` (BackendProvider SPI) | online / actor | event-sourced entity (memory, Postgres, Cassandra, Redis) |
 | Agentic Clojure | `agentic.pipeline/load-system` (`-M:run` demo, `pipeline_test.clj`) | online | Datomic immutable log (in-process, Pro, Cloud) |
 | Apache Flink | `FlinkPipelineRunner` (YAML to a MiniCluster job, driven from `FlinkPipelineRunnerTest`) and the code-first Java/Python DSL | streamed | checkpoints / keyed state |
-| Experimental adapters (not conformance tested) | each `ports/experimental/<engine>` hosts the banking graph through its own entry point, not through `backend:` in the Python loader: go, faust, kafka-streams, temporal, pulsar, spring, quarkus, ray, dask, airflow. See [`ports/experimental/README.md`](../../ports/experimental/README.md) | varies | varies, see [parity-matrix](../portability/parity-matrix.md) |
 
 The richer specs work the same way: [`banking-llm.yaml`](../../examples/pipelines/banking-llm.yaml)
 (a bounded ReAct LLM brain on the payments path, scripted so no key is needed) and

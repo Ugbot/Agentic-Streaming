@@ -6,9 +6,8 @@ ordered log of events, with CQRS (command = process a turn; query = read the vie
 single-writer-per-conversation. Apache Flink is the **first-class runtime** (this main
 module). The same `agentic/v1` spec is conformance tested on the bindings listed in the
 generated `docs/capabilities.md` (reference, jvm-core, flink, pekko, clojure, python, pyflink,
-python-jvm, python-flink). The engine adapters under `ports/experimental/` are experimental:
-they predate agentic/v1, run the banking example, are not conformance tested, and may be
-removed. Design docs are under `docs/portability/`.
+python-jvm, python-flink). The experimental engine adapters were moved out of this repository;
+the code as it stood is at tag `pre-cornerstone`. Design docs are under `docs/portability/`.
 
 This main module is the Flink framework: a standalone agentic framework for Apache Flink
 with LangChain4J integration. Java 21 target, Flink 2.2.1 (native FLIP-27 sources /
@@ -16,9 +15,9 @@ FLIP-143 sinks), LangChain4J 1.16.3 (managed via the langchain4j-bom). PyFlink p
 apache-flink 2.x (see docs/python.md).
 
 `ports/` holds the conformance tested cores (`ports/jagentic-core`, `ports/pyagentic`) and the
-portable pipeline CLI (`ports/agentic-pipeline`); the multi-engine adapters + gateways live under
-`ports/experimental/` (see `ports/experimental/README.md`, and `ports/README.md` for the
-comparison). The engine-agnostic "essence" and per-engine design notes are in `docs/portability/`.
+portable pipeline CLI (`ports/agentic-pipeline`, whose only backend is `local`; see
+`ports/README.md`). The engine-agnostic "essence" and per-engine design notes are in
+`docs/portability/`.
 
 ## Project Structure
 
@@ -82,7 +81,7 @@ A module built on its own needs its upstream modules in the local repository; in
 ./mvnw install -DskipTests && ./mvnw -f a2a-gateway/pom.xml package   # build the A2A gateway
 ```
 
-`ports/experimental/*` are not modules of the reactor. CI (`.github/workflows/ci.yml`) runs the
+CI (`.github/workflows/ci.yml`) runs the
 reactor once with the backing services (Postgres, Redis, Kafka, Qdrant, a Python with the MCP
 SDK) and audits every skipped test against `tools/ci/skip-allowlist.txt`; a service-backed test
 that skips in CI fails the build. `PythonExecutorTest` (PEMJA has no CPython 3.12 wheel) and

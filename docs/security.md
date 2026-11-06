@@ -2,9 +2,8 @@
 
 This page describes how the network-facing surfaces of this repository authenticate callers,
 how outbound HTTP egress is constrained, and which defaults exist only for local development.
-Everything here refers to the Flink main module, the Quarkus A2A gateway (`a2a-gateway/`),
-the Quarkus tool services (`tool-services/`) and the FastAPI gateway
-(`ports/experimental/gateway-fastapi/`). The compose stacks in the repository root follow the same rules.
+Everything here refers to the Flink main module, the Quarkus A2A gateway (`a2a-gateway/`)
+and the Quarkus tool services (`tool-services/`). The compose stacks in the repository root follow the same rules.
 
 ## Token model
 
@@ -21,7 +20,6 @@ The only way to run without a token is the explicit development override listed 
 |---------|---------------|----------------------|-------|
 | A2A gateway (JSON-RPC, SSE, `/rag/ingest`, `/rag/query`) | `a2a.auth.tokens` (`AGENTIC_FLINK_A2A_AUTH_TOKENS`) as `subject=token,subject2=token2` or a bare token; fallback `AGENTIC_A2A_TOKEN` | `a2a.auth.dev.mode=true` (`AGENTIC_FLINK_A2A_AUTH_DEV_MODE`) | The subject is recorded as the task owner. A bare token maps to the subject `a2a-client`; the dev override maps to `dev-anonymous`. |
 | Tool services (REST, MCP, gRPC) | `TOOL_SERVICES_TOKEN` (`tools.auth.token`) | `TOOL_SERVICES_AUTH_DEV_MODE=true`; on by default only under the Quarkus `dev` profile | Swagger UI is served only under the `dev` profile. |
-| FastAPI gateway (`/agent`, `/conversations/*`) | `AGENTIC_GATEWAY_TOKENS` as `alice=tok-a,bob=tok-b`, or `AGENTIC_GATEWAY_TOKEN` for one token mapped to `gateway-client` | `AGENTIC_GATEWAY_AUTH_DEV_MODE=true` | The subject is the user id passed to the backend. |
 
 ### Identity and ownership
 
@@ -34,11 +32,6 @@ metadata under the key `owner`. `tasks/get`, `tasks/cancel` and the four
 `tasks/pushNotificationConfig/*` methods compare the caller against that owner and answer with
 JSON-RPC error `-32003` (Forbidden) on a mismatch, so a task id alone is not enough to read,
 cancel or redirect somebody else's task.
-
-The FastAPI gateway scopes conversations per principal. The backend key is
-`<subject>/<conversation_id>`, so two principals using the same conversation id get two
-independent transcripts, and a request body `user_id` that differs from the authenticated
-subject is rejected with HTTP 403. `conversation_id` must not contain `/`.
 
 Tool invocation inside a Flink job checks the active agent's tool allowlist
 (`Agent.canUseTool`) before the registry lookup. A call to a tool the agent is not allowed to
@@ -79,8 +72,8 @@ are trusted; they are not subject to this policy.
 The following settings are acceptable on a developer machine and must not be used in any shared
 or exposed deployment:
 
-- `a2a.auth.dev.mode=true`, `TOOL_SERVICES_AUTH_DEV_MODE=true`,
-  `AGENTIC_GATEWAY_AUTH_DEV_MODE=true`: admit unauthenticated callers when no token is set.
+- `a2a.auth.dev.mode=true`, `TOOL_SERVICES_AUTH_DEV_MODE=true`: admit unauthenticated callers
+  when no token is set.
 - `TOOL_WEB_ALLOW_PRIVATE=true` or `OutboundUrlPolicy.allowingPrivateAddresses()`: let
   fetchers reach loopback and private networks.
 - The Quarkus `dev` profile for the tool services: enables Swagger UI and the auth override.

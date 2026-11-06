@@ -39,8 +39,7 @@ JVM module (`org.jagentic`, one version); it enforces Maven 3.9+ and Java 21, so
 ./mvnw clean package -P flink-agents     # build with optional Flink Agents plugin
 ```
 
-`ports/experimental/*` stay outside the reactor. CI audits skipped tests against
-`tools/ci/skip-allowlist.txt`; a test that skips because a service is missing fails the build.
+CI audits skipped tests against `tools/ci/skip-allowlist.txt`; a test that skips because a service is missing fails the build.
 
 The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
 Enable it with `-P flink-agents` after building Flink Agents from source.

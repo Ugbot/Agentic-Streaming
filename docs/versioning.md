@@ -26,9 +26,8 @@ PEP 440 version) as described in `docs/release.md`. Between tags they build as d
 versions and are not releasable.
 
 Which classes, functions and keys count as public API is defined by the API stability
-annotations documented in `docs/api-stability.md`. Anything not marked stable there, the
-`ports/experimental/*` adapters, and the internal packages of each module may change in any
-release.
+annotations documented in `docs/api-stability.md`. Anything not marked stable there and the
+internal packages of each module may change in any release.
 
 ## Spec version: `agentic/v1` is independent
 

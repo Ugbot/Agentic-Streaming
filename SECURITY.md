@@ -40,8 +40,7 @@ In scope: any code in this repository that is reachable from an untrusted input,
 particular
 
 - the network-facing surfaces: the Quarkus A2A gateway (`a2a-gateway/`), the Quarkus tool
-  services (`tool-services/`), the Pekko HTTP front door (`agentic-pekko`) and the FastAPI
-  gateway (`ports/experimental/gateway-fastapi/`);
+  services (`tool-services/`) and the Pekko HTTP front door (`agentic-pekko`);
 - workflow document loading and validation in every runtime (`agentic/v1` documents are
   data, and a hostile document must fail validation rather than execute anything);
 - outbound HTTP made on behalf of model output or request bodies (web tools, crawlers, A2A
@@ -49,26 +48,25 @@ particular
 - the compose stacks in the repository root and the scripts under `examples-bin/`.
 
 Out of scope: vulnerabilities in third-party dependencies that are not exploitable through
-this code (report those upstream; a dependency bump here is welcome as a pull request),
-issues that require the development-only overrides listed below, and the experimental engine
-adapters under `ports/experimental/` unless the report shows a path from a supported surface.
+this code (report those upstream; a dependency bump here is welcome as a pull request)
+and issues that require the development-only overrides listed below.
 
 ## Security posture
 
 `docs/security.md` is the normative description of the security model; this section
 summarises it so a reporter can tell expected behavior from a bug.
 
-- Every HTTP, SSE, gRPC and MCP entry point of the A2A gateway, the tool services and the
-  FastAPI gateway requires a shared bearer token (`Authorization: Bearer <token>`), compared
+- Every HTTP, SSE, gRPC and MCP entry point of the A2A gateway and the tool
+  services requires a shared bearer token (`Authorization: Bearer <token>`), compared
   in constant time. A missing, malformed, empty or
   unknown token is rejected with HTTP 401 (gRPC `UNAUTHENTICATED`). Health probes and the
   public A2A Agent Card are the only unauthenticated endpoints.
 - Services fail closed: with no token configured, every protected request is rejected. The
   only way to run without a token is an explicit development override
-  (`a2a.auth.dev.mode`, `TOOL_SERVICES_AUTH_DEV_MODE`, `AGENTIC_GATEWAY_AUTH_DEV_MODE`).
+  (`a2a.auth.dev.mode`, `TOOL_SERVICES_AUTH_DEV_MODE`).
 - Caller identity comes only from the validated token. A2A tasks record their owner, and
   `tasks/get`, `tasks/cancel` and the push notification config methods refuse a caller that is
-  not the owner. The FastAPI gateway scopes conversations per principal.
+  not the owner.
 - Outbound URLs that originate from untrusted input pass through `OutboundUrlPolicy`:
   `http`/`https` only, no userinfo, every resolved address must be public (loopback,
   link-local, private ranges, the cloud metadata address, multicast, unique-local and

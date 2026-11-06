@@ -6,7 +6,7 @@ to it. Classifications are `canonical` (the one implementation of a concept), `a
 of something already canonical), `experimental` (a demonstration, not on the critical
 path), `tooling`, or `docs`.
 
-File counts are source files (`.java`, `.py`, `.clj`, `.go`, `.md`) at the time of
+File counts are source files (`.java`, `.py`, `.clj`, `.md`) at the time of
 writing and are indicative, not exact.
 
 ## Tier 1
@@ -35,27 +35,10 @@ on another runtime" means the `agentic/v1` workflow path; the DSL is Flink-only 
 | `ports/agentic-pipeline/` | 8 | tooling | pure Python | the portable `pipeline.yaml` CLI and backend selection. Becomes the pure-Python fixture entry point |
 | `python/agentic_flink/pyflink/` | part of 47 | adapter | PyFlink | Python-authored Flink jobs, job submission, connector and checkpoint configuration |
 
-## Runtime demonstrations: `ports/experimental/`
+## Runtime demonstrations
 
-These are ports in the original sense: one file or a handful, showing the model on an
-engine. They predate the `agentic/v1` spec, are not conformance tested, are not on the
-Tier 1 or Tier 2 critical path, and may be removed. Documentation must not describe them
-as supported runtimes. They all live under `ports/experimental/`, so that `ports/` itself
-holds only the canonical cores and the pipeline CLI; each keeps a status banner in its own
-README and [`ports/experimental/README.md`](../ports/experimental/README.md) lists what each
-one does and how to run it.
-
-| Module | Files | Class | Disposition |
-|---|---:|---|---|
-| `ports/experimental/pekko/` | 1 | pointer | the `ports/pekko/` proof-of-concept was superseded by `agentic-pekko/` and its Java has been deleted; only a README pointing at `agentic-pekko/` remains |
-| `ports/experimental/temporal/` | 6 | experimental | keep, labelled experimental |
-| `ports/experimental/pulsar/` | 8 | experimental | keep, labelled experimental |
-| `ports/experimental/kafka-streams/` | 3 | experimental | keep, labelled experimental |
-| `ports/experimental/spring/`, `ports/experimental/quarkus/` | 10 | experimental | keep, labelled experimental |
-| `ports/experimental/celery/`, `ports/experimental/nats/`, `ports/experimental/ray/`, `ports/experimental/dask/`, `ports/experimental/faust/`, `ports/experimental/airflow/` | 6 | experimental | single-file Python adapters; `celery` and `nats` are the two the `ports/agentic-pipeline` backend registry can select, and its tests pin their paths |
-| `ports/experimental/gateway-fastapi/` | 7 | experimental | HTTP front door over `pyagentic` (local, celery, nats backends); not conformance tested |
-| `ports/experimental/go/` | 70 | experimental | Go core, gateway, and engines; outside the critical path until the Tier 1 and Tier 2 contracts are stable, per the plan |
-| `ports/experimental/tests/` | 1 | experimental | pytest over the Python adapters above |
+The experimental adapters were moved out of this repository. The code as it stood is available
+at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
 
 ## Supporting modules
 
@@ -63,7 +46,7 @@ one does and how to run it.
 |---|---:|---|---|
 | `a2a-gateway/` | 16 | adapter | standalone Quarkus inbound A2A gateway; built outside the reactor |
 | `tool-services/` | 36 | adapter | standalone tool services |
-| `docs/portability/` | 21 | docs | design notes per engine. Capability claims move to the generated matrix; the notes keep the reasoning |
+| `docs/portability/` | 15 | docs | design notes per engine. Capability claims move to the generated matrix; the notes keep the reasoning |
 | `notebooks/`, `examples/`, `examples-bin/` | - | docs | examples must run from a clean checkout (Phase 7.3) |
 
 ## Deprecation and deletion list
@@ -76,8 +59,7 @@ workstream that owns the replacement (item 3 is the only one done so far):
    outside the `agentic/v1` conformance path, not a removal candidate.
 2. `org.agentic.flink.storage.memory.InMemoryShortTermStore`: already marked a legacy
    path in `CLAUDE.md`; remove once `memory/` covers it.
-3. `ports/pekko/`: done; reduced to `ports/experimental/pekko/README.md`, which points at
-   `agentic-pekko/`, and its Java was deleted.
+3. `ports/pekko/`: done; superseded by `agentic-pekko/`, and its Java was deleted.
 4. Any builder option that is accepted and ignored: the plan forbids silent no-ops, so
    each one either gains behavior or is rejected at build time. Phase 2.1 enumerates them.
 5. Manually maintained capability tables in `docs/`: replaced by the generated matrix in

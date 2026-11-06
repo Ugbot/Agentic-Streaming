@@ -50,9 +50,6 @@ A single module can be built on its own once its upstream modules are installed:
 ./mvnw -f agentic-pekko/pom.xml test
 ```
 
-`ports/experimental/*` are not reactor modules; each has its own `pom.xml` and is built with
-`./mvnw -f ports/experimental/<name>/pom.xml test`.
-
 ### Formatting
 
 Java sources are formatted with google-java-format through Spotless. The default lifecycle
