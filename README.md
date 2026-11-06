@@ -47,8 +47,9 @@ Everything else was moved out of this repository. The code as it stood is at
   `pyagentic` package, which has real model clients but no event log.
 - **The tool allowlist is not a security control, and the canonical path has no authentication.** See
   [security](docs/security.md).
-- **The full Java test run is red.** `AgentJobGeneratorGraphTest` fails in full runs and passes alone,
-  because of an order assumption in the test, and `AgentExecutorTest` is flaky on timing.
+- **The full Java test run is flaky.** `AgentJobGeneratorGraphTest` asserts an operator order that
+  depends on process state, so it can fail in a full run and passes alone. It has failed on macOS and
+  passed on Linux CI at the same commit. `AgentExecutorTest` has also failed once on timing.
 - **There is no supported way to run a `pipeline.yaml` from Kafka on a Flink cluster.**
 
 ## Quick start
@@ -86,10 +87,10 @@ python3 -m venv .venv
 ./mvnw test -Dtest='FlinkConformanceTest,FlinkPipelineRunnerTest'
 ```
 
-**Not listed as working:** `./mvnw clean test` and `./mvnw -f reactor/pom.xml verify` build everything
-but do not pass, because of the flaky tests under [Known failures](#known-failures).
-`./mvnw -f reactor/pom.xml -DskipTests verify` passes, which shows the build and nothing about the
-tests.
+**Not listed as working:** `./mvnw clean test` and `./mvnw -f reactor/pom.xml verify` cannot be relied
+on to pass, because of the flaky tests under [Known failures](#known-failures). When the Flink module
+fails, the reactor skips Pekko. `./mvnw -f reactor/pom.xml -DskipTests verify` passes, which shows the
+build and nothing about the tests.
 
 The walkthrough is in [the banking agent on every runtime](docs/examples/banking-everywhere.md) and
 [getting started](docs/getting-started.md).
