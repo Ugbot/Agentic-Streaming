@@ -43,8 +43,8 @@ management, an in-process **HNSW** vector index, vector/long-term/conversation s
   capability matrix, and the ranked fit. Every engine doc is written against it.
 
 **Per-engine deep-dives** (same 6-section template; ranked best-fit first). Pekko and Clojure
-are runtimes in this repository; the others are design notes only. The experimental adapters
-were moved out; the code as it stood is at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
+are runtimes in this repository. The experimental adapters and their design notes were moved
+out; the code as it stood is at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
 
 | Doc | Engine | Lang | Verdict in one line |
 |-----|--------|------|---------------------|
