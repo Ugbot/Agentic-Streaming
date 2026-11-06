@@ -159,6 +159,7 @@ public final class ConversationState implements Serializable {
           }
         }
         case TURN_FAILED -> {
+          suspended.remove(e.turnId());
           if (b != null) {
             String declared = str(p.get("status"));
             b.status = declared == null ? TurnStatus.FAILED : TurnStatus.parse(declared);

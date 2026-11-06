@@ -195,9 +195,71 @@ public final class RoutedGraph {
     return own != null ? own : verifier;
   }
 
+  /**
+   * The turn boundary. It never throws for anything a turn does: whatever escapes the turn's own
+   * handling becomes a terminal {@code turn_failed} of class {@code fatal} on the log. Only {@link
+   * LogUnavailable} passes through, since a turn cannot record its end in a log it cannot reach.
+   */
   public TurnResult handle(Event event, AgentContext ctx) {
     ctx.listeners = listeners; // so callTool can fire tool-call hooks
     ctx.contextWindow = contextWindow;
+    try {
+      return process(event, ctx);
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException e) {
+      return failAtBoundary(ctx, e);
+    }
+  }
+
+  private TurnResult failAtBoundary(AgentContext ctx, RuntimeException e) {
+    for (AgentListener l : listeners) {
+      try {
+        l.onError("turn", e, ctx);
+      } catch (RuntimeException ignored) {
+        // a listener observes the failure; it cannot change the outcome
+      }
+    }
+    String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+    TurnError error = new TurnError(TurnError.ErrorClass.FATAL, message);
+    if (!endedOnTheLog(ctx)) {
+      Map<String, Object> p = map("status", TurnStatus.FAILED.wire(), "reason", message);
+      p.put("error_class", error.errorClass().wire());
+      ctx.record(EventType.TURN_FAILED, p);
+    }
+    return new TurnResult(ctx.conversationId, ctx.turnId, TurnStatus.FAILED, routedPath(ctx), null,
+        error, ctx.calls, ctx.events, stateOrEmpty(ctx));
+  }
+
+  private static boolean endedOnTheLog(AgentContext ctx) {
+    if (ctx.events.isEmpty()) {
+      return false;
+    }
+    String last = ctx.events.get(ctx.events.size() - 1).type();
+    return EventType.TURN_FAILED.wire().equals(last) || EventType.TURN_COMPLETED.wire().equals(last);
+  }
+
+  private static String routedPath(AgentContext ctx) {
+    for (LogEvent e : ctx.events) {
+      if (EventType.ROUTED.wire().equals(e.type())) {
+        return String.valueOf(e.payload().get("path"));
+      }
+    }
+    return null;
+  }
+
+  /** The reduced state, or empty when the log cannot be folded: a corrupt log still gets a result. */
+  private static Map<String, Object> stateOrEmpty(AgentContext ctx) {
+    try {
+      return ctx.conversationState().reduced();
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException e) {
+      return Map.of();
+    }
+  }
+
+  private TurnResult process(Event event, AgentContext ctx) {
     ConversationState before = ctx.conversationState();
 
     if (event.isResume() && before.suspended().containsKey(event.turnId())) {
@@ -217,7 +279,13 @@ public final class RoutedGraph {
     Long processingNow = timers.isEmpty() ? null : WorkflowTimers.processingNow(timers, ctx);
     boolean firstTurn = before.nextSequence() == 0;
     if (!firstTurn && processingNow != null) {
-      WorkflowTimers.fireDue(timers, before.timers(), ctx, processingNow, watermark);
+      try {
+        WorkflowTimers.fireDue(timers, before.timers(), ctx, processingNow, watermark);
+      } catch (ToolFailure e) {
+        return fail(ctx, null, TurnError.ErrorClass.TOOL, e);
+      } catch (ToolRegistry.UnknownTool e) {
+        return fail(ctx, null, TurnError.ErrorClass.VALIDATION, e);
+      }
     }
     Map<String, Object> received = org.jagentic.core.cep.EventTime.annotate(
         map("turn_id", event.turnId(), "text", event.text()), event);
@@ -347,19 +415,19 @@ public final class RoutedGraph {
   }
 
   private TurnResult runSaga(Event event, AgentContext ctx, String path) {
-    ctx.store.associateUser(event.conversationId(), event.userId());
+    if (event.userId() != null) {
+      ctx.store.associateUser(event.conversationId(), event.userId());
+    }
     List<SagaPlan.Step> done = new ArrayList<>();
     for (SagaPlan.Step step : saga.steps()) {
       try {
         ctx.invoke(step.tool(), step.args(), null);
       } catch (ToolFailure | ToolRegistry.UnknownTool e) {
         ctx.record(EventType.COMPENSATION_STARTED, map("failed_step", step.name()));
-        for (int i = done.size() - 1; i >= 0; i--) {
-          SagaPlan.Step completed = done.get(i);
-          String undo = completed.compensateWith();
-          if (undo != null) {
-            ctx.invoke(undo, Map.of(), EventType.COMPENSATION_STEP);
-          }
+        List<String> failedUndos = compensate(done, ctx);
+        if (!failedUndos.isEmpty()) {
+          return fail(ctx, path, TurnError.ErrorClass.FATAL, new IllegalStateException(
+              "compensation failed for " + failedUndos + " after: " + e.getMessage()));
         }
         ctx.record(EventType.COMPENSATION_COMPLETED, map("steps", done.size()));
         return fail(ctx, path, e instanceof ToolFailure ? TurnError.ErrorClass.TOOL
@@ -368,6 +436,28 @@ public final class RoutedGraph {
       done.add(step);
     }
     return complete(event, ctx, path, "[" + path + "] saga completed");
+  }
+
+  /**
+   * Runs every undo in reverse order. One that fails is recorded and passed over, so the rest still
+   * run; the ids of those that failed come back for the turn's terminal error.
+   */
+  private static List<String> compensate(List<SagaPlan.Step> done, AgentContext ctx) {
+    List<String> failed = new ArrayList<>();
+    for (int i = done.size() - 1; i >= 0; i--) {
+      String undo = done.get(i).compensateWith();
+      if (undo == null) {
+        continue;
+      }
+      try {
+        ctx.compensate(undo);
+      } catch (LogUnavailable e) {
+        throw e;
+      } catch (RuntimeException e) {
+        failed.add(undo);
+      }
+    }
+    return failed;
   }
 
   private TurnResult fail(AgentContext ctx, String path, TurnError.ErrorClass cls, RuntimeException e) {
@@ -403,7 +493,7 @@ public final class RoutedGraph {
     ctx.store.putAttribute(ctx.conversationId, PHASE_ATTR,
         status == TurnStatus.SUSPENDED ? "suspended" : "done");
     TurnResult result = new TurnResult(ctx.conversationId, ctx.turnId, status, path, reply, error,
-        ctx.calls, ctx.events, ctx.conversationState().reduced());
+        ctx.calls, ctx.events, stateOrEmpty(ctx));
     for (AgentListener l : listeners) {
       l.onTurnEnd(result, ctx);
     }

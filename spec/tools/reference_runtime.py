@@ -193,7 +193,11 @@ class ReferenceRuntime:
             conv.watermark_ms = max(conv.watermark_ms if conv.watermark_ms is not None else event_time, event_time)
         first_turn = not conv.log
         if not first_turn:
-            self._fire_due_timers(conv, ctx)
+            try:
+                self._fire_due_timers(conv, ctx)
+            except ToolError as exc:
+                return self._finish(conv, ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
+                                    event=("turn_failed", {"reason": str(exc)}))
         received: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text}
         if event_time is not None:
             received["event_time_ms"] = event_time
@@ -370,10 +374,18 @@ class ReferenceRuntime:
                 self._invoke(conv, ctx, step["tool"], step.get("args", {}))
             except ToolError as exc:
                 self._append(conv, ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
+                failed_undos: List[str] = []
                 for completed in reversed(done):
                     undo = completed.get("compensate_with") or self.tools[completed["tool"]].get("compensation")
                     if undo:
-                        self._invoke(conv, ctx, undo, {}, event="compensation_step")
+                        try:
+                            self._invoke(conv, ctx, undo, {}, event="compensation_step", strict=True)
+                        except ToolError:
+                            failed_undos.append(undo)
+                if failed_undos:
+                    message = f"compensation failed for {failed_undos} after: {exc}"
+                    return self._finish(conv, ctx, "failed", path, None, {"class": "fatal", "message": message},
+                                        event=("turn_failed", {"reason": message}))
                 self._append(conv, ctx, "compensation_completed", {"steps": len(done)})
                 return self._finish(conv, ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
                                     event=("turn_failed", {"reason": str(exc)}))
@@ -420,7 +432,9 @@ class ReferenceRuntime:
         raise SpecError(f"the reference runtime does not implement the {kind} verifier")
 
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,
-                args: Dict[str, Any], event: str = None) -> Any:
+                args: Dict[str, Any], event: str = None, strict: bool = False) -> Any:
+        """`strict` raises when the budget is spent whatever `on_tool_error` says: a saga undo
+        that failed must never read as compensated."""
         spec = self.tools.get(tool_id)
         if spec is None:
             raise SpecError(f"unknown tool {tool_id}")
@@ -436,7 +450,7 @@ class ReferenceRuntime:
                 self._append(conv, ctx, "tool_failed",
                              {"tool": tool_id, "index": index, "attempt": attempt, "error": str(exc)})
                 if attempt == max_attempts:
-                    if self.policies.get("on_tool_error", "fail") == "continue":
+                    if self.policies.get("on_tool_error", "fail") == "continue" and not strict:
                         return None
                     raise
                 continue

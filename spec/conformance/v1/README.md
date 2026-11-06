@@ -34,6 +34,8 @@ Python owners.
 | `parallel-conversations` | concurrently delivered turns on different conversations are isolated |
 | `path-verifier-override` | `paths.<name>.verifier` replaces `agent.verifier` for turns routed to that path |
 | `path-verifier-fallback` | a path without a verifier is judged by `agent.verifier` |
+| `compensation-failure` | a failing compensation ends the turn `fatal`, the rest still run, and it never escapes the turn |
+| `timer-tool-failure` | a failing timer tool fails the turn that observed the deadline, and the next turn runs |
 
 Run them against the reference runtime:
 

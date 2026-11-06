@@ -10,6 +10,7 @@ import org.apache.flink.api.common.state.ValueState;
 import org.jagentic.core.ConversationLog;
 import org.jagentic.core.EventType;
 import org.jagentic.core.LogEvent;
+import org.jagentic.core.LogUnavailable;
 
 /**
  * The spec's per-conversation event log stored in Flink keyed state.
@@ -44,7 +45,7 @@ final class KeyedConversationLog implements ConversationLog {
       nextSequence.update(next + 1);
       return e;
     } catch (Exception ex) {
-      throw new IllegalStateException("failed to append to keyed conversation log for " + cid, ex);
+      throw new LogUnavailable("failed to append to keyed conversation log for " + cid, ex);
     }
   }
 
@@ -61,7 +62,7 @@ final class KeyedConversationLog implements ConversationLog {
       }
       return out;
     } catch (Exception ex) {
-      throw new IllegalStateException("failed to read keyed conversation log for " + cid, ex);
+      throw new LogUnavailable("failed to read keyed conversation log for " + cid, ex);
     }
   }
 

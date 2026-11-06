@@ -26,6 +26,7 @@ import org.apache.flink.streaming.api.TimeDomain;
 import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.ChatMessage;
 import org.jagentic.core.ConversationLog;
@@ -35,6 +36,8 @@ import org.jagentic.core.Event;
 import org.jagentic.core.EventType;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LogEvent;
+import org.jagentic.core.LogUnavailable;
+import org.jagentic.core.TurnError;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
 import org.jagentic.core.cep.SequencePattern;
@@ -102,6 +105,14 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   private final Map<String, Object> spec;
   private final FlinkRuntimeOptions options;
   private final ChatClientFactories.SerializableChatClientFactory chatClientFactory;
+
+  /**
+   * The dead-letter side output: turns that ended {@code failed} with error class {@code fatal} or
+   * {@code transient}. They also appear on the main output; this stream is the one an operator
+   * alerts on, repairs from or redelivers from.
+   */
+  public static final OutputTag<TurnResult> TURN_FAILURES =
+      new OutputTag<>("turn-failures", TurnResultTypeInfo.INSTANCE);
 
   private transient GraphBuilder.Built built;
   private transient ListState<LogEvent> log;
@@ -233,13 +244,19 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
               + event.conversationId());
     }
     ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
-    TurnResult result = handle(event, keyedLog, ctx.timerService());
-
-    if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
-      LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
-      result = withEvents(result, append(result.events, scheduled));
+    TurnResult result = null;
+    try {
+      result = handle(event, keyedLog, ctx.timerService());
+      if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
+        LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
+        result = withEvents(result, append(result.events, scheduled));
+      }
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException e) {
+      result = failAtBoundary(cid, event.turnId(), keyedLog, result, e);
     }
-    emit(result, out);
+    emit(result, ctx, out);
   }
 
   @Override
@@ -266,8 +283,51 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
       return; // resumed by an explicit signal before the timer fired; the firing is recorded only
     }
     Map<String, Object> signal = payload("kind", TIMER_SIGNAL_KIND, "timer_id", timerId);
-    TurnResult result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
-    emit(withEvents(result, prepend(fired, result.events)), out);
+    TurnResult result;
+    try {
+      result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException e) {
+      result = failAtBoundary(cid, turnId, keyedLog, null, e);
+    }
+    emit(withEvents(result, prepend(fired, result.events)), ctx, out);
+  }
+
+  /**
+   * The operator's half of the turn boundary, for what happens outside the core graph: a log that
+   * no longer folds, or a suspended turn whose resume timer cannot be registered. The turn ends
+   * {@code failed} with class {@code fatal} and the job keeps serving every other key.
+   *
+   * @param partial the result so far, when the core had already produced one
+   */
+  private static TurnResult failAtBoundary(
+      String cid, String turnId, ConversationLog keyedLog, TurnResult partial, RuntimeException e) {
+    String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+    TurnError error = new TurnError(TurnError.ErrorClass.FATAL, message);
+    LogEvent failed =
+        keyedLog.append(
+            cid,
+            turnId,
+            EventType.TURN_FAILED,
+            payload(
+                "status",
+                TurnStatus.FAILED.wire(),
+                "reason",
+                message,
+                "error_class",
+                error.errorClass().wire()));
+    List<LogEvent> events = partial == null ? List.of() : partial.events;
+    return new TurnResult(
+        cid,
+        turnId,
+        TurnStatus.FAILED,
+        partial == null ? null : partial.path,
+        null,
+        error,
+        partial == null ? List.of() : partial.calls,
+        append(events, failed),
+        partial == null ? Map.of() : partial.state);
   }
 
   private TurnResult handle(Event event, ConversationLog keyedLog, TimerService timerService) {
@@ -333,9 +393,20 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     return ts;
   }
 
-  private void emit(TurnResult result, Collector<TurnResult> out) {
+  private void emit(TurnResult result, Context ctx, Collector<TurnResult> out) {
     turnCounters.get(result.status).inc();
     out.collect(result);
+    if (needsAttention(result)) {
+      ctx.output(TURN_FAILURES, result);
+    }
+  }
+
+  private static boolean needsAttention(TurnResult result) {
+    if (result.status != TurnStatus.FAILED || result.error == null) {
+      return false;
+    }
+    TurnError.ErrorClass cls = result.error.errorClass();
+    return cls == TurnError.ErrorClass.FATAL || cls == TurnError.ErrorClass.TRANSIENT;
   }
 
   private static String timerId(String turnId, long fireAt) {

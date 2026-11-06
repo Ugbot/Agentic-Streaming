@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
-from .errors import AgenticError, ToolError, ValidationError
+from .errors import AgenticError, LogUnavailable, ToolError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec
@@ -165,7 +165,26 @@ class Engine:
 
     def handle(self, turn: Turn) -> Dict[str, Any]:
         """Process one turn to a terminal status. Must be called by the conversation's
-        single writer."""
+        single writer.
+
+        This is the turn boundary and it does not raise for anything a turn does: whatever
+        escapes the turn's own handling ends it `failed` with class `fatal`. `LogUnavailable`
+        alone passes through, since a turn cannot record its end in a log it cannot reach."""
+        ctx = _TurnContext(turn, turn.text, self.clock())
+        try:
+            return self._process(turn, ctx)
+        except LogUnavailable:
+            raise
+        except Exception as exc:  # the boundary: a per-turn failure must not reach the caller
+            return self._fail_at_boundary(ctx, exc)
+
+    def _fail_at_boundary(self, ctx: _TurnContext, exc: Exception) -> Dict[str, Any]:
+        message = str(exc) or type(exc).__name__
+        ended = ctx.events and ctx.events[-1].type in ("turn_completed", "turn_failed")
+        return self._finish(ctx, "failed", self._routed_path(ctx), None, {"class": "fatal", "message": message},
+                            event=None if ended else ("turn_failed", {"status": "failed", "reason": message}))
+
+    def _process(self, turn: Turn, ctx: _TurnContext) -> Dict[str, Any]:
         key = (turn.conversation_id, turn.turn_id)
         idempotent = self.policies.get("idempotency", "turn-id") == "turn-id"
         with self._guard:
@@ -174,7 +193,6 @@ class Engine:
 
         if turn.signal is not None:
             if pending is None:
-                ctx = _TurnContext(turn, turn.text, self.clock())
                 return self._fail_validation(ctx, None, f"no suspended turn {turn.turn_id!r} to resume")
             return self._resume(turn, pending)
         if idempotent and prior is not None:
@@ -184,7 +202,6 @@ class Engine:
             duplicate["runtime_detail"] = {"duplicate_of": prior.get("runtime_detail", {}), "re_executed": False}
             return duplicate
 
-        ctx = _TurnContext(turn, turn.text, self.clock())
         history = self.log.read(turn.conversation_id)
         try:
             self.timers.fire_due(turn, history, lambda kind, payload: self._append(ctx, kind, payload),
@@ -331,11 +348,19 @@ class Engine:
             except ToolError as exc:
                 self._append(ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
                 compensated = 0
+                failed_undos: List[str] = []
                 for completed in reversed(done):
                     undo = completed.get("compensate_with") or self.tools.spec(completed["tool"]).compensation
                     if undo:
-                        self._invoke(ctx, undo, {}, event="compensation_step")
-                        compensated += 1
+                        try:
+                            self._invoke(ctx, undo, {}, event="compensation_step", strict=True)
+                            compensated += 1
+                        except (ToolError, ValidationError):
+                            failed_undos.append(undo)
+                if failed_undos:
+                    message = f"compensation failed for {failed_undos} after: {exc}"
+                    return self._finish(ctx, "failed", path, None, {"class": "fatal", "message": message},
+                                        event=("turn_failed", {"status": "failed", "reason": message}))
                 self._append(ctx, "compensation_completed", {"steps": len(done), "compensated": compensated})
                 return self._finish(ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
                                     event=("turn_failed", {"status": "failed", "reason": str(exc)}))
@@ -421,7 +446,9 @@ class Engine:
         return passages
 
     def _invoke(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any],
-                event: Optional[str] = None) -> Any:
+                event: Optional[str] = None, strict: bool = False) -> Any:
+        """One tool call under `policies.retry`. `strict` raises when the budget is spent whatever
+        `on_tool_error` says: a saga undo that failed must never read as compensated."""
         spec: ToolSpec = self.tools.spec(tool_id)
         self.tools.validate_args(tool_id, args)
         index = ctx.take_index()
@@ -438,7 +465,7 @@ class Engine:
                 self._append(ctx, "tool_failed", {"tool": tool_id, "index": index, "attempt": attempt,
                                                   "args": args, "error": str(exc)})
                 if attempt == max_attempts:
-                    if self.policies.get("on_tool_error", "fail") == "continue":
+                    if self.policies.get("on_tool_error", "fail") == "continue" and not strict:
                         return None
                     raise
                 delay = retry_delay_ms(retry, attempt, self.rng)

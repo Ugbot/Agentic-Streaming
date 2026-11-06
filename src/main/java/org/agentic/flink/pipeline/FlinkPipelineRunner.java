@@ -20,6 +20,7 @@ import org.apache.flink.cep.CEP;
 import org.apache.flink.cep.functions.PatternProcessFunction;
 import org.apache.flink.cep.pattern.Pattern;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.Collector;
 import org.jagentic.core.Event;
@@ -74,16 +75,17 @@ public final class FlinkPipelineRunner {
    * {@link #assembleResults(StreamExecutionEnvironment, Map, DataStream, FlinkRuntimeOptions)} with
    * options from {@code runtime.flink}.
    */
-  public static DataStream<TurnResult> assembleResults(
+  public static SingleOutputStreamOperator<TurnResult> assembleResults(
       StreamExecutionEnvironment env, Map<String, Object> spec, DataStream<Event> source) {
     return assembleResults(env, spec, source, FlinkRuntimeOptions.fromSpec(spec));
   }
 
   /**
    * Assemble the job graph and return the normalized turn results, one per input event (and one per
-   * timer-driven resume), in the shape of {@code spec/v1/result.schema.json}.
+   * timer-driven resume), in the shape of {@code spec/v1/result.schema.json}. Turns that need
+   * attention are also on {@code getSideOutput(WorkflowTurnFunction.TURN_FAILURES)}.
    */
-  public static DataStream<TurnResult> assembleResults(
+  public static SingleOutputStreamOperator<TurnResult> assembleResults(
       StreamExecutionEnvironment env,
       Map<String, Object> spec,
       DataStream<Event> source,
@@ -96,7 +98,7 @@ public final class FlinkPipelineRunner {
    * the factory used for {@code brain: llm} paths; the default rejects such specs at build time.
    */
   @SuppressWarnings("unchecked")
-  public static DataStream<TurnResult> assembleResults(
+  public static SingleOutputStreamOperator<TurnResult> assembleResults(
       StreamExecutionEnvironment env,
       Map<String, Object> spec,
       DataStream<Event> source,

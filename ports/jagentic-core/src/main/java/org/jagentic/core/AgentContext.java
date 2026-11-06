@@ -101,6 +101,19 @@ public final class AgentContext {
    *     ({@code delegated} for peer tools, {@code tool_called} otherwise)
    */
   public Object invoke(String toolId, Map<String, Object> params, EventType successEvent) {
+    return invoke(toolId, params, successEvent, policies.onToolError() == Policies.OnToolError.CONTINUE);
+  }
+
+  /**
+   * One saga undo. It always throws when its budget is spent, whatever {@code on_tool_error} says:
+   * a failed compensation must never read as a compensated step.
+   */
+  public Object compensate(String toolId) {
+    return invoke(toolId, Map.of(), EventType.COMPENSATION_STEP, false);
+  }
+
+  private Object invoke(String toolId, Map<String, Object> params, EventType successEvent,
+                        boolean swallowFailure) {
     ToolRegistry.Tool tool = tools.get(toolId);
     if (tool == null) {
       throw new ToolRegistry.UnknownTool(toolId);
@@ -126,7 +139,7 @@ public final class AgentContext {
           l.onError("tool:" + toolId, e, this);
         }
         if (attempt == budget) {
-          if (policies.onToolError() == Policies.OnToolError.CONTINUE) {
+          if (swallowFailure) {
             return null;
           }
           throw new ToolFailure(toolId, index, attempt, message, e);

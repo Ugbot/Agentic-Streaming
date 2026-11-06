@@ -1,0 +1,39 @@
+id: timer-tool-failure
+description: "A workflow timer's tool that fails ends the turn that observed the deadline as failed with error class tool, recording timer_fired, tool_failed and turn_failed. It does not escape the turn, and the next turn on the conversation runs normally: the timer has fired and does not fire again."
+requires: [timers, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  timers:
+    - {id: followup, after_ms: 1000, tool: send_nudge, payload: {channel: email}}
+  agent:
+    id: reminders
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: rule, prompt: You chat.}
+  policies:
+    on_tool_error: fail
+    retry: {kind: none, max_attempts: 1}
+  tools:
+    - {id: send_nudge, kind: failing, description: Always raises}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "start"}
+  - {conversation_id: c1, turn_id: t2, text: "still here", advance_time_ms: 1000}
+  - {conversation_id: c1, turn_id: t3, text: "and now?"}
+expect:
+  - turn_id: t1
+    status: completed
+    tool_calls: []
+  - turn_id: t2
+    status: failed
+    error_class: tool
+    tool_calls:
+      - {tool: send_nudge, index: 0, failed: true}
+    events_include: [timer_fired, tool_failed, turn_failed]
+    events_exclude: [turn_completed]
+    state_includes: {fired_timers: [followup]}
+  - turn_id: t3
+    status: completed
+    tool_calls: []
+    events_exclude: [timer_fired]
+    state_includes: {fired_timers: [followup]}

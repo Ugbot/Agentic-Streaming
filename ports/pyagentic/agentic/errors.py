@@ -48,6 +48,11 @@ class ToolError(AgenticError):
     error_class = "tool"
 
 
+class LogUnavailable(AgenticError):
+    """The event log could not be read or written: storage, not anything a turn did. The one
+    failure the turn boundary lets through, since a turn cannot record its end in that log."""
+
+
 class GuardrailError(AgenticError):
     error_class = "guardrail"
 

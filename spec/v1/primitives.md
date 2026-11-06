@@ -145,6 +145,26 @@ policies:
     jitter: false          # deterministic by default so fixtures are reproducible
 ```
 
+The turn boundary. Handling a turn never raises to the runtime for anything the turn did. A
+failure no other rule covers ends the turn `failed`, with `turn_failed` of class `fatal` as
+its last event, and a redelivery is a `duplicate` of that failure like any other applied turn.
+A runtime must not fail, restart, or stop for a per-conversation error: other conversations
+keep running. It surfaces turns ending `fatal` somewhere an operator can act on them (on Flink
+the `turn-failures` side output). The one exception is a log that cannot be read or written,
+which is an infrastructure failure: the turn cannot record its end there, so the runtime fails
+as a whole and recovers.
+
+Failed compensation. A compensation that fails, after `policies.retry`, is recorded as
+`tool_failed` and does not stop the others: every remaining compensation still runs, in reverse
+order. `on_tool_error: continue` does not apply to compensations. `compensation_completed` is
+written only when every compensation succeeded. When any failed it is absent, and the turn ends
+`failed` with class `fatal` whatever the failed step's class was, because the saga is partly
+applied and needs repair by hand.
+
+A timer's tool that fails ends the turn that observed the deadline as `failed` with class
+`tool`, before `turn_received`. `timer_fired` stays on the log, so the timer does not fire
+again.
+
 Retries never re-append `turn_received`. Each attempt appends its own `tool_called` or
 `tool_failed` events with an incrementing `attempt` in the payload.
 
