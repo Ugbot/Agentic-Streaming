@@ -52,6 +52,7 @@
         <!-- 1.18.40 was the first release to support JDK 25; staying current here keeps a
              future baseline bump from being blocked by annotation processing. -->
         <lombok.version>1.18.48</lombok.version>
+        <bouncycastle.version>1.86</bouncycastle.version>
     </properties>
 
     <dependencyManagement>
@@ -65,6 +66,13 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <!-- A2A Java SDK BOM — aligns all a2a-java-sdk-* module versions. -->
             <dependency>
                 <groupId>io.github.a2asdk</groupId>
@@ -72,6 +80,46 @@
                 <version>${a2a.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <!-- flink-connector-kafka 5.0.0-2.2 is built on the 4.1 line; 4.1.2 is that line's patch
+                 for CVE-2026-33557 and CVE-2026-35554. agentic-pekko stays on 3.9.2 through its
+                 connector, so this is not managed in the reactor. -->
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>4.1.2</version>
+            </dependency>
+            <!-- Bouncy Castle comes in through Tika's crypto module at 1.82. -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcpkix-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcutil-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcjmail-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+            <!-- Test scope only, both through flink-test-utils. -->
+            <dependency>
+                <groupId>org.apache.zookeeper</groupId>
+                <artifactId>zookeeper</artifactId>
+                <version>3.9.7</version>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>3.27.7</version>
             </dependency>
             <!-- The LangChain4J BOM, flink-cep, postgresql and HikariCP versions, and every
                  org.jagentic module coordinate are managed in reactor/pom.xml. -->
