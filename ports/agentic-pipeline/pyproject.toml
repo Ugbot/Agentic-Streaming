@@ -44,8 +44,7 @@ agentic-pipeline = "agentic_pipeline.__main__:main"
 Repository = "https://github.com/Ugbot/Agentic-Streaming"
 Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/ports/agentic-pipeline/README.md"
 
-# Dev and test installs: `uv sync` in this directory (see docs/release.md). uv is not needed to
-# install or use the wheel.
+# Dev and test installs: `uv sync` in this directory (a dev tool only; nothing here needs it to run).
 [dependency-groups]
 dev = ["pytest>=7,<9", "build>=1.2", "twine>=5"]
 

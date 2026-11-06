@@ -2,7 +2,7 @@
 
 Runtimes are found by name in three places, in order: `register_runtime(name, factory)`,
 the `agentic.runtimes` entry-point group, and the built-in `local`. Selecting a name that
-resolves to nothing raises `RuntimeNotAvailableError` naming the extra to install.
+resolves to nothing raises `RuntimeNotAvailableError`.
 """
 
 from __future__ import annotations
@@ -33,19 +33,10 @@ CAPABILITIES: Tuple[str, ...] = (
 )
 CAPABILITY_VALUES = frozenset({"supported", "partial", "unsupported", "not_tested"})
 
-# Runtime names that other packages of this project provide, with the extra that installs them.
-KNOWN_EXTRAS: Dict[str, str] = {
-    "flink-jvm": "pyagentic[flink]",
-    "local-jvm": "pyagentic[jvm]",
-    "pekko": "pyagentic[jvm]",
-    "pyflink": "pyagentic[pyflink]",
-}
-
-# Names that used to be registered and now resolve to nothing; the error says what replaced them.
-RENAMED_RUNTIMES: Dict[str, str] = {
-    "flink": "'flink-jvm' (the JPype facade, agentic-flink) or 'pyflink' (agentic-pyflink)",
-    "jvm": "'local-jvm' (agentic-flink)",
-}
+# Python-to-JVM runtimes that used to be registered. The packages behind them left this repository;
+# the error says so rather than suggesting an install that cannot work. The code as it stood is at tag
+# `pre-cornerstone`.
+REMOVED_RUNTIMES = frozenset({"flink", "flink-jvm", "jvm", "local-jvm", "pekko", "pyflink"})
 
 Factory = Callable[..., "Runtime"]
 _registry: Dict[str, Factory] = {}
@@ -173,10 +164,8 @@ def get_runtime(name: str = "local", **options: Any) -> Runtime:
     if factory is None and name == "local":
         factory = LocalRuntime
     if factory is None:
-        extra = KNOWN_EXTRAS.get(name)
-        renamed = RENAMED_RUNTIMES.get(name)
-        hint = (f"install it with `pip install '{extra}'`" if extra
-                else f"it was renamed; use {renamed}" if renamed
+        hint = ("the package that provided it has been removed; the code is at tag `pre-cornerstone`"
+                if name in REMOVED_RUNTIMES
                 else "install the package that provides it, or call register_runtime()")
         known = ", ".join(sorted(available_runtimes()))
         raise RuntimeNotAvailableError(

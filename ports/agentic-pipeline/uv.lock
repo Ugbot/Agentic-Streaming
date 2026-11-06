@@ -909,9 +909,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agentic-flink", marker = "python_full_version >= '3.10' and extra == 'flink'", editable = "../../python" },
-    { name = "agentic-flink", marker = "python_full_version >= '3.10' and extra == 'jvm'", editable = "../../python" },
-    { name = "agentic-pyflink", marker = "python_full_version >= '3.10' and extra == 'pyflink'", editable = "../../pyflink" },
     { name = "jsonschema", specifier = ">=4.18,<5" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8,<2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7,<9" },
@@ -919,7 +916,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
 ]
-provides-extras = ["flink", "pyflink", "jvm", "test", "dev"]
+provides-extras = ["test", "dev"]
 
 [package.metadata.requires-dev]
 dev = [

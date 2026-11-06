@@ -7,9 +7,7 @@ or retrieval. So a new tool / new path / new brain added through the public API 
 "just work", and by construction every adapter then gets it for free.
 
 These tests add a brand-new tool and a brand-new path using only the public
-abstractions (no edits to the framework), and prove the core routes to it and invokes
-it. The adapter-level counterpart (same extension, run through a real engine seam)
-lives in ../../tests/test_adapters.py::test_celery_*.
+abstractions (no edits to the framework), and prove the core routes to it and invokes it.
 """
 
 from __future__ import annotations
