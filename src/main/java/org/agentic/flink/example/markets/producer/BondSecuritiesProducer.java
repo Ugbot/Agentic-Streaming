@@ -8,7 +8,7 @@ import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
 
 /**
- * Java twin of {@code examples-bin/markets/bond_securities_producer.py}. Publishes a slow stream of
+ * Publishes a slow stream of
  * security-master rows to the {@code fnd-securities} topic. The Flink job broadcasts these into the
  * inventory enrichment stage.
  *

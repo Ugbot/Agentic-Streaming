@@ -23,7 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Java twin of {@code examples-bin/markets/coinbase_producer.py}. Subscribes to the public Coinbase
+ * Subscribes to the public Coinbase
  * Exchange WebSocket and translates each event into the same Inventory/Trade JSON shape the Flink
  * job already consumes, so the operator graph is identical for crypto and bonds.
  *

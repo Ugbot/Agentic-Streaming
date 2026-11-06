@@ -1,16 +1,12 @@
-# Closing the loop: an agent that consumes the standalone Tool Services over MCP.
+# An agent that takes its tools from an MCP server.
 #
-# The tool packs (web/Tika, RAG, inference, utility) run as a separate, framework-agnostic
-# MCP server (tool-services-app). Any agent, in any language, on any backend, pulls those
-# tools in via the `mcp:` section. Here the agent spawns the tool-services stdio MCP server
-# from this repository and exposes its `tools_util_*` tools to the LLM brain.
+# Any agent, in any language, pulls tools in through the `mcp:` section. Here the agent spawns the
+# small stdio MCP server next to this file and exposes its `tools_util_*` tools to the LLM brain.
 #
-# Prerequisites (run from the repository root, which is also the working directory the
-# stdio command's relative classpath assumes):
+# Prerequisites (run from the repository root, which is also the working directory the stdio
+# command's relative path assumes). The python3 on PATH must have the MCP SDK:
 #   ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
-#   ./mvnw -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
-#   ./mvnw -q -f tool-services/tool-services-app/pom.xml package -DskipTests
-#   python -m pip install -e ports/pyagentic -e ports/agentic-pipeline mcp   # Python core needs the MCP SDK
+#   python3 -m pip install -e ports/pyagentic -e ports/agentic-pipeline "mcp<2"
 #
 # Run on either core (both spawn the same MCP server as a subprocess):
 #   python -m agentic_pipeline run examples/pipelines/tools-mcp.yaml --text "add 40 and 2"
@@ -22,7 +18,7 @@
 # tools_util_add and answers with the result, so the example runs offline and is part of
 # tools/smoke-examples.sh. To let a real model choose the tools, replace the llm section with
 #   llm: {provider: ollama, model: qwen2.5:3b, base_url: http://localhost:11434}
-# and start Ollama with examples-bin/run-ollama.sh.
+# and start Ollama.
 
 backend: local
 
@@ -33,13 +29,11 @@ llm:
     - {tool: tools_util_add, args: {a: 40, b: 2}}
     - {text: "40 plus 2 is 42."}
 
-# Spawn the tool-services stdio MCP server and register its tools (id-prefixed `tools_`).
-# The last argument selects the packs the server exposes (util = calculator and string ops).
+# Spawn the stdio MCP server and register its tools (id-prefixed `tools_`).
 mcp:
   - name: tools
     transport: stdio
-    command: [java, "-cp", "tool-services/tool-services-app/target/quarkus-app/app/*:tool-services/tool-services-app/target/quarkus-app/lib/main/*",
-              "org.jagentic.tools.app.mcp.StdioMain", "util"]
+    command: [python3, examples/pipelines/mcp_util_server.py]
 
 agent:
   router:

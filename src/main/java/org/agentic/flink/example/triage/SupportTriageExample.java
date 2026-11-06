@@ -46,13 +46,13 @@ import org.agentic.flink.statemachine.AgentTransition;
  * <p><b>Prerequisites:</b>
  *
  * <pre>
- *   bash examples-bin/run-ollama.sh      # Podman: starts Ollama and pulls qwen2.5:3b
+ *   podman compose up -d ollama &amp;&amp; podman compose exec ollama ollama pull qwen2.5:3b
  * </pre>
  *
  * <p><b>To run:</b>
  *
  * <pre>
- *   bash examples-bin/run-support-triage.sh
+ *   ./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.triage.SupportTriageExample
  * </pre>
  *
  * <p>See {@code docs/examples/support-triage.md} for the walkthrough.

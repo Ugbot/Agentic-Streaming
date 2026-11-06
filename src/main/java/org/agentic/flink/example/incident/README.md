@@ -53,7 +53,7 @@ mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.incident.IncidentAg
 Or:
 
 ```bash
-./examples-bin/run-incident.sh
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.incident.IncidentAgentExample
 ```
 
 ## Expected output

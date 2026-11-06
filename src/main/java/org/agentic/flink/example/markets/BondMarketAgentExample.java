@@ -7,8 +7,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 /**
  * Classic Flink upstream + inline agentic downstream over a (anonymised) fixed-income bond market
- * data feed. Reads three Kafka topics produced by the anonymised Python synthesizers under {@code
- * examples-bin/markets/}:
+ * data feed. Reads three Kafka topics produced by the anonymised synthesizers in {@code
+ * example.markets.producer}:
  *
  * <ul>
  *   <li>{@code fnd-inventory} — dealer bid/offer quotes (5K msg/s when synthesizers run)
@@ -23,9 +23,12 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * <pre>
  *   podman compose -f docker-compose-kafka.yml up -d
- *   python3 examples-bin/markets/bond_securities_producer.py &amp;
- *   python3 examples-bin/markets/bond_inventory_producer.py &amp;
- *   python3 examples-bin/markets/bond_trades_producer.py &amp;
+ *   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+ *     org.agentic.flink.example.markets.producer.BondSecuritiesProducer &amp;
+ *   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+ *     org.agentic.flink.example.markets.producer.BondInventoryProducer &amp;
+ *   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+ *     org.agentic.flink.example.markets.producer.BondTradesProducer &amp;
  *   flink run target/agentic-flink-1.0.0-SNAPSHOT.jar \
  *     org.agentic.flink.example.markets.BondMarketAgentExample
  * </pre>

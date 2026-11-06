@@ -22,7 +22,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  * </ol>
  *
  * <p><b>Prerequisites:</b> a reachable A2A peer. Point {@code A2A_PEER_URL} at one — e.g. this
- * project's own gateway (see {@code a2a-gateway/README.md}) or any A2A-compliant agent. Without a
+ * any A2A-compliant agent. Without a
  * peer the explicit step records a per-event error (it is configured with {@code
  * failOnError=false}) and the job still completes.
  *

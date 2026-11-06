@@ -1,24 +1,15 @@
-# Dependabot: weekly dependency updates for every build file in the repository, with minor and
-# patch bumps grouped into one pull request per ecosystem so the noise stays low. Major bumps
-# open one pull request each.
+# Dependabot: weekly dependency updates, with minor and patch bumps grouped into one pull request
+# per ecosystem so the noise stays low. Major bumps open one pull request each.
 #
-# Maven: every directory that holds a pom.xml is listed explicitly: the reactor
-# (reactor/pom.xml), each reactor module (the root pom is the Flink framework module), and the
-# standalone pom outside the reactor (a2a-gateway behind its profile).
-# pip: the four Python distributions. github-actions: the workflows under .github/workflows.
+# Maven lists /reactor alone. reactor/pom.xml names every module (`..` and `../<module>`), so
+# Dependabot reaches them all from there. Listing the modules as well made the directories overlap:
+# a file fetched through /reactor was assigned to /reactor, the job for the other directory found no
+# file of its own, and the grouped update failed with "No pom.xml!".
+# pip: the two Python distributions. github-actions: the workflows under .github/workflows.
 version: 2
 updates:
   - package-ecosystem: maven
-    directories:
-      - /reactor
-      - /
-      - /ports/jagentic-core
-      - /agentic-pekko
-      - /pyflink/java
-      - /tool-services/tool-services-packs
-      - /tool-services/tool-services-app
-      - /banking-job
-      - /a2a-gateway
+    directory: /reactor
     schedule:
       interval: weekly
       day: monday
@@ -32,8 +23,6 @@ updates:
   - package-ecosystem: pip
     directories:
       - /ports/pyagentic
-      - /python
-      - /pyflink
       - /ports/agentic-pipeline
     schedule:
       interval: weekly

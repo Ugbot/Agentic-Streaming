@@ -71,7 +71,7 @@ Add a DJL native binary to your local pom:
 ## Run
 
 ```bash
-./examples-bin/run-live-research.sh
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.research.LiveResearchExample
 # or
 mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.research.LiveResearchExample"
 ```

@@ -46,7 +46,7 @@ services:
     depends_on:
       - flink-jobmanager
     # Expose the ZMQ ports used by the L0..L5 chain so jobs can pull/push between containers
-    # *and* publishers on the host can connect. Ports below match the notebook defaults; adjust
+    # *and* publishers on the host can connect. Ports below are the defaults; adjust
     # if you change the chain layout.
     ports:
       - "127.0.0.1:5560:5560"
@@ -56,7 +56,7 @@ services:
       - "127.0.0.1:5564:5564"
       - "127.0.0.1:5559:5559" # control plane (PULL into L5)
       - "127.0.0.1:5558:5558" # debug PUB out of L5
-      - "127.0.0.1:5557:5557" # alerts PUB out of L5 (live notebook tail)
+      - "127.0.0.1:5557:5557" # alerts PUB out of L5 (live tail)
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager

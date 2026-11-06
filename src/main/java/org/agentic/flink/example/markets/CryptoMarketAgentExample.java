@@ -7,8 +7,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 /**
  * The same classic-Flink-then-agentic graph as {@link BondMarketAgentExample}, but pointed at the
- * live Coinbase market data feed (via the Python bridge at {@code
- * examples-bin/markets/coinbase_producer.py}, which subscribes to the public Coinbase WebSocket and
+ * live Coinbase market data feed (via {@link
+ * org.agentic.flink.example.markets.producer.CoinbaseProducer}, which subscribes to the public Coinbase WebSocket and
  * writes per-product bid/offer levels + trades to Kafka in the same JSON shape).
  *
  * <p>Crypto has no security master, so the {@code coinbase-securities} topic carries a small static
@@ -19,7 +19,8 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
  *
  * <pre>
  *   podman compose -f docker-compose-kafka.yml up -d
- *   python3 examples-bin/markets/coinbase_producer.py &amp;   # requires internet
+ *   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+ *     org.agentic.flink.example.markets.producer.CoinbaseProducer &amp;   # requires internet
  *   flink run target/agentic-flink-1.0.0-SNAPSHOT.jar \
  *     org.agentic.flink.example.markets.CryptoMarketAgentExample
  * </pre>

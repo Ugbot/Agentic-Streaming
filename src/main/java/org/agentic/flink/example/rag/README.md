@@ -56,7 +56,7 @@ mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.rag.RagResearchExam
 Or:
 
 ```bash
-./examples-bin/run-rag.sh
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.rag.RagResearchExample
 ```
 
 ## Adding an MCP tool source

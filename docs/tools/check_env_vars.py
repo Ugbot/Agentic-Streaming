@@ -10,9 +10,8 @@ Two kinds of ``AGENTIC_FLINK_*`` names are legitimate in the documentation:
 
 * application keys: the variable maps back to a dotted key that appears as a string literal in a
   Java source file of the repository (every ``ConfigKeys`` constant, plus keys some modules read
-  with a literal, for example ``a2a.auth.dev.mode`` in the A2A gateway);
-* runtime and tooling variables read directly by scripts or code, for example ``AGENTIC_FLINK_JAR``
-  in examples-bin/_common.sh; the literal name must appear in a non-documentation source file.
+  with a literal, for example ``a2a.auth.dev.mode``);
+* runtime and tooling variables read directly by scripts or code; the literal name must appear in a non-documentation source file.
 
 Anything else is drift and fails the check. The block between ``<!-- env-vars: ConfigKeys -->``
 and ``<!-- /env-vars -->`` in docs/configuration.md is generated from ``ConfigKeys.java`` and must
