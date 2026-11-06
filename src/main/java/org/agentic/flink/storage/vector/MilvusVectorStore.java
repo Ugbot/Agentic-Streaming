@@ -143,7 +143,7 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
   }
 
   private void connect() {
-    ConnectConfig.ConnectConfigBuilder<?, ?> builder =
+    ConnectConfig.ConnectConfigBuilder builder =
         ConnectConfig.builder().uri("http://" + host + ":" + port);
     if (token != null) {
       builder.token(token);
@@ -259,7 +259,7 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
     if (topK <= 0) {
       return new ArrayList<>();
     }
-    SearchReq.SearchReqBuilder<?, ?> builder =
+    SearchReq.SearchReqBuilder builder =
         SearchReq.builder()
             .collectionName(collection)
             .annsField(VECTOR_FIELD)
