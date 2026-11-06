@@ -23,7 +23,7 @@
   <properties>
     <jackson.version>2.17.2</jackson.version>
     <tika.version>2.9.2</tika.version>
-    <jsoup.version>1.18.1</jsoup.version>
+    <jsoup.version>1.23.2</jsoup.version>
   </properties>
 
   <dependencies>
