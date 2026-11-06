@@ -334,7 +334,7 @@ names the code it was checked against.
   UTF-8 bytes, with offset basis `0x811C9DC5` and prime `0x01000193`. Tokens are the maximal
   runs matching `[a-z0-9]+` after lower-casing the text. Each token adds `1.0` to slot
   `fnv1a_32(token) mod dim`; the vector is then L2-normalized, and an all-zero vector stays
-  zero (`embed`). This is the embedder the Python, JVM, and Clojure cores share at byte parity;
+  zero (`embed`). This is the embedder the Python and JVM cores share at byte parity;
   the fixture `15-retrieval` depends on it producing the same order on every runtime.
 - Retrieval scoring and threshold. Candidates are scored by cosine similarity between the
   query vector and each passage vector (`cosine`; zero if either norm is zero), sorted by

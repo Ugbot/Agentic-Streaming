@@ -2,7 +2,7 @@
 """Run the v1 conformance fixtures against every runtime binding and build the capability matrix.
 
     python spec/tools/conformance_matrix.py                       # every binding it can find
-    python spec/tools/conformance_matrix.py --runtimes reference clojure
+    python spec/tools/conformance_matrix.py --runtimes reference python
     python spec/tools/conformance_matrix.py --require jvm-core --require flink   # missing toolchain is a failure
     python spec/tools/conformance_matrix.py --output build/conformance.json --write-docs docs/capabilities.md
     python spec/tools/conformance_matrix.py --render build/conformance.json --write-docs docs/capabilities.md
@@ -16,16 +16,7 @@ never a reimplementation of it:
 | jvm-core  | `ports/jagentic-core` JUnit `ConformanceTest`                    | inside the binding    |
 | flink     | `src/test/.../FlinkConformanceTest` on a MiniCluster             | inside the binding    |
 | pekko     | `agentic-pekko` JUnit `PekkoConformanceTest`                     | inside the binding    |
-| clojure   | `agentic-clj` `agentic.conformance/run-all`                      | here, on its results  |
 | python    | an installed `agentic.conformance` entry point (see below)       | here, on its results  |
-| pyflink   | `agentic_pyflink.conformance.run_all()` (PyFlink over the bridge jar) | inside the binding |
-| python-jvm | `agentic_flink.conformance.run_all('local-jvm')` (JPype facade)  | inside the binding    |
-| python-flink | `agentic_flink.conformance.run_all('flink-jvm')` (JPype facade)    | inside the binding    |
-
-The last three ship their own conformance module that imports `run_conformance.check_expectation`
-(the same comparator) and returns per-fixture pass/fail/skip outcomes rather than normalized results;
-the runner executes that module in a subprocess of the current interpreter and reads the outcomes
-back. A missing package or shaded jar is reported as `not_tested: toolchain unavailable`.
 
 "Here" means the binding returns one normalized result document per turn (schema
 `spec/v1/result.schema.json`); the runner validates every document against that schema,
@@ -92,7 +83,6 @@ PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
 RAN, NOT_TESTED, ERROR = "ran", "not_tested", "error"
 
 MVN = shutil.which("mvn")
-CLOJURE = shutil.which("clojure")
 
 
 def maven_command(root: Path) -> Optional[str]:
@@ -417,172 +407,15 @@ def run_maven_suite(suite: MavenSuite, fixtures: Dict[str, Dict[str, Any]], root
     return report
 
 
-CLOJURE_EXPR = """
-(require '[agentic.conformance :as conf] '[clojure.data.json :as json])
-(let [outcomes (conf/run-all)]
-  (println "@@AGENTIC_CONFORMANCE@@")
-  (println (json/write-str (mapv (fn [o] (update o :status name)) outcomes)))
-  (println "@@END@@"))
-(shutdown-agents)
-"""
-
-
-def parse_clojure_output(text: str) -> List[Dict[str, Any]]:
-    if "@@AGENTIC_CONFORMANCE@@" not in text or "@@END@@" not in text:
-        raise BindingError("agentic.conformance/run-all did not print its outcomes")
-    payload = text.split("@@AGENTIC_CONFORMANCE@@", 1)[1].split("@@END@@", 1)[0].strip()
-    return json.loads(payload)
-
-
-def outcomes_from_clojure(outcomes: List[Dict[str, Any]], fixtures: Dict[str, Dict[str, Any]]) -> List[FixtureOutcome]:
-    by_id = {o["id"]: o for o in outcomes}
-    validator = result_validator()
-    out: List[FixtureOutcome] = []
-    for fixture in fixtures.values():
-        o = by_id.get(fixture["id"])
-        if o is None:
-            raise BindingError(f"agentic.conformance reported nothing for fixture {fixture['id']}")
-        if o["status"] == "skipped":
-            reason = "; ".join(o.get("problems") or []) or "skipped by the binding"
-            out.append(skip_outcome(fixture, missing_from_skip_reason(reason, fixture["requires"]), reason))
-        else:
-            out.append(outcome_from_results(fixture, o.get("results") or [], validator))
-    return out
-
-
-def run_clojure(fixtures: Dict[str, Dict[str, Any]], root: Path, logs: Path) -> RuntimeReport:
-    report = RuntimeReport("clojure", "agentic-clj: agentic.conformance/run-all", "runner", RAN)
-    module = root / "agentic-clj"
-    if not (module / "src" / "agentic" / "conformance.clj").exists():
-        report.status, report.reason = NOT_TESTED, "binding absent: agentic-clj/src/agentic/conformance.clj not found"
-        return report
-    if CLOJURE is None:
-        report.status, report.reason = NOT_TESTED, "toolchain unavailable: clojure CLI not on PATH"
-        return report
-    cmd = [CLOJURE, "-M", "-e", CLOJURE_EXPR]
-    report.command = "clojure -M -e <agentic.conformance/run-all as JSON>"
-    started = _dt.datetime.now()
-    log = logs / "clojure.log"
-    try:
-        proc = _run(cmd, module, log)
-        text = log.read_text(encoding="utf-8")
-        if proc.returncode != 0:
-            raise BindingError(f"clojure exited {proc.returncode}; see {log}")
-        report.fixtures = outcomes_from_clojure(parse_clojure_output(text), fixtures)
-    except (BindingError, json.JSONDecodeError) as exc:
-        report.status, report.reason, report.fixtures = ERROR, str(exc), []
-    report.duration_s = (_dt.datetime.now() - started).total_seconds()
-    return report
-
-
-# Python bindings that ship their own conformance module (batch `run_all` returning per-fixture
-# outcomes, comparison done inside the binding via the imported shared comparator). The runner
-# executes that module in a subprocess of the current interpreter and reads the outcomes back.
-@dataclass(frozen=True)
-class PythonSuite:
-    name: str
-    package_dir: str        # source dir in the checkout that proves the binding exists
-    module: str             # importable conformance module
-    call: str               # Python expression (module bound as `m`) producing the outcome list
-    id_attr: str            # outcome attribute holding the fixture id
-    status_expr: str        # Python expression (outcome bound as `o`) -> 'pass' | 'fail' | 'skip'
-    reason_expr: str        # Python expression (outcome bound as `o`) -> skip reason or None
-    install_hint: str
-
-
-PYTHON_SUITES: Dict[str, PythonSuite] = {
-    "pyflink": PythonSuite(
-        "pyflink", "pyflink/agentic_pyflink", "agentic_pyflink.conformance", "m.run_all()", "id",
-        "'skip' if o.skipped else ('fail' if o.problems else 'pass')", "o.skip_reason",
-        "pip install -e pyflink"),
-    "python-jvm": PythonSuite(
-        "python-jvm", "python/agentic_flink", "agentic_flink.conformance", "m.run_all('local-jvm')",
-        "fixture_id", "o.status", "o.reason", "pip install -e python"),
-    "python-flink": PythonSuite(
-        "python-flink", "python/agentic_flink", "agentic_flink.conformance", "m.run_all('flink-jvm')",
-        "fixture_id", "o.status", "o.reason", "pip install -e python"),
-}
-
-PYTHON_SUITE_SCRIPT = """
-import importlib, json, sys
-try:
-    m = importlib.import_module({module!r})
-except ImportError as exc:
-    print("@@AGENTIC_UNAVAILABLE@@ " + str(exc).splitlines()[0]); sys.exit(0)
-try:
-    outcomes = {call}
-except Exception as exc:
-    if type(exc).__name__ in ("JarNotFoundError", "MissingJarError"):
-        print("@@AGENTIC_UNAVAILABLE@@ " + str(exc).splitlines()[0]); sys.exit(0)
-    raise
-rows = [{{"id": getattr(o, {id_attr!r}), "status": (lambda o: {status_expr})(o),
-         "reason": (lambda o: {reason_expr})(o), "problems": list(o.problems)}} for o in outcomes]
-print("@@AGENTIC_CONFORMANCE@@"); print(json.dumps(rows)); print("@@END@@")
-"""
-
-
-def outcomes_from_python_suite(rows: List[Dict[str, Any]], fixtures: Dict[str, Dict[str, Any]],
-                               suite: PythonSuite) -> List[FixtureOutcome]:
-    by_id = {r["id"]: r for r in rows}
-    out: List[FixtureOutcome] = []
-    for fixture in fixtures.values():
-        r = by_id.get(fixture["id"])
-        if r is None:
-            raise BindingError(f"{suite.module} reported nothing for fixture {fixture['id']}")
-        if r["status"] == "skip":
-            reason = r.get("reason") or "skipped by the binding"
-            out.append(skip_outcome(fixture, missing_from_skip_reason(reason, fixture["requires"]), reason))
-        elif r["status"] == "pass":
-            out.append(FixtureOutcome(fixture["id"], PASSED, list(fixture["requires"])))
-        elif r["status"] == "fail":
-            out.append(FixtureOutcome(fixture["id"], FAILED, list(fixture["requires"]),
-                                      list(r.get("problems") or []) or ["failed inside the binding"]))
-        else:
-            raise BindingError(f"{suite.module} reported unknown status {r['status']!r} for {fixture['id']}")
-    return out
-
-
-def run_python_suite(suite: PythonSuite, fixtures: Dict[str, Dict[str, Any]], root: Path, logs: Path) -> RuntimeReport:
-    report = RuntimeReport(suite.name, f"{suite.module}: {suite.call.replace('m.', '', 1)}", "binding", RAN)
-    if not (root / suite.package_dir / "conformance.py").exists():
-        report.status, report.reason = NOT_TESTED, f"binding absent: {suite.package_dir}/conformance.py not found"
-        return report
-    script = PYTHON_SUITE_SCRIPT.format(module=suite.module, call=suite.call, id_attr=suite.id_attr,
-                                        status_expr=suite.status_expr, reason_expr=suite.reason_expr)
-    cmd = [sys.executable, "-c", script]
-    report.command = f"{Path(sys.executable).name} -c <{suite.module}.{suite.call.replace('m.', '', 1)} as JSON>"
-    started = _dt.datetime.now()
-    log = logs / f"{suite.name}.log"
-    try:
-        proc = _run(cmd, root, log)
-        text = log.read_text(encoding="utf-8")
-        if "@@AGENTIC_UNAVAILABLE@@" in text:
-            why = text.split("@@AGENTIC_UNAVAILABLE@@", 1)[1].splitlines()[0].strip()
-            report.status, report.reason = NOT_TESTED, f"toolchain unavailable: {why} ({suite.install_hint})"
-            return report
-        if proc.returncode != 0:
-            raise BindingError(f"{suite.module} exited {proc.returncode}; see {log}")
-        report.fixtures = outcomes_from_python_suite(parse_clojure_output(text), fixtures, suite)
-    except (BindingError, json.JSONDecodeError) as exc:
-        report.status, report.reason, report.fixtures = ERROR, str(exc), []
-    finally:
-        report.duration_s = (_dt.datetime.now() - started).total_seconds()
-    return report
-
-
-RUNTIMES = ["reference", "jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink"]
+RUNTIMES = ["reference", "jvm-core", "flink", "pekko", "python"]
 
 
 def run_runtime(name: str, fixtures: Dict[str, Dict[str, Any]], root: Path, logs: Path,
                 python_binding: Optional[str]) -> RuntimeReport:
     if name == "reference":
         return run_reference(fixtures)
-    if name == "clojure":
-        return run_clojure(fixtures, root, logs)
     if name == "python":
         return run_python_binding(fixtures, python_binding)
-    if name in PYTHON_SUITES:
-        return run_python_suite(PYTHON_SUITES[name], fixtures, root, logs)
     return run_maven_suite(MAVEN_SUITES[name], fixtures, root, logs)
 
 
@@ -638,7 +471,7 @@ def build_artifact(reports: List[RuntimeReport], fixtures: Dict[str, Dict[str, A
         "generated_at": _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat(),
         "commit": commit,
         "host": {"platform": platform.platform(), "python": platform.python_version(),
-                 "mvn": maven_command(root) is not None, "clojure": CLOJURE is not None},
+                 "mvn": maven_command(root) is not None},
         "capabilities": CAPABILITIES,
         "fixtures": [{"id": f["id"], "file": f["_file"], "requires": list(f["requires"])} for f in fixtures.values()],
         "runtimes": [r.to_dict() for r in reports],
@@ -671,8 +504,6 @@ def render_docs(artifact: Dict[str, Any]) -> str:
         counts = {s: sum(1 for f in r["fixtures"] if f["status"] == s) for s in (PASSED, FAILED, SKIPPED)}
         if r["comparison"] == "runner":
             where = "by the runner on the binding's normalized results"
-        elif r["name"] in PYTHON_SUITES:
-            where = "inside the binding (imported shared comparator), outcomes read from its run_all"
         else:
             where = "inside the binding (ported comparator), read from JUnit XML"
         status = r["status"] if r["status"] == RAN else f"{r['status']}: {r.get('reason', '')}"

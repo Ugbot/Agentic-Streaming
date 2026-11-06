@@ -54,8 +54,8 @@ through all three syntaxes must produce the same structure.
   that is asked to load a newer major version fails with a `validation` error rather than
   parsing what it recognises.
 - The reference runtime, the schemas, and the fixtures version together. A fixture change
-  that alters expected behavior is a spec change and needs review from the JVM, Clojure,
-  and Python owners.
+  that alters expected behavior is a spec change and needs review from the JVM and Python
+  owners.
 
 ## Validation rules beyond the schema
 
