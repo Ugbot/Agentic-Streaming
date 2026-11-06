@@ -232,7 +232,15 @@ public final class FlinkPipelineRunner {
     Event seed = new Event(cid, "user", text == null ? "what is my balance?" : text, Map.of());
     DataStream<Event> source = env.fromData(List.of(seed), WorkflowTurnFunction.EVENT_TYPE);
 
-    assemble(env, spec, source).print();
+    assembleResults(
+            env,
+            spec,
+            source,
+            FlinkRuntimeOptions.fromSpec(spec),
+            ChatClientFactories.fromWorkflow())
+        .map(FlinkGraphFunction::summary)
+        .returns(TypeInformation.of(String.class))
+        .print();
     env.execute("agentic-flink: " + yaml);
   }
 }

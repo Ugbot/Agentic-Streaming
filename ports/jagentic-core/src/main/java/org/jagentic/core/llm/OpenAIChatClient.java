@@ -1,6 +1,7 @@
 package org.jagentic.core.llm;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -10,13 +11,28 @@ import com.fasterxml.jackson.databind.JsonNode;
  * endpoint in JSON-object mode. */
 public final class OpenAIChatClient extends AbstractHttpChatClient {
 
+  private final Double temperature;
+  private final Integer maxTokens;
+
   public OpenAIChatClient(String model) {
     this(model, resolveKey(), resolveBaseUrl());
   }
 
   public OpenAIChatClient(String model, String apiKey, String baseUrl) {
+    this(model, apiKey, baseUrl, null, null);
+  }
+
+  /** The key comes from {@code OPENAI_API_KEY}; {@code baseUrl} null for the default. */
+  public OpenAIChatClient(String model, String baseUrl, Double temperature, Integer maxTokens) {
+    this(model, resolveKey(), baseUrl == null ? resolveBaseUrl() : baseUrl, temperature, maxTokens);
+  }
+
+  private OpenAIChatClient(String model, String apiKey, String baseUrl, Double temperature,
+                           Integer maxTokens) {
     super(model, OllamaChatClient.stripTrailingSlash(baseUrl) + "/chat/completions",
         Map.of("Authorization", "Bearer " + require(apiKey)), Duration.ofSeconds(10));
+    this.temperature = temperature;
+    this.maxTokens = maxTokens;
   }
 
   private static String require(String key) {
@@ -37,8 +53,17 @@ public final class OpenAIChatClient extends AbstractHttpChatClient {
 
   @Override
   protected Map<String, Object> buildBody(List<Map<String, String>> messages) {
-    return Map.of("model", model, "messages", messages,
-        "response_format", Map.of("type", "json_object"));
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("model", model);
+    body.put("messages", messages);
+    body.put("response_format", Map.of("type", "json_object"));
+    if (temperature != null) {
+      body.put("temperature", temperature);
+    }
+    if (maxTokens != null) {
+      body.put("max_completion_tokens", maxTokens);
+    }
+    return body;
   }
 
   @Override

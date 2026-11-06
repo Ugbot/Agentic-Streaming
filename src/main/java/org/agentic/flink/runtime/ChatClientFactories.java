@@ -6,6 +6,7 @@ import org.agentic.flink.annotation.Internal;
 import org.jagentic.core.llm.ChatClient;
 import org.jagentic.core.llm.ScriptedChatClient;
 import org.jagentic.core.pipeline.GraphBuilder;
+import org.jagentic.core.pipeline.PipelineLoader;
 
 /**
  * Serializable {@link GraphBuilder.ChatClientFactory} implementations for {@link
@@ -42,6 +43,21 @@ public final class ChatClientFactories {
     return Stub.INSTANCE;
   }
 
+  /**
+   * The production factory: builds the client the document's {@code llm} block declares, with the
+   * same provider code the cores use ({@code PipelineLoader.chatClient}). It holds no state, so
+   * nothing but the document ships with the operator. Credentials are read from the environment of
+   * the TaskManager when the operator opens; {@link WorkflowTurnFunction} refuses a document that
+   * carries one, or an unknown provider, when the job is built.
+   */
+  public static SerializableChatClientFactory fromWorkflow() {
+    return FromWorkflow.INSTANCE;
+  }
+
+  static boolean isFromWorkflow(GraphBuilder.ChatClientFactory factory) {
+    return factory instanceof FromWorkflow;
+  }
+
   static boolean isFailFast(GraphBuilder.ChatClientFactory factory) {
     return factory instanceof FailFast;
   }
@@ -52,9 +68,18 @@ public final class ChatClientFactories {
     @Override
     public ChatClient create(Map<String, Object> llmSpec) {
       throw new IllegalStateException(
-          "no ChatClientFactory configured for llm spec "
-              + llmSpec
+          "no ChatClientFactory configured for llm provider "
+              + (llmSpec == null ? null : llmSpec.get("provider"))
               + "; pass one to WorkflowTurnFunction");
+    }
+  }
+
+  private enum FromWorkflow implements SerializableChatClientFactory {
+    INSTANCE;
+
+    @Override
+    public ChatClient create(Map<String, Object> llmSpec) {
+      return PipelineLoader.chatClient(llmSpec);
     }
   }
 

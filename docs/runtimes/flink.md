@@ -20,8 +20,8 @@ The first is described here. The second is deprecated legacy code, kept for now,
   one checkpoint interval while the outside world does not. A turn that ran after the last completed
   checkpoint runs again on restore, tools included, and the tool receives no idempotency key. Do not
   use this for payments or other non-idempotent actions.
-- **A workflow document cannot declare a real model on Flink.** Only the scripted stub runs on the
-  canonical path.
+- **A real model on Flink has been tested against a local stand-in server, not a live provider.**
+  See [Real models](#real-models).
 - **There is no supported way to run a `pipeline.yaml` from Kafka on a cluster.** `FlinkPipelineRunner`
   has no Kafka source.
 
@@ -62,6 +62,19 @@ conversation rebuilds it from `KeyedConversationLog` without re-running brains o
 `MiniCluster`) maps the fixture verb `restart_runtime` onto the same sequence, so the `flink`
 binding's `replay-after-restart` and `suspend-resume` passes are savepoint restores. Savepoints are
 taken between turns, so these do not exercise a failure in the window after the last checkpoint.
+
+## Real models
+
+`ChatClientFactories.fromWorkflow()` builds the client the document's `llm` block declares, with the
+same code the cores use (`PipelineLoader.chatClient`): `provider: ollama` or `openai`, with `model`,
+`base_url`, `temperature`, `max_tokens` and `timeout_ms`. `FlinkPipelineRunner` uses it. Code calling
+`assembleResults` or `new WorkflowTurnFunction` passes it explicitly; their default refuses an `llm`
+brain when the job is built.
+
+Credentials are not part of the document. The document ships with the job and lands in logs and
+savepoints, so `OPENAI_API_KEY` is read from the TaskManager's environment when the operator opens,
+and a document with a key that looks like a credential is refused when the job is built, naming the
+field and not its value (`WorkflowTurnRealModelTest`).
 
 ## Idle expiry
 

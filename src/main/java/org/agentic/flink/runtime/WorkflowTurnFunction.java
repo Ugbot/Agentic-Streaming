@@ -40,6 +40,7 @@ import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
 import org.jagentic.core.cep.SequencePattern;
 import org.jagentic.core.pipeline.GraphBuilder;
+import org.jagentic.core.pipeline.PipelineLoader;
 import org.jagentic.core.pipeline.WorkflowValidator;
 
 /**
@@ -169,6 +170,15 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
                 + " configured; pass one to WorkflowTurnFunction(spec, options, factory)");
       }
     }
+    if (ChatClientFactories.isFromWorkflow(chatClientFactory)
+        && !llmBrainPaths(this.spec).isEmpty()) {
+      PipelineLoader.checkLlm(llmBlock(this.spec));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> llmBlock(Map<String, Object> spec) {
+    return (Map<String, Object>) spec.get("llm");
   }
 
   @SuppressWarnings("unchecked")
