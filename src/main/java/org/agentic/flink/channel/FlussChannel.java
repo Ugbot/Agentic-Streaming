@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.source.PollingSource;
+import org.agentic.flink.config.FlussClient;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -56,6 +57,7 @@ public final class FlussChannel<T> implements Channel<T> {
   private final boolean fromBeginning;
 
   private FlussChannel(Builder<T> b) {
+    FlussClient.require();
     this.bootstrapServers = Objects.requireNonNull(b.bootstrapServers, "bootstrapServers");
     this.database = Objects.requireNonNull(b.database, "database");
     this.table = Objects.requireNonNull(b.table, "table");

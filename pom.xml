@@ -21,6 +21,7 @@
     <description>Standalone Agentic Framework for Apache Flink with LangChain4J Integration</description>
 
     <properties>
+        <fluss.version>0.7.0</fluss.version>
         <!-- flink.version, java.version, langchain4j.version and junit.version are inherited from
              the reactor parent. Flink 2.x supports 17/21; 25 is not yet viable (see the Lombok
              note below). slf4j.version and log4j.version come from the reactor too. -->
@@ -203,12 +204,17 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Apache Fluss streaming storage client (backs FlussVectorStore; optional) -->
+        <!-- Apache Fluss client, behind FlussChannel, FlussSink, FlussVectorStore and
+             FlussConversationStore. `provided` keeps it out of the uber jar, because the client
+             carries its own relocated Netty, Jackson, Guava and lz4 that no floor here can reach
+             (docs/security.md). The code still compiles and is unit tested in every build; at
+             runtime FlussClient says what to do when the classes are missing. `-P fluss` bundles
+             it. -->
         <dependency>
             <groupId>com.alibaba.fluss</groupId>
             <artifactId>fluss-client</artifactId>
-            <version>0.7.0</version>
-            <optional>true</optional>
+            <version>${fluss.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Native Qdrant gRPC client (backs QdrantVectorStore; optional) -->
@@ -680,6 +686,21 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
+
+        <!-- Bundles the Fluss client into the uber jar, for jobs that use a Fluss backend:
+                 ./mvnw -P fluss package
+             The jar then carries everything listed against fluss-client in docs/security.md. -->
+        <profile>
+            <id>fluss</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.alibaba.fluss</groupId>
+                    <artifactId>fluss-client</artifactId>
+                    <version>${fluss.version}</version>
+                    <scope>compile</scope>
+                </dependency>
+            </dependencies>
         </profile>
 
         <!--

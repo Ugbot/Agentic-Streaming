@@ -7,6 +7,7 @@ import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
 import org.agentic.flink.annotation.Public;
+import org.agentic.flink.config.FlussClient;
 import org.agentic.flink.storage.memory.InMemoryLongTermStore;
 import org.agentic.flink.storage.memory.InMemoryShortTermStore;
 import org.agentic.flink.storage.postgres.PostgresConversationStore;
@@ -151,6 +152,9 @@ public final class StorageFactory {
         candidate.initialize(config);
         return candidate;
       }
+    }
+    if ("fluss".equalsIgnoreCase(backend)) {
+      FlussClient.require();
     }
     throw new IllegalArgumentException(
         "No VectorStore registered for backend: "

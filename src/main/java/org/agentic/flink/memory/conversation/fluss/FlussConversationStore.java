@@ -26,6 +26,7 @@ import java.util.Optional;
 import org.agentic.flink.annotation.Public;
 import org.agentic.flink.config.AgenticFlinkConfig;
 import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.config.FlussClient;
 import org.agentic.flink.llm.ChatMessage;
 import org.agentic.flink.memory.conversation.ConversationStore;
 import org.slf4j.Logger;
@@ -64,7 +65,6 @@ public final class FlussConversationStore implements ConversationStore {
 
   private static final Logger LOG = LoggerFactory.getLogger(FlussConversationStore.class);
 
-  private static final int COL_KEY = 0;
   private static final int COL_PAYLOAD = 1;
   private static final String ALL_KEY = "__idx__:all";
   private static final String USER_PREFIX = "__idx__:user:";
@@ -90,6 +90,7 @@ public final class FlussConversationStore implements ConversationStore {
 
   /** Explicit constructor (tests / programmatic wiring). Always enabled. */
   public FlussConversationStore(String bootstrapServers, String database, String table) {
+    FlussClient.require();
     this.bootstrapServers = bootstrapServers;
     this.database = database;
     this.table = table;
@@ -325,10 +326,33 @@ public final class FlussConversationStore implements ConversationStore {
 
   // ==================== Fluss plumbing ====================
 
+  /**
+   * Builds Fluss values outside this class's own bytecode: passing a {@code GenericRow} as an
+   * {@code InternalRow} here would make the verifier load Fluss classes when this class links,
+   * before {@link FlussClient#require()} can say what is wrong.
+   */
+  private static final class Shapes {
+    static TableDescriptor table(int buckets) {
+      Schema schema =
+          Schema.newBuilder()
+              .column("key", DataTypes.STRING())
+              .column("payload", DataTypes.STRING())
+              .primaryKey("key")
+              .build();
+      return TableDescriptor.builder().schema(schema).distributedBy(buckets, "key").build();
+    }
+
+    static InternalRow row(String... columns) {
+      GenericRow row = new GenericRow(columns.length);
+      for (int i = 0; i < columns.length; i++) {
+        row.setField(i, BinaryString.fromString(columns[i]));
+      }
+      return row;
+    }
+  }
+
   private Optional<String> readRow(String key) throws Exception {
-    GenericRow keyRow = new GenericRow(1);
-    keyRow.setField(0, BinaryString.fromString(key));
-    InternalRow row = lookuper().lookup(keyRow).get().getSingletonRow();
+    InternalRow row = lookuper().lookup(Shapes.row(key)).get().getSingletonRow();
     if (row == null || row.isNullAt(COL_PAYLOAD)) {
       return Optional.empty();
     }
@@ -336,11 +360,8 @@ public final class FlussConversationStore implements ConversationStore {
   }
 
   private void writeRow(String key, String payload) throws Exception {
-    GenericRow row = new GenericRow(2);
-    row.setField(COL_KEY, BinaryString.fromString(key));
-    row.setField(COL_PAYLOAD, BinaryString.fromString(payload));
     UpsertWriter w = writer();
-    w.upsert(row).get();
+    w.upsert(Shapes.row(key, payload)).get();
     w.flush();
     // Fluss PK lookups are not strictly read-your-writes the instant an upsert is acked (the kv
     // apply
@@ -379,15 +400,7 @@ public final class FlussConversationStore implements ConversationStore {
             admin.createDatabase(database, DatabaseDescriptor.EMPTY, true).get();
           }
           if (!admin.tableExists(path).get()) {
-            Schema schema =
-                Schema.newBuilder()
-                    .column("key", DataTypes.STRING())
-                    .column("payload", DataTypes.STRING())
-                    .primaryKey("key")
-                    .build();
-            TableDescriptor descriptor =
-                TableDescriptor.builder().schema(schema).distributedBy(buckets, "key").build();
-            admin.createTable(path, descriptor, true).get();
+            admin.createTable(path, Shapes.table(buckets), true).get();
             LOG.info("fluss conversation store created table {} (buckets={})", path, buckets);
           }
         }
