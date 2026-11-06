@@ -36,7 +36,8 @@ class WorkflowTurnRealModelTest {
     Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
     @SuppressWarnings("unchecked")
     Map<String, Object> agent = new LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
-    agent.put("paths", Map.of("general", Map.of("brain", "llm"), "billing", Map.of("brain", "llm")));
+    agent.put(
+        "paths", Map.of("general", Map.of("brain", "llm"), "billing", Map.of("brain", "llm")));
     wf.put("agent", agent);
     wf.put("llm", llm);
     return wf;
@@ -84,8 +85,7 @@ class WorkflowTurnRealModelTest {
       WorkflowTurnFunction fn =
           new WorkflowTurnFunction(
               wf, FlinkRuntimeOptions.fromSpec(wf), ChatClientFactories.fromWorkflow());
-      WorkflowTurnFunction shipped =
-          InstantiationUtil.clone(fn, getClass().getClassLoader());
+      WorkflowTurnFunction shipped = InstantiationUtil.clone(fn, getClass().getClassLoader());
       try (var h =
           new KeyedOneInputStreamOperatorTestHarness<String, Event, TurnResult>(
               new KeyedProcessOperator<>(shipped), Event::conversationId, Types.STRING)) {
@@ -102,7 +102,8 @@ class WorkflowTurnRealModelTest {
       }
       assertEquals(1, bodies.size());
       assertTrue(bodies.get(0).contains("some-model"), bodies.get(0));
-      assertTrue(bodies.get(0).contains("0.25"), "a declared temperature is sent: " + bodies.get(0));
+      assertTrue(
+          bodies.get(0).contains("0.25"), "a declared temperature is sent: " + bodies.get(0));
     } finally {
       server.stop(0);
     }

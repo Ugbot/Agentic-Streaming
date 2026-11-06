@@ -39,7 +39,9 @@ public final class ChatSetup implements Serializable {
     return modelName;
   }
 
-  /** The declared temperature, or {@value #DEFAULT_TEMPERATURE} for a reader that needs a number. */
+  /**
+   * The declared temperature, or {@value #DEFAULT_TEMPERATURE} for a reader that needs a number.
+   */
   public double getTemperature() {
     return temperature == null ? DEFAULT_TEMPERATURE : temperature;
   }

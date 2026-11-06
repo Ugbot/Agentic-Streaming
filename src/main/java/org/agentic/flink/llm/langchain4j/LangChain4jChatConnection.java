@@ -85,9 +85,9 @@ public final class LangChain4jChatConnection implements ChatConnection {
 
   /**
    * Google Gemini via the Google AI API key ({@code GOOGLE_API_KEY}). The model name (e.g. {@code
-   * gemini-3.6-flash}) is supplied per call through {@link
-   * org.agentic.flink.llm.ChatSetup}. Generous default timeout to stay under the harness's per-turn
-   * limit while tolerating Vertex rate-limiting.
+   * gemini-3.6-flash}) is supplied per call through {@link org.agentic.flink.llm.ChatSetup}.
+   * Generous default timeout to stay under the harness's per-turn limit while tolerating Vertex
+   * rate-limiting.
    */
   public static LangChain4jChatConnection gemini(String apiKey) {
     return new LangChain4jChatConnection(Provider.GEMINI, null, apiKey, Duration.ofSeconds(120));

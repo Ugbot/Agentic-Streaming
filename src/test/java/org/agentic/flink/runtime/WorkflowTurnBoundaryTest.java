@@ -224,12 +224,12 @@ class WorkflowTurnBoundaryTest {
     Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
     @SuppressWarnings("unchecked")
     Map<String, Object> agent = new LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
-    agent.put("paths", Map.of("general", Map.of("brain", "llm"), "billing", Map.of("brain", "llm")));
+    agent.put(
+        "paths", Map.of("general", Map.of("brain", "llm"), "billing", Map.of("brain", "llm")));
     wf.put("agent", agent);
     wf.put(
         "llm",
-        Map.of(
-            "provider", "stub", "script", List.of(Map.of("text", "ok", "x-fail-attempts", 1))));
+        Map.of("provider", "stub", "script", List.of(Map.of("text", "ok", "x-fail-attempts", 1))));
     String cid = rnd("c");
     String tid = rnd("t");
     try (var h = harness(wf)) {

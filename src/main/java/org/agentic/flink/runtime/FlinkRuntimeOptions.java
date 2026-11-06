@@ -22,9 +22,10 @@ import org.apache.flink.streaming.api.TimeDomain;
  *
  * <p>Neither setting changes the observable turn semantics of the spec while a conversation is in
  * use: {@code state_ttl_ms} forgets a conversation only after that long with no turn and no
- * suspended turn, and the resume timer only decides <em>when</em> a suspended turn is resumed (the spec's {@code turn_suspended → timer_scheduled → timer_fired → turn_resumed}
- * sequence). When {@code resume_after_ms} is absent, suspended turns wait for an explicit resume
- * signal and no timer is registered.
+ * suspended turn, and the resume timer only decides <em>when</em> a suspended turn is resumed (the
+ * spec's {@code turn_suspended → timer_scheduled → timer_fired → turn_resumed} sequence). When
+ * {@code resume_after_ms} is absent, suspended turns wait for an explicit resume signal and no
+ * timer is registered.
  *
  * @param stateTtl how long an idle conversation is kept, or {@code null} to keep it forever
  * @param resumeAfter delay before a suspended turn is resumed by timer, or {@code null} for none

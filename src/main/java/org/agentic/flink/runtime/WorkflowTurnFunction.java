@@ -77,8 +77,8 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *       timers across a restore without re-scheduling or double-firing.
  *   <li><b>Idle expiry.</b> {@link FlinkRuntimeOptions#stateTtl()} is a per-conversation inactivity
  *       timer, moved forward by every turn. When it fires it clears the log, counter and timer
- *       registry together, unless a turn is suspended. It is deliberately not Flink state TTL, which
- *       expires list elements one at a time and would leave a log with a gap.
+ *       registry together, unless a turn is suspended. It is deliberately not Flink state TTL,
+ *       which expires list elements one at a time and would leave a log with a gap.
  *   <li><b>Serialization.</b> Log entries use {@link JsonTypeInfo}; results use {@link
  *       TurnResultTypeInfo}; nothing falls back to Kryo.
  *   <li><b>Metrics.</b> Per-status turn counters and a fired-timer counter on the operator's metric

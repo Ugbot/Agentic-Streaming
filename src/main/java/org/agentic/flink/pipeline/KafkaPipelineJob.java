@@ -45,10 +45,10 @@ import org.jagentic.core.TurnResult;
  *  "metadata": {"k": "v"}}
  * {"conversation_id": "c1", "turn_id": "t1", "signal": {"approved": true}}</pre>
  *
- * <p>{@code turn_id} is required rather than minted: it is what makes a redelivered record a
- * {@code duplicate}. A record that cannot be a turn goes to the failures topic and the job carries
- * on; so does a turn that ends {@code fatal} or {@code transient}, as well as appearing on the
- * results topic.
+ * <p>{@code turn_id} is required rather than minted: it is what makes a redelivered record a {@code
+ * duplicate}. A record that cannot be a turn goes to the failures topic and the job carries on; so
+ * does a turn that ends {@code fatal} or {@code transient}, as well as appearing on the results
+ * topic.
  *
  * <p>Results are written at-least-once under the conversation key. A consumer can see the same
  * result again after a restore, and tools re-run as the README's known failures describe.
@@ -66,7 +66,11 @@ public final class KafkaPipelineJob {
 
   /** Where the job reads and writes. */
   public record Options(
-      String bootstrap, String inputTopic, String outputTopic, String failuresTopic, String groupId) {
+      String bootstrap,
+      String inputTopic,
+      String outputTopic,
+      String failuresTopic,
+      String groupId) {
 
     /**
      * Reads the Kafka flags, or returns null when {@code --input-topic} is absent, which means this
@@ -155,7 +159,11 @@ public final class KafkaPipelineJob {
             .name("agent")
             .uid("agentic-workflow-turn");
     DataStream<Tuple2<String, String>> results =
-        turns.map(KafkaPipelineJob::encodeResult).returns(KEYED).name("encode").uid("agentic-encode");
+        turns
+            .map(KafkaPipelineJob::encodeResult)
+            .returns(KEYED)
+            .name("encode")
+            .uid("agentic-encode");
     DataStream<Tuple2<String, String>> failures =
         turns
             .getSideOutput(WorkflowTurnFunction.TURN_FAILURES)
@@ -217,7 +225,8 @@ public final class KafkaPipelineJob {
 
   private static Tuple2<String, String> encodeResult(TurnResult r) {
     try {
-      return Tuple2.of(r.conversationId, new String(TurnResultCodec.encode(r), StandardCharsets.UTF_8));
+      return Tuple2.of(
+          r.conversationId, new String(TurnResultCodec.encode(r), StandardCharsets.UTF_8));
     } catch (IOException e) {
       return Tuple2.of(r.conversationId, unencodable(r, e));
     }

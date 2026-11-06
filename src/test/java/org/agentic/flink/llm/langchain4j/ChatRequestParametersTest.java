@@ -53,7 +53,8 @@ class ChatRequestParametersTest {
   private JsonNode requestFrom(Provider provider, String path, String model, Double temperature)
       throws Exception {
     String base = "http://127.0.0.1:" + server.getAddress().getPort() + path;
-    var connection = new LangChain4jChatConnection(provider, base, "test-key", Duration.ofSeconds(5));
+    var connection =
+        new LangChain4jChatConnection(provider, base, "test-key", Duration.ofSeconds(5));
     try {
       connection.buildModel(model, temperature, 256).chat("hello");
     } catch (RuntimeException refusedByTheTestServer) {
@@ -81,7 +82,8 @@ class ChatRequestParametersTest {
 
   @Test
   void aTemperatureNobodyDeclaredIsNotSentToAnyone() throws Exception {
-    assertFalse(requestFrom(Provider.ANTHROPIC, "/v1/", "claude-sonnet-4-6", null).has("temperature"));
+    assertFalse(
+        requestFrom(Provider.ANTHROPIC, "/v1/", "claude-sonnet-4-6", null).has("temperature"));
     bodies.clear();
     assertFalse(requestFrom(Provider.OPENAI, "/v1/", "gpt-4.1", null).has("temperature"));
   }

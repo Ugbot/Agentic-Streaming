@@ -81,8 +81,7 @@ class KafkaPipelineJobTest {
             "{\"conversation_id\":\"c\",\"text\":\"hi\"}",
             "{\"conversation_id\":\"c\",\"turn_id\":\"t\"}",
             "{\"conversation_id\":\"c\",\"turn_id\":\"t\",\"text\":7}")) {
-      assertThrows(
-          KafkaPipelineJob.MalformedRecord.class, () -> KafkaPipelineJob.decode(bad), bad);
+      assertThrows(KafkaPipelineJob.MalformedRecord.class, () -> KafkaPipelineJob.decode(bad), bad);
     }
   }
 
@@ -90,7 +89,8 @@ class KafkaPipelineJobTest {
   void aTombstoneDoesNotReachTheDecoderAsNull() throws Exception {
     assertEquals("", new KafkaPipelineJob.RecordValue().deserialize(null));
     assertEquals(
-        "hi", new KafkaPipelineJob.RecordValue().deserialize("hi".getBytes(StandardCharsets.UTF_8)));
+        "hi",
+        new KafkaPipelineJob.RecordValue().deserialize("hi".getBytes(StandardCharsets.UTF_8)));
   }
 
   @Test
@@ -100,14 +100,18 @@ class KafkaPipelineJobTest {
     assertEquals("results", r.topic());
     assertEquals("c1", new String(r.key(), StandardCharsets.UTF_8));
     assertNull(
-        new KafkaPipelineJob.KeyedRecord("results").serialize(Tuple2.of("", "{}"), null, null).key());
+        new KafkaPipelineJob.KeyedRecord("results")
+            .serialize(Tuple2.of("", "{}"), null, null)
+            .key());
   }
 
   @Test
   void optionsComeFromTheCommandLineAndTheEnvironment() {
     KafkaPipelineJob.Options o =
         KafkaPipelineJob.Options.parse(
-            new String[] {"--input-topic", "turns"}, Map.of("KAFKA_BOOTSTRAP", "kafka:29092"), "bank");
+            new String[] {"--input-topic", "turns"},
+            Map.of("KAFKA_BOOTSTRAP", "kafka:29092"),
+            "bank");
     assertEquals("kafka:29092", o.bootstrap());
     assertEquals("turns", o.inputTopic());
     assertEquals("turns.results", o.outputTopic());
@@ -117,17 +121,25 @@ class KafkaPipelineJobTest {
     KafkaPipelineJob.Options explicit =
         KafkaPipelineJob.Options.parse(
             new String[] {
-              "--kafka-bootstrap", "b:1", "--input-topic", "i", "--output-topic", "o",
-              "--failures-topic", "f", "--group-id", "g"
+              "--kafka-bootstrap",
+              "b:1",
+              "--input-topic",
+              "i",
+              "--output-topic",
+              "o",
+              "--failures-topic",
+              "f",
+              "--group-id",
+              "g"
             },
             Map.of("KAFKA_BOOTSTRAP", "ignored:2"),
             "bank");
-    assertEquals(
-        new KafkaPipelineJob.Options("b:1", "i", "o", "f", "g"), explicit);
+    assertEquals(new KafkaPipelineJob.Options("b:1", "i", "o", "f", "g"), explicit);
     assertNull(KafkaPipelineJob.Options.parse(new String[] {"x.yaml"}, Map.of(), "bank"));
     assertThrows(
         IllegalArgumentException.class,
-        () -> KafkaPipelineJob.Options.parse(new String[] {"--input-topic", "i"}, Map.of(), "bank"));
+        () ->
+            KafkaPipelineJob.Options.parse(new String[] {"--input-topic", "i"}, Map.of(), "bank"));
   }
 
   private record Run(List<JsonNode> results, List<JsonNode> failures) {}
@@ -143,14 +155,12 @@ class KafkaPipelineJobTest {
         wired
             .results()
             .map(r -> Tuple2.of("result", r))
-            .returns(
-                Types.TUPLE(Types.STRING, Types.TUPLE(Types.STRING, Types.STRING)))
+            .returns(Types.TUPLE(Types.STRING, Types.TUPLE(Types.STRING, Types.STRING)))
             .union(
                 wired
                     .failures()
                     .map(r -> Tuple2.of("failure", r))
-                    .returns(
-                        Types.TUPLE(Types.STRING, Types.TUPLE(Types.STRING, Types.STRING))));
+                    .returns(Types.TUPLE(Types.STRING, Types.TUPLE(Types.STRING, Types.STRING))));
     try (CloseableIterator<Tuple2<String, Tuple2<String, String>>> it = both.executeAndCollect()) {
       it.forEachRemaining(tagged::add);
     }

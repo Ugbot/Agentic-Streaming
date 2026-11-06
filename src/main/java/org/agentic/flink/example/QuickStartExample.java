@@ -110,7 +110,8 @@ public class QuickStartExample {
     out.println(result.getOutput());
     out.println();
     out.println("Events generated: " + result.getEvents().size());
-    out.println("Tool calls: " + (result.getToolCalls() == null ? 0 : result.getToolCalls().size()));
+    out.println(
+        "Tool calls: " + (result.getToolCalls() == null ? 0 : result.getToolCalls().size()));
     out.println();
     out.println("=".repeat(80));
     out.println("  " + SUCCESS_BANNER);

@@ -55,7 +55,9 @@ class AgentJobGeneratorGraphTest {
         .orElseThrow(() -> new AssertionError("no operator named " + name));
   }
 
-  /** True when records leaving {@code from} can arrive at {@code to}, following the graph's edges. */
+  /**
+   * True when records leaving {@code from} can arrive at {@code to}, following the graph's edges.
+   */
   private static boolean feeds(StreamGraph graph, StreamNode from, StreamNode to) {
     Set<Integer> seen = new HashSet<>();
     Deque<StreamNode> todo = new ArrayDeque<>(List.of(from));
