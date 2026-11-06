@@ -1,7 +1,7 @@
 # Optional Kafka overlay for the content-moderation example.
 #
-# Boot together with the base compose (after `podman network create agentic-flink-network`):
-#   podman compose -f docker-compose.yml -f docker-compose-kafka.yml up -d
+# Boot together with the base compose (after `docker network create agentic-flink-network`):
+#   docker compose -f docker-compose.yml -f docker-compose-kafka.yml up -d
 #
 # Produces a single-broker Kafka + a Zookeeper, with the broker advertised on
 # the host network at localhost:9092. Adequate for local development; not a

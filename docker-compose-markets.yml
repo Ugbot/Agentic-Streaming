@@ -7,8 +7,8 @@
 #   - Flink session cluster (so submitted market jobs land somewhere)
 #
 # Bring up:
-#   podman network create agentic-flink-network    # once
-#   podman compose -f docker-compose-markets.yml up -d
+#   docker network create agentic-flink-network    # once
+#   docker compose -f docker-compose-markets.yml up -d
 #
 # Then, from the repository root:
 #   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \

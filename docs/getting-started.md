@@ -119,7 +119,7 @@ is pure Python and its 24 conformance fixtures run in about a second, also witho
 
 ```bash
 python spec/tools/validate_spec.py        # checked 33 document(s), 0 failure(s)
-python spec/tools/run_conformance.py      # 24 passed, 0 failed, 0 skipped
+python spec/tools/run_conformance.py      # 31 passed, 0 failed, 0 skipped
 ```
 
 Which runtime passes which fixture is in the [conformance results](runtimes/README.md#conformance-results).

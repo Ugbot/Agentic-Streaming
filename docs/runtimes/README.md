@@ -28,5 +28,5 @@ python spec/tools/conformance_matrix.py --output build/conformance-matrix.json -
 ```
 
 Passing the fixtures is a narrow claim. They are mostly rule brains and scripted stubs: no real
-model, no crash inside a turn, no failed compensation and no tool timeout. They say nothing about
+model, no crash inside a turn. They say nothing about
 what a tool sees when a Flink job restores from a checkpoint.

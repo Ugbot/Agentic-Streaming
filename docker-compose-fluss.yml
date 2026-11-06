@@ -1,11 +1,11 @@
 # Apache Fluss single-node cluster for local development.
 #
-#   podman network create agentic-flink-network   # once
-#   podman compose -f docker-compose-fluss.yml up -d
+#   docker network create agentic-flink-network   # once
+#   docker compose -f docker-compose-fluss.yml up -d
 #
 # Coordinator + one tablet server backed by ZooKeeper. Each server exposes two
 # named listeners: INTERNAL (container hostnames, for server<->server traffic
-# inside the podman network) and CLIENT (advertised as localhost:<published
+# inside the compose network) and CLIENT (advertised as localhost:<published
 # port>, so a Fluss client on the host can reconnect after bootstrap).
 #
 # Client bootstrap.servers = localhost:9123 (the coordinator's CLIENT listener).

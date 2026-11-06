@@ -91,6 +91,6 @@ volumes:
   #   driver: local
 
 networks:
-  # Shared with every other compose file; create it once with `podman network create agentic-flink-network`.
+  # Shared with every other compose file; create it once with `docker network create agentic-flink-network`.
   agentic-flink-network:
     external: true

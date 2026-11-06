@@ -57,8 +57,8 @@ pipeline and a **live Coinbase crypto** pipeline.
 ## Running
 
 ```bash
-podman network create agentic-flink-network                     # once
-podman compose -f docker-compose-markets.yml up -d                # Kafka on localhost:9092, Flink 2.2.1 session cluster (REST on :8081)
+docker network create agentic-flink-network                     # once; Podman works too
+docker compose -f docker-compose-markets.yml up -d                # Kafka on localhost:9092, Flink 2.2.1 session cluster (REST on :8081)
 ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
 ./mvnw package -DskipTests                                        # target/agentic-flink-1.0.0-SNAPSHOT-uber.jar
 ```
@@ -66,11 +66,10 @@ podman compose -f docker-compose-markets.yml up -d                # Kafka on loc
 Then start the producers in `example.markets.producer` and submit
 `org.agentic.flink.example.markets.BondMarketAgentExample` or `CryptoMarketAgentExample` with
 `flink run -c <main class> target/agentic-flink-1.0.0-SNAPSHOT-uber.jar`, which needs a Flink 2.2.x
-CLI on the PATH. Inside the compose network the job must read Kafka at `kafka:29092`, so set
-`KAFKA_BOOTSTRAP=kafka:29092` on the JobManager and TaskManager; the default, `localhost:9092`, fails
-there with a metadata timeout.
+CLI on the PATH. Inside the compose network the job reads Kafka at `kafka:29092`:
+`docker-compose-session.yml` sets `KAFKA_BOOTSTRAP` to that on the JobManager and TaskManager.
 
-Prerequisites: JDK 21, the Maven wrapper, Podman for the stack. No API key; `ANTHROPIC_API_KEY`
+Prerequisites: JDK 21, the Maven wrapper, Docker or Podman for the stack. No API key; `ANTHROPIC_API_KEY`
 enables the optional LLM tier and the rule tiers alert without it. The jobs are unbounded streaming
 jobs fed from Kafka, so they are submitted to the session cluster rather than run in an embedded
 MiniCluster. Alerts print to the TaskManager stdout log.

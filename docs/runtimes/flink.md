@@ -22,8 +22,6 @@ The first is described here. The second is deprecated legacy code, kept for now,
   use this for payments or other non-idempotent actions.
 - **A real model on Flink has been tested against a local stand-in server, not a live provider.**
   See [Real models](#real-models).
-- **There is no supported way to run a `pipeline.yaml` from Kafka on a cluster.** `FlinkPipelineRunner`
-  has no Kafka source.
 
 ## How a turn runs
 
@@ -62,6 +60,59 @@ conversation rebuilds it from `KeyedConversationLog` without re-running brains o
 `MiniCluster`) maps the fixture verb `restart_runtime` onto the same sequence, so the `flink`
 binding's `replay-after-restart` and `suspend-resume` passes are savepoint restores. Savepoints are
 taken between turns, so these do not exercise a failure in the window after the last checkpoint.
+
+## Running on a cluster
+
+`FlinkPipelineRunner` with `--input-topic` runs a `pipeline.yaml` as a long-running job between
+Kafka topics (`KafkaPipelineJob`). Submit the uber jar to a session cluster over REST, or with
+`flink run`, where `/opt/agentic/examples` is the mount in `docker-compose-session.yml`:
+
+```bash
+flink run -c org.agentic.flink.pipeline.FlinkPipelineRunner \
+  target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+  /opt/agentic/examples/pipelines/banking.yaml --input-topic agentic.turns
+```
+
+| Flag | Default |
+|---|---|
+| `--input-topic` | none; this is what selects the Kafka job. The topics must exist |
+| `--kafka-bootstrap` | `KAFKA_BOOTSTRAP` in the environment of the process running `main` |
+| `--output-topic` | `<input>.results` |
+| `--failures-topic` | `<output>.failures` |
+| `--group-id` | `agentic-<agent id>` |
+
+A turn is a JSON record. Key it by `conversation_id`, so that a conversation stays on one partition
+and its turns stay in order:
+
+```json
+{"conversation_id": "c1", "turn_id": "t1", "user_id": "alice", "text": "what is my balance?"}
+{"conversation_id": "c1", "turn_id": "t1", "signal": {"approved": true}}
+```
+
+`turn_id` is required, not minted: it is what makes a redelivery a `duplicate`. Results are the
+`result.schema.json` document, keyed by conversation and written at-least-once. A record that cannot
+be a turn reaches the failures topic as `{"kind": "malformed_record", "reason", "record"}` and the
+job carries on. A turn ending `fatal` or `transient` reaches it as `{"kind": "turn_failure",
+"result"}` as well as the results topic.
+
+`tools/kafka-flink-e2e.sh` proves this on a real Flink 2.2.1 cluster and a real broker, with Docker
+or Podman: it submits `banking.yaml`, sends a poison record and a redelivery, kills the TaskManager
+after a checkpoint and checks that the conversation carries on from the restored log.
+
+To run a document once on a local cluster, in its own JVM:
+
+```bash
+bash tools/run-pipeline.sh examples/pipelines/banking.yaml --text "what is my balance?"
+```
+
+## Failed turns
+
+Nothing a turn does fails the job. Whatever escapes a turn ends it `failed` with class `fatal`, as
+`turn_failed` on the log and a result on the main output, and a redelivery is a `duplicate` of that
+failure. Turns ending `fatal` or `transient` also go to the side output
+`WorkflowTurnFunction.TURN_FAILURES`. A failing compensation ends the turn `fatal`, after the
+remaining compensations have run, and needs repair by hand. Only a log that cannot be reached, which
+is a state backend failure, still fails the job (`WorkflowTurnBoundaryTest`).
 
 ## Real models
 
