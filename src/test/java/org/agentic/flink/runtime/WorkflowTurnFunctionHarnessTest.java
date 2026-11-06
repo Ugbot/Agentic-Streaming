@@ -1,7 +1,6 @@
 package org.agentic.flink.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -103,10 +102,10 @@ class WorkflowTurnFunctionHarnessTest {
             Workflows.approval(), Map.of("resume_after_ms", 10, "timer_domain", "event_time"));
     try (KeyedOneInputStreamOperatorTestHarness<String, Event, TurnResult> h = harness(wf)) {
       h.open();
-      assertThrows(
-          IllegalStateException.class,
-          () ->
-              h.processElement(new StreamRecord<>(Event.turn(rnd("c"), rnd("t"), "u", "refund"))));
+      h.processElement(new StreamRecord<>(Event.turn(rnd("c"), rnd("t"), "u", "refund")));
+      TurnResult failed = outputs(h).get(0);
+      assertEquals(TurnStatus.FAILED, failed.status, "a per-key error, not a job failure");
+      assertTrue(failed.error.message().contains("requires event timestamps"));
     }
   }
 

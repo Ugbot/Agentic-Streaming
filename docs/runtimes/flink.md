@@ -63,17 +63,26 @@ conversation rebuilds it from `KeyedConversationLog` without re-running brains o
 binding's `replay-after-restart` and `suspend-resume` passes are savepoint restores. Savepoints are
 taken between turns, so these do not exercise a failure in the window after the last checkpoint.
 
-## State TTL
+## Idle expiry
 
-`runtime.flink.state_ttl_ms` in the workflow document (read by `FlinkRuntimeOptions`) applies a
-Flink `StateTtlConfig` to the log, the sequence counter and the timer registry, with
-`OnCreateAndWrite` updates and `NeverReturnExpired` visibility. Without the option, retention is unbounded.
+`runtime.flink.state_ttl_ms` in the workflow document (read by `FlinkRuntimeOptions`) is how long an
+idle conversation is kept. It is one processing-time timer per conversation, moved forward by every
+turn. When it fires, the log, the sequence counter and the timer registry are cleared together.
+Without the option, retention is unbounded.
 
-**Do not set this on a conversation that can stay active past the TTL.** Flink tracks TTL per list
-element and old elements are not refreshed, so the oldest events expire while the sequence counter
-lives on, the log stops being dense, and the fold throws. That failure repeats after a restore. Idle
-expiry also forgets a suspended turn and clears the `turn_id` dedupe window
+An active conversation can outlive the value for as long as it likes
+(`WorkflowTurnIdleExpiryTest.anActiveConversationOutlivesTheTtl`). A conversation with a suspended
+turn is kept and looked at again one interval later, so an approval is not lost, which also means a
+turn nobody ever answers is retained
+(`aSuspendedTurnIsNeverExpired`). Expiry does end the `turn_id` dedupe window: a turn redelivered
+after its conversation expired runs again
 (`WorkflowTurnFunctionMiniClusterTest.stateTtlExpiresTheConversationLog`).
+
+This is deliberately not Flink state TTL, which tracks list elements one by one: the oldest events
+expired under a live conversation and the log stopped folding. A savepoint taken while that was in
+place restores (`aSavepointTakenWithFlinkTtlRestoresIntoTheIdleTimer`, on the hashmap and RocksDB
+backends), but a restored conversation has no idle timer until its next turn, so one that never
+speaks again is not expired.
 
 ```yaml
 runtime:
