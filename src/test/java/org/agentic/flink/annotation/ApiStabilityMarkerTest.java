@@ -22,8 +22,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Every public top-level type compiled from {@code src/main} carries exactly one of {@link Public},
  * {@link Experimental} or {@link Internal}. The check runs over the compiled classes so it covers
- * whatever the active Maven profiles include (for example {@code plugins/flintagents} with {@code
- * -P flink-agents}).
+ * whatever the active Maven profiles include.
  */
 class ApiStabilityMarkerTest {
 

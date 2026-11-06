@@ -115,25 +115,6 @@
             <artifactId>jagentic-core</artifactId>
         </dependency>
 
-        <!--
-        Apache Flink Agents - OPTIONAL Plugin (Experimental)
-
-        NOTE: This is an OPTIONAL dependency for the Flink Agents plugin.
-        The core framework works WITHOUT these dependencies.
-
-        To enable Flink Agents plugin:
-        1. Build Flink Agents from source (still in SNAPSHOT):
-           git clone https://github.com/apache/flink-agents.git
-           cd flink-agents && ./tools/build.sh && mvn install -DskipTests
-
-        2. Build this project with the flink-agents profile:
-           mvn clean package -P flink-agents
-
-        See: src/main/java/org/agentic/flink/plugins/flintagents/README.md
-        -->
-
-        <!-- Flink Agents dependencies are in the 'flink-agents' profile below -->
-
         <!-- LangChain4J Core -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -528,10 +509,6 @@
                             <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
-                    <!-- Exclude Flink Agents plugin by default -->
-                    <excludes>
-                        <exclude>**/plugins/flintagents/**</exclude>
-                    </excludes>
                 </configuration>
             </plugin>
 
@@ -644,19 +621,6 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-
-        <!-- Apache Snapshot Repository (for Flink Agents snapshots) -->
-        <repository>
-            <id>apache.snapshots</id>
-            <name>Apache Snapshot Repository</name>
-            <url>https://repository.apache.org/snapshots</url>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
     </repositories>
 
     <profiles>
@@ -749,61 +713,6 @@
                         <configuration>
                             <excludedGroups>none</excludedGroups>
                             <groups>djl</groups>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-
-        <!-- Optional Flink Agents Plugin Profile -->
-        <profile>
-            <id>flink-agents</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <dependencies>
-                <!-- Flink Agents API - Built from source and installed locally -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-api</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-
-                <!-- Flink Agents Plan - Workflow agent support -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-plan</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-
-                <!-- Flink Agents Runtime - Agent execution runtime -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-runtime</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-
-                <!-- Flink Agents Ollama Integration - LLM support -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-integrations-chat-models-ollama</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-compiler-plugin</artifactId>
-                        <configuration>
-                            <release>${java.version}</release>
-                            <compilerArgs>
-                                <arg>-parameters</arg>
-                            </compilerArgs>
-                            <!-- Include Flink Agents plugin when profile is active -->
-                            <excludes>
-                                <exclude>NOTHING_TO_EXCLUDE</exclude>
-                            </excludes>
                         </configuration>
                     </plugin>
                 </plugins>

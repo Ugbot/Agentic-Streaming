@@ -106,10 +106,6 @@
         <javadoc.doclint>none</javadoc.doclint>
         <javadoc.failOnError>false</javadoc.failOnError>
         <javadoc.failOnWarnings>false</javadoc.failOnWarnings>
-        <!-- The optional Flink Agents plugin under the root module is excluded from compilation
-             unless the flink-agents profile is active (root pom.xml, maven-compiler-plugin); the
-             Javadoc run must skip the same sources or it fails on their unresolved imports. -->
-        <javadoc.sourceFileExclude>**/plugins/flintagents/**</javadoc.sourceFileExclude>
     </properties>
 
     <!-- Every cross-module coordinate is managed here, so no module states another module's
@@ -350,9 +346,6 @@
                     <doclint>${javadoc.doclint}</doclint>
                     <failOnError>${javadoc.failOnError}</failOnError>
                     <failOnWarnings>${javadoc.failOnWarnings}</failOnWarnings>
-                    <sourceFileExcludes>
-                        <sourceFileExclude>${javadoc.sourceFileExclude}</sourceFileExclude>
-                    </sourceFileExcludes>
                     <quiet>true</quiet>
                     <notimestamp>true</notimestamp>
                 </configuration>
@@ -378,15 +371,6 @@
                 <javadoc.doclint>all,-missing</javadoc.doclint>
                 <javadoc.failOnError>true</javadoc.failOnError>
                 <javadoc.failOnWarnings>true</javadoc.failOnWarnings>
-            </properties>
-        </profile>
-
-        <!-- Companion of the root module's flink-agents profile (same id, activated by the same
-             -P flag): when the plugin sources are compiled they are documented as well. -->
-        <profile>
-            <id>flink-agents</id>
-            <properties>
-                <javadoc.sourceFileExclude>NOTHING_TO_EXCLUDE</javadoc.sourceFileExclude>
             </properties>
         </profile>
 
