@@ -1,5 +1,5 @@
 """agentic-pipeline — a declarative YAML pipeline that builds to the agentic system of
-your choice, on any backend.
+your choice.
 
     from agentic_pipeline import load
     system = load("pipeline.yaml")

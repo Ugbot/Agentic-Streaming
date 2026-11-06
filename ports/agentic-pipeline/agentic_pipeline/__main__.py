@@ -1,7 +1,7 @@
 """CLI: build a pipeline.yaml on the chosen backend and run turns through it.
 
     python -m agentic_pipeline run banking.yaml --text "what is my balance?"
-    python -m agentic_pipeline run banking.yaml --backend celery --conv c1 --text "hi"
+    python -m agentic_pipeline run banking.yaml --backend local --conv c1 --text "hi"
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sys
 
 from pyagentic.core import Event
 
-from .backends import BackendUnavailableError, backend_names, demonstration_only_names
+from .backends import backend_names
 from .loader import load
 
 
@@ -23,8 +23,7 @@ def main(argv=None) -> int:
     run.add_argument(
         "--backend",
         default=None,
-        help=f"override backend ({', '.join(backend_names())}); demonstration-only adapters that are "
-        f"rejected: {', '.join(demonstration_only_names())}",
+        help=f"override backend ({', '.join(backend_names())})",
     )
     run.add_argument("--text", default="what is my balance?", help="the turn text")
     run.add_argument("--conv", default="c1", help="conversation id")
@@ -33,7 +32,7 @@ def main(argv=None) -> int:
 
     try:
         system = load(args.pipeline, backend=args.backend)
-    except (ValueError, BackendUnavailableError) as exc:
+    except ValueError as exc:
         print(f"agentic_pipeline: {exc}", file=sys.stderr)
         return 2
     try:
