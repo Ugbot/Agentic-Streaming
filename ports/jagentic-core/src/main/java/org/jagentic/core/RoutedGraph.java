@@ -266,9 +266,9 @@ public final class RoutedGraph {
       return resume(event, ctx, before.suspended().get(event.turnId()));
     }
     ConversationState.TurnRecord prior = before.turn(event.turnId());
-    boolean rerun = prior != null && prior.retryable();
-    if (policies.idempotency() == Policies.Idempotency.TURN_ID && prior != null
-        && prior.status() != null && !rerun) {
+    boolean idempotent = policies.idempotency() == Policies.Idempotency.TURN_ID;
+    boolean rerun = idempotent && prior != null && prior.retryable();
+    if (idempotent && prior != null && prior.status() != null && !rerun) {
       return recorded(ctx, prior).asDuplicate(before.reduced());
     }
     if (rerun) {

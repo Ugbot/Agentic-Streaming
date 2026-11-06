@@ -203,7 +203,7 @@ class Engine:
             pending = self._suspended.get(key)
             prior = self._results.get(key)
 
-        rerun = prior is not None and (prior.get("error") or {}).get("class") == "transient"
+        rerun = idempotent and prior is not None and (prior.get("error") or {}).get("class") == "transient"
         if turn.signal is not None:
             if pending is not None:
                 return self._resume(turn, pending)

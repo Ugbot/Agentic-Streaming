@@ -90,6 +90,17 @@ class ModelFailureClassificationTest {
   }
 
   @Test
+  void withoutTurnIdempotencyARedeliveryIsSimplyANewTurn() {
+    AtomicInteger calls = new AtomicInteger();
+    Runtime rt = runtime(workflow(Map.of("idempotency", "none")),
+        failing(calls, 1, new TransientFailure("blip")));
+    assertEquals(TurnStatus.FAILED, rt.submit(Event.turn("c", "t", "u", "hi")).status);
+    TurnResult second = rt.submit(Event.turn("c", "t", "u", "hi"));
+    assertEquals(TurnStatus.COMPLETED, second.status);
+    assertEquals(2L, ((Number) second.state.get("turn_count")).longValue());
+  }
+
+  @Test
   void anyOtherModelFailureIsFatalAndIsNotRetried() {
     AtomicInteger calls = new AtomicInteger();
     Runtime rt = runtime(workflow(retry(3)), failing(calls, 99, new IllegalStateException("bug")));

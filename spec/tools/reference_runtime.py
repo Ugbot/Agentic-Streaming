@@ -188,7 +188,7 @@ class ReferenceRuntime:
         if turn.signal is not None and turn.turn_id in conv.suspended:
             return self._resume(conv, turn)
         recorded = conv.results.get(turn.turn_id)
-        rerun = recorded is not None and (recorded.get("error") or {}).get("class") == "transient"
+        rerun = idempotent and recorded is not None and (recorded.get("error") or {}).get("class") == "transient"
         if rerun and turn.signal is not None and turn.turn_id in conv.resumed:
             conv.suspended[turn.turn_id] = conv.resumed[turn.turn_id]
             return self._resume(conv, turn)

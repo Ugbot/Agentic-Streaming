@@ -52,3 +52,14 @@ def test_a_redelivery_of_a_fatal_turn_is_a_duplicate_not_a_rerun():
     written = len(log.read(cid))
     assert runtime.submit(Turn(cid, tid, "hello"))["status"] == "duplicate"
     assert len(log.read(cid)) == written
+
+
+def test_without_turn_idempotency_a_redelivered_transient_failure_is_a_new_turn():
+    doc = _doc(policies={"idempotency": "none"},
+               llm={"provider": "stub", "script": [{"text": "ok", "x-fail-attempts": 1}]})
+    doc["agent"]["paths"]["p"] = {"brain": "llm"}
+    runtime = LocalRuntime(log=InMemoryEventLog())
+    runtime.deploy(_Deployable(doc, Bindings()))
+    cid = f"c-{uuid.uuid4()}"
+    assert runtime.submit(Turn(cid, "t", "hello"))["status"] == "failed"
+    assert runtime.submit(Turn(cid, "t", "hello"))["state"]["turn_count"] == 2
