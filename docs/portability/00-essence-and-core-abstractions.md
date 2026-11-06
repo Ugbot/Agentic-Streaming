@@ -1,8 +1,7 @@
 # The Essence of Agentic Streaming: and How to Port It Off Flink
 
 > Keystone design note for the `docs/portability/` series. Read this first; every
-> per-engine doc (`kafka-streams.md`, `pekko.md`, `temporal.md`, `pulsar.md`,
-> `nats.md`, `spring.md`, `quarkus.md`, `ray.md`, `celery.md`, `dask.md`,
+> per-engine doc (`pekko.md`, `spring.md`, `quarkus.md`, `ray.md`, `dask.md`,
 > `airflow.md`, `faust.md`) is written against the abstractions, capability matrix, and
 > Engine SPI defined here.
 
@@ -211,7 +210,7 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
 > Flink here that supply **C1+C2+C3 all natively**, the actor-model peer of Kafka
 > Streams' streaming-model fit.
 
-> **Temporal** (added after the table; see [`temporal.md`](temporal.md)) is the durable
+> **Temporal** (added after the table) is the durable
 > execution engine. Its column would read **N** for C1 (workflow state, persisted via
 > event-sourced history, keyed by workflowId = conversationId), **N** for C2 (exactly
 > one running execution per id; Updates/Signals applied serially), **N** for C3 (the
@@ -221,7 +220,7 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
 > request/response durable orchestration, not a low-latency stream, but it is one of
 > the three besides Flink to give C1+C2+C3 natively, with the strongest durability.
 
-> **NATS JetStream** (added after the table; see [`nats.md`](nats.md)) is persistent
+> **NATS JetStream** (added after the table) is persistent
 > streaming + a durable KV store on NATS. Its column would read **N** for C1 (the
 > **KV store**, a revisioned envelope per conversationId),**L** for C2 (no native
 > per-key consumer assignment; subject routing + KV revision compare-and-set), **N** for
@@ -231,7 +230,7 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
 > native durable keyed state from one small server; C2 is a convention rather than an
 > engine guarantee.
 
-> **Apache Pulsar Functions** (added after the table; see [`pulsar.md`](pulsar.md)) is
+> **Apache Pulsar Functions** (added after the table) is
 > Pulsar's lightweight serverless compute. Its column would read **N** for C1 (the
 > built-in **state store**, BookKeeper-backed and durable),**N** for C2 (a
 > `Key_Shared` subscription keyed by `conversationId` delivers one key to one instance
@@ -242,7 +241,7 @@ How each engine supplies the §3 capabilities. Legend: **N**ative ·
 > Flink to give C1+C2+C3 natively, and the closest of them to Flink's topic-in/topic-out
 > shape.
 
-> **Celery** (added after the table; see [`celery.md`](celery.md)) is the Python
+> **Celery** (added after the table) is the Python
 > distributed task queue. Its column would read **X** for C1 (state in the result
 > backend / an external ConversationStore. Redis), **L** for C2 (no native keyed
 > ordering; route a conversation to one queue + a per-conversation lock), **L/N** for

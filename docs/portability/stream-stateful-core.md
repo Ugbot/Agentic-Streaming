@@ -3,13 +3,13 @@
 The project's thesis is *"an agent is a materialized view over an ordered log of events."* For a long
 time the portable cores only did single-turn `submit(event) → TurnResult`; everything stream-native,
 complex event processing, timers, windows, lived only on Flink. The **stream-stateful core** closes
-that: a small set of modules, present and at **byte-for-byte parity** in all four cores
-(`pyagentic` · `jagentic-core` · `goagentic` · `agentic-clj`), turns the event log into a first-class,
+that: a small set of modules, present and at **byte-for-byte parity** in all three cores
+(`pyagentic` · `jagentic-core` · `agentic-clj`), turns the event log into a first-class,
 ordered, replayable stream and layers the stream-native capabilities on top.
 
-Everything below is **model-free by default** and composes with the engine adapters: the portable
+Everything below is **model-free by default** and composes with the runtimes: the portable
 implementation is the default, and the SPI seam lets an engine inject its native primitive
-(Flink timers/CEP, a Pekko scheduler + Pekko Streams, Temporal durable timers) without touching agent
+(Flink timers/CEP, a Pekko scheduler + Pekko Streams) without touching agent
 code, exactly how the store SPIs already work.
 
 ## The modules
@@ -27,7 +27,7 @@ code, exactly how the store SPIs already work.
 ## The headline: CEP, off Flink
 
 The canonical example. "**3 anomalies on one host within 5 minutes → open an incident**", now runs
-on every core, byte-identically (Java shown; the Python/Go/Clojure forms mirror it):
+on every core, byte-identically (Java shown; the Python/Clojure forms mirror it):
 
 ```java
 Pattern incident = Pattern.begin("first",  Condition.any())
@@ -92,7 +92,6 @@ SPIs where they have something native:
 - **Flink** keeps its real CEP / keyed-state timers / windows (event-time + watermarks); the portable
   `cep` is the fallback and the parity reference.
 - **Pekko** can back `TimerService` with its scheduler and the stream with Pekko Streams.
-- **Temporal** can back timers with durable workflow timers.
 - The `Tracer` SPI bridges to native tracing (OpenTelemetry) where present.
 
 So **"CEP everywhere" means**: the portable engine by default, the native engine where one exists,
@@ -103,5 +102,4 @@ the agent definition is unchanged either way.
 Each module ships a cross-core parity test asserting byte-identical behaviour (the incident match,
 timer fire order, window counts, replay reproduction, suspend/resume, span trees) the way the FNV
 embedder and banking goldens already do. Run them with the usual per-core commands:
-`pytest ports/pyagentic` · `mvn -f ports/jagentic-core/pom.xml test` · `go test ./...` (in `ports/experimental/go`)
-· `clojure -X:test` (in `agentic-clj`).
+`pytest ports/pyagentic` · `mvn -f ports/jagentic-core/pom.xml test` · `clojure -X:test` (in `agentic-clj`).

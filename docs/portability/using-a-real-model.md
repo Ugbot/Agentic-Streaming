@@ -15,7 +15,7 @@ podman exec ollama ollama pull qwen2.5:3b          # a small chat model
 podman exec ollama ollama pull nomic-embed-text    # embeddings
 ```
 
-## In a `pipeline.yaml` (all three languages)
+## In a `pipeline.yaml` (Python and the JVM)
 
 ```yaml
 llm:        {provider: ollama, model: qwen2.5:3b, base_url: http://localhost:11434}
@@ -52,16 +52,6 @@ missing one raises `ValueError` before any request is made. Name a model you hav
 or been granted access to.
 `pip install litellm` (chat+embeddings across providers); `qdrant-client`, `psycopg`,
 `duckdb`, `mcp` are optional extras for the matching backends.
-
-### Go (`goagentic`): langchaingo, native go-openai where needed
-
-```go
-chat := core.NewOllamaChatClient("qwen2.5:3b", "http://localhost:11434")
-emb, _ := core.NewLangChainGoEmbedder("ollama", "nomic-embed-text", "")
-brain := core.NewLlmBrain(chat, "assistant", "You are helpful.", nil, 6)
-```
-`go get github.com/tmc/langchaingo` is already wired; `qdrant`/`pgx`/`mark3labs/mcp-go`
-back the optional stores/MCP.
 
 ### Java (`jagentic-core`): LangChain4J behind the ChatClient SPI
 

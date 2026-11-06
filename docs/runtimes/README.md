@@ -16,7 +16,7 @@ disagree.
 | [Pure Python](python.md) | `python` |
 | [Python facade (JVM-backed)](python-facade.md) | `python-jvm`, `python-flink` |
 | [PyFlink](pyflink.md) | `pyflink` |
-| [Experimental adapters](experimental.md) | none |
+| [Experimental adapters (moved out)](experimental.md) | none |
 
 The JVM core that Flink, Pekko and the Python facade share (`ports/jagentic-core`) is the
 `jvm-core` column; it is described on the [common primitives page](common-primitives.md#the-cores).

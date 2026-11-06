@@ -8,8 +8,7 @@
 > (memory · Postgres · Cassandra · Redis), `backend: pekko` for any `pipeline.yaml`, and a
 > durability/recovery demo. This doc is the design rationale (C1..C12); the original
 > `ports/pekko/` proof-of-concept it was written against has been deleted in favour of that
-> module. [`../../ports/experimental/pekko/`](../../ports/experimental/pekko/) holds only a
-> README pointing at `agentic-pekko/`.
+> module.
 
 ## 1. Verdict
 
