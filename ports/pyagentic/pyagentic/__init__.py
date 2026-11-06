@@ -3,8 +3,8 @@
 A faithful, dependency-free distillation of the project's core abstractions
 (see ../../docs/portability/00-essence-and-core-abstractions.md): per-conversation
 memory, keyed state, tools, the ReAct-style turn, the router->path->verifier routed
-graph, and hot+cold retrieval — plus a LocalRuntime. Engine adapters (Faust, Ray,
-Dask, Airflow) import this core and provide their own Runtime/state backing.
+graph, and hot+cold retrieval — plus a LocalRuntime. Engine adapters
+import this core and provide their own Runtime/state backing.
 """
 
 from __future__ import annotations

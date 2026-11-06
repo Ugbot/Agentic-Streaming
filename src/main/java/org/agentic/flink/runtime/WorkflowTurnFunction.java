@@ -58,8 +58,8 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *   <li><b>Idempotency and recovery.</b> The log is checkpointed with the operator, so a turn id
  *       already recorded in the restored log is answered as {@code duplicate} by the core without
  *       re-running the brain, tools or saga. Flink snapshots state between elements, so a partially
- *       processed turn is never checkpointed: after a failure the turn is either fully in the log
- *       (answered as duplicate) or not at all (executed once on redelivery).
+ *       processed turn is never checkpointed. A turn that ran after the last completed checkpoint
+ *       is not in the restored log, so on redelivery it runs again, tools and model calls included.
  *   <li><b>Timers.</b> When {@link FlinkRuntimeOptions#resumeAfter()} is set, a suspended turn
  *       registers a Flink timer (processing or event time), appends {@code timer_scheduled}, and on
  *       firing appends {@code timer_fired} and resumes the turn with a {@code {kind: "timer"}}

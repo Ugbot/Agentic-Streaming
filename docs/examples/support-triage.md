@@ -87,8 +87,8 @@ LangChain4J-idiomatic thing.
 ## Running it
 
 ```bash
-bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
-bash examples-bin/run-support-triage.sh
+podman compose up -d ollama && podman compose exec ollama ollama pull qwen2.5:3b
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.triage.SupportTriageExample
 ```
 
 Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama), and outbound internet on the

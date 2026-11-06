@@ -5,27 +5,19 @@ decides *how it runs*. Pick along three axes, in order.
 
 ## 1. Delivery model: how do turns arrive?
 
-- **A live keyed event stream** (high throughput, per-conversation ordering):**Flink**
-  (first-class, richest), **Kafka Streams**,**Faust** (pure Python), or **Pulsar
-  Functions**. These give single-writer-per-conversation natively.
-- **Online request/response turns** (a service answers a turn):**Local** (embedded),
-  **NATS JetStream**,**Celery**,**Ray**,**Pekko**,**Temporal**,**Spring**. Great
-  behind an HTTP gateway.
-- **Durable, long-running, retried, human-in-the-loop workflows**:**Temporal** (strongest
-  durability) or **Pekko** (actor entities). Turns can span minutes/days and survive
-  restarts.
-- **Batch / scheduled** (offline RAG ingest, eval sweeps, branching DAGs):**Dask** (data
-  plane) or **Airflow** (orchestration). Not the live conversational loop.
+- **A live keyed event stream** (high throughput, per-conversation ordering): **Flink**
+  (the primary runtime). It gives single-writer-per-conversation natively.
+- **Online request/response turns** (a service answers a turn): **Local** (embedded) or
+  **Pekko**.
+- **Durable, long-running, retried, human-in-the-loop workflows**: **Pekko** (actor entities).
+  Turns can span minutes or days and survive restarts.
 
 ## 2. Durability + ordering: native or external?
 
 - **Native C1+C2+C3** (durable keyed state + ordering + fault tolerance, no external DB):
-  **Flink** (checkpoints),**Pekko** (sharding + persistence),**Temporal**
-  (event-sourced), **Pulsar Functions** (BookKeeper state).**NATS JetStream** gives
-  durable KV + stream with ordering as a convention.
-- **Assembled** (keyed state in an external store, ordering via partitions/queue):
-  **Kafka Streams**/**Faust**/**Quarkus**/**Spring** (Kafka partitions + Redis/Postgres),
-  **Celery** (routed queue + Redis),**Ray** (in-memory + write-through).
+  **Flink** (checkpoints), **Pekko** (sharding + persistence).
+- **Local** keeps a lock per conversation in-process; durability comes from the store you
+  configure.
 
 Whichever you choose, the durable store is **hot-swappable behind the SPI**
 (`stores.conversation: {kind: redis|memory, url: ...}`); bring it up with
@@ -33,33 +25,24 @@ Whichever you choose, the durable store is **hot-swappable behind the SPI**
 
 ## 3. Your stack / language
 
-- **Pure Python**: Faust, Ray, Celery, NATS, Dask, Airflow.
-- **JVM**: Flink, Kafka Streams, Pekko, Temporal, Pulsar, Quarkus, Spring.
-- **Go**: the `goagentic` core + NATS + Temporal + the stdlib gateway.
-- **Just embed it / a service**: the in-process **Local** runtime in any of the three
-  languages, optionally behind the **FastAPI** or **Go** gateway.
+- **Pure Python**: the in-process **Local** runtime (`pyagentic`).
+- **JVM**: Flink, Pekko, or **Local** (`jagentic-core`).
 
 ## Quick picks
 
 | You want... | Use |
 |-----------|-----|
-| The richest, battle-tested streaming agent platform | **Flink** (first-class) |
-| The same essence, pure Python, live stream | **Faust** |
-| Durable multi-step / HITL workflows | **Temporal** |
+| Agents over a stream, with Flink state and CEP | **Flink** (the primary runtime) |
 | Actor entity per conversation on the JVM | **Pekko** |
-| Lightweight durable streaming, edge-friendly | **NATS JetStream** |
-| Agents as tasks on a queue you already run | **Celery** |
-| Offline RAG indexing / eval at scale | **Dask** |
-| Scheduled / triggered agentic DAGs | **Airflow** |
-| Embed in a service / quickest start | **Local** + a gateway |
+| Durable multi-step / HITL workflows | **Pekko** |
+| Embed in a service / quickest start | **Local** |
 
-See the **[parity matrix](parity-matrix.md)** for the per-backend feature/limitation
-table, and **[pipelines](pipelines.md)** for the one YAML that runs on any of them.
+See the **[conformance results](../runtimes/README.md#conformance-results)** for what each runtime passes,
+and **[pipelines](pipelines.md)** for the YAML.
 
 ## Don't lock into Flink
 
-Flink is the first-class runtime, but the agent, prompts, tools, calls to other agents,
-retrieval, memory, guardrails, is engine-agnostic. Prototype on **Local**, move to a
-streaming/durable backend for production by changing `backend:` in your YAML, and keep
-external services (Redis/Valkey, Kafka/Fluss, Postgres) behind their interfaces so they
-swap without touching agent code.
+Flink is the primary runtime, but the agent, prompts, tools, calls to other agents,
+retrieval, memory, guardrails, is engine-agnostic. Prototype on **Local**, take the same file to
+Pekko or Flink, and keep external services (Redis/Valkey, Kafka/Fluss, Postgres)
+behind their interfaces so they swap without touching agent code.

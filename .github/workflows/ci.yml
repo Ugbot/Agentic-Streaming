@@ -4,19 +4,11 @@ name: CI
 #
 # Required status checks (branch protection should list exactly these):
 #   core     the whole Maven reactor (reactor/pom.xml) in one invocation, with the
-#            integration-tests profile and the backing services it needs, plus the
-#            JPype facade (python/tests) and the PyFlink binding (pyflink/tests) run
-#            against the shaded jar that build produced
-#   python   the pure-Python core (ports/pyagentic) with its service-backed tests
-#   clojure  the Clojure/Datomic runtime
+#            integration-tests profile and the backing services it needs
+#   python   the pure-Python core (ports/pyagentic) with its service-backed tests, the pipeline
+#            CLI (ports/agentic-pipeline) and the docs checks
 # The conformance matrix is a required check too; it lives in conformance.yml and is
-# not repeated here (the python/pyflink steps below deselect their conformance modules).
-#
-# Advisory jobs (continue-on-error, must not be listed as required checks):
-#   ports-experimental   JVM engine adapters under ports/experimental (pre-agentic/v1,
-#                        not conformance tested, may be removed)
-#   python-experimental  Python adapters under ports/experimental (same status)
-#   go                   the Go port under ports/experimental/go (same status)
+# not repeated here.
 #
 # Skips are audited. The Maven *IT classes start their own PostgreSQL, pgvector, Redis,
 # Qdrant and Fluss containers through Testcontainers and fail (never skip) without a
@@ -51,7 +43,7 @@ env:
 
 jobs:
   core:
-    name: core (Maven reactor + Python facades)
+    name: core (Maven reactor)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -96,13 +88,6 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 20
-      # tool-services-app's RedisToolBridgeTest hard-codes localhost:6379.
-      redis-tool-bridge:
-        image: redis:7-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 20
       qdrant:
         image: qdrant/qdrant:v1.13.2
         ports: ["6333:6333"]
@@ -122,11 +107,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            python/pyproject.toml
-            pyflink/pyproject.toml
-            ports/pyagentic/pyproject.toml
 
       - name: Wait for services without a health check
         run: tools/ci/wait-for-ports.sh localhost:6333 localhost:9092
@@ -140,68 +120,32 @@ jobs:
       # One reactor invocation builds every first-class module in dependency order and
       # runs its tests: the unit suite through surefire, then the *IT classes through
       # failsafe in the integration-test phase (the integration-tests profile binds it in
-      # reactor/pom.xml); `install` (not `verify`) so the Python steps below can resolve
-      # org.jagentic:agentic-flink through the root pom (python/tests/conftest.py runs
-      # `./mvnw dependency:build-classpath`). a2a-gateway is behind the a2a-gateway profile
-      # because Quarkus roughly doubles the build time; it is still exercised here.
+      # reactor/pom.xml).
       #
-      # Two surefire test classes of the Flink module are excluded by name (failsafe
-      # does not read -Dtest, so the *IT classes are unaffected):
-      # - PythonExecutorTest embeds CPython through PEMJA 0.4.1, which ships no wheel for
-      #   the Python 3.12 this job installs and pins a different pemja than the apache-flink
-      #   package the PyFlink step needs. It stays a local-only integration test.
+      # One surefire test class of the Flink module is excluded by name (failsafe does not
+      # read -Dtest, so the *IT classes are unaffected):
       # - ZeroMqChannelTest has no per-test timeout and hangs on some hosts (jeromq
       #   PUSH/PULL over tcp://127.0.0.1); a hang here would only surface as this job's
       #   60 minute timeout. Run it locally with `./mvnw test -Dtest=ZeroMqChannelTest`.
       # - `-Dtest` replaces surefire's include patterns, so `!*IT` keeps the *IT.java classes
       #   out of surefire; failsafe runs them once in the integration-test phase.
-      - name: Maven reactor (integration-tests profile, a2a-gateway included)
+      - name: Maven reactor (integration-tests profile)
         run: >-
           ./mvnw -B -ntp -f reactor/pom.xml install
-          -P integration-tests,a2a-gateway
-          -Dtest='!PythonExecutorTest,!ZeroMqChannelTest,!*IT'
+          -P integration-tests
+          -Dtest='!ZeroMqChannelTest,!*IT'
           -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: Shaded framework jar is present
         run: |
-          ls -l target/agentic-flink-*-uber.jar pyflink/java/target/agentic-pyflink-*.jar
+          ls -l target/agentic-flink-*-uber.jar
           test "$(ls target/agentic-flink-*-uber.jar | wc -l)" -eq 1
-
-      # python/tests/test_pekko_runtime.py boots the `pekko` runtime inside the JPype JVM and
-      # locates agentic-pekko/target/agentic-pekko-*.jar plus this classpath file
-      # (agentic_flink._classpath.pekko_jars); without the file those tests fail, not skip.
-      # mdep.outputFile is resolved against the module directory, hence the absolute path.
-      - name: Pekko classpath for the JPype facade
-        run: >-
-          ./mvnw -B -ntp -q -f reactor/pom.xml -pl :agentic-pekko
-          dependency:build-classpath -Dmdep.outputFile="$PWD/python/tests/.cp-pekko"
-
-      - name: Install the Python facades
-        run: |
-          python -m pip install -e "ports/pyagentic[test]"
-          python -m pip install -e "python[test]" cloudpickle
-          python -m pip install -e "pyflink[test]"
-
-      # test_conformance_jvm.py is the python-jvm / python-flink conformance run and
-      # pyflink/tests/test_conformance.py the pyflink one; conformance.yml owns those.
-      - name: JPype facade (python/tests)
-        run: >-
-          python -m pytest python/tests -q -ra
-          --ignore python/tests/test_conformance_jvm.py
-          --junitxml build/junit/python-facade.xml
-
-      - name: PyFlink binding (pyflink/tests)
-        run: >-
-          python -m pytest pyflink/tests -q -ra
-          --ignore pyflink/tests/test_conformance.py
-          --junitxml build/junit/pyflink.xml
 
       - name: Skip audit (a skip in CI must be allowlisted)
         if: always()
         run: >-
           python tools/ci/skip_audit.py --allowlist tools/ci/skip-allowlist.txt
           '**/target/surefire-reports/TEST-*.xml' '**/target/failsafe-reports/TEST-*.xml'
-          'build/junit/*.xml'
 
       - name: Collect test reports
         if: always()
@@ -213,7 +157,6 @@ jobs:
             **/target/surefire-reports/*.txt
             **/target/failsafe-reports/TEST-*.xml
             **/target/failsafe-reports/*.txt
-            build/junit/*.xml
           if-no-files-found: warn
           retention-days: 7
 
@@ -221,123 +164,12 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: agentic-flink-uber-jar
-          path: |
-            target/agentic-flink-*-uber.jar
-            pyflink/java/target/agentic-pyflink-*.jar
+          path: target/agentic-flink-*-uber.jar
           if-no-files-found: error
           retention-days: 7
 
-  # The JVM engine adapters under ports/experimental/ predate agentic/v1, are not
-  # conformance tested, and are not on the acceptance path. They are deliberately
-  # outside reactor/pom.xml; jagentic-core (their only in-repo dependency) is installed
-  # from the reactor first. continue-on-error keeps a red adapter from failing the
-  # workflow, and this job must not be listed as a required status check.
-  ports-experimental:
-    name: ports/experimental (JVM adapters, advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-
-      - name: jagentic-core (shared JVM core, from the reactor)
-        run: ./mvnw -B -ntp -f reactor/pom.xml -pl :jagentic-core -am install -DskipTests
-
-      - name: ports/experimental/kafka-streams
-        run: ./mvnw -B -ntp -f ports/experimental/kafka-streams/pom.xml test
-      - name: ports/experimental/spring
-        run: ./mvnw -B -ntp -f ports/experimental/spring/pom.xml test
-      - name: ports/experimental/quarkus
-        run: ./mvnw -B -ntp -f ports/experimental/quarkus/pom.xml test
-      - name: ports/experimental/temporal
-        run: ./mvnw -B -ntp -f ports/experimental/temporal/pom.xml test
-      - name: ports/experimental/pulsar
-        run: ./mvnw -B -ntp -f ports/experimental/pulsar/pom.xml test
-
-  # Same status as ports-experimental, for the Python adapters (Celery, NATS, ...).
-  python-experimental:
-    name: ports/experimental (Python adapters, advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      # The adapters are installed packages (agentic-<engine>, see ports/experimental/README.md);
-      # each engine is an optional extra. celery, dask and ray run for real here; airflow,
-      # faust and nats skip their engine-backed tests with the reason printed.
-      - name: Install
-        run: |
-          python -m pip install -e "ports/pyagentic[test]" \
-            -e "ports/experimental/celery[celery]" -e "ports/experimental/dask[dask]" \
-            -e "ports/experimental/ray[ray]" -e "ports/experimental/nats[nats]" \
-            -e "ports/experimental/faust" -e "ports/experimental/airflow" \
-            -e "ports/experimental/gateway-fastapi[test]"
-
-      - name: port adapters
-        run: python -m pytest ports/experimental -q -ra
-
-  go:
-    name: Go (ports/experimental/go, advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    defaults:
-      run:
-        working-directory: ports/experimental/go
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: ports/experimental/go/go.mod
-          cache-dependency-path: ports/experimental/go/go.sum
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go test
-        run: go test ./...
-
-  clojure:
-    name: Clojure (Datomic runtime)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - uses: DeLaGuardo/setup-clojure@13.7.0
-        with:
-          cli: latest
-
-      - name: Cache clojure deps
-        uses: actions/cache@v6
-        with:
-          path: ~/.m2/repository
-          key: clj-${{ runner.os }}-${{ hashFiles('agentic-clj/deps.edn') }}
-          restore-keys: clj-${{ runner.os }}-
-
-      - name: clojure -X:test
-        working-directory: agentic-clj
-        run: clojure -X:test
-
   python:
-    name: python (ports/pyagentic)
+    name: python (ports/pyagentic, ports/agentic-pipeline, docs)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -356,14 +188,29 @@ jobs:
       qdrant:
         image: qdrant/qdrant:v1.13.2
         ports: ["6333:6333"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
+
+      # The docs tests compile the Java snippets against the root module.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
 
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: ports/pyagentic/pyproject.toml
+          cache-dependency-path: |
+            ports/pyagentic/pyproject.toml
+            ports/agentic-pipeline/pyproject.toml
 
       - name: Wait for services without a health check
         run: tools/ci/wait-for-ports.sh localhost:6333
@@ -373,10 +220,20 @@ jobs:
       # server uses the FastMCP API). litellm is not installed: the only test that needs it
       # also needs a live Ollama, which CI does not provide (see the allowlist).
       - name: Install
-        run: python -m pip install -e "ports/pyagentic[test]" "mcp<2" qdrant-client "psycopg[binary]" duckdb
+        run: >-
+          python -m pip install -e "ports/pyagentic[test]" -e "ports/agentic-pipeline[test,redis]"
+          "mcp<2" qdrant-client "psycopg[binary]" duckdb
 
       - name: pyagentic
         run: python -m pytest ports/pyagentic/tests -q -ra --junitxml build/junit/pyagentic.xml
+
+      - name: agentic-pipeline
+        run: python -m pytest ports/agentic-pipeline -q -ra --junitxml build/junit/agentic-pipeline.xml
+
+      - name: docs
+        run: |
+          ./mvnw -B -ntp -q -f ports/jagentic-core/pom.xml install -DskipTests
+          python -m pytest docs/tools/test_docs.py -q -ra --junitxml build/junit/docs.xml
 
       - name: Skip audit (a skip in CI must be allowlisted)
         if: always()

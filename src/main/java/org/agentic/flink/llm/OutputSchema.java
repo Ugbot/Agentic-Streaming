@@ -11,10 +11,9 @@ import org.agentic.flink.annotation.Public;
 /**
  * A typed contract for structured LLM output.
  *
- * <p>Wraps a target type plus an optional JSON Schema describing it. Implementations of {@link
- * ChatConnection} translate this to provider-specific structured-output features (OpenAI {@code
- * response_format=json_schema}, Ollama {@code format=json}, Anthropic tool-use schemas). On
- * providers without native support, the framework falls back to post-hoc parsing with retries.
+ * <p>Wraps a target type plus an optional JSON Schema describing it. The schema is not translated
+ * to provider-specific structured-output features: {@link ChatConnection} implementations do not
+ * read it. Replies are parsed after the fact.
  *
  * <p>The default {@link #of(Class)} constructs a schema by reflection on Jackson-deserializable
  * POJOs. Pass a hand-crafted {@code jsonSchema} string if you need finer control.

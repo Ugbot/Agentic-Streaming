@@ -23,9 +23,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Java twin of {@code examples-bin/markets/coinbase_producer.py}. Subscribes to the public Coinbase
- * Exchange WebSocket and translates each event into the same Inventory/Trade JSON shape the Flink
- * job already consumes, so the operator graph is identical for crypto and bonds.
+ * Subscribes to the public Coinbase Exchange WebSocket and translates each event into the same
+ * Inventory/Trade JSON shape the Flink job already consumes, so the operator graph is identical for
+ * crypto and bonds.
  *
  * <p>Uses the built-in JDK 17 {@link WebSocket} client — no extra dependency. Channels: {@code
  * level2_batch} (mapped to inventory rows) and {@code matches} (mapped to trades). A small static

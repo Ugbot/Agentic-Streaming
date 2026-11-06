@@ -1,7 +1,7 @@
-# Agentic Flink
+# Agentic Streaming
 
-Standalone agentic framework for Apache Flink with LangChain4J integration.
-Java 21 target, Flink 2.2.1, LangChain4J 1.16.3.
+Experimental and pre-release; see the status block in `README.md`. This is the Flink adapter, the
+Java and Python cores, Pekko and the `agentic/v1` spec. Java 21 target, Flink 2.2.1, LangChain4J 1.16.3.
 
 ## Project Structure
 
@@ -21,7 +21,6 @@ Java 21 target, Flink 2.2.1, LangChain4J 1.16.3.
   - `cep/` -- Flink CEP integration for event-driven patterns
   - `compensation/` -- Saga compensation/rollback support
   - `example/` -- Working examples (SimpleCalculatorTool, ToolAnnotationExample)
-  - `plugins/flintagents/` -- Optional Apache Flink Agents integration (excluded from default build)
 
 ## Build
 
@@ -31,23 +30,17 @@ JVM module (`org.jagentic`, one version); it enforces Maven 3.9+ and Java 21, so
 
 ```
 ./mvnw -f reactor/pom.xml verify         # every module in dependency order (what CI gates on)
-./mvnw -f reactor/pom.xml verify -P a2a-gateway   # plus the Quarkus A2A gateway (opt-in)
 ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests   # first, when building one module at a time
 ./mvnw clean test                        # unit tests (Flink framework)
 ./mvnw test -P integration-tests         # Testcontainers suites; with Podman set DOCKER_HOST to the
                                          # podman socket and TESTCONTAINERS_RYUK_DISABLED=true
-./mvnw clean package -P flink-agents     # build with optional Flink Agents plugin
 ```
 
-`ports/experimental/*` stay outside the reactor. CI audits skipped tests against
-`tools/ci/skip-allowlist.txt`; a test that skips because a service is missing fails the build.
-
-The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
-Enable it with `-P flink-agents` after building Flink Agents from source.
+CI audits skipped tests against `tools/ci/skip-allowlist.txt`; a test that skips because a service is missing fails the build.
 
 ## Key Patterns
 
-- **AgentBuilder DSL** (legacy, supported pure-Flink API): `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`. Every public `withX` method is consumed by `AgentTurnDispatcher`, `TurnDispatchDedupFunction`, `stream.AgentExecutionFunction` or `stream.CompensationFunction`, and `src/test/java/org/agentic/flink/dsl/AgentBuilderTest` asserts each one; a builder method without a read site is a bug, not a feature.
+- **AgentBuilder DSL** (legacy and deprecated, outside the spec): `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`. Every public `withX` method is consumed by `AgentTurnDispatcher`, `TurnDispatchDedupFunction`, `stream.AgentExecutionFunction` or `stream.CompensationFunction`, and `src/test/java/org/agentic/flink/dsl/AgentBuilderTest` asserts each one; a builder method without a read site is a bug, not a feature.
 - **StorageFactory**: `StorageFactory.createLongTermStore("postgres", config)` -- factory for long-term backends (`memory`, `postgres`, `postgresql`). `createShortTermStore` accepts only `"memory"` and throws for anything else; short-term memory is Flink state (`FlinkStateShortTermMemory`)
 - **ToolExecutor interface**: Async tool execution via `CompletableFuture<Object> execute(Map<String, Object>)`
 - **@Tool annotations**: LangChain4J annotation-based tool discovery via ToolAnnotationRegistry

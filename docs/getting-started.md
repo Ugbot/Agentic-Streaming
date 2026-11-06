@@ -1,10 +1,8 @@
 # Getting started
 
-This guide takes a fresh clone to a running agent. Every command in Parts 1, 2, 3, 5 and 6 was
-run on a clean checkout with Java 21, Python 3.12 and the committed Maven wrapper on
-2026-09-25; the ones that do not work are listed as such rather than left out. Part 4 needs
-Ollama or Podman on the machine and is the only part whose commands were not run for this
-revision of the page.
+This guide takes a fresh clone to a running agent. The project is experimental and pre-release;
+read the status block in the [README](../README.md) first. Commands that do not work are listed as
+such rather than left out. Part 4 needs Ollama or Podman on the machine.
 
 The first path needs no model, no model download, no vector store and no container. The
 workflow documents under `examples/pipelines/` describe a banking agent whose paths use either
@@ -92,19 +90,17 @@ of the same file, answered from the in-memory hashing embedder.
 
 ### On the JVM local runtime
 
-Requires JDK 21 (`java -version` must print `21` or later). Nothing else: the wrapper
-downloads Maven, and the runner script installs `ports/jagentic-core` into your local Maven
-repository the first time.
+Requires JDK 21. Nothing else: the wrapper downloads Maven.
 
 ```bash
-bash examples-bin/run-pipeline.sh examples/pipelines/banking.yaml --runtime jvm --text "what is my balance?"
-bash examples-bin/run-pipeline.sh examples/pipelines/banking-llm.yaml --runtime jvm --text "what is my balance?"
+./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw -q -f ports/jagentic-core/pom.xml exec:java -Dexec.mainClass=org.jagentic.core.pipeline.PipelineCli \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
+./mvnw -q -f ports/jagentic-core/pom.xml exec:java -Dexec.mainClass=org.jagentic.core.pipeline.PipelineCli \
+  -Dexec.args="examples/pipelines/banking-llm.yaml --text 'what is my balance?'"
 ```
 
 ```
-ok: java 21.0.12.1
-ok: jagentic-core 1.0.0-SNAPSHOT is installed
-.. jvm-core PipelineCli: .../examples/pipelines/banking.yaml
 backend=local path=payments ok=true
 reply: [payments] get_balance returned 1234.56
 tools: [get_balance]
@@ -114,10 +110,7 @@ reply: Your balance is 1234.56.
 tools: [get_balance]
 ```
 
-The script wraps `org.jagentic.core.pipeline.PipelineCli`; the same script runs the file on the
-Pekko runtime with `--runtime pekko` and on Python with `--runtime python` (set `PYTHON` to the
-interpreter of the virtual environment above). `docs/examples/banking-everywhere.md` shows the
-same agent on Flink, Clojure and Go, and on the experimental adapters under `ports/`.
+`docs/examples/banking-everywhere.md` shows the same agent on Pekko and Flink.
 
 ### The specification behind the file
 
@@ -129,7 +122,7 @@ python spec/tools/validate_spec.py        # checked 33 document(s), 0 failure(s)
 python spec/tools/run_conformance.py      # 24 passed, 0 failed, 0 skipped
 ```
 
-Which runtime passes which fixture is the generated table in [capabilities.md](capabilities.md).
+Which runtime passes which fixture is in the [conformance results](runtimes/README.md#conformance-results).
 
 ## Part 2: The JVM build
 
@@ -158,20 +151,16 @@ URL. The repository does not ship that file; write it locally when you need it.
 
 `reactor/pom.xml` is the parent and aggregator of every first-class JVM module:
 `ports/jagentic-core`, the Flink framework (the root `pom.xml`, artifact `agentic-flink`),
-`agentic-pekko`, `pyflink/java`, `tool-services/*` and `banking-job`. One command builds and
-tests all of them in dependency order, with one groupId (`org.jagentic`) and one version
+and `agentic-pekko`. One command builds and tests all of them in dependency order, with one groupId (`org.jagentic`) and one version
 (`1.0.0-SNAPSHOT`):
 
 ```bash
 ./mvnw -f reactor/pom.xml install -DskipTests       # compile and install, no tests
 ./mvnw -f reactor/pom.xml verify                    # everything CI gates on
-./mvnw -f reactor/pom.xml verify -P a2a-gateway     # plus the Quarkus A2A gateway (slow, opt-in)
 ```
 
 `package` and later phases also attach a `-sources.jar` and a `-javadoc.jar` next to every
-module jar (`banking-job` has no Java sources and gets only the former). The adapters under
-`ports/experimental/` are not part of the reactor; each has its own `pom.xml` and is built on
-its own.
+module jar.
 
 A single module builds with `-f <module>/pom.xml` once the modules it depends on are in the
 local repository. The Flink module and Pekko both depend on `ports/jagentic-core`, so install
@@ -212,20 +201,30 @@ MiniCluster with the test classpath.
 ./mvnw -q test -Dtest=FlinkConformanceTest
 ```
 
-Result on `main` on 2026-09-25 (the class runs the 24 fixtures plus two checks of its own):
+Result on 2026-11-06 (the class runs the 24 fixtures plus two checks of its own):
 
 ```
-Tests run: 26, Failures: 0, Errors: 0, Skipped: 3
+Tests run: 26, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-The skips are the fixtures whose capabilities the Flink binding declares `unsupported`; the
-generated [capabilities.md](capabilities.md) lists which. A skip is never a pass.
+A skip, when there is one, is never a pass.
 
 ### A `pipeline.yaml` through the Flink runner
 
 `FlinkPipelineRunner` assembles a real Flink job from a pipeline file: source, optional
 native CEP, `keyBy` on the conversation, the portable graph in a keyed operator, sink.
-`FlinkPipelineRunnerTest` drives `examples/pipelines/banking.yaml` through it:
+One turn through it on a local MiniCluster:
+
+```bash
+./mvnw -q -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
+```
+
+```
+c1 | path=payments | ok=true | [payments] get_balance returned 1234.56
+```
+
+`FlinkPipelineRunnerTest` drives the same file:
 
 ```bash
 ./mvnw -q test -Dtest=FlinkPipelineRunnerTest -Dsurefire.failIfNoSpecifiedTests=false
@@ -240,9 +239,9 @@ runner is called; it is the reference for embedding the runner in your own job.
 
 ### Durability
 
-Crash and restart durability on Flink is proven by
-`WorkflowTurnFunctionMiniClusterTest` (savepoint restart, checkpoint recovery after failure,
-and a registered timer surviving a savepoint restart):
+`WorkflowTurnFunctionMiniClusterTest` covers savepoint restart, checkpoint recovery after a failure
+that follows a checkpoint, and a registered timer surviving a savepoint restart. It does not cover a
+turn that ran after the last completed checkpoint; that turn runs again, tools included:
 
 ```bash
 ./mvnw -q test -Dtest=WorkflowTurnFunctionMiniClusterTest
@@ -311,15 +310,17 @@ runtimes run the same tests.
 
 ### Compose stacks
 
-The end-to-end examples (RAG, markets, incident) run as `podman compose` stacks started by the
-scripts under `examples-bin/`; [compose.md](compose.md) describes them and
-`tools/smoke-examples.sh` runs every one of them in no-key mode.
+`docker-compose.yml` holds Postgres, Redis and Ollama, and `docker-compose-kafka.yml`,
+`docker-compose-fluss.yml`, `docker-compose-session.yml` and `docker-compose-markets.yml` add Kafka,
+Fluss and a Flink session cluster. `docker-compose-all.yml` includes the lot. Each file's header says
+how to start it. `tools/smoke-examples.sh` runs `examples/pipelines/` in no-key mode and needs none of
+them.
 
 ## Part 5: Example entry points that do not work from a fresh clone
 
 These are the commands earlier versions of this page told you to run. Each was tried again on
-a fresh clone on 2026-09-25 and each fails. They are listed so nobody wastes time on them; the
-failures are tracked in [`docs/audit-backlog.md`](audit-backlog.md) under AGS-40.
+a fresh clone on 2026-09-25 and each failed, for the reason shown. They are listed so nobody wastes
+time on them.
 
 | Command | Failure |
 |---|---|
@@ -327,16 +328,14 @@ failures are tracked in [`docs/audit-backlog.md`](audit-backlog.md) under AGS-40
 | `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `Invalid classpath scope: provided` from exec-maven-plugin 3.2.0, which accepts only `compile`, `runtime` and `test`. |
 | the same with `test-compile` and `-Dexec.classpathScope=test` | `Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable` during job graph construction. |
 | `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample -Dexec.classpathScope=test` | `Initial state has no outgoing transitions` from `AgentBuilder.build()`, before any Ollama call. |
-| `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner -Dexec.classpathScope=test -Dexec.args=examples/pipelines/banking.yaml` | `Could not deserialize stream node 4: ... SimpleUdfStreamOperatorFactory` at job submission. The same runner passes inside `FlinkPipelineRunnerTest`. |
 
 There is no `MyFirstAgentExample` in the repository; an earlier version of this page invented
 it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem
 as `SimpleAgentExample`.
 
-## Part 6: The other first-class runtimes
+## Part 6: The other runtimes
 
-Pekko, after the core install from Part 2 (or through `examples-bin/run-pipeline.sh ...
---runtime pekko`, which does the same):
+Pekko, after the core install from Part 2:
 
 ```bash
 ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
@@ -347,19 +346,8 @@ Pekko, after the core install from Part 2 (or through `examples-bin/run-pipeline
 Without `compile` in the same invocation the class is not on the exec classpath and the
 command fails with `ClassNotFoundException: org.jagentic.pekko.PipelineMain`.
 
-Clojure:
-
-```bash
-cd agentic-clj && clojure -M:run
-```
-
-This runs the banking demo (`agentic.main`) against the in-process Datomic store; `clojure -X:test`
-runs the suite, including the conformance fixtures.
-
-Python beyond the pipeline CLI: the two levels of the Python API (high-level `run(runtime=...)`
-and full-control `Runtime.deploy(spec)`) on pure Python, the JVM facade (`pip install -e python`,
-needs the uber jar from Part 2) and PyFlink (`pip install -e pyflink`) are in
-[python.md](python.md).
+Python beyond the pipeline CLI: the two levels of the Python API (high-level `run(...)` and
+full-control `Runtime.deploy(spec)`) are in [python.md](python.md).
 
 What each of these runtimes is made of, and what they all guarantee for an `agentic/v1`
 workflow, is one page each under [runtimes/](runtimes/README.md).
@@ -370,8 +358,8 @@ workflow, is one page each under [runtimes/](runtimes/README.md).
 2. [reference/examples.md](reference/examples.md) for the example catalogue.
 3. [reference/agent-framework.md](reference/agent-framework.md) for the framework API.
 4. [reference/troubleshooting.md](reference/troubleshooting.md) for common failures.
-5. [capabilities.md](capabilities.md) for what each runtime has proven, and
-   [runtimes/](runtimes/README.md) for what each runtime is made of.
+5. [runtimes/](runtimes/README.md) for what each runtime is made of, and its
+   [conformance results](runtimes/README.md#conformance-results).
 
 ## Common questions
 

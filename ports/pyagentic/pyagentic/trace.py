@@ -2,7 +2,7 @@
 
 A span per turn, timer fire, and CEP match. The :data:`NOOP` default costs nothing;
 :class:`RecordingTracer` captures completed spans for tests and local inspection; an
-OpenTelemetry exporter is an opt-in adapter (the heavy dependency stays out of the
+OpenTelemetry exporter would be an opt-in adapter (the heavy dependency stays out of the
 core). Engine adapters can bridge to their native tracing behind the same SPI.
 
 The portable counterpart of the Java ``org.jagentic.core.trace`` SPI — same shapes,

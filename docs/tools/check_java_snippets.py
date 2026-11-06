@@ -9,7 +9,7 @@ Selection rules for a ```java fence:
 * the info string carries the word ``complete`` (```java complete): always compiled;
 * the info string carries the word ``fragment`` (```java fragment): never compiled, even when the
   body looks like a compilation unit (used for listings that depend on classes outside the default
-  build, for example the flink-agents plugin);
+  build, for example an optional profile);
 * otherwise the block is compiled when its first non-blank line starts with ``package`` or
   ``import`` and it declares a top-level ``class``, ``interface``, ``enum`` or ``record``, which is
   how a reader recognises a full source file rather than an excerpt.
@@ -17,8 +17,7 @@ Selection rules for a ```java fence:
 The selected blocks of one page are compiled together in a single ``javac -proc:none`` call, so a
 later listing may use a class defined earlier on the same page (as a reader copying the guide
 would), against ``target/classes`` plus the
-test-scope dependency classpath of the root module (``target/example-classpath.txt``, the same
-file examples-bin/_common.sh produces). When that file is absent the script creates it with
+test-scope dependency classpath of the root module (``target/example-classpath.txt``). When that file is absent the script creates it with
 ``./mvnw -q compile dependency:build-classpath -Dmdep.includeScope=test``; that needs
 ``./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`` to have run once.
 """

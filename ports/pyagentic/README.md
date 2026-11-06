@@ -2,11 +2,10 @@
 
 Pure-Python implementation of the Agentic Streaming v1 model (`spec/v1`). One workflow IR,
 one user-facing `agentic` API, and the local runtime that is the Python reference for the
-shared conformance fixtures. It is the `python` column of the generated
-[capability matrix](../../docs/capabilities.md); what the runtime is made of and where it
-stands is on the [pure Python runtime page](../../docs/runtimes/python.md), and the two-level
-Python API (this package, the JVM facade and PyFlink on the same workflow) is in
-[docs/python.md](../../docs/python.md).
+shared conformance fixtures. It is the `python` binding of the
+[conformance runner](../../docs/runtimes/README.md#conformance-results); what the runtime is made of
+is on the [pure Python runtime page](../../docs/runtimes/python.md), and the two-level Python API is
+in [docs/python.md](../../docs/python.md).
 
 ```python
 from agentic import Agent, load
@@ -57,7 +56,7 @@ extra (`pip install 'pyagentic[flink]'`); nothing falls back silently.
 - `agentic/conformance.py` -- runs `spec/conformance/v1/fixtures/*.yaml` in place
   (`python -m agentic.conformance`); `matrix_binding` is the `agentic.conformance` entry point
   that `spec/tools/conformance_matrix.py` drives.
-- `pyagentic/` -- the earlier engine-agnostic essence kept for the Faust/Ray/Dask/Airflow ports.
+- `pyagentic/` -- the earlier engine-agnostic essence.
 
 ## Classes named `Agent`
 
@@ -67,10 +66,7 @@ so they keep their names and are told apart by module.
 | Class | What it is | Use it when |
 |---|---|---|
 | `agentic.Agent` (`agentic/spec.py`) | Fluent builder for a v1 workflow document. `build()` returns an `AgentSpec`; `AgentSpec.run(...)` deploys it on a `Runtime`. | You write a workflow in Python instead of YAML. This is the canonical API. |
-| `pyagentic.core.Agent` | A path handler: `agent_id`, `system_prompt`, a `Brain`. `RoutedGraph` maps each path name to one of these. | You build a `RoutedGraph` by hand or through `pyagentic.builder.build()` for the Faust, Ray, Dask, Airflow, Celery and NATS ports. |
-| `agentic_flink.Agent` (`python/agentic_flink/agent.py`) | JPype handle on the Java `org.agentic.flink.dsl.Agent`, built with `Agent.builder()`. | You drive the Flink framework in process through the `agentic-flink` package. |
-| `agentic_flink.workflow.Agent` (exported as `agentic_flink.WorkflowAgent`) | The same fluent builder API as `agentic.Agent`, producing a document the JVM runtimes (`local-jvm`, `flink-jvm`, `pekko`) run. | You want the builder syntax and a JVM runtime without installing `pyagentic`. |
-| `agentic_flink.pyflink.Agent` | Declarative base class whose subclass attributes describe a PyFlink job plan. | You compile an agent into a PyFlink `DataStream` plan. |
+| `pyagentic.core.Agent` | A path handler: `agent_id`, `system_prompt`, a `Brain`. `RoutedGraph` maps each path name to one of these. | You build a `RoutedGraph` by hand or through `pyagentic.builder.build()`. |
 
 Routing is the same everywhere: `router.kind: keyword` matches `router.rules` case-insensitively as a
 substring of the turn text, the first path in declaration order wins, and no match goes to

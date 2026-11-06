@@ -50,32 +50,30 @@ pipeline and a **live Coinbase crypto** pipeline.
   - `stage/FeatureAggregatorFn.java`, windowed aggregation
   - `stage/MarketSignals.java`, pure-function math
   - `stage/MarketAgentFn.java`, inline agentic operator
-  - `producer/`. Java producers (same wire format as the Python flavour):
+  - `producer/`. Java producers:
     `BondInventoryProducer`, `BondSecuritiesProducer`, `BondTradesProducer`, `CoinbaseProducer`
     (built-in JDK WebSocket client, no extra deps), plus `MarketProducerSupport`
-- `examples-bin/markets/`. Python producers (anonymised + Coinbase)
-- `examples-bin/run-markets-stack.sh`, `examples-bin/run-bond-market.sh`,
-  `examples-bin/run-crypto-market.sh`
-- `notebooks/07_market_depth_agents.ipynb`, drives the agentic operator on a deterministic
-  feature stream so the funnel is demonstrable without Kafka
 
 ## Running
 
 ```bash
-bash examples-bin/run-markets-stack.sh     # Kafka on localhost:9092 plus a Flink 2.2.1 session cluster (REST on :8081) in Podman
-bash examples-bin/run-bond-market.sh       # checks prerequisites, builds target/agentic-flink-1.0.0-SNAPSHOT-uber.jar, prints the commands
-bash examples-bin/run-crypto-market.sh     # same for the Coinbase feeds (outbound internet to wss://ws-feed.exchange.coinbase.com)
+podman network create agentic-flink-network                     # once
+podman compose -f docker-compose-markets.yml up -d                # Kafka on localhost:9092, Flink 2.2.1 session cluster (REST on :8081)
+./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
+./mvnw package -DskipTests                                        # target/agentic-flink-1.0.0-SNAPSHOT-uber.jar
 ```
 
-Prerequisites: JDK 21, the Maven wrapper, python3 (for the Python producers; `pip install
-kafka-python numpy websockets`), Podman for the stack. No API key; `ANTHROPIC_API_KEY` enables
-the optional LLM tier and the rule tiers alert without it. Both wrappers stop with an exact
-message when Kafka is not listening. They print the producer commands and
-`flink run -c <main class> "$JAR"`; with `--submit` they also run `flink run`, which needs a
-Flink 2.2.x CLI on the PATH. The jobs are unbounded streaming jobs fed from Kafka, so they are
-submitted to the session cluster rather than run in an embedded MiniCluster. Alerts print to
-the TaskManager stdout log. `examples-bin/markets/README.md` lists the Java producer flavour
-and the Kafka topics.
+Then start the producers in `example.markets.producer` and submit
+`org.agentic.flink.example.markets.BondMarketAgentExample` or `CryptoMarketAgentExample` with
+`flink run -c <main class> target/agentic-flink-1.0.0-SNAPSHOT-uber.jar`, which needs a Flink 2.2.x
+CLI on the PATH. Inside the compose network the job must read Kafka at `kafka:29092`, so set
+`KAFKA_BOOTSTRAP=kafka:29092` on the JobManager and TaskManager; the default, `localhost:9092`, fails
+there with a metadata timeout.
+
+Prerequisites: JDK 21, the Maven wrapper, Podman for the stack. No API key; `ANTHROPIC_API_KEY`
+enables the optional LLM tier and the rule tiers alert without it. The jobs are unbounded streaming
+jobs fed from Kafka, so they are submitted to the session cluster rather than run in an embedded
+MiniCluster. Alerts print to the TaskManager stdout log.
 
 ## What the agentic operator does
 
@@ -93,7 +91,7 @@ for `ALLOW` / `REVIEW` / `BLOCK`, with auto-block on overwhelming combined risk.
 
 ## Why the same job works for crypto
 
-Coinbase has no "security master", so `coinbase_producer.py` publishes a small static seed
+Coinbase has no "security master", so `CoinbaseProducer` publishes a small static seed
 (one row per `BTC-USD` etc.) to the broadcast input topic and translates level2 changes + matches
 into the same Inventory / Trade JSON shapes the bond pipeline already understands. The Java
 operator graph is unchanged.

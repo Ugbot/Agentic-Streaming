@@ -56,8 +56,6 @@ def test_allowlist_file_parses_and_every_block_starts_with_a_reason():
 
 @pytest.mark.parametrize("message", [
     f"skip {_word()}-{_word()}: requires [timers]",
-    f"runtime 'flink-jvm' does not support ['{_word()}']",
-    f"local-jvm does not support ['{_word()}']",
     f"requires ['{_word()}']",
     f"requires ['{_word()}'], declared unsupported",
     "Ollama not reachable / model not pulled: connect refused",

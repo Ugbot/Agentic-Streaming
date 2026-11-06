@@ -58,7 +58,7 @@ mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.triage.SupportTriag
 Or via the wrapper script:
 
 ```bash
-./examples-bin/run-support-triage.sh
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.triage.SupportTriageExample
 ```
 
 ## Expected output

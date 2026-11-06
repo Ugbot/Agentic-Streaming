@@ -20,8 +20,6 @@ the snippet, plug in your chat / inference / storage backends, and go.
 - [13. Web fetch as an LLM tool](#13-web-fetch-as-an-llm-tool)
 - [14. LLM-driven channel into a crawler](#14-llm-driven-channel-into-a-crawler)
 - [15. Broadcast corpus shared across operators](#15-broadcast-corpus-shared-across-operators)
-- [16. PyFlink-native agent with Python decorators](#16-pyflink-native-agent-with-python-decorators)
-- [17. Inspect a Python agent plan offline](#17-inspect-a-python-agent-plan-offline)
 
 ---
 
@@ -296,52 +294,3 @@ queries.connect(bs).process(new MyBroadcastReader(corpus, bsDescriptor));
 
 Each query replica holds an independent copy of the corpus; reads scale
 independently of ingest.
-
-### 16. PyFlink-native agent with Python decorators
-
-```python
-from agentic_flink.pyflink import Agent, ResourceRef, action, environment, tool
-from pyflink.datastream import StreamExecutionEnvironment
-
-class TriageAgent(Agent):
-    agent_id = "triage"
-    chat_connection = ResourceRef(
-        "org.agentic.flink.llm.langchain4j.LangChain4jChatConnection",
-        {"provider": "OLLAMA", "base_url": "http://localhost:11434"},
-    )
-
-    @tool
-    def classify(self, text: str) -> str:
-        return "billing" if "refund" in text.lower() else "general"
-
-    @action("ticket")
-    def reply(self, event, ctx):
-        return {"id": event["id"], "label": self.classify(event["body"])}
-
-s_env = StreamExecutionEnvironment.get_execution_environment()
-tickets = s_env.from_collection([...])
-
-ae = environment(s_env)
-(ae.from_datastream(tickets, key_selector=lambda t: t["id"])
-   .apply(TriageAgent())
-   .to_datastream()
-   .print())
-s_env.execute("triage")
-```
-
-The agent ships as a JSON plan; the operator runs in the JVM; PEMJA invokes
-your Python tool/action on the operator thread. See
-[`pyflink-integration.md`](pyflink-integration.md) for the full mechanics.
-
-### 17. Inspect a Python agent plan offline
-
-```python
-import json
-from agentic_flink.pyflink.plan import build_plan
-
-print(json.dumps(build_plan(TriageAgent()), indent=2))
-```
-
-No JVM, no PyFlink, just walks the decorated class and dumps the JSON
-that would be sent across the gateway. Handy for diffing schema changes
-and writing unit tests against the plan shape.

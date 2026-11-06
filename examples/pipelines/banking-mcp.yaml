@@ -5,18 +5,15 @@
 # This spec needs live endpoints to load: an MCP stdio server and a peer A2A agent.
 # It uses the ones shipped in this repository.
 #
-#   MCP server: the tool-services stdio server (util pack), spawned as a subprocess from the
-#   repository root. Build it once:
-#     ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
-#     ./mvnw -q -f tool-services/tool-services-packs/pom.xml install -DskipTests
-#     ./mvnw -q -f tool-services/tool-services-app/pom.xml package -DskipTests
+#   MCP server: mcp_util_server.py next to this file, spawned as a subprocess from the repository
+#   root. The python3 on PATH needs the MCP SDK (pip install "mcp<2").
 #   Peer agent: any A2A front door; here the Agentic Pekko HTTP front door on port 8085.
 #     AGENTIC_PEKKO_HTTP_PORT=8085 ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
 #       -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
 #
 # Prerequisite: AGENTIC_PEER_AGENT_URL must point at the peer. The jvm-core loader rejects the
 # document at load time when it is unset ("http peers need a url"); the Python loader loads it
-# and fails on the first delegation. The Python core also needs the MCP SDK (pip install mcp).
+# and fails on the first delegation.
 #
 #   export AGENTIC_PEER_AGENT_URL=http://localhost:8085
 #   python -m agentic_pipeline run examples/pipelines/banking-mcp.yaml --text "what is my balance?"
@@ -64,8 +61,7 @@ tools:
 mcp:
   - name: tools
     transport: stdio
-    command: [java, "-cp", "tool-services/tool-services-app/target/quarkus-app/app/*:tool-services/tool-services-app/target/quarkus-app/lib/main/*",
-              "org.jagentic.tools.app.mcp.StdioMain", "util"]
+    command: [python3, examples/pipelines/mcp_util_server.py]
 
 # Register a peer agent as a tool (peer-as-tool over A2A). The peer can be any A2A agent;
 # ${AGENTIC_PEER_AGENT_URL} is a connection link expanded from the environment.

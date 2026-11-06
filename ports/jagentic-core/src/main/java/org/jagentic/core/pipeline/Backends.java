@@ -9,7 +9,7 @@ import org.jagentic.core.Runtime;
 
 /**
  * Backend registry (JVM): name → {@link Runtime} from a {@link GraphBuilder.Built}. The
- * core ships {@code local}; engine modules (Pulsar/Temporal/Kafka-Streams/Pekko) provide
+ * core ships {@code local}; engine modules (such as Pekko) provide
  * their own {@code Runtime} over the same {@code Built} graph, so "choose a backend and
  * the rest falls into place" holds across the JVM ports too.
  */
@@ -28,7 +28,7 @@ public final class Backends {
           conversationStore == null ? new ConversationStore.InMemory() : conversationStore,
           new KeyedStateStore.InMemory(), built.tools(), built.retriever());
     }
-    // Engine modules (pekko/kafka-streams/temporal/pulsar) register a BackendProvider on the
+    // Engine modules (such as pekko) register a BackendProvider on the
     // classpath via ServiceLoader, so `backend: <name>` resolves without the core knowing them.
     ConversationStore store = conversationStore == null ? new ConversationStore.InMemory() : conversationStore;
     for (BackendProvider provider : ServiceLoader.load(BackendProvider.class)) {

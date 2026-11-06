@@ -48,9 +48,7 @@ release notes. Once an experimental type has kept its shape for a release it is 
 
 `@Experimental` covers `inference` (the traditional model SPI and guardrails), the web
 toolkit (`web`, `net.OutboundUrlPolicy`), `a2a` and its bridge and storage packages,
-`corpus`, `retrieve`, `ingest`, `rag` and `tools.rag`, `context.inverse`, the DJL backends,
-the embedded Python executor (`python`) and the optional Flink Agents plugin
-(`plugins.flintagents`).
+`corpus`, `retrieve`, `ingest`, `rag` and `tools.rag`, `context.inverse`, and the DJL backends.
 
 ### `@Internal`
 
@@ -59,11 +57,10 @@ needs to reach it. It is not API and may change or disappear in any release, inc
 releases. It is not covered by the deprecation policy.
 
 `@Internal` covers the Flink functions and operators that the builders wire up on the user's
-behalf (`function`, `AgentPlanProcessFunction`, `ContextCompactionFunction`,
+behalf (`function`, `ContextCompactionFunction`,
 `SupervisorTierFunction`, the `stream` functions), runtime plumbing (`TurnResultCodec`,
 `TurnResultTypeInfo`, `ChatClientFactories`, `LangChain4jChatClient`), helpers
-(`CompileUtils`, `HnswGraph`, `MetricsWrapper`, `ZeroMqProxy`), the session job launcher
-and everything under `example`.
+(`HnswGraph`, `MetricsWrapper`, `ZeroMqProxy`) and everything under `example`.
 
 ## Deprecation policy
 

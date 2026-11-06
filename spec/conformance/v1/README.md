@@ -1,10 +1,10 @@
 # Conformance fixtures, v1
 
 A fixture is a workflow, a sequence of turns, and the expected normalized results. It is
-data, not code, so the JVM, Clojure, and Python suites all read the same files. No runtime
+data, not code, so the JVM and Python suites all read the same files. No runtime
 ships its own copy and no runtime edits a fixture to make itself pass: a disagreement is
-either a runtime bug or a spec change, and a spec change needs review from the JVM,
-Clojure, and Python owners.
+either a runtime bug or a spec change, and a spec change needs review from the JVM and
+Python owners.
 
 ## Fixtures
 

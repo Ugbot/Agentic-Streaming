@@ -3,7 +3,7 @@
 ``Runtime`` is the engine seam (the Python mirror of the Java "Engine SPI"): give it
 an event, it builds an ``AgentContext`` from the shared stores and runs the graph,
 guaranteeing single-writer-per-conversation. ``LocalRuntime`` is the zero-dependency
-in-process implementation (a lock per conversation id); the Faust/Ray/etc. adapters
+in-process implementation (a lock per conversation id); engine adapters
 provide their own ``Runtime`` where the engine supplies the per-key ordering.
 """
 

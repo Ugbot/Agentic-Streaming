@@ -57,13 +57,9 @@ def test_local_runtime_resolves_by_name_and_entry_point():
     assert "local" in found
 
 
-def test_unknown_runtime_names_the_extra():
-    with pytest.raises(RuntimeNotAvailableError, match="renamed.*'flink-jvm'.*'pyflink'"):
-        get_runtime("flink")
-    for name, extra in (("flink-jvm", "flink"), ("pyflink", "pyflink"), ("local-jvm", "jvm")):
-        if name in available_runtimes():
-            continue
-        with pytest.raises(RuntimeNotAvailableError, match=rf"pip install 'pyagentic\[{extra}\]'"):
+def test_unknown_runtime_says_why():
+    for name in ("flink", "flink-jvm", "jvm", "local-jvm", "pekko", "pyflink"):
+        with pytest.raises(RuntimeNotAvailableError, match="has been removed.*pre-cornerstone"):
             get_runtime(name)
     with pytest.raises(RuntimeNotAvailableError, match="register_runtime"):
         get_runtime(rid("nope"))

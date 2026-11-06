@@ -3,13 +3,12 @@
 > Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Apache Pekko is the open-source fork of Akka, a JVM actor/streams/cluster toolkit.
 >
-> **Pekko is now a first-class runtime: [`agentic-pekko/`](../../agentic-pekko/)**, an event-sourced,
+> **Pekko is a supported runtime: [`agentic-pekko/`](../../agentic-pekko/)**, an event-sourced,
 > cluster-sharded entity per conversation with HTTP + Kafka front doors, pluggable durability
 > (memory · Postgres · Cassandra · Redis), `backend: pekko` for any `pipeline.yaml`, and a
 > durability/recovery demo. This doc is the design rationale (C1..C12); the original
 > `ports/pekko/` proof-of-concept it was written against has been deleted in favour of that
-> module. [`../../ports/experimental/pekko/`](../../ports/experimental/pekko/) holds only a
-> README pointing at `agentic-pekko/`.
+> module.
 
 ## 1. Verdict
 
@@ -90,7 +89,7 @@ actor-model peer of Temporal's event-sourced workflows.
 
 ## 4. Worked example: banking router→path→verifier
 
-The first-class module's `Main` (single-node) and `ConversationSharding` (cluster) run the banking
+The module's `Main` (single-node) and `ConversationSharding` (cluster) run the banking
 graph as one event-sourced entity per conversation:
 
 ```

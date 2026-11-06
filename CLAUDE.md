@@ -1,24 +1,22 @@
 # Agentic Streaming (formerly Agentic Flink)
 
-Agentic Streaming is a library + example pack for building agents as streaming,
-stateful, **event-sourced** systems, an agent's state is a materialized view over an
-ordered log of events, with CQRS (command = process a turn; query = read the view) and
-single-writer-per-conversation. Apache Flink is the **first-class runtime** (this main
-module). The same `agentic/v1` spec is conformance tested on the bindings listed in the
-generated `docs/capabilities.md` (reference, jvm-core, flink, pekko, clojure, python, pyflink,
-python-jvm, python-flink). The engine adapters under `ports/experimental/` are experimental:
-they predate agentic/v1, run the banking example, are not conformance tested, and may be
-removed. Design docs are under `docs/portability/`.
+Experimental and pre-release: no published packages, and not safe for real payments or other
+non-idempotent actions yet (see the status block in `README.md`).
 
-This main module is the Flink framework: a standalone agentic framework for Apache Flink
-with LangChain4J integration. Java 21 target, Flink 2.2.1 (native FLIP-27 sources /
-FLIP-143 sinks), LangChain4J 1.16.3 (managed via the langchain4j-bom). PyFlink path targets
-apache-flink 2.x (see docs/python.md).
+Agentic Streaming is a portable spec and conformance suite for building agents as streaming, stateful,
+**event-sourced** systems: an agent's state is a fold over an ordered log of events, with CQRS
+(command = process a turn; query = read the view) and single-writer-per-conversation. The supported
+runtimes are Apache Flink (Java, the primary one, this main module), plain Python and Apache Pekko,
+built on the Java core, the Python core and the reference spec. The conformance bindings are
+reference, jvm-core, flink, pekko and python. Everything else moved out of this repository; the code
+as it stood is at tag `pre-cornerstone`.
+
+This main module is the Flink adapter plus the deprecated legacy DSL. Java 21 target, Flink 2.2.1
+(native FLIP-27 sources / FLIP-143 sinks), LangChain4J 1.16.3 (managed via the langchain4j-bom).
 
 `ports/` holds the conformance tested cores (`ports/jagentic-core`, `ports/pyagentic`) and the
-portable pipeline CLI (`ports/agentic-pipeline`); the multi-engine adapters + gateways live under
-`ports/experimental/` (see `ports/experimental/README.md`, and `ports/README.md` for the
-comparison). The engine-agnostic "essence" and per-engine design notes are in `docs/portability/`.
+portable pipeline CLI (`ports/agentic-pipeline`, whose only backend is `local`; see
+`ports/README.md`). The engine-agnostic "essence" and design notes are in `docs/portability/`.
 
 ## Project Structure
 
@@ -48,11 +46,8 @@ comparison). The engine-agnostic "essence" and per-engine design notes are in `d
   - `storage/vector/` -- pgvector implementation of VectorStore (Qdrant via the SPI path)
   - `cep/` -- Flink CEP integration for event-driven patterns
   - `compensation/` -- Saga compensation/rollback support
-  - `a2a/` -- A2A (Agent2Agent) protocol support. Outbound: `RemoteAgentSpec`, `A2AClient` SPI + `SdkA2AClient` (official a2a-java SDK, optional dep, isolated behind the SPI), `A2AToolExecutor` (peer-as-tool), `A2AStep` (explicit pipeline step). `a2a/bridge/` -- pluggable gateway↔Flink transport (`inproc`/`zeromq`/`redis`). `a2a/storage/` -- `A2ATaskStore` (memory/postgres/redis). See `docs/a2a.md`.
+  - `a2a/` -- Outbound A2A (Agent2Agent) support, used by the legacy DSL: `RemoteAgentSpec`, `A2AClient` SPI + `SdkA2AClient` (official a2a-java SDK, optional dep, isolated behind the SPI), `A2AToolExecutor` (peer-as-tool), `A2AStep` (explicit pipeline step), plus the `a2a/bridge/` and `a2a/storage/` packages. See `docs/a2a.md`.
   - `example/` -- Working examples (SimpleCalculatorTool, ToolAnnotationExample)
-  - `plugins/flintagents/` -- Optional Apache Flink Agents integration (excluded from default build)
-- `a2a-gateway/` -- Optional standalone Quarkus module: inbound A2A gateway (Agent Card + JSON-RPC, with `message/stream` over SSE; no gRPC or REST server is implemented) bridging external A2A callers into a Flink job. Built on its own (`./mvnw -f a2a-gateway/pom.xml package`) or with `./mvnw -f reactor/pom.xml verify -P a2a-gateway`; not part of the default reactor build. See `a2a-gateway/README.md`.
-- `python/` -- JPype-backed Python facade (`agentic-flink` PyPI package). In-process JVM, `@tool` decorator for Python functions, examples mirror the Java ones. See `docs/python.md`.
 
 ## Build
 
@@ -62,9 +57,7 @@ groupId (`org.jagentic`) and one version (`1.0.0-SNAPSHOT`).
 
 ```
 ./mvnw -f reactor/pom.xml verify         # whole reactor in dependency order (what CI gates on):
-                                         # jagentic-core, Flink framework, agentic-pekko, pyflink/java,
-                                         # tool-services-packs, tool-services-app, banking-job
-./mvnw -f reactor/pom.xml verify -P a2a-gateway   # plus the Quarkus A2A gateway (slow, opt-in)
+                                         # jagentic-core, Flink framework, agentic-pekko
 ./mvnw -f reactor/pom.xml install -DskipTests     # compile + install everything, no tests
 ```
 
@@ -78,20 +71,15 @@ A module built on its own needs its upstream modules in the local repository; in
 ./mvnw test -P integration-tests         # Testcontainers suites; with Podman export
                                          # DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
                                          # and TESTCONTAINERS_RYUK_DISABLED=true (docs/getting-started.md)
-./mvnw clean package -P flink-agents     # build with optional Flink Agents plugin
-./mvnw install -DskipTests && ./mvnw -f a2a-gateway/pom.xml package   # build the A2A gateway
 ```
 
-`ports/experimental/*` are not modules of the reactor. CI (`.github/workflows/ci.yml`) runs the
+CI (`.github/workflows/ci.yml`) runs the
 reactor once with the backing services (Postgres, Redis, Kafka, Qdrant, a Python with the MCP
 SDK) and audits every skipped test against `tools/ci/skip-allowlist.txt`; a service-backed test
-that skips in CI fails the build. `PythonExecutorTest` (PEMJA has no CPython 3.12 wheel) and
-`ZeroMqChannelTest` (no timeout, hangs on some hosts) are excluded there by name.
+that skips in CI fails the build. `ZeroMqChannelTest` (no timeout, hangs on some hosts) is excluded
+there by name.
 
-The `plugins/flintagents/` directory is excluded from the default Maven compiler configuration.
-Enable it with `-P flink-agents` after building Flink Agents from source.
-
-### Other first-class runtimes (part of the reactor; on their own after `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`)
+### Agentic Pekko (part of the reactor; on their own after `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests`)
 
 ```
 # Agentic Pekko (actors); `compile` must be in the same invocation as exec:java
@@ -99,20 +87,15 @@ Enable it with `-P flink-agents` after building Flink Agents from source.
 ./mvnw -f agentic-pekko/pom.xml compile exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
   -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"   # any spec on the actor runtime
 ./mvnw -f agentic-pekko/pom.xml compile exec:java -Dexec.mainClass=org.jagentic.pekko.RecoveryDemo  # durability/recovery
-
-# Agentic Clojure (Datomic) - in agentic-clj/
-clojure -X:test          # full suite
-clojure -M:run           # banking demo
-clojure -M:time-travel   # Datomic transcript time-travel (as-of)
 ```
 
-The cross-runtime parity story (one `pipeline.yaml`, every runtime) is documented in
+The cross-runtime parity story (one `pipeline.yaml`, each runtime) is documented in
 `docs/examples/banking-everywhere.md`; the Flink-only examples under `docs/examples/` are labelled
 "Flink-runtime showcase".
 
 ## Key Patterns
 
-- **AgentBuilder DSL** (legacy, supported pure-Flink API): `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).withConversationStore(...).build()`. Every public `withX` method is read by an operator: identity and prompt (`withId`, `withName`, `withDescription`, `withType`, `withSystemPrompt`, `withSkill`), chat (`withChatConnection`, `withChatSetup`, `withOutputSchema`), tools (`withTools`, `withRequiredTools`, `withToolDefaults`, `withToolTimeout`, `withMcpServer`, `withRemoteAgent`, `withA2AClientFactory`, `withInferenceTool`), budgets (`withMaxIterations`, `withTimeout`, `withMaxValidationAttempts`, `withMaxCorrectionAttempts`, `withStateMachine`), sagas (`withCompensationEnabled`, `withCompensatingTool`), memory (`withShortTermTtl` drives the TTL of the keyed dedup state in `TurnDispatchDedupFunction`, `withConversationStore`, `withLongTermStore`), and interceptors (`withGuardrail`, `withListener`). `src/test/java/org/agentic/flink/dsl/AgentBuilderTest` asserts each one; add a test there before adding a builder method. The job graph is `AgentTurnDispatcher` (CEP match, stateless) -> `TurnDispatchDedupFunction` (keyed; drops a turn redelivered after a restore) -> `stream.AgentExecutionFunction` (async LLM/tool loop) -> `stream.CompensationFunction` (only when compensation is enabled; runs the registered compensating tools in reverse call order) -> `AgentResultRouter`.
+- **AgentBuilder DSL** (legacy and deprecated, outside the spec): `Agent.builder().withId(...).withSystemPrompt(...).withTools(...).withConversationStore(...).build()`. Every public `withX` method is read by an operator: identity and prompt (`withId`, `withName`, `withDescription`, `withType`, `withSystemPrompt`, `withSkill`), chat (`withChatConnection`, `withChatSetup`, `withOutputSchema`), tools (`withTools`, `withRequiredTools`, `withToolDefaults`, `withToolTimeout`, `withMcpServer`, `withRemoteAgent`, `withA2AClientFactory`, `withInferenceTool`), budgets (`withMaxIterations`, `withTimeout`, `withMaxValidationAttempts`, `withMaxCorrectionAttempts`, `withStateMachine`), sagas (`withCompensationEnabled`, `withCompensatingTool`), memory (`withShortTermTtl` drives the TTL of the keyed dedup state in `TurnDispatchDedupFunction`, `withConversationStore`, `withLongTermStore`), and interceptors (`withGuardrail`, `withListener`). `src/test/java/org/agentic/flink/dsl/AgentBuilderTest` asserts each one; add a test there before adding a builder method. The job graph is `AgentTurnDispatcher` (CEP match, stateless) -> `TurnDispatchDedupFunction` (keyed; drops a turn redelivered after a restore) -> `stream.AgentExecutionFunction` (async LLM/tool loop) -> `stream.CompensationFunction` (only when compensation is enabled; runs the registered compensating tools in reverse call order) -> `AgentResultRouter`.
 - **Flink-state-first memory**: Short-term memory is `FlinkStateShortTermMemory`, built in `RichFunction.open()` from `ShortTermMemorySpec`. No external HOT tier required.
 - **LongTermMemoryStore** (optional): Postgres default, Redis optional, ServiceLoader-discovered. Used only for conversation resumption + fact archive. Write-behind from Flink state.
 - **ToolExecutor interface**: Async tool execution via `CompletableFuture<Object> execute(Map<String, Object>)`

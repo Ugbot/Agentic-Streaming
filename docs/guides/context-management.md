@@ -430,8 +430,7 @@ ollama pull nomic-embed-text:latest
 Known failure: the command above compiles and submits the job but `ContextManagementExample` currently stops
 at job graph construction with `IllegalStateException: Auto generated UIDs have been disabled but no UID or
 hash has been assigned to operator compaction-requests` (the example disables
-`PipelineOptions.AUTO_GENERATE_UIDS` and omits a `uid` on one source). The failure is tracked in
-[`docs/audit-backlog.md`](../audit-backlog.md) under AGS-40.
+`PipelineOptions.AUTO_GENERATE_UIDS` and omits a `uid` on one source).
 
 ## Best Practices
 

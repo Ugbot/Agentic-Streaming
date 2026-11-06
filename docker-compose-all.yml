@@ -7,15 +7,15 @@
 #   - Fluss coordinator + tablet     (durable streaming storage)
 #   - Flink session cluster (JM+TM)  (long-running job slots)
 #
-# Useful when you want to run any notebook without thinking about which sub-stack it needs.
+# Useful when you want every service without thinking about which sub-stack you need.
 # Heavier than the scenario-specific umbrellas — pulls ~5GB of images on first run.
 #
 # Bring up:
-#   bash examples-bin/setup-network.sh             # once
+#   podman network create agentic-flink-network    # once
 #   podman compose -f docker-compose-all.yml up -d
 #
 # Tear down:
-#   bash examples-bin/down-all.sh
+#   podman compose -f docker-compose-all.yml down
 
 include:
   - docker-compose.yml

@@ -312,8 +312,6 @@ src/main/java/org/agentic/flink/
     compensation/    Saga compensation
     function/        Flink ProcessFunction wrappers (ReActProcessFunction, etc.)
     execution/       LLMClient (wraps ChatConnection) + AgentExecutor
-    plugins/
-        flintagents/ optional bridge to Apache Flink Agents 0.3-SNAPSHOT
 ```
 
 ## Where to put your own code

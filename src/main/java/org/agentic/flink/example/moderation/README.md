@@ -57,7 +57,7 @@ mvn -q exec:java -Dexec.mainClass="org.agentic.flink.example.moderation.ContentM
 Or:
 
 ```bash
-./examples-bin/run-moderation.sh
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.moderation.ContentModerationExample
 ```
 
 ## Swapping in a Kafka source

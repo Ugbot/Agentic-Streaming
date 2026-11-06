@@ -1,16 +1,18 @@
 # Compose umbrella for the bond/crypto markets streaming scenarios that go through Kafka
-# instead of in-JVM ZeroMQ — examples-bin/run-bond-market.sh, run-crypto-market.sh, and the
-# CryptoMarketAgentExample / BondMarketAgentExample mains submitted via `flink run`.
+# instead of in-JVM ZeroMQ: the CryptoMarketAgentExample and BondMarketAgentExample mains submitted
+# via `flink run`.
 #
 # Brings up:
 #   - Kafka (broker + ZooKeeper; topics auto-created on first produce)
 #   - Flink session cluster (so submitted market jobs land somewhere)
 #
-# Bring up (creates the agentic-flink-network external network, then podman compose up):
-#   bash examples-bin/run-markets-stack.sh
+# Bring up:
+#   podman network create agentic-flink-network    # once
+#   podman compose -f docker-compose-markets.yml up -d
 #
 # Then, from the repository root:
-#   python3 examples-bin/markets/coinbase_producer.py --products BTC-USD,ETH-USD,SOL-USD
+#   java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+#       org.agentic.flink.example.markets.producer.CoinbaseProducer --products BTC-USD,ETH-USD,SOL-USD
 #   flink run -c org.agentic.flink.example.markets.CryptoMarketAgentExample \
 #       target/agentic-flink-1.0.0-SNAPSHOT-uber.jar
 

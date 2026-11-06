@@ -115,25 +115,6 @@
             <artifactId>jagentic-core</artifactId>
         </dependency>
 
-        <!--
-        Apache Flink Agents - OPTIONAL Plugin (Experimental)
-
-        NOTE: This is an OPTIONAL dependency for the Flink Agents plugin.
-        The core framework works WITHOUT these dependencies.
-
-        To enable Flink Agents plugin:
-        1. Build Flink Agents from source (still in SNAPSHOT):
-           git clone https://github.com/apache/flink-agents.git
-           cd flink-agents && ./tools/build.sh && mvn install -DskipTests
-
-        2. Build this project with the flink-agents profile:
-           mvn clean package -P flink-agents
-
-        See: src/main/java/org/agentic/flink/plugins/flintagents/README.md
-        -->
-
-        <!-- Flink Agents dependencies are in the 'flink-agents' profile below -->
-
         <!-- LangChain4J Core -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -142,7 +123,7 @@
 
         <!-- LangChain4J provider SDKs. All optional: LangChain4jChatConnection selects the provider
              class in a switch at runtime, so a consumer adds only the SDK(s) it configures (see
-             the install section of README.md). The uber jar and banking-job carry all four. -->
+             the install section of README.md). The uber jar carries all four. -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-ollama</artifactId>
@@ -158,8 +139,7 @@
             <artifactId>langchain4j-anthropic</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- Google Gemini (API-key auth; required by the A2A banking demo, where the model is locked
-             to gemini-3.5-flash). For Vertex project/location auth instead, swap to
+        <!-- Google Gemini (API-key auth). For Vertex project/location auth instead, swap to
              langchain4j-vertex-ai-gemini. -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
@@ -201,7 +181,7 @@
 
         <!-- Logging: the library logs through the SLF4J API only. The Log4j backend is test scope,
              so consumers (and the thin jar's pom) choose their own binding; the uber jar excludes
-             both (a Flink cluster supplies them) and banking-job declares its own backend. -->
+             both (a Flink cluster supplies them). -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -396,32 +376,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!--
-        PEMJA — OPTIONAL. Embeds a Python interpreter inside the JVM so cloudpickled
-        Python callbacks shipped in an AgentPlan can run on the operator thread without
-        IPC. Marked optional — users who only run the Java side or the JPype standalone
-        path pay nothing.
-        -->
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>pemja</artifactId>
-            <version>0.4.1</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!--
-        Razorvine pickle decoder — OPTIONAL. Standalone Java decoder for plain pickle
-        payloads (metadata, schema descriptors). Cloudpickle bytes themselves require
-        cloudpickle inside the embedded Python interpreter; this dep is the fallback
-        path for plain-pickle metadata that doesn't need a Python runtime.
-        -->
-        <dependency>
-            <groupId>net.razorvine</groupId>
-            <artifactId>pickle</artifactId>
-            <version>1.5</version>
-            <optional>true</optional>
-        </dependency>
-
         <!-- Reflections for @Tool annotation scanning -->
         <dependency>
             <groupId>org.reflections</groupId>
@@ -528,10 +482,6 @@
                             <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
-                    <!-- Exclude Flink Agents plugin by default -->
-                    <excludes>
-                        <exclude>**/plugins/flintagents/**</exclude>
-                    </excludes>
                 </configuration>
             </plugin>
 
@@ -549,11 +499,11 @@
                         <configuration>
                             <!--
                             Attach the fat jar under the `uber` classifier and keep the MAIN
-                            artifact thin. Maven consumers of agentic-flink (a2a-gateway,
-                            banking-job, …) then get the plain classes + correct transitive deps
+                            artifact thin. Maven consumers of agentic-flink then get the plain
+                            classes + correct transitive deps
                             (e.g. commons-lang3 3.19.0) instead of a 260MB uber-jar that bundles —
                             and accidentally shadows with — stale third-party classes. Use the
-                            `-uber` jar for `flink run` / cluster upload (see examples-bin/*).
+                            `-uber` jar for `flink run` / cluster upload.
                             -->
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <shadedClassifierName>uber</shadedClassifierName>
@@ -644,19 +594,6 @@
                 <enabled>false</enabled>
             </snapshots>
         </repository>
-
-        <!-- Apache Snapshot Repository (for Flink Agents snapshots) -->
-        <repository>
-            <id>apache.snapshots</id>
-            <name>Apache Snapshot Repository</name>
-            <url>https://repository.apache.org/snapshots</url>
-            <releases>
-                <enabled>false</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
     </repositories>
 
     <profiles>
@@ -704,7 +641,6 @@
             ./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
                 -Dexec.args="examples/pipelines/incident.yaml"
 
-        The showcase scripts under examples-bin/ wrap the same classpath with prerequisite checks.
         -->
         <profile>
             <id>examples</id>
@@ -749,61 +685,6 @@
                         <configuration>
                             <excludedGroups>none</excludedGroups>
                             <groups>djl</groups>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-
-        <!-- Optional Flink Agents Plugin Profile -->
-        <profile>
-            <id>flink-agents</id>
-            <activation>
-                <activeByDefault>false</activeByDefault>
-            </activation>
-            <dependencies>
-                <!-- Flink Agents API - Built from source and installed locally -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-api</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-
-                <!-- Flink Agents Plan - Workflow agent support -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-plan</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-
-                <!-- Flink Agents Runtime - Agent execution runtime -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-runtime</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-
-                <!-- Flink Agents Ollama Integration - LLM support -->
-                <dependency>
-                    <groupId>org.apache.flink</groupId>
-                    <artifactId>flink-agents-integrations-chat-models-ollama</artifactId>
-                    <version>0.2-SNAPSHOT</version>
-                </dependency>
-            </dependencies>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-compiler-plugin</artifactId>
-                        <configuration>
-                            <release>${java.version}</release>
-                            <compilerArgs>
-                                <arg>-parameters</arg>
-                            </compilerArgs>
-                            <!-- Include Flink Agents plugin when profile is active -->
-                            <excludes>
-                                <exclude>NOTHING_TO_EXCLUDE</exclude>
-                            </excludes>
                         </configuration>
                     </plugin>
                 </plugins>

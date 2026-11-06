@@ -1,8 +1,8 @@
 # Pure Python runtime
 
 `ports/pyagentic` (import package `agentic`, distribution `pyagentic`) is a pure Python
-implementation of `agentic/v1` with no JVM. Its `LocalRuntime` is the `python` column of the
-[matrix](../capabilities.md) and the runtime behind `run(runtime="local")` in
+implementation of `agentic/v1` with no JVM. Its `LocalRuntime` is the `python` binding of the
+[conformance runner](README.md#conformance-results) and the runtime behind `run(runtime="local")` in
 [docs/python.md](../python.md). The module README (`ports/pyagentic/README.md`) has the layout and
 the `Agent` builder; this page is about how the primitives map.
 
@@ -35,32 +35,19 @@ answered from the log as `duplicate` without running the engine.
 `LocalRuntime.restart()` closes the instance and returns a fresh `LocalRuntime` over the same log,
 replayed. It returns the new object rather than mutating in place, so callers must rebind:
 `rt = rt.restart()`. Passing the same `log` to a second `LocalRuntime` is the same operation
-spelled out. The conformance verb `restart_runtime` maps onto it, so the `python` column's
+spelled out. The conformance verb `restart_runtime` maps onto it, so the `python` binding's
 `replay-after-restart` and `suspend-resume` passes are replays into a new instance.
 
 ## Capabilities
 
 `LocalRuntime.capabilities()` is the runtime's own declaration. `deploy(spec)` compares the
 workflow's requirements against it and raises `CapabilityError` listing every unsupported
-requirement instead of running a subset. The declaration says `llm_brain` is partial (only the
-scripted `stub` provider runs locally); because the one `llm_brain` fixture uses the stub, the
-matrix records `llm_brain` as supported. `timers` read the runtime's `clock` (wall time by default,
+requirement instead of running a subset. The declaration says `llm_brain` is partial: only the
+scripted `stub` provider runs locally, and the one `llm_brain` fixture uses that stub, so a pass there
+says nothing about a real model. `timers` read the runtime's `clock` (wall time by default,
 or a `ManualClock` whose `advance(ms)` moves it) and the conversation watermark; pending timers
-and a manual clock's reading survive `restart()` because both are rebuilt from the log. What counts is the matrix, derived from fixture
-outcomes.
-
-## Where it stands
-
-<!-- matrix: python -->
-Derived from [capabilities.md](../capabilities.md) (run 2026-09-23T19:34:19+00:00, commit `4f583aae7bcd`) by
-`docs/tools/matrix_excerpt.py`; do not edit by hand. Every capability not listed below is
-[supported](../capabilities.md#capabilities) for the binding, meaning every fixture that requires it passed.
-
-Binding `python`: 24 passed, 0 failed, 0 skipped.
-
-| Capability | python |
-|---|---|
-<!-- /matrix -->
+and a manual clock's reading survive `restart()` because both are rebuilt from the log. What counts is fixture outcomes, not the
+declaration.
 
 ## Running it
 
@@ -68,12 +55,11 @@ Binding `python`: 24 passed, 0 failed, 0 skipped.
 cd ports/pyagentic
 python -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest
-.venv/bin/python -m agentic.conformance    # the fixtures against LocalRuntime, the python column
+.venv/bin/python -m agentic.conformance    # the fixtures against LocalRuntime
 ```
 
 The two-level API (`Agent` builder and `load(...).run(runtime="local")` on top,
 `LocalRuntime().deploy(spec)` underneath) is documented with executed examples in
-[docs/python.md](../python.md). Other runtime names (`local-jvm`, `flink-jvm`, `pyflink`) are
-resolved through the `agentic.runtimes` entry point group when the corresponding package is
-installed; selecting one that is not installed raises `RuntimeNotAvailableError` naming the
-package.
+[docs/python.md](../python.md). Other runtime names resolve through the `agentic.runtimes` entry
+point group; this repository registers only `local`, and any other name raises
+`RuntimeNotAvailableError`.

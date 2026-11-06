@@ -159,79 +159,15 @@ def test_surefire_parser_refuses_incomplete_reports(tmp_path: Path) -> None:
         cm.parse_surefire(tmp_path, FIXTURES, "PekkoConformanceTest")
 
 
-def test_clojure_outcomes_are_recompared_by_the_runner() -> None:
-    outcomes = []
-    for fixture in FIXTURES.values():
-        if fixture["id"] == "retrieval":
-            outcomes.append({"id": fixture["id"], "status": "skipped", "problems": ['requires ["retrieval"]']})
-            continue
-        runtime = cm.ReferenceRuntime(fixture["workflow"])
-        results = []
-        for t in fixture["turns"]:
-            if t.get("restart_runtime"):
-                runtime.restart()
-            if "advance_time_ms" in t:
-                runtime.advance(t["advance_time_ms"])
-            results.append(runtime.submit(cm.Turn(t["conversation_id"], t["turn_id"], t.get("text", ""), t.get("signal"),
-                                                 metadata=dict(t.get("metadata") or {}))))
-        if fixture["id"] == "routing-default":
-            results[0]["path"] = "billing"
-        outcomes.append({"id": fixture["id"], "status": "passed", "problems": [], "results": results})
-
-    text = "SKIP retrieval\n@@AGENTIC_CONFORMANCE@@\n" + json.dumps(outcomes) + "\n@@END@@\n"
-    parsed = {o.fixture: o for o in cm.outcomes_from_clojure(cm.parse_clojure_output(text), FIXTURES)}
-    assert parsed["retrieval"].status == cm.SKIPPED and parsed["retrieval"].missing == ["retrieval"]
-    assert parsed["routing-default"].status == cm.FAILED  # the binding said passed; the runner disagrees
-    assert parsed["routing-keyword"].status == cm.PASSED
-
-
-def test_clojure_output_without_marker_is_a_binding_error() -> None:
-    with pytest.raises(cm.BindingError):
-        cm.parse_clojure_output("Error building classpath")
-
-
 def test_absent_bindings_and_toolchains_are_reported_not_omitted(tmp_path: Path) -> None:
     # python is located through entry points, not the checkout, so it is exercised with an absent module
     reports = [cm.run_runtime(name, FIXTURES, tmp_path, tmp_path / "logs", "no_such_agentic_binding:run")
-               for name in ("jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink")]
-    assert [r.status for r in reports[:4]] == [cm.NOT_TESTED] * 4
-    assert reports[4].status == cm.ERROR
-    assert [r.status for r in reports[5:]] == [cm.NOT_TESTED] * 3
-    assert all("binding absent" in r.reason for r in reports[5:])
+               for name in ("jvm-core", "flink", "pekko", "python")]
+    assert [r.status for r in reports[:3]] == [cm.NOT_TESTED] * 3
+    assert reports[3].status == cm.ERROR
     assert all(r.reason for r in reports)
     artifact = cm.build_artifact(reports, FIXTURES, tmp_path)
-    assert [r["name"] for r in artifact["runtimes"]] == [
-        "jvm-core", "flink", "pekko", "clojure", "python", "pyflink", "python-jvm", "python-flink"]
-
-
-def test_python_suite_outcomes_map_to_fixture_outcomes() -> None:
-    suite = cm.PYTHON_SUITES["pyflink"]
-    rows = []
-    for fixture in FIXTURES.values():
-        if fixture["id"] == "saga-compensation":
-            rows.append({"id": fixture["id"], "status": "skip", "reason": "requires ['saga']", "problems": []})
-        elif fixture["id"] == "tool-failure":
-            rows.append({"id": fixture["id"], "status": "fail", "reason": None, "problems": ["status differs"]})
-        else:
-            rows.append({"id": fixture["id"], "status": "pass", "reason": None, "problems": []})
-    by_id = {o.fixture: o for o in cm.outcomes_from_python_suite(rows, FIXTURES, suite)}
-    assert len(by_id) == len(FIXTURES)
-    assert by_id["saga-compensation"].status == cm.SKIPPED and by_id["saga-compensation"].missing == ["saga"]
-    assert by_id["tool-failure"].status == cm.FAILED and by_id["tool-failure"].problems == ["status differs"]
-    assert by_id["routing-keyword"].status == cm.PASSED
-    with pytest.raises(cm.BindingError):
-        cm.outcomes_from_python_suite(rows[1:], FIXTURES, suite)
-    with pytest.raises(cm.BindingError):
-        cm.outcomes_from_python_suite([{**rows[0], "status": "maybe"}] + rows[1:], FIXTURES, suite)
-
-
-def test_python_suite_missing_module_is_not_tested(tmp_path: Path) -> None:
-    (tmp_path / "x").mkdir()
-    (tmp_path / "x" / "conformance.py").write_text("", encoding="utf-8")
-    suite = cm.PythonSuite("x", "x", "no_such_agentic_suite.conformance", "m.run_all()", "id", "o.status", "o.reason", "pip install x")
-    report = cm.run_python_suite(suite, FIXTURES, tmp_path, tmp_path / "logs")
-    assert report.status == cm.NOT_TESTED
-    assert report.reason.startswith("toolchain unavailable:") and "pip install x" in report.reason
+    assert [r["name"] for r in artifact["runtimes"]] == ["jvm-core", "flink", "pekko", "python"]
 
 
 def test_python_binding_hook_uses_the_runner_comparator() -> None:
@@ -275,13 +211,12 @@ def test_require_present_fails_only_for_missing_toolchains(tmp_path: Path, monke
     (tmp_path / "ports" / "jagentic-core" / "pom.xml").write_text("<project/>", encoding="utf-8")
     (tmp_path / "ports" / "jagentic-core" / "src" / "test" / "java" / "ConformanceTest.java").write_text("", encoding="utf-8")
     monkeypatch.setattr(cm, "MVN", None)
-    monkeypatch.setattr(cm, "CLOJURE", None)
     root = str(tmp_path)
-    # clojure binding is absent -> not_tested is acceptable; jvm-core binding is present but mvn is missing -> failure
-    assert cm.main(["--runtimes", "reference", "clojure", "--require-present", "--root", root]) == 0
+    # pekko binding is absent -> not_tested is acceptable; jvm-core binding is present but mvn is missing -> failure
+    assert cm.main(["--runtimes", "reference", "pekko", "--require-present", "--root", root]) == 0
     assert cm.main(["--runtimes", "reference", "jvm-core", "--root", root]) == 0
     assert cm.main(["--runtimes", "reference", "jvm-core", "--require-present", "--root", root]) == 1
-    assert cm.main(["--runtimes", "reference", "clojure", "--require", "clojure", "--root", root]) == 1
+    assert cm.main(["--runtimes", "reference", "pekko", "--require", "pekko", "--root", root]) == 1
 
 
 def test_maven_command_prefers_committed_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

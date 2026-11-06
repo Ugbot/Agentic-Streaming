@@ -1,9 +1,8 @@
 # Testing
 
 How to run the unit, integration and conformance suites of this repository, and what each
-of them requires. GitHub Actions is disabled on the repository, so the local runs described
-here are the authoritative verification; `.github/workflows/ci.yml` and
-`.github/workflows/conformance.yml` document the same commands for a hosted runner.
+of them requires. `.github/workflows/ci.yml` and `.github/workflows/conformance.yml` run the same
+commands on a hosted runner.
 
 ## Unit suites
 
@@ -19,13 +18,10 @@ excludes the `integration` and `djl` JUnit tags; it never runs `*IT.java` classe
 ./mvnw -f agentic-pekko/pom.xml test            # Pekko runtime
 ```
 
-Two root-module classes are known to need a specific host setup and are excluded by name
-on hosts that lack it: `ZeroMqChannelTest` has no per-test timeout and hangs on some hosts,
-and `PythonExecutorTest` embeds CPython through PEMJA, which has no wheel for every Python
-version. Exclude them explicitly when needed:
+`ZeroMqChannelTest` has no per-test timeout and hangs on some hosts. Exclude it when needed:
 
 ```
-./mvnw -f reactor/pom.xml test -Dtest='!ZeroMqChannelTest,!PythonExecutorTest' \
+./mvnw -f reactor/pom.xml test -Dtest='!ZeroMqChannelTest' \
   -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
@@ -37,15 +33,9 @@ once, through failsafe.
 Tests that read example pipelines (`examples/pipelines/*.yaml`) locate the repository root
 from the surefire `basedir` property, the working directory or the test class location
 (`org.agentic.flink.testkit.RepoRoot`, `org.jagentic.core.RepoFixtures`,
-`org.jagentic.pekko.testing.RepoFixtures`, `agentic.fixtures` in Clojure). A missing fixture
+`org.jagentic.pekko.testing.RepoFixtures`). A missing fixture
 fails the test; it is never skipped. This holds both for a reactor build and for a module
 built on its own.
-
-The Clojure runtime is tested from `agentic-clj/`:
-
-```
-cd agentic-clj && clojure -X:test
-```
 
 If Maven Central answers with HTTP 429, point the wrapper at the Google mirror:
 
@@ -139,11 +129,10 @@ python -m pytest spec/tools -q          # the spec tooling itself
 ```
 
 The per-runtime conformance suites run as part of the unit suites above
-(`FlinkConformanceTest`, `ConformanceTest` in jagentic-core, `PekkoConformanceTest`, the
-Clojure and Python conformance modules). A fixture whose `requires` names a capability the
+(`FlinkConformanceTest`, `ConformanceTest` in jagentic-core, `PekkoConformanceTest`, and
+`agentic.conformance` in Python). A fixture whose `requires` names a capability the
 runtime does not declare is reported as skipped with a reason that names that capability;
-this is a declared gap that appears in the generated `docs/capabilities.md`, not a missing
-service. The full matrix across every binding present in the checkout is produced by:
+this is a declared gap that appears in the matrix, not a missing service. The full matrix across every binding present in the checkout is produced by:
 
 ```
 python spec/tools/conformance_matrix.py --require reference --require-present \
@@ -151,8 +140,8 @@ python spec/tools/conformance_matrix.py --require reference --require-present \
   --write-docs build/capabilities.md
 ```
 
-`docs/capabilities.md` and the excerpts under `docs/runtimes/` are generated from that
-output and must not be edited by hand.
+No copy of that output is committed; see
+[conformance results](runtimes/README.md#conformance-results).
 
 ## Skips
 
@@ -167,7 +156,6 @@ Outside the Maven root module, `ports/jagentic-core` still has tests that probe 
 services (`StoreTest.qdrantColdTierIfAvailable`, `postgresLongTermIfAvailable`,
 `redisConversationStoreIfAvailable`, `EmbeddingTest.ollamaEmbedderIfAvailable`,
 `McpTest.mcpClientRegistersAndCallsTools`) and abort when the service is absent; CI
-provisions those services on fixed ports. `tool-services-app` has the same pattern for
-Redis and Kafka (`RedisToolBridgeTest`, `KafkaToolBridgeTest`). These skips are explained
+provisions those services on fixed ports. These skips are explained
 by the service they probe and are the remaining candidates for the Testcontainers approach
 described above.

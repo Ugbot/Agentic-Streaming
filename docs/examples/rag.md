@@ -12,8 +12,8 @@
 ## Running it
 
 ```bash
-bash examples-bin/run-ollama.sh      # Ollama in Podman on 127.0.0.1:11434, pulls qwen2.5:3b
-bash examples-bin/run-rag.sh
+podman compose up -d ollama && podman compose exec ollama ollama pull qwen2.5:3b
+./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.rag.RagResearchExample
 ```
 
 Prerequisites: JDK 21, the Maven wrapper, Podman (for Ollama), and outbound internet on the
@@ -25,8 +25,7 @@ JVM in an embedded MiniCluster.
 
 The input is a fixed list of `(topic, question)` queries; each prints one `Answer[...]` record
 with the topic, the question, the grounded answer with `[1] [2] [3]` citations and the top
-rerank score. `bash examples-bin/run-rag-stack.sh` brings up the larger Podman stack (Ollama,
-Postgres, Redis, Fluss) that the RAG notebooks use; `run-rag.sh` itself needs only Ollama.
+rerank score. The example needs only Ollama.
 
 ## Why this shape
 
