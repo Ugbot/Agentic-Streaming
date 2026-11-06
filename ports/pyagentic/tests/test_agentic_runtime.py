@@ -181,6 +181,7 @@ def test_file_event_log_survives_a_new_instance_and_preserves_unknown_types(tmp_
     log = FileEventLog(str(tmp_path))
     log.append(cid, "t1", "turn_received", {"text": "hi"}, 7, {"k": "v"})
     log.append(cid, "t1", "turn_completed", {"reply": "ok"}, 8)
+    log.close()
     path = next(tmp_path.glob("*.jsonl"))
     with open(path, "a", encoding="utf-8") as fh:
         fh.write('{"turn_id": "t9", "sequence": 2, "type": "future_event", "payload": {}}\n')

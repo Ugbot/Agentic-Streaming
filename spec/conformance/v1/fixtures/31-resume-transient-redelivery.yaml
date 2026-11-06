@@ -1,0 +1,33 @@
+id: resume-transient-redelivery
+description: "A turn that resumes and then fails transiently has not spent its turn_id or its approval. The redelivered signal runs the brain on the original turn's text, and the turn completes."
+requires: [suspend_resume, llm_brain, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: approval
+    router: {kind: keyword, default: main, rules: {main: [refund]}}
+    paths:
+      main:
+        brain: llm
+        x-suspend-until: approval
+    verifier: {kind: none}
+  llm:
+    provider: stub
+    script:
+      - {text: "refund issued", x-fail-attempts: 1}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}}
+  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}}
+expect:
+  - turn_id: t1
+    status: suspended
+  - turn_id: t1
+    status: failed
+    error_class: transient
+  - turn_id: t1
+    status: completed
+    reply: "refund issued"
+    events_include: [turn_resumed, turn_completed]
+    state_includes: {turn_count: 1, transcript_length: 2}

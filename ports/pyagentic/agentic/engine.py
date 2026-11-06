@@ -8,6 +8,7 @@ conversation is a fold over the event log, so `recover()` rebuilds it after a re
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 import threading
@@ -19,11 +20,13 @@ from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
-from .errors import AgenticError, LogUnavailable, ToolError, TransientError, ValidationError
+from .errors import AgenticError, CorruptLog, LogUnavailable, ToolError, TransientError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec
 from .workflow_timers import WorkflowTimers
+
+LOG = logging.getLogger(__name__)
 
 Clock = Callable[[], int]
 Sleep = Callable[[float], None]
@@ -130,7 +133,11 @@ class Engine:
         results: Dict[Tuple[str, str], Dict[str, Any]] = {}
         suspended: Dict[Tuple[str, str], _Pending] = {}
         for conversation_id in self.log.conversation_ids():
-            log = self.log.read(conversation_id)
+            try:
+                log = self.log.read(conversation_id)
+            except CorruptLog as exc:  # one bad conversation must not stop the others
+                LOG.error("skipping conversation %s on recovery: %s", conversation_id, exc)
+                continue
             by_turn: Dict[str, List[Event]] = {}
             for event in log:
                 by_turn.setdefault(event.turn_id, []).append(event)
@@ -182,8 +189,12 @@ class Engine:
     def _fail_at_boundary(self, ctx: _TurnContext, exc: Exception) -> Dict[str, Any]:
         message = str(exc) or type(exc).__name__
         ended = ctx.events and ctx.events[-1].type in ("turn_completed", "turn_failed")
-        return self._finish(ctx, "failed", self._routed_path(ctx), None, {"class": "fatal", "message": message},
-                            event=None if ended else ("turn_failed", {"status": "failed", "reason": message}))
+        path, error = self._routed_path(ctx), {"class": "fatal", "message": message}
+        try:
+            return self._finish(ctx, "failed", path, None, error,
+                                event=None if ended else ("turn_failed", {"status": "failed", "reason": message}))
+        except CorruptLog:  # nothing can be recorded on this conversation; the caller still gets a result
+            return self._finish(ctx, "failed", path, None, error)
 
     def _process(self, turn: Turn, ctx: _TurnContext) -> Dict[str, Any]:
         key = (turn.conversation_id, turn.turn_id)
@@ -192,22 +203,21 @@ class Engine:
             pending = self._suspended.get(key)
             prior = self._results.get(key)
 
-        if turn.signal is not None:
-            if pending is None:
-                return self._fail_validation(ctx, None, f"no suspended turn {turn.turn_id!r} to resume")
-            return self._resume(turn, pending)
         rerun = prior is not None and (prior.get("error") or {}).get("class") == "transient"
+        if turn.signal is not None:
+            if pending is not None:
+                return self._resume(turn, pending)
+            if rerun:
+                return self._resume(turn, self._pending_of(turn, prior))
+            if prior is not None:
+                return self._duplicate(prior)  # a redelivered signal must not rewrite the turn
+            return self._fail_validation(ctx, None, f"no suspended turn {turn.turn_id!r} to resume")
         if idempotent and prior is not None and not rerun:
-            duplicate = dict(prior)
-            duplicate["status"] = "duplicate"
-            duplicate["events"] = []
-            duplicate["runtime_detail"] = {"duplicate_of": prior.get("runtime_detail", {}), "re_executed": False}
-            return duplicate
+            return self._duplicate(prior)
 
         history = self.log.read(turn.conversation_id)
-        if rerun:  # (turn_id, index) identifies one call across runs of the turn
-            ctx.next_index = 1 + max((int(e.payload["index"]) for e in history
-                                      if e.turn_id == turn.turn_id and "index" in e.payload), default=-1)
+        if rerun:
+            ctx.next_index = self._next_index(turn, history)
         try:
             self.timers.fire_due(turn, history, lambda kind, payload: self._append(ctx, kind, payload),
                                  lambda tool_id, args: self._invoke(ctx, tool_id, args))
@@ -249,12 +259,33 @@ class Engine:
         except ValidationError as exc:
             return self._fail_validation(ctx, self._routed_path(ctx), str(exc))
 
+    @staticmethod
+    def _duplicate(prior: Mapping[str, Any]) -> Dict[str, Any]:
+        duplicate = dict(prior)
+        duplicate["status"] = "duplicate"
+        duplicate["events"] = []
+        duplicate["runtime_detail"] = {"duplicate_of": prior.get("runtime_detail", {}), "re_executed": False}
+        return duplicate
+
+    def _pending_of(self, turn: Turn, prior: Mapping[str, Any]) -> _Pending:
+        """The parked state of a resumed turn that failed transiently, read back from the log."""
+        received = next(e for e in self.log.read(turn.conversation_id)
+                        if e.turn_id == turn.turn_id and e.type == "turn_received")
+        return _Pending(turn.turn_id, str(prior["path"]), str(received.payload.get("text", "")),
+                        str(received.payload.get("user_id", "anonymous")))
+
+    def _next_index(self, turn: Turn, history: Sequence[Event]) -> int:
+        """(turn_id, index) identifies one call across runs of the turn."""
+        return 1 + max((int(e.payload["index"]) for e in history
+                        if e.turn_id == turn.turn_id and "index" in e.payload), default=-1)
+
     def _resume(self, turn: Turn, pending: _Pending) -> Dict[str, Any]:
         key = (turn.conversation_id, turn.turn_id)
         with self._guard:
             self._suspended.pop(key, None)
         resumed = Turn(turn.conversation_id, turn.turn_id, pending.text, pending.user_id, None, turn.metadata)
         ctx = _TurnContext(resumed, pending.text, self.clock())
+        ctx.next_index = self._next_index(turn, self.log.read(turn.conversation_id))
         self._append(ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": dict(turn.signal or {})})
         try:
             if self.saga is not None:
@@ -546,7 +577,7 @@ class Engine:
             "status": status,
             "path": path,
             "reply": reply,
-            "state": self.state(ctx.turn.conversation_id),
+            "state": self._state_or_empty(ctx.turn.conversation_id),
             "tool_calls": list(ctx.tool_calls),
             "events": [e.normalized() for e in ctx.events],
             "error": error,
@@ -556,6 +587,13 @@ class Engine:
         with self._guard:
             self._results[(ctx.turn.conversation_id, ctx.turn.turn_id)] = result
         return result
+
+    def _state_or_empty(self, conversation_id: str) -> Dict[str, Any]:
+        """A corrupt log still gets a result."""
+        try:
+            return self.state(conversation_id)
+        except CorruptLog:
+            return {}
 
     def _result_from_events(self, conversation_id: str, turn_id: str, events: Sequence[Event],
                             log: Sequence[Event], status: str) -> Dict[str, Any]:

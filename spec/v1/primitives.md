@@ -112,6 +112,8 @@ A turn ends in exactly one terminal status:
 - `turn_id` is the idempotency key and is mandatory on every inbound turn. A runtime that
   receives a `turn_id` it has already applied must return the recorded result with status
   `duplicate`, and must not re-run the brain, tools, or guardrails.
+- A resume signal redelivered after its turn reached a terminal status is a `duplicate` of that
+  turn: nothing is appended and the recorded result stands.
 - A turn that ended `failed` with class `transient` has not been applied, so its `turn_id` is
   not spent. A redelivery runs the turn again rather than answering `duplicate`, and does not
   append a second `turn_received`, so it is not counted twice. A redelivered resume signal runs

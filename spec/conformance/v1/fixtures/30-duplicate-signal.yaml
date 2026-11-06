@@ -1,0 +1,38 @@
+id: duplicate-signal
+description: "A resume signal redelivered after the turn completed is a duplicate of that turn. It appends nothing, and the recorded reply survives: a later redelivery of the original turn still sees the completed result, including after a restart."
+requires: [suspend_resume, idempotency, durable_store]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: approval
+    router: {kind: keyword, default: main, rules: {main: [refund]}}
+    paths:
+      main:
+        brain: rule
+        prompt: You handle refunds.
+        x-suspend-until: approval
+    verifier: {kind: none}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}}
+  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}}
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge", restart_runtime: true}
+expect:
+  - turn_id: t1
+    status: suspended
+  - turn_id: t1
+    status: completed
+    reply_matches: "^\\[main\\] "
+  - turn_id: t1
+    status: duplicate
+    reply_matches: "^\\[main\\] "
+    events_exclude: [turn_failed, turn_resumed]
+  - turn_id: t1
+    status: duplicate
+    reply_matches: "^\\[main\\] "
+  - turn_id: t1
+    status: duplicate
+    reply_matches: "^\\[main\\] "
+    state_includes: {turn_count: 1}

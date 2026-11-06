@@ -83,6 +83,7 @@ class Conversation:
     timers: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # pending, by timer id
     watermark_ms: Optional[int] = None
     tool_indices: Dict[str, int] = field(default_factory=dict)  # next call index, by turn id
+    resumed: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # parked state of resumed turns
 
 
 def reduce_state(log: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -188,6 +189,9 @@ class ReferenceRuntime:
             return self._resume(conv, turn)
         recorded = conv.results.get(turn.turn_id)
         rerun = recorded is not None and (recorded.get("error") or {}).get("class") == "transient"
+        if rerun and turn.signal is not None and turn.turn_id in conv.resumed:
+            conv.suspended[turn.turn_id] = conv.resumed[turn.turn_id]
+            return self._resume(conv, turn)
         if idempotent and recorded is not None and not rerun:
             prior = dict(recorded)
             prior["status"] = "duplicate"
@@ -237,7 +241,9 @@ class ReferenceRuntime:
 
     def _resume(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
         pending = conv.suspended.pop(turn.turn_id)
-        ctx = _TurnContext(Turn(turn.conversation_id, turn.turn_id, pending["text"]))
+        conv.resumed[turn.turn_id] = pending
+        ctx = _TurnContext(Turn(turn.conversation_id, turn.turn_id, pending["text"]),
+                           _tool_index=conv.tool_indices.get(turn.turn_id, 0))
         self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal})
         return self._run_brain(conv, ctx, pending["path"])
 

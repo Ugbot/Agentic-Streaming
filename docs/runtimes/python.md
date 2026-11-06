@@ -14,6 +14,13 @@ the `Agent` builder; this page is about how the primitives map.
 Unknown event types survive a new instance over the same file and are ignored by the fold
 (`tests/test_agentic_runtime.py::test_file_event_log_survives_a_new_instance_and_preserves_unknown_types`).
 
+`FileEventLog` takes an OS lock on `.writer.lock` in its directory, so a second writer, in this
+process or another, is refused rather than interleaving sequences; the OS releases the lock if a
+writer dies. A final line without its newline was never acknowledged, and is cut on load. Anything
+else that does not read back, or a gap in `sequence`, raises `CorruptLog` for that conversation
+alone: the runtime still deploys, and turns on that conversation end `failed` with class `fatal`
+(`tests/test_file_event_log.py`).
+
 ## The engine
 
 `agentic/engine.py` holds the semantics shared by every fixture: guardrails, keyword and static

@@ -60,6 +60,11 @@ class LogUnavailable(AgenticError):
     failure the turn boundary lets through, since a turn cannot record its end in that log."""
 
 
+class CorruptLog(AgenticError):
+    """One conversation's log cannot be trusted: a bad record inside it, or a gap in its sequence.
+    That is a failure of that conversation alone, not of the store."""
+
+
 class GuardrailError(AgenticError):
     error_class = "guardrail"
 
