@@ -42,7 +42,7 @@ Apache License, Version 2.0:
   (optional)
 - Qdrant Java client (io.qdrant:client 1.11.0) (optional)
 - Milvus Java SDK (io.milvus:milvus-sdk-java 2.4.8) (optional)
-- Apache Fluss client (com.alibaba.fluss:fluss-client 0.7.0) (optional)
+- Apache Fluss client (com.alibaba.fluss:fluss-client 0.7.0) (optional; bundled only by -P fluss)
 - A2A Java SDK spec, client and JSON-RPC, gRPC and REST client transports
   (io.github.a2asdk:* 1.0.0.Alpha3) (optional)
 

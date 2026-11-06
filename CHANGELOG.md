@@ -98,6 +98,9 @@ exists.
   Jackson and pgjdbc are one version across the reactor, Milvus 2.6 sheds the Hadoop closure, and
   Tika, DJL, jsoup, LangChain4j, Qdrant, Pekko, Netty and the rest move forward. What Flink and the
   Fluss client shade is listed in `docs/security.md` (#101).
+- The Fluss client is out of the default uber jar, which loses about 64 MB and the client's old
+  relocated Netty, Jackson, Guava and lz4. `-P fluss` puts it back. Selecting a Fluss backend
+  without the client now fails with a message rather than falling back to the in-JVM store (#101).
 - Flink storage and inference correctness: PostgreSQL `ON CONFLICT` upserts, reopenable stores,
   exact VALID/INVALID verdicts and nested tool-argument JSON (#22).
 - Build, conformance gate and stale documentation fixes from review: nested `Entry` type in

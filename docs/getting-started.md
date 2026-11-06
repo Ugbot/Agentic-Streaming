@@ -178,7 +178,10 @@ The second command produces two jars under `target/`:
 - `agentic-flink-1.0.0-SNAPSHOT-uber.jar`: the shaded jar for `flink run`. It does not contain
   Flink itself: `flink-streaming-java` and `flink-clients` are `provided` scope and are
   excluded from the shade, because a Flink cluster supplies them. That is why running it
-  with a bare `java -cp` fails (Part 5).
+  with a bare `java -cp` fails (Part 5). It does not contain the Fluss client either, unless
+  you build with `-P fluss`: `./mvnw -P fluss package` bundles it. The Fluss classes stay in the
+  default jar, and selecting one without the client fails with an `IllegalStateException` that
+  says this.
 
 ### The Flink tests
 

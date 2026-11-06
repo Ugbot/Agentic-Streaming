@@ -182,6 +182,11 @@ Flink runtime a cluster provides. `bash tools/check-jar-launch.sh` boots it unde
 `agentic-flink` jar marks its provider SDKs and drivers optional, so add the ones you use to your own
 pom; see the `<optional>` entries in the root `pom.xml`.
 
+The uber jar leaves out the Fluss client, which carries old relocated copies of Netty, Jackson, Guava
+and lz4 ([docs/security.md](docs/security.md)). For a Fluss backend, build with `./mvnw -P fluss
+package` or put `com.alibaba.fluss:fluss-client` on the job classpath. Without it, selecting Fluss
+fails at startup and says so.
+
 ## Contributing
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) describes the toolchain, the local
