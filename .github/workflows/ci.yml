@@ -12,12 +12,6 @@ name: CI
 # The conformance matrix is a required check too; it lives in conformance.yml and is
 # not repeated here (the python/pyflink steps below deselect their conformance modules).
 #
-# Advisory jobs (continue-on-error, must not be listed as required checks):
-#   ports-experimental   JVM engine adapters under ports/experimental (pre-agentic/v1,
-#                        not conformance tested, may be removed)
-#   python-experimental  Python adapters under ports/experimental (same status)
-#   go                   the Go port under ports/experimental/go (same status)
-#
 # Skips are audited. The Maven *IT classes start their own PostgreSQL, pgvector, Redis,
 # Qdrant and Fluss containers through Testcontainers and fail (never skip) without a
 # container runtime; the remaining service-backed tests skip themselves when Postgres,
@@ -226,88 +220,6 @@ jobs:
             pyflink/java/target/agentic-pyflink-*.jar
           if-no-files-found: error
           retention-days: 7
-
-  # The JVM engine adapters under ports/experimental/ predate agentic/v1, are not
-  # conformance tested, and are not on the acceptance path. They are deliberately
-  # outside reactor/pom.xml; jagentic-core (their only in-repo dependency) is installed
-  # from the reactor first. continue-on-error keeps a red adapter from failing the
-  # workflow, and this job must not be listed as a required status check.
-  ports-experimental:
-    name: ports/experimental (JVM adapters, advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-
-      - name: jagentic-core (shared JVM core, from the reactor)
-        run: ./mvnw -B -ntp -f reactor/pom.xml -pl :jagentic-core -am install -DskipTests
-
-      - name: ports/experimental/kafka-streams
-        run: ./mvnw -B -ntp -f ports/experimental/kafka-streams/pom.xml test
-      - name: ports/experimental/spring
-        run: ./mvnw -B -ntp -f ports/experimental/spring/pom.xml test
-      - name: ports/experimental/quarkus
-        run: ./mvnw -B -ntp -f ports/experimental/quarkus/pom.xml test
-      - name: ports/experimental/temporal
-        run: ./mvnw -B -ntp -f ports/experimental/temporal/pom.xml test
-      - name: ports/experimental/pulsar
-        run: ./mvnw -B -ntp -f ports/experimental/pulsar/pom.xml test
-
-  # Same status as ports-experimental, for the Python adapters (Celery, NATS, ...).
-  python-experimental:
-    name: ports/experimental (Python adapters, advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      # The adapters are installed packages (agentic-<engine>, see ports/experimental/README.md);
-      # each engine is an optional extra. celery, dask and ray run for real here; airflow,
-      # faust and nats skip their engine-backed tests with the reason printed.
-      - name: Install
-        run: |
-          python -m pip install -e "ports/pyagentic[test]" \
-            -e "ports/experimental/celery[celery]" -e "ports/experimental/dask[dask]" \
-            -e "ports/experimental/ray[ray]" -e "ports/experimental/nats[nats]" \
-            -e "ports/experimental/faust" -e "ports/experimental/airflow" \
-            -e "ports/experimental/gateway-fastapi[test]"
-
-      - name: port adapters
-        run: python -m pytest ports/experimental -q -ra
-
-  go:
-    name: Go (ports/experimental/go, advisory)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    defaults:
-      run:
-        working-directory: ports/experimental/go
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: ports/experimental/go/go.mod
-          cache-dependency-path: ports/experimental/go/go.sum
-
-      - name: go vet
-        run: go vet ./...
-
-      - name: go test
-        run: go test ./...
 
   clojure:
     name: Clojure (Datomic runtime)

@@ -60,8 +60,6 @@
     framework jar keeps its artifactId, so the file name agentic-flink-1.0.0-SNAPSHOT-uber.jar
     the Python packages glob for is unchanged. Java package names (org.agentic.flink.*,
     org.jagentic.*) are unaffected by the Maven groupId.
-
-    ports/experimental/* are advisory adapters and are deliberately not modules of this reactor.
     -->
 
     <modules>
@@ -116,9 +114,8 @@
 
     <!-- Every cross-module coordinate is managed here, so no module states another module's
          version: a module declares `org.jagentic:agentic-flink` with no <version>. Consumers
-         outside the reactor (ports/experimental/*) import this pom as a BOM instead of
-         inheriting from it. The LangChain4J BOM, flink-cep and the postgres/Hikari versions
-         are managed here too: the Flink framework (root pom) marks the provider SDKs and the
+         outside the reactor import this pom as a BOM instead of inheriting from it. The
+         LangChain4J BOM, flink-cep and the postgres/Hikari versions are managed here too: the Flink framework (root pom) marks the provider SDKs and the
          postgres driver/pool optional, so the modules that need them at runtime (banking-job,
          a2a-gateway) declare them explicitly and must resolve to the same versions. -->
     <dependencyManagement>
