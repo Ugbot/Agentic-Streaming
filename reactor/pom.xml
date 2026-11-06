@@ -78,6 +78,9 @@
         <langchain4j.version>1.16.3</langchain4j.version>
         <junit.version>5.10.2</junit.version>
         <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- One Jackson for every module. Dependencies pull 2.17 to 2.21 on their own, and the
+             nearest declaration would otherwise win, so the BOM below pins the whole family. -->
+        <jackson.version>2.22.4</jackson.version>
         <postgresql.version>42.7.13</postgresql.version>
         <hikaricp.version>5.0.1</hikaricp.version>
         <!-- SLF4J 2.x API line; the matching log4j binding is log4j-slf4j2-impl (log4j 2.19+). -->
@@ -111,6 +114,14 @@
          versions. -->
     <dependencyManagement>
         <dependencies>
+            <!-- First on purpose: among imported BOMs the first to name an artifact wins. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.apache.logging.log4j</groupId>
                 <artifactId>log4j-bom</artifactId>

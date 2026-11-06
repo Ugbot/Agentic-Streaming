@@ -52,11 +52,19 @@
         <!-- 1.18.40 was the first release to support JDK 25; staying current here keeps a
              future baseline bump from being blocked by annotation processing. -->
         <lombok.version>1.18.48</lombok.version>
-        <jackson.version>2.18.10</jackson.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Ahead of the A2A BOM on purpose: it manages Jackson too, a module's own imports
+                 come before the parent's, and the first BOM to name an artifact wins. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <!-- A2A Java SDK BOM — aligns all a2a-java-sdk-* module versions. -->
             <dependency>
                 <groupId>io.github.a2asdk</groupId>
@@ -346,20 +354,17 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-yaml</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
 
         <!-- Jackson Parameter Names Module for constructor detection -->
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-parameter-names</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
 
         <!-- PostgreSQL JDBC driver and HikariCP pool behind the postgres stores (PostgresConversationStore,
