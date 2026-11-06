@@ -333,7 +333,7 @@ There is no `MyFirstAgentExample` in the repository; an earlier version of this 
 it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem
 as `SimpleAgentExample`.
 
-## Part 6: The other first-class runtimes
+## Part 6: The other runtimes
 
 Pekko, after the core install from Part 2:
 

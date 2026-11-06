@@ -32,9 +32,10 @@ that cannot guarantee it must declare `ordering` unsupported rather than approxi
 
 ## Effects are at-least-once
 
-Exactly-once is a property of the log, not of side effects. Anything that leaves the system
-(`publish`, `delegate`, tool calls with external effects) carries `(conversation_id, turn_id,
-call_index)` so the receiver can deduplicate. [Section 4](../../spec/v1/primitives.md#4-idempotency)
+Exactly-once is a property of the log, not of side effects. The spec says anything that leaves the
+system (`publish`, `delegate`, tool calls with external effects) carries `(conversation_id, turn_id,
+call_index)` so the receiver can deduplicate. **No runtime does this yet:** a function or HTTP tool
+receives no key, and a recorded tool result is not read back on a retry. [Section 4](../../spec/v1/primitives.md#4-idempotency)
 and the retry rules in [section 5](../../spec/v1/primitives.md#5-errors-and-retries). Fixtures:
 `tool-failure`, `retry-tool`, `saga-compensation`, `a2a-delegation`.
 

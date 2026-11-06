@@ -14,7 +14,7 @@
   <artifactId>agentic-pekko</artifactId>
   <packaging>jar</packaging>
   <name>Agentic Pekko</name>
-  <description>First-class Apache Pekko agent runtime: an event-sourced, cluster-sharded entity
+  <description>Apache Pekko agent runtime: an event-sourced, cluster-sharded entity
     actor per conversation (single-writer + durable), Pekko Streams + Kafka ingress and a Pekko
     HTTP front door — reusing the Flink-free jagentic-core agent brain.</description>
 

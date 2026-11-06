@@ -1,4 +1,4 @@
-# Agentic Pekko: a first-class Apache Pekko agent runtime
+# Agentic Pekko: an Apache Pekko agent runtime
 
 A genuinely actor-native realization of the agent essence: **one event-sourced, cluster-sharded
 entity per conversation**, single-writer + durable + recoverable the *proper* Pekko way, with

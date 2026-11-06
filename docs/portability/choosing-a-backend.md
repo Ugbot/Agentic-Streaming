@@ -6,7 +6,7 @@ decides *how it runs*. Pick along three axes, in order.
 ## 1. Delivery model: how do turns arrive?
 
 - **A live keyed event stream** (high throughput, per-conversation ordering): **Flink**
-  (first-class, richest). It gives single-writer-per-conversation natively.
+  (the primary runtime). It gives single-writer-per-conversation natively.
 - **Online request/response turns** (a service answers a turn): **Local** (embedded) or
   **Pekko**.
 - **Durable, long-running, retried, human-in-the-loop workflows**: **Pekko** (actor entities).

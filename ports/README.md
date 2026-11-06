@@ -25,8 +25,7 @@ retrieval, guardrails, hot-swappable stores) and run it on the local backend, on
 
 The cores implement the engine-agnostic abstractions once, `ConversationStore`,
 `KeyedStateStore`, `ToolRegistry`, `AgentContext`, `RoutedGraph`, hot+cold
-`Retrieval`, `Banking` example, and are **near-complete standalone agent
-frameworks**: an LLM `ChatClient` SPI (litellm / LangChain4J + Ollama/OpenAI), an `Embedder`
+`Retrieval`, `Banking` example, and hold an LLM `ChatClient` SPI (litellm / LangChain4J + Ollama/OpenAI), an `Embedder`
 SPI, structured output, skills, regex **and** classifier guardrails, ≈9 listener hooks, a
 `VectorStore` SPI with an in-process **HNSW** index (+ Qdrant / DuckDB), a `LongTermStore` SPI
 (Postgres), Redis/Valkey conversations, an **MCP** client, an **A2A** peer-as-tool client,

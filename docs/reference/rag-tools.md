@@ -1,6 +1,6 @@
 # RAG Tools for Agentic Framework
 
-Production-ready RAG (Retrieval-Augmented Generation) tools built on LangChain4J and integrated with the agentic framework.
+RAG (Retrieval-Augmented Generation) tools built on LangChain4J and integrated with the agentic framework.
 
 ## Overview
 

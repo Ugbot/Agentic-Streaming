@@ -509,7 +509,7 @@ String answer = (String) rag.execute(ragParams).get();
 
 | Feature | What It Means | Why It Matters |
 |---------|---------------|----------------|
-| **Exactly-Once** | Never lose or duplicate data | Reliable results |
+| **Exactly-Once** | Flink state is not lost or duplicated; tool calls are not covered | Reliable state |
 | **Scalable** | Handle 1 or 1 million events | Grows with your needs |
 | **Fault-Tolerant** | Survives server crashes | Always available |
 | **Stateful** | Remembers context | Agents don't forget |
