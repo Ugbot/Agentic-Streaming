@@ -32,11 +32,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # Native PyFlink path targets the Flink 2.x line (matches the Java side's Flink 2.2).
-pyflink = ["apache-flink>=2.0", "cloudpickle>=2"]
+pyflink = ["apache-flink>=2.2,<2.3", "cloudpickle>=2"]
 # The `flink-jvm` runtime (get_runtime("flink-jvm")) runs jobs in-process and needs the Flink
 # distribution jars, which the shaded agentic-flink jar keeps out; the apache-flink wheel
 # ships them under pyflink/lib.
-flink = ["apache-flink>=2.0"]
+flink = ["apache-flink>=2.2,<2.3"]
 test = ["pytest>=7", "jsonschema>=4", "setuptools>=68"]
 all = ["agentic-flink[pyflink,flink,test]"]
 

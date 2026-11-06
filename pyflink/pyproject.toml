@@ -24,7 +24,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "apache-flink>=2.0,<3",
+    "apache-flink>=2.2,<2.3",
     "PyYAML>=6",
 ]
 

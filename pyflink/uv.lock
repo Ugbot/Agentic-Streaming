@@ -31,7 +31,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "apache-flink", specifier = ">=2.0,<3" },
+    { name = "apache-flink", specifier = ">=2.2,<2.3" },
     { name = "jsonschema", marker = "extra == 'test'", specifier = ">=4" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7" },
     { name = "pyyaml", specifier = ">=6" },
@@ -105,7 +105,7 @@ wheels = [
 
 [[package]]
 name = "apache-flink"
-version = "2.3.0"
+version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-beam" },
@@ -125,26 +125,26 @@ dependencies = [
     { name = "requests" },
     { name = "ruamel-yaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e1/6a/0c944e1cb9d66e86900d8e1f04bbf17394f4701ba5ddbc5a7198b4447ed1/apache_flink-2.3.0.tar.gz", hash = "sha256:47ded5aea434b4b6db3e010cbd6893afcde3eda36cbb07e0260f868f56d370f7", size = 1710704, upload-time = "2026-06-22T01:42:44.991Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/68/ebaddf5ed167d67de692aec47ecdbd2b20ce7923ba0191c4cec5e1200e80/apache_flink-2.2.1.tar.gz", hash = "sha256:4f282f520dac147a9cbc92ce0db04544c9731adcce594c1cf6a3ce9d4e737095", size = 1698528, upload-time = "2026-05-15T13:49:38.29Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/22/ce4fcf249b736b4f68a7d4ed58d3d011da5a1fe219dbf5b75439f5a9b4b7/apache_flink-2.3.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c9941075cc196ae1a1e49e49be3872a9cc1ae608e26c8081213429a5d6d747ce", size = 2688615, upload-time = "2026-06-21T19:01:40.803Z" },
-    { url = "https://files.pythonhosted.org/packages/49/87/d61cc97cbecb6036dd1e02a2523ffd92b7a40451fd2b086b1b4df5e92eec/apache_flink-2.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c674e931e4e0effbf2e2b32733027c1a06af399a070df7b4400cb100db170851", size = 2662427, upload-time = "2026-06-22T01:22:58.828Z" },
-    { url = "https://files.pythonhosted.org/packages/11/5e/493507f915459ace6a5c7e682539178dbf67262f6eb07d821b8642798603/apache_flink-2.3.0-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e67ec32fc5056beacf16ec4ec682f3716df5b165d6e69c3bd2e176085a81cd5d", size = 2873161, upload-time = "2026-06-22T01:23:04.912Z" },
-    { url = "https://files.pythonhosted.org/packages/ef/37/95ad0947bd32d9a7efea0f5f5a91726c61f8694d5652169fa51512a980e3/apache_flink-2.3.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3433bcdb8d5a139ecf69d44800cce6ee40d335ae00eb27038015f63f37ce41b0", size = 2688678, upload-time = "2026-06-22T01:26:04.82Z" },
-    { url = "https://files.pythonhosted.org/packages/2c/6b/6dceaa79421db5ab72133abf32581bddac2dffb60a84209e85923dadfbd9/apache_flink-2.3.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:7937b49423c29b5932093c5e50b733ea8a22572289e86e0e19ef139199c08024", size = 2662093, upload-time = "2026-06-22T01:26:10.313Z" },
-    { url = "https://files.pythonhosted.org/packages/08/fa/d7090ba3a49d2f3128905614a631757f056f045cdc833cbcd151d029e730/apache_flink-2.3.0-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0e5f612704de1610b153e919c0564b62ad513cddfcf4960f5a021658cdf41a13", size = 2838429, upload-time = "2026-06-22T01:26:17.898Z" },
-    { url = "https://files.pythonhosted.org/packages/bc/29/f9c17808f6bb0527fffbeda4969aaf28745b7a03ddaa814e5ca3626ffb86/apache_flink-2.3.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:561a5ca1a1505d1f9ac13971e43810fd235cddbc5ef9fbc642d9d31e29c46719", size = 2669265, upload-time = "2026-06-22T01:28:09.913Z" },
-    { url = "https://files.pythonhosted.org/packages/26/06/5e4bdbde40c9dec62eb5101c662a5099a9f6fee57b4aa1868850cadc91b5/apache_flink-2.3.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:12240243e83e03c702e5a0f52d66cb703fbfa525303a01b061950458cebb721b", size = 2648921, upload-time = "2026-06-22T01:28:17.071Z" },
-    { url = "https://files.pythonhosted.org/packages/85/e0/0cdeb70d7b862439b9fd350c6183b36dc29defb6875e4d9118d82e6be552/apache_flink-2.3.0-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c0608b3b5f57e252c2c26f7f963d7a1b5ba664172d6f76e8df237a4f159fbff3", size = 2886842, upload-time = "2026-06-22T01:28:22.991Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/03/c9d476274d4c89da0175c3e5ec71765c04e8fb2c5bc985348569731f94cf/apache_flink-2.2.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:4f6e9806676044ac712cd060e160de670714336ad372bf29262aface78a5a9a5", size = 2670012, upload-time = "2026-05-11T10:47:51.06Z" },
+    { url = "https://files.pythonhosted.org/packages/91/c1/8c3f364be6e94bb76e606fede0a430e63ff79b4c8fa7c64fb1934daf44b4/apache_flink-2.2.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:ae6b781459714fbbbc7d4dbb08d4e3cac2cb0a86bea9957de7d10d8c86fa17da", size = 2642821, upload-time = "2026-05-11T10:47:55.038Z" },
+    { url = "https://files.pythonhosted.org/packages/58/92/0aae6605ff5abd198a2512a7849c914b88f40d2b79b2e7245beb909e8710/apache_flink-2.2.1-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:870feec118107b654dd18be5b015575abbe8a8d857d08aeb8119062554bbe802", size = 2854775, upload-time = "2026-05-11T10:48:01.787Z" },
+    { url = "https://files.pythonhosted.org/packages/76/82/8b43f37df5a5dd4b684b5552ae74f56fa2a926de4bc95c797480f54c7626/apache_flink-2.2.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:751e5be76a43c4dac5c7efc7c2892998f1eb9efdab9dd3405bea0f22096e0cbf", size = 2669624, upload-time = "2026-05-11T10:48:05.573Z" },
+    { url = "https://files.pythonhosted.org/packages/49/57/775db8cfea6c293093cb2fef8ea69fdaffc83f336c6e84328f9b14c92e47/apache_flink-2.2.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:5953f66def90082056365c2d2662ed79b3470d93c49fed171fe7eac8596d31bd", size = 2642691, upload-time = "2026-05-11T10:48:11.742Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/86/30cccc4458d54868e533b9105fe2573d26d232d4b02d9dd464d0c7822abb/apache_flink-2.2.1-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a7e0e06e6e2a788b1e0c4f6225efe6a9bdcb6463db77080b99620c36c076cbab", size = 2819851, upload-time = "2026-05-11T10:48:15.378Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/b7/8391ab8abe17fc5afdebd57fd568c4d5da9404a35da35b60004030d81a92/apache_flink-2.2.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:990e187ecc8061eff81467920fd0cf9d30bb47b1b6c6143b7f8a07cab1a9aa0f", size = 2652797, upload-time = "2026-05-11T10:48:22.196Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/7a/29f860ce38e0e5badf3010f3bdf8d24986e9c7adf88b8aeeece815902afa/apache_flink-2.2.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ee1cc61e0a33fe437c70a0508a4848ac371e3c97f70c4d71871272d712e6469e", size = 2629683, upload-time = "2026-05-11T10:48:25.944Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/bb/c4603c395734edab8ebacc435ea09f50a324900767344a069d9f29a3522b/apache_flink-2.2.1-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5fab3a13e7cffd63c81af8d8250ac5bdc4418ab7995443aff5695689f37607d5", size = 2868062, upload-time = "2026-05-11T10:48:29.728Z" },
 ]
 
 [[package]]
 name = "apache-flink-libraries"
-version = "2.3.0"
+version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/28/18/a14423ca106f9200c11a41ff6c32b43e217eb0e063d8d4baeba50d95e611/apache_flink_libraries-2.3.0.tar.gz", hash = "sha256:570bf8831d3c1336311e924e97119e52d8842e5485a4a7709ff9a92db709b006", size = 329008299, upload-time = "2026-06-22T01:31:20.057Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b8/2c/14808bef075a611bc0d6ad19bddade9c3375587486236f41cb4cdc87f8d0/apache_flink_libraries-2.2.1.tar.gz", hash = "sha256:eec27ffa86d01184de7f5ab668c479c83cdb75ebc7fba8091307da4f1a9d3348", size = 312504331, upload-time = "2026-05-15T13:49:10.784Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/33/e4ee83e79da52516632a768a54380e5c4e7e505f16d4f56591d65fcd7e6c/apache_flink_libraries-2.3.0-py2.py3-none-any.whl", hash = "sha256:38ece876553286b3a285cf344c2d2038f8a7ca10da5df54d5107250386d64151", size = 329139814, upload-time = "2026-06-22T01:19:05.541Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/92/45c039bbc685a194c61ecccb3367457f855579123c330252c3eda4f90e4c/apache_flink_libraries-2.2.1-py2.py3-none-any.whl", hash = "sha256:74dc5546fbd9add8fbcdf1222a237e09491f9b80296241aef8676ec56f8e686e", size = 312587297, upload-time = "2026-05-15T13:55:02.154Z" },
 ]
 
 [[package]]
