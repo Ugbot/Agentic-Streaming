@@ -100,6 +100,13 @@ the Python and Clojure artifacts take their version from the release tag when on
 
 ### Removed
 
+- `ports/experimental/` and everything that needed it: the advisory CI jobs, the Dependabot
+  entries, and the docs pages for Celery, Kafka Streams, NATS, Pulsar, Temporal and the retired
+  parity matrix. The code as it stood is at
+  [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
+- The `celery`, `nats` and `ray` backends of `ports/agentic-pipeline`, its engine extras and
+  `BackendUnavailableError`. `local` is the only backend; any other name, including the
+  demonstration-only adapters, raises `ValueError`. The NATS quick start no longer works.
 - `docs/parity-matrix.md` in favour of the generated `docs/capabilities.md` (#51).
 - The never-consumed `ToolAllowlistUpdate` and `ToolAllowlistAction` control types (#36).
 - The Java sources of `ports/pekko`, replaced by a README pointer to `agentic-pekko/` (#38).
