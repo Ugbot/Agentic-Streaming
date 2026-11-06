@@ -67,10 +67,13 @@ taken between turns, so these do not exercise a failure in the window after the 
 
 `runtime.flink.state_ttl_ms` in the workflow document (read by `FlinkRuntimeOptions`) applies a
 Flink `StateTtlConfig` to the log, the sequence counter and the timer registry, with
-`OnCreateAndWrite` updates and `NeverReturnExpired` visibility. TTL bounds how long an idle
-conversation's log is retained; it does not change turn semantics
-(`WorkflowTurnFunctionMiniClusterTest.stateTtlExpiresTheConversationLog`). Without the option,
-retention is unbounded.
+`OnCreateAndWrite` updates and `NeverReturnExpired` visibility. Without the option, retention is unbounded.
+
+**Do not set this on a conversation that can stay active past the TTL.** Flink tracks TTL per list
+element and old elements are not refreshed, so the oldest events expire while the sequence counter
+lives on, the log stops being dense, and the fold throws. That failure repeats after a restore. Idle
+expiry also forgets a suspended turn and clears the `turn_id` dedupe window
+(`WorkflowTurnFunctionMiniClusterTest.stateTtlExpiresTheConversationLog`).
 
 ```yaml
 runtime:

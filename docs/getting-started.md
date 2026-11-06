@@ -201,20 +201,30 @@ MiniCluster with the test classpath.
 ./mvnw -q test -Dtest=FlinkConformanceTest
 ```
 
-Result on `main` on 2026-09-25 (the class runs the 24 fixtures plus two checks of its own):
+Result on 2026-11-06 (the class runs the 24 fixtures plus two checks of its own):
 
 ```
-Tests run: 26, Failures: 0, Errors: 0, Skipped: 3
+Tests run: 26, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-The skips are the fixtures whose capabilities the Flink binding declares `unsupported`. A skip is
-never a pass.
+A skip, when there is one, is never a pass.
 
 ### A `pipeline.yaml` through the Flink runner
 
 `FlinkPipelineRunner` assembles a real Flink job from a pipeline file: source, optional
 native CEP, `keyBy` on the conversation, the portable graph in a keyed operator, sink.
-`FlinkPipelineRunnerTest` drives `examples/pipelines/banking.yaml` through it:
+One turn through it on a local MiniCluster:
+
+```bash
+./mvnw -q -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
+```
+
+```
+c1 | path=payments | ok=true | [payments] get_balance returned 1234.56
+```
+
+`FlinkPipelineRunnerTest` drives the same file:
 
 ```bash
 ./mvnw -q test -Dtest=FlinkPipelineRunnerTest -Dsurefire.failIfNoSpecifiedTests=false
@@ -229,9 +239,9 @@ runner is called; it is the reference for embedding the runner in your own job.
 
 ### Durability
 
-Crash and restart durability on Flink is proven by
-`WorkflowTurnFunctionMiniClusterTest` (savepoint restart, checkpoint recovery after failure,
-and a registered timer surviving a savepoint restart):
+`WorkflowTurnFunctionMiniClusterTest` covers savepoint restart, checkpoint recovery after a failure
+that follows a checkpoint, and a registered timer surviving a savepoint restart. It does not cover a
+turn that ran after the last completed checkpoint; that turn runs again, tools included:
 
 ```bash
 ./mvnw -q test -Dtest=WorkflowTurnFunctionMiniClusterTest
@@ -318,7 +328,6 @@ time on them.
 | `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `Invalid classpath scope: provided` from exec-maven-plugin 3.2.0, which accepts only `compile`, `runtime` and `test`. |
 | the same with `test-compile` and `-Dexec.classpathScope=test` | `Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable` during job graph construction. |
 | `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample -Dexec.classpathScope=test` | `Initial state has no outgoing transitions` from `AgentBuilder.build()`, before any Ollama call. |
-| `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner -Dexec.classpathScope=test -Dexec.args=examples/pipelines/banking.yaml` | `Could not deserialize stream node 4: ... SimpleUdfStreamOperatorFactory` at job submission. The same runner passes inside `FlinkPipelineRunnerTest`. |
 
 There is no `MyFirstAgentExample` in the repository; an earlier version of this page invented
 it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem

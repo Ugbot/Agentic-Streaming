@@ -4,9 +4,10 @@ All notable changes to this project are documented in this file.
 
 The format follows Keep a Changelog (https://keepachangelog.com/en/1.1.0/) and the project
 follows Semantic Versioning for its artifacts as described in `docs/versioning.md`. Nothing has
-been released yet; every entry below is on `main` and unreleased. Entries name the pull request
-that delivered them. The artifact version on `main` is `1.0.0-SNAPSHOT` for the JVM modules;
-the Python and Clojure artifacts take their version from the release tag when one exists.
+been released yet; every entry below is on `main` and unreleased, and the project is experimental.
+Entries name the pull request that delivered them. The artifact version on `main` is
+`1.0.0-SNAPSHOT` for the JVM modules; the Python artifacts take their version from a tag when one
+exists.
 
 ## [Unreleased]
 
@@ -72,6 +73,10 @@ the Python and Clojure artifacts take their version from the release tag when on
 
 ### Changed
 
+- The project is marked experimental. The README, `docs/security.md` and the Flink Agents guide now
+  state what the code does today, and the claims that did not hold are gone (#99).
+- `tools/smoke-examples.sh` and `tools/check-jar-launch.sh` no longer need `examples-bin`.
+  `tools-mcp.yaml` and `banking-mcp.yaml` spawn `examples/pipelines/mcp_util_server.py` (#99).
 - Java 21 is the baseline for every JVM module, enforced by the build, with a committed Maven
   wrapper (#15).
 - Documentation was rewritten in plain prose without en and em dashes, emoji or marketing
@@ -100,6 +105,20 @@ the Python and Clojure artifacts take their version from the release tag when on
 
 ### Removed
 
+- `pyflink/`, `python/`, `agentic-clj/`, `tool-services/`, `a2a-gateway/`, `banking-job/`,
+  `banking-kb/`, `notebooks/` and `examples-bin/`, with the compose files, Dockerfile, env examples
+  and scripts that only served them. Their entries in the reactor, CI, Dependabot and the conformance
+  runner went too. The code as it stood is at
+  [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone) (#99).
+- The publish workflows and release scripts: nothing is published, and the PyPI name `pyagentic`
+  belongs to someone else (#99).
+- `plugins/flintagents`, the `flink-agents` Maven profile, and the root module's `plan`, `python`,
+  `session` and `compile` packages, which only the moved Python facades reached (#99).
+- `docs/capabilities.md` and the matrix excerpts: the file named a commit outside this repository and
+  reported a scripted stub as a supported LLM brain. Results now come from the Conformance workflow
+  (#99).
+- `docs/audit-backlog.md`, `docs/release.md`, `docs/inventory.md`, `docs/compose.md` and the OpenAI
+  guide for the removed plugin (#99).
 - `ports/experimental/` and everything that needed it: the advisory CI jobs, the Dependabot
   entries, and the docs pages for Celery, Kafka Streams, NATS, Pulsar, Temporal and the retired
   parity matrix. The code as it stood is at

@@ -1,760 +1,192 @@
 # Agentic Streaming
 
-Agentic Streaming builds agents as streaming, stateful, event-sourced systems: an agent's
-state is a materialized view over an ordered log of events, one writer per conversation.
-Apache Flink is the most complete runtime. The same agent spec is conformance tested on seven
-runtimes across Python, the JVM, and Clojure (see [Runtimes](#runtimes)).
+> **Status: experimental and pre-release.** There are no published packages. This project is **not
+> safe to use for real payments or other non-idempotent actions yet**: known failures include tool
+> calls re-running after a Flink restore. See [Known failures](#known-failures).
 
-The project was called Agentic Flink. It started as an agent framework for Apache Flink
-and grew past the name; Flink is still the richest runtime, but no longer the only one.
+Agentic Streaming is a portable specification for durable, auditable agents over streaming data,
+with a conformance suite and runtimes on Apache Flink, plain Python and Apache Pekko. An agent's
+state is a fold over an ordered log of events, with one writer per conversation.
 
-Licensed under [Apache 2.0](LICENSE).
+The project was called Agentic Flink. Licensed under [Apache 2.0](LICENSE).
 
-## Why streaming engines
+## Supported runtimes
 
-Agents that do real work (moving money, resolving tickets, answering customers) have to
-survive traffic spikes, node failures, and replayed messages. Streaming engines already
-solve that: durable keyed state, exactly-once or idempotent processing, backpressure, and
-automatic recovery. Putting agents on top of one means the agent you prototype is the
-agent that runs in production, and you get to pick the engine that matches your scale.
+Flink is the primary runtime. All three are built on the Java core or the Python core and measured
+against the [reference spec](spec/v1/primitives.md).
 
-## What you can build
+| Runtime | Built on | What it adds | Page |
+|---|---|---|---|
+| **Apache Flink (Java)**, primary | `ports/jagentic-core`, in the root module | Keyed event log in Flink state, savepoint restart, CEP. **The Flink adapter blocks on model and tool calls today**: a whole turn runs synchronously on the task thread | [Flink](docs/runtimes/flink.md) |
+| Plain Python | `ports/pyagentic` | No JVM and no infrastructure | [pure Python](docs/runtimes/python.md) |
+| Apache Pekko | `ports/jagentic-core`, in `agentic-pekko` | One event-sourced, cluster-sharded actor per conversation | [Pekko](docs/runtimes/pekko.md) |
 
-| Capability | How it works |
-|------------|--------------|
-| Agents over live event streams | Kafka, Postgres CDC, Redis pub/sub, webhooks, Fluss, ZeroMQ, and static seeds are all `Channel<T>` on Flink; many channels can fan into one agent |
-| Routing and chaining with checkable outcomes | a `router -> path -> verifier` graph dispatches each turn and validates the reply, with input/output guardrails and reproducible rule brains that need no model |
-| Almost any function as a tool | `@Tool` methods, async `ToolExecutor`s, MCP servers (stdio and HTTP/SSE), DJL models, and HTTP endpoints, all in one `ToolRegistry` |
-| Agents that call other agents | A2A treats a peer agent as a tool: in-process, over the `a2a-gateway` (Agent Card, JSON-RPC, and SSE; no gRPC or REST server is implemented), or as an explicit pipeline step, with retries and circuit breaking |
-| State that survives failure | per-conversation memory plus keyed state, with durability from the engine where a runtime-specific test proves it: Flink checkpoints and savepoints, Pekko persistence, Datomic on Clojure. See [Runtimes](#runtimes) for the tests |
-| Exactly-once where the engine provides it | Flink checkpointed state; idempotent (effectively-once) elsewhere, with the `ConversationStore` as the source of truth. |
-| Long-running work with the saga pattern | compensation handlers unwind a multi-step flow when a later step fails; the Pekko runtime adds durable, retried, human-in-the-loop workflows |
-| Pattern detection across events (CEP) | a declarative [`cep:`](docs/portability/stream-stateful-core.md) block ("3 anomalies on one host within 5 min, escalate") fires a tool or a derived event; portable on every core ([`incident.yaml`](examples/pipelines/incident.yaml)) and native on Flink, alongside timers, windows, replay, and suspend/resume |
-| Most data systems | memory, vectors, and long-term storage are SPIs (Postgres, Redis/Valkey, Fluss, pgvector/Qdrant) chosen by a connection link, swappable without touching agent code |
-| One definition, many deployments | define the agent in a [`pipeline.yaml`](docs/portability/pipelines.md) and run the same spec on Flink, Pekko, Clojure, or the Python and Java cores |
+The contract is the `agentic/v1` spec under [`spec/v1`](spec/v1/primitives.md), its reference runtime
+and the 24 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
+mostly rule brains and scripted stubs. They do not cover a real model, a crash inside a turn, or a
+failed compensation, so a pass is a narrow claim; see
+[conformance results](docs/runtimes/README.md#conformance-results).
 
-## Runtimes
+Everything else was moved out of this repository. The code as it stood is at
+[tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone); the
+[list is here](docs/runtimes/experimental.md).
 
-The contract is the agentic/v1 spec under [`spec/v1`](spec/v1/primitives.md) and the 24
-fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). A runtime counts as
-conformance tested only if it runs those fixtures through its own binding and reports the
-result into the generated [capability matrix](docs/capabilities.md). Today that is seven
-runtimes and two facade bindings:
+## Known failures
 
-| Runtime | Binding | Notes | Page |
-|---------|---------|-------|------|
-| reference | `spec/tools/reference_runtime.py` | the oracle for the fixtures, not a production runtime | [common primitives](docs/runtimes/common-primitives.md) |
-| jvm-core | `ports/jagentic-core` JUnit `ConformanceTest` | the Flink-free Java core | [common primitives](docs/runtimes/common-primitives.md#the-cores) |
-| flink | root module JUnit `FlinkConformanceTest` | the Flink framework, on a local MiniCluster | [Flink](docs/runtimes/flink.md) |
-| pekko | `agentic-pekko` JUnit `PekkoConformanceTest` | event-sourced actors | [Pekko](docs/runtimes/pekko.md) |
-| clojure | `agentic-clj` `agentic.conformance/run-all` | pure Clojure on Datomic | [Clojure](docs/runtimes/clojure.md) |
-| python | `ports/pyagentic` `agentic.conformance:matrix_binding` | the pure Python core | [pure Python](docs/runtimes/python.md) |
-| pyflink | `pyflink` `agentic_pyflink.conformance` | PyFlink operators | [PyFlink](docs/runtimes/pyflink.md) |
-| python-jvm, python-flink | `python/agentic_flink` `conformance.run_all` | the JPype facade over jvm-core and over Flink | [Python facade](docs/runtimes/python-facade.md) |
-
-Which capability each of them passes, skips, or fails is in
-[`docs/capabilities.md`](docs/capabilities.md), regenerated from a run of the fixtures. A
-skipped fixture is an explicit `unsupported` declaration, never a pass. What each runtime is
-made of, and what agentic/v1 guarantees on all of them, is under
-[`docs/runtimes/`](docs/runtimes/README.md).
-
-Crash durability is a separate claim. `durable_store: supported` in the matrix means the three
-fixtures that require it (`replay-after-restart`, `suspend-resume`, `timer-survives-restart`)
-passed with whatever store the binding declares, which for most bindings is an in-process store
-that the binding tears down and rebuilds from the log inside one test process. `partial` means
-the binding skipped one of them (the JVM bindings skip `timer-survives-restart`). Durability
-across a real process or cluster restart is proven only by these runtime-specific tests:
-
-| Runtime | Tests |
-|---------|-------|
-| flink | `WorkflowTurnFunctionMiniClusterTest` (savepoint restart, checkpoint recovery after failure, timers surviving a savepoint restart) |
-| pekko | `ConversationEntityTest` (journal replay on restart, suspended turn across restart) and `RedisJournalIT` (whole-system restart from Redis, durable timer fires once) |
-| clojure | `test/agentic/datomic_test.clj` (a new system over the same Datomic stores replays state) and `runtime_test.clj` |
-| python | `ports/pyagentic/tests/test_agentic_runtime.py` (file store survives a fresh runtime, suspend and resume across restart) and `test_timers.py` |
-| jvm-core | `SpecSemanticsTest` (suspended turn resumes after restart from the log alone) |
-
-### Experimental adapters
-
-The experimental adapters were moved out of this repository.
-The code as it stood is available at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/ports/experimental).
+- **Tool calls re-run after a Flink restore.** Flink state rolls back to the last checkpoint and the
+  outside world does not. A turn that ran after that checkpoint runs again on redelivery, tools and
+  model calls included. Tools receive no idempotency key, so the second call looks like a new one.
+  The same happens to a turn that crashes before finishing on the other runtimes.
+- **A failing compensation escapes the turn.** No terminal event is written, and on Flink the job
+  goes into a restart loop that repeats the forward effects.
+- **`state_ttl_ms` can crash a Flink job permanently** for a conversation that stays active past the
+  TTL.
+- **An uncaught exception in a turn fails the whole Flink job.** There is no dead-letter path.
+- **No real model on the canonical paths.** On Flink and in the `agentic` Python package only a
+  scripted stub runs. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) still sits on the older
+  `pyagentic` package, which has real model clients but no event log.
+- **The tool allowlist is not a security control, and the canonical path has no authentication.** See
+  [security](docs/security.md).
+- **The full Java test run is red.** `AgentJobGeneratorGraphTest` fails in full runs and passes alone,
+  because of an order assumption in the test, and `AgentExecutorTest` is flaky on timing.
+- **There is no supported way to run a `pipeline.yaml` from Kafka on a Flink cluster.**
 
 ## Quick start
 
-The same banking agent runs on whichever runtime you like. One
-[`pipeline.yaml`](examples/pipelines/banking.yaml) describes a router/path/verifier graph
-with a tool, a knowledge base, and a guardrail, and runs unchanged everywhere.
+Needs Java 21 and Python 3.9 or later. The JVM commands use the committed wrapper (`./mvnw`).
+Every command in the block below was run from a fresh clone, on Java 21 and Python 3.13 on macOS
+arm64, and passed. Each answers on path `payments` with a balance of `1234.56`.
 
 ```bash
 git clone https://github.com/Ugbot/Agentic-Streaming.git && cd Agentic-Streaming
-```
 
-Every command below was run from a fresh clone with Java 21 and Python 3.11 or later. The
-JVM lanes use the committed Maven wrapper (`./mvnw`); a system `mvn` older than 3.9 is
-rejected by the build.
+# Plain Python, no model, no infrastructure
+python3 -m venv .venv
+.venv/bin/pip install -e ports/pyagentic -e ports/agentic-pipeline
+.venv/bin/python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
 
-```bash
-# Python, model-free, no infrastructure. Install the Python core and put the
-# pipeline loader on the path first; the loader is not a package on PyPI.
-python -m pip install -e ports/pyagentic
-PYTHONPATH=ports/agentic-pipeline \
-python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+# The spec and the reference runtime
+.venv/bin/python spec/tools/validate_spec.py
+.venv/bin/python spec/tools/run_conformance.py
 
-# Agentic Pekko: the same spec on an event-sourced actor runtime.
-# Build order matters: install the Flink-free Java core first, then compile Pekko.
+# The Java core; every JVM command below needs this first
 ./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests
-./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
-  -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
+./mvnw -q -f ports/jagentic-core/pom.xml exec:java -Dexec.mainClass=org.jagentic.core.pipeline.PipelineCli \
   -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
 
-# Agentic Clojure: pure Clojure on Datomic (needs the Clojure CLI)
-cd agentic-clj && clojure -M:run && cd ..
+# Apache Pekko
+./mvnw -q -f agentic-pekko/pom.xml compile exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
 
-# Apache Flink: the code-first framework. Compiles 400 or so sources, then runs
-# the unit suite including the Flink conformance binding on a local MiniCluster.
-./mvnw -q -f ports/jagentic-core/pom.xml install -DskipTests   # once, if not done above
-./mvnw clean test
+# Apache Flink: one turn through a real job on a local MiniCluster
+./mvnw -q -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
+  -Dexec.args="examples/pipelines/banking.yaml --text 'what is my balance?'"
 
-# Every first-class JVM module (jagentic-core, the Flink framework, Pekko, the PyFlink
-# bridge, the tool services, the banking job) in one build, in dependency order, tests
-# included. Add -P a2a-gateway for the Quarkus A2A gateway. This is what CI runs.
-./mvnw -f reactor/pom.xml verify
-
-# Optional infrastructure for the LLM examples (Ollama, Postgres, Redis):
-podman compose up -d && podman compose exec ollama ollama pull qwen2.5:3b
+# The Flink conformance binding, and the runner's tests
+./mvnw test -Dtest='FlinkConformanceTest,FlinkPipelineRunnerTest'
 ```
 
-The Python, Pekko, and Clojure lanes each answer with path `payments` and a balance of
-`1234.56`. The full walkthrough is in
-[the banking agent on every runtime](docs/examples/banking-everywhere.md).
+**Not listed as working:** `./mvnw clean test` and `./mvnw -f reactor/pom.xml verify` build everything
+but do not pass, because of the flaky tests under [Known failures](#known-failures).
+`./mvnw -f reactor/pom.xml -DskipTests verify` passes, which shows the build and nothing about the
+tests.
 
-Two commands that earlier versions of this page listed do not work from a fresh clone and
-are not part of the quick start until the code owner fixes them (tracked in
-[`docs/audit-backlog.md`](docs/audit-backlog.md), AGS-40):
+The walkthrough is in [the banking agent on every runtime](docs/examples/banking-everywhere.md) and
+[getting started](docs/getting-started.md).
 
-- `./mvnw exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample` compiles
-  with `-Dexec.classpathScope=compile` but fails in `AgentBuilder.build()` with
-  `Initial state has no outgoing transitions`, before any model is called.
-- `./mvnw exec:java -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner ...`
-  fails on the compile classpath because `flink-connector-datagen` is test scoped, and on
-  the test classpath fails at job submission with `Could not deserialize stream node`. The
-  Flink lane of the pipeline runner is exercised by `FlinkPipelineRunnerTest` and
-  `FlinkConformanceTest` under `./mvnw test`, not by a standalone command. The root
-  `pom.xml` does not declare `exec-maven-plugin`; Maven resolves the latest version on
-  the fly.
+## The model
 
-<details>
-<summary><b>Build an agent: Flink Java DSL</b></summary>
+A conversation is an ordered log of events: turns, tool results, routing decisions. The agent's
+state is the value you get by folding that log.
 
-```java
-Agent agent = Agent.builder()
-    .withId("research-bot")
-    .withSystemPrompt("You are a research assistant.")
-    .withChatConnection(LangChain4jChatConnection.ollama("http://localhost:11434"))
-    .withChatSetup(ChatSetup.builder()
-        .withModel("qwen2.5:7b")
-        .withTemperature(0.3)
-        .withMaxResponseTokens(2048)
-        .withOutputSchema(OutputSchema.of(ResearchVerdict.class))
-        .build())
-    .withMcpServer(McpServerSpec.stdio("calc", "npx", "-y", "mcp-server-calculator"))
-    .withSkill(Skill.builder()
-        .withName("citations")
-        .withTools("doc-fetch", "summarize")
-        .withSystemPromptFragment("Prefer primary sources. Cite arxiv IDs.")
-        .build())
-    .withListener(new LoggingAgentEventListener(), new MetricsAgentEventListener())
-    .withMaxIterations(10)
-    .build();
+- **Event sourcing:** state is derived from the log, which gives replay and audit of what the log
+  holds. Model output is not in the log.
+- **CQRS:** a command ("process this turn") is an ordered mutation with one writer per conversation;
+  a query reads the view.
+
+One turn is the same pipeline on every runtime. The logic lives in the core; each runtime supplies
+ordering and durability.
+
+```
+        Event in
+            |
+            v
+        input guardrails        regex or classifier: block or allow
+            |
+            v
+        router                  keyword: pick a path
+            |
+            v
+        path brain              rule, or a bounded LLM loop
+            |                   tools, MCP, A2A peers, retrieval, context window
+            v
+        verifier                validate the reply
+            |
+            v
+        Reply out, plus events appended to the conversation log
 ```
 
-Every `with*` method is optional; defaults are discovered via `ServiceLoader`. The minimum
-viable agent is `Agent.builder().withId(...).withSystemPrompt(...).build()`.
+| Runtime | One writer per conversation | Durability of the log |
+|---|---|---|
+| Flink | `keyBy` and a keyed operator | Checkpoints and keyed state, so it rolls back to the last checkpoint |
+| Pekko | Actor mailbox and cluster sharding | Pekko Persistence journal |
+| Plain Python | A per-conversation gate | In memory, or a JSONL file |
 
-Every public `with*` method is consumed by an operator of the job graph and asserted in
-`src/test/java/org/agentic/flink/dsl/AgentBuilderTest`; see
-[`docs/reference/agent-framework.md`](docs/reference/agent-framework.md) for the method to
-operator table. Vector memory is not an `AgentBuilder` option: use `FlinkStateVectorMemory`
-or `FlinkStateHnswVectorMemory` directly in the operator, or the retrieval pipeline.
-
-</details>
-
-<details>
-<summary><b>Build an agent: Python</b></summary>
-
-The Python API has two levels on the same agentic/v1 workflow, documented in
-[`docs/python.md`](docs/python.md): a high-level `load(...)` / `Agent` / `run(runtime=...)` API
-and a full-control `Runtime.deploy(spec)` API, each available on pure Python
-(`ports/pyagentic`), the JVM core and Flink through the JPype facade (`python/`), and PyFlink
-(`pyflink/`). One workflow, one line to pick the runtime:
-
-```python
-from agentic_flink import load   # or: from agentic import load  (pure Python)
-
-spec = load("spec/conformance/v1/workflows/support.yaml")
-result = spec.run(runtime="flink-jvm", text="what is my balance?", conversation_id="c1", turn_id="t1")
-```
-
-The facade also keeps the legacy Flink DSL (`Agent.builder()` and `@tool`), a pure-Flink API
-outside the agentic/v1 conformance matrix:
-
-```python
-import agentic_flink as af
-from agentic_flink import Agent, ChatSetup, flink_jars, langchain4j_ollama, tool
-
-af.start_jvm(extra_jars=flink_jars())
-
-@tool
-def add(a: int, b: int) -> int:
-    """Add two numbers."""
-    return a + b
-
-agent = (
-    Agent.builder()
-        .with_id("calc-bot")
-        .with_system_prompt("You are a calculator.")
-        .with_chat_connection(langchain4j_ollama())
-        .with_chat_setup(ChatSetup(model="qwen2.5:3b"))
-        .with_tools(add)
-        .build()
-)
-```
-
-Full guide: [`docs/python.md`](docs/python.md); the three Flink surfaces are told apart in
-[`docs/pyflink.md`](docs/pyflink.md). Examples live under `python/agentic_flink/examples/` and
-`docs/snippets/python/`.
-
-</details>
-
-<details>
-<summary><b>Build an agent: Agentic Pekko (actors)</b></summary>
-
-The agent brain is reused verbatim from the Flink-free core; only the actor and persistence
-shell is Pekko, with one event-sourced, sharded entity per conversation. Run any
-`pipeline.yaml` on it, or expose it over HTTP:
-
-```bash
-# HTTP front door (Agent Card + POST /agent), A2A-interoperable
-mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
-curl -XPOST localhost:8080/agent -H 'content-type: application/json' \
-  -d '{"conversation_id":"c1","user_id":"u","text":"what is my balance?"}'
-
-# durability demo: passivate the entity, watch it rehydrate from the event journal
-mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.RecoveryDemo
-```
-
-Durability profiles (memory, Postgres, Cassandra, Redis) are config-only. Full guide:
-[`agentic-pekko/README.md`](agentic-pekko/README.md).
-
-</details>
-
-<details>
-<summary><b>Build an agent: Agentic Clojure (Datomic)</b></summary>
-
-An idiomatic Clojure implementation: brains, routers, and verifiers are functions, and the
-transcript is immutable Datomic datoms, so history is time-travellable. Requires the
-[Clojure CLI](https://clojure.org/guides/install_clojure).
-
-```clojure
-;; brains are just functions; the graph is data
-(defn balance-brain [user-text ctx]
-  (str "[payments] Your balance is " (ctx/call-tool ctx "get_balance" {})))
-```
-
-```bash
-cd agentic-clj
-clojure -M:run            # banking demo (multi-turn, persisted state)
-clojure -M:http           # HTTP front door on :8080
-clojure -M:time-travel    # replay the transcript `as-of` an earlier point
-```
-
-Full guide: [`agentic-clj/README.md`](agentic-clj/README.md).
-
-</details>
-
-## Deploy anywhere
-
-Flink is the feature-richest runtime, but the agent itself is engine-agnostic. Prototype on
-the embedded local runtime, then take the same file to Pekko or Flink.
-
-```yaml
-# pipeline.yaml: prompts, tools, calls to other agents, retrieval, guardrails, stores
-# The Python loader accepts backend: local and raises ValueError for anything else.
-# The Pekko, Flink, and Clojure runtimes take the same file through their own entry
-# points (PipelineMain, FlinkPipelineRunner, agentic.pipeline) and override this key.
-backend: local
-agent:
-  router:  { kind: keyword, default: general, rules: { payments: [balance], cards: [card] } }
-  paths:
-    payments: { brain: llm, prompt: "You are a payments specialist.", tools: [get_balance] }
-    cards:    { brain: rule, prompt: "You answer card questions." }
-    general:  { brain: rule, prompt: "You answer general questions." }
-tools:   [ { id: get_balance, kind: constant, value: 1234.56 } ]
-stores:  { conversation: { kind: redis, url: "${AGENTIC_REDIS_URL}" } }
-```
-
-External services (Redis/Valkey, Kafka/Fluss, Postgres) sit behind interfaces and come
-up via [`examples/compose/externals.yml`](examples/compose/externals.yml).
-
-See the [pipeline reference](docs/portability/pipelines.md), the generated
-[capability matrix](docs/capabilities.md) and the [runtime pages](docs/runtimes/README.md) for
-what each conformance tested runtime can and cannot do, and
-[choosing a backend](docs/portability/choosing-a-backend.md).
-
-## The model: an agent as a materialized view over a stream of events
-
-A conversation is not a request/response call. It is an ordered log of events (turns, tool
-results, model outputs, routing decisions), and the agent's state is the value you get by
-replaying that log.
-
-Two familiar patterns follow from that:
-
-- Event sourcing: the log is the source of truth and state is derived. That is the
-  durability, replay, audit, and recovery story, which each engine implements differently
-  (Flink checkpoints, Pekko persistence, Datomic on Clojure).
-- CQRS: a command ("process this turn") is an ordered, single-writer-per-conversation
-  mutation, while a query ("what is the current answer or state?") is a fan-out read of the
-  view. Separating them lets a conversation be both a durable keyed entity and a stream.
-
-Every engine here does the same thing underneath: materialize a series of events into a
-value, in order, durably, per key. See the
-[capability inventory](docs/portability/00-essence-and-core-abstractions.md).
+What the spec aims to make true: state is exactly-once, effects are at-least-once under a stable key,
+and anything that cannot take a key is an explicit human decision. Only the first part holds today,
+and only on Flink within its checkpoints.
 
 ## What is in the repository
 
-| Component | What it is | Start here |
-|-----------|------------|------------|
-| Flink framework | the full agent framework on Apache Flink: state-first memory, vector memory, CEP, chat/embedding/tool/inference SPIs, A2A, RAG, PyFlink | this README |
-| Agentic Pekko | the agent core on Apache Pekko actors: one event-sourced, cluster-sharded entity per conversation (single-writer, durable, recoverable), async turns, `backend: pekko`, Pekko HTTP and Kafka Streams front doors, durability on memory/Postgres/Cassandra/Redis | [`agentic-pekko/`](agentic-pekko/) |
-| Agentic Clojure | the agent core in pure Clojure (no Java-core dependency) on Datomic: each message is an immutable datom, so the transcript is an event log with time-travel; functions for brains, routers, and verifiers, the FNV embedder at byte-parity, an EDN and YAML pipeline loader, http-kit and MCP-stdio front doors | [`agentic-clj/`](agentic-clj/) |
-| Portability pack | two Flink-free cores (`pyagentic`, `jagentic-core`), both conformance tested (see [Runtimes](#runtimes)). The cores are standalone agent frameworks: LLM and embedding libraries, structured output, skills, MCP and A2A clients, saga, context-window management, an in-process HNSW index, vector/long-term/conversation store SPIs (Qdrant, Postgres, Redis), web toolkit, and a DL inference SPI | [`ports/`](ports/) |
-| Declarative pipelines | one `pipeline.yaml` (or EDN), with loaders in Python, the JVM, and Clojure | [`pipelines.md`](docs/portability/pipelines.md) |
-| Tool services | the toolkit (web scraping, Tika, RAG, inference, utilities) as standalone, framework-agnostic tools any LLM or framework can call over MCP, REST, gRPC, or Kafka/Redis (Quarkus, no Flink) | [`tool-services/`](tool-services/), [`tool-services.md`](docs/portability/tool-services.md) |
-| Runtime pages | what each conformance tested runtime is made of, with a matrix excerpt per page | [`docs/runtimes/`](docs/runtimes/README.md) |
-| Design docs | per-engine mapping, choosing a backend | [`docs/portability/`](docs/portability/) |
+| Path | What it is |
+|---|---|
+| [`spec/`](spec/README.md) | `agentic/v1`: the primitives, schemas, fixtures, reference runtime and conformance runner |
+| [`ports/jagentic-core`](ports/jagentic-core/README.md) | The Java core |
+| [`ports/pyagentic`](ports/pyagentic/README.md) | The Python core: the conformance-tested `agentic` package and the older `pyagentic` package |
+| [`ports/agentic-pipeline`](ports/agentic-pipeline/README.md) | The `pipeline.yaml` CLI; `local` is its only backend |
+| Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) and, for now, the deprecated legacy Flink DSL and its examples |
+| [`agentic-pekko`](agentic-pekko/README.md) | The Pekko runtime |
+| [`examples/pipelines`](examples/pipelines) | Example workflow documents |
+| `reactor/` | The Maven parent and aggregator for the JVM modules |
 
-## Architecture
+The legacy DSL (`Agent.builder()` under `org.agentic.flink.dsl`) is outside the spec and no fixture
+measures it. It is still in the root module and will be removed in a later change.
 
-<details open>
-<summary><b>The agent turn (every runtime)</b></summary>
+## Documentation
 
-One turn is the same pipeline everywhere. The logic lives in a Flink-free core; each runtime
-supplies only the seam that runs it, which is ordering plus durability.
-
-```
-        Event in  (a Channel / HTTP / Kafka / queue / seed)
-                        |
-                        v
-        +-------------------------------+
-        |  input guardrails             |   regex, classifier: block or allow
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  router                       |   keyword or LLM: pick a path
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  path brain                   |   rule | ReAct LLM loop
-        |    - ToolRegistry (+ MCP)     |   call functions / peer agents (A2A)
-        |    - retrieval (hot + cold)   |   RAG over the embedder + vector store
-        |    - context-window (MoSCoW)  |
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  verifier                     |   validate the reply (prefix, schema)
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  output guardrails -> listeners|  logging, metrics, custom hooks
-        +---------------+---------------+
-                        v
-        Reply out  +  one ordered append to the durable conversation log
-```
-
-The runtime supplies ordering and durability; the agent code is identical.
-
-| Runtime | single-writer ordering | durability of the log |
-|---------|------------------------|-----------------------|
-| Flink | keyBy / keyed operator | checkpoints + keyed state |
-| Agentic Pekko | actor mailbox + cluster sharding | event-sourced persistence |
-| Agentic Clojure | per-conversation serialize | Datomic immutable datoms (with time-travel) |
-
-See the [capability inventory](docs/portability/00-essence-and-core-abstractions.md) for the
-engine-agnostic core and the per-engine seam.
-
-</details>
-
-<details>
-<summary><b>Flink-runtime specifics</b></summary>
-
-On Flink the loop also offers CEP pattern matching (validation, escalation, saga
-compensation), Flink-state-first short-term memory (`ValueState`/`MapState` with
-`StateTtlConfig`, durable via checkpoints and with no external hot tier), and in-JVM vector
-memory over Flink state (`FlinkStateHnswVectorMemory`):
-
-```
-        Events (any Channel<T>: Kafka / Postgres / Redis / webhook / seed)
-                        |
-                        v
-        +-------------------------------+
-        |  Flink CEP pattern matching   |   validation, escalation, compensation
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  Agent loop                   |   ChatConnection (SPI), ToolRegistry + MCP
-        |                               |   ReAct / workflow / custom
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  Context management            |  MoSCoW 5-phase compaction
-        |                               |   embedder-driven relevancy
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  Memory                        |  short-term: Flink keyed state (+TTL)
-        |                               |   vector: Flink MapState KNN
-        |                               |   long-term: Postgres (optional)
-        +---------------+---------------+
-                        v
-        +-------------------------------+
-        |  Listeners (SPI)               |  logging, metrics, custom
-        +-------------------------------+
-```
-
-Short-term memory is Flink-state-first: checkpoints provide durability and TTL runs
-incrementally inside the state backend. Long-term storage is opt-in, for conversation
-resumption across job lifetimes and fact archival.
-
-</details>
-
-## Reference
-
-<details>
-<summary><b>Features shared by every runtime</b></summary>
-
-These are portable and identical on Flink, Pekko, Clojure, the cores, and every
-backend, enforced by cross-core parity tests.
-
-- Routed graph: `router -> path -> verifier` with input/output guardrails (regex and
-  classifier) and reproducible rule brains that need no model.
-- LLM brain: a bounded ReAct loop over a `ChatClient` SPI (Ollama, OpenAI, stub) with
-  structured output.
-- Tools: one `ToolRegistry` holding functions, MCP servers (stdio and HTTP/SSE), and HTTP,
-  shared by every brain.
-- A2A: a peer agent is just a tool (card, send, retries), in-process or over a gateway.
-- Retrieval: the FNV-1a hashing embedder (byte-identical across languages), cosine
-  similarity, and a two-tier hot/cold retriever with an in-process HNSW cold tier.
-- Skills: bundle tools, a prompt fragment, and required facts onto a path.
-- Context window: MoSCoW compaction of the replayed transcript to a token budget.
-- Saga and compensation: reverse-order rollback of a multi-step flow.
-- Listeners: lifecycle hooks for logging, metrics, and custom handlers.
-- Declarative pipeline: the whole agent as one `pipeline.yaml`, or EDN in Clojure.
-- Stores behind SPIs: conversation, keyed-state, long-term, and vector, swappable per
-  runtime.
-
-</details>
-
-<details>
-<summary><b>Flink-runtime features</b></summary>
-
-- Flink-state-first memory: short-term memory is `ValueState`/`MapState` with
-  `StateTtlConfig`, and checkpoints provide durability with no external hot tier.
-- In-JVM vector memory over Flink state: brute-force KNN or HNSW
-  (`FlinkStateHnswVectorMemory`), with an SPI escape hatch for external HNSW backends.
-- Named, shareable corpora: `Corpus` with three flavours (single-operator, broadcast,
-  external) so ingest and retrieve share one index.
-- Unified `Channel<T>` SPI: Kafka, Postgres CDC, Redis pub/sub, webhook, static seeds, and
-  LLM-driven tool invocations; many channels union into one operator.
-- Web toolkit: Jsoup, crawler-commons, and Apache Tika behind `WebFetchTool`, `CrawlerCore`,
-  and `DocumentExtractor`.
-- Postgres-default long-term storage: resumption and fact archive via `LongTermMemoryStore`,
-  with Redis optional.
-- Chat-model SPI: `ChatConnection` (transport) split from `ChatSetup` (per-agent model,
-  temperature, structured output). LangChain4J is the default implementation, not the API.
-- Embedder SPI: `EmbeddingConnection`, `EmbeddingSetup`, and `EmbeddingClient`; the default
-  talks to a local Ollama.
-- MCP support: `tools/mcp/` wraps Model Context Protocol servers (stdio and HTTP/SSE) as
-  ordinary `ToolExecutor`s.
-- Traditional DL models: an `inference/` SPI for classifiers, scorers, embedders, and
-  generic models (DJL with PyTorch, TensorFlow, ONNX, HuggingFace). Use them as tools,
-  guardrails, the scorer's backend, or standalone.
-- Structured output: `OutputSchema<T>` infers JSON Schema from Lombok POJOs and parses LLM
-  responses via Jackson.
-- ReAct agent: `ReActProcessFunction` packages the thought/action/observation loop, bounded
-  by `getMaxIterations()`.
-- Skills: bundle tools, a system-prompt fragment, and required facts through
-  `AgentBuilder.withSkill(...)`.
-- Listeners: the `AgentEventListener` SPI (nine lifecycle hooks), with
-  `LoggingAgentEventListener` and `MetricsAgentEventListener` included.
-- CEP-driven orchestration: Flink CEP patterns drive validation, escalation, and saga
-  compensation.
-- `@Tool` annotation discovery: LangChain4J-annotated tools, MCP tools, and `ToolExecutor`s
-  share one `ToolRegistry`.
-
-</details>
-
-<details>
-<summary><b>Pekko-runtime features</b></summary>
-
-- Event-sourced sharded entity: one `EventSourcedBehavior` per conversation. The mailbox
-  gives single-writer ordering, the journal gives durability and recovery, and cluster
-  sharding gives one live entity per id across the cluster.
-- Async turns: `graph.handle` runs off the actor thread (blocking dispatcher plus
-  `pipeToSelf`) and stashes concurrent turns. One `TurnCommitted` event per turn, with
-  `turnId` dedupe for at-least-once ingress.
-- Durability profiles, config-only: in-memory, Postgres (`pekko-persistence-jdbc`),
-  Cassandra, or Redis (write-through).
-- Front doors: Pekko HTTP (Agent Card and `POST /agent`) and a backpressured Pekko Streams
-  Kafka flow.
-- `backend: pekko`: any `pipeline.yaml` runs on the actor runtime via the `BackendProvider`
-  SPI (`PipelineMain`). See [`agentic-pekko/`](agentic-pekko/).
-
-</details>
-
-<details>
-<summary><b>Clojure-runtime features</b></summary>
-
-- Idiomatic Clojure with no Java-core dependency: brains, routers, and verifiers are
-  functions, the registry is a map, and a turn is a pure transform over a context map.
-- Datomic storage: each message is an immutable datom, so the transcript is an event log,
-  and `as-of` replays any past state. The same client API covers in-process
-  `com.datomic/local`, Datomic Pro, and Cloud.
-- EDN and YAML pipeline loader: the shared schema, parsed natively, running `banking`,
-  `banking-llm`, and `banking-rag`.
-- Front doors: http-kit (Agent Card and `POST /agent`) and a JSON-RPC MCP stdio server over
-  the tool registry. See [`agentic-clj/`](agentic-clj/).
-
-</details>
-
-<details>
-<summary><b>Pluggable surfaces (SPI summary)</b></summary>
-
-| Concern | Interface | Default | Discovery |
-|---------|-----------|---------|-----------|
-| Short-term memory | `memory.ShortTermMemorySpec` | `FlinkStateShortTermMemory` | `ServiceLoader` + builder |
-| Vector memory | `memory.vector.VectorMemorySpec` | `FlinkStateVectorMemory` / `FlinkStateHnswVectorMemory` | Builder |
-| Corpus | `corpus.CorpusSpec` | `SingleOperatorCorpus` / `BroadcastCorpus` / `ExternalCorpus` | Builder |
-| Long-term store | `storage.LongTermMemoryStore` | `PostgresConversationStore` | `ServiceLoader` + factory |
-| External vector store | `storage.VectorStore` | `PgVectorStore` (opt-in) | `ServiceLoader` + factory |
-| Channel (continuous input) | `channel.Channel<T>` | `StaticSeed`, `Kafka`, `Webhook`, `KafkaContext`, `PostgresChange`, `RedisPubSub`, `ToolInvocation` | Programmatic |
-| Chat transport | `llm.ChatConnection` | `LangChain4jChatConnection` (Ollama) | `ServiceLoader` |
-| Embedding transport | `embedding.EmbeddingConnection` | `OllamaEmbeddingConnection` / `DjlEmbeddingConnection` | `ServiceLoader` |
-| MCP server | `tools.mcp.McpServerSpec` | none | Programmatic |
-| Inference model | `inference.InferenceConnection` | `DjlInferenceConnection` (opt-in) | `ServiceLoader` + builder |
-| Guardrail | `inference.Guardrail` | none | Programmatic |
-| Web fetch | `web.WebFetchTool` / `web.CrawlerCore` | Jsoup + crawler-commons + Tika (opt-in) | Programmatic |
-| Listener | `listener.AgentEventListener` | `LoggingAgentEventListener` | `ServiceLoader` |
-| Tool | `tools.ToolExecutor` | built-ins and `@Tool` | `ToolRegistry` |
-
-LangChain4J is the default chat backend, wrapped behind `ChatConnection`. If you need the
-raw model, downcast to `LangChain4jChatClient` and call `getUnderlyingModel()` for the
-`dev.langchain4j.model.chat.ChatLanguageModel`.
-
-</details>
-
-<details>
-<summary><b>Examples</b></summary>
-
-Portable examples run on any runtime, with identical behaviour from one spec. The full
-walkthrough is in [the banking agent on every runtime](docs/examples/banking-everywhere.md).
-
-| Spec | Demonstrates | Run (pick a runtime) |
-|------|--------------|----------------------|
-| [`banking.yaml`](examples/pipelines/banking.yaml) | router, path, verifier, a tool, a guardrail | `python -m agentic_pipeline run examples/pipelines/banking.yaml --text "..."`, `clojure -M:run`, Pekko `PipelineMain` |
-| [`banking-llm.yaml`](examples/pipelines/banking-llm.yaml) | a bounded ReAct LLM brain on a path | `... run examples/pipelines/banking-llm.yaml --text "..."` |
-| [`banking-rag.yaml`](examples/pipelines/banking-rag.yaml) | HNSW cold tier, skills, context window, classifier guardrail | `... run examples/pipelines/banking-rag.yaml --text "how do I dispute a charge?"` |
-| [`multiagent.yaml`](examples/pipelines/multiagent.yaml) | A2A, a peer agent as a tool | `... run examples/pipelines/multiagent.yaml --text "escalate this"` |
-
-Runtime-specific demos: Pekko durability and recovery (`RecoveryDemo`), Clojure Datomic
-time-travel (`clojure -M:time-travel`).
-
-<details>
-<summary><b>Flink-runtime showcases</b></summary>
-
-These exercise Flink-only capabilities (CEP, side outputs, keyed-state vector memory, Kafka
-streaming). Each has an inline `README.md`, a walkthrough under
-[`docs/examples/`](docs/examples/), and a wrapper script under
-[`examples-bin/`](examples-bin/).
-
-| Use case | Package | Flink-only capability | Run |
-|----------|---------|-----------------------|-----|
-| Customer-support triage | `example.triage` | guardrail and scorer over keyed state | `./examples-bin/run-support-triage.sh` |
-| Real-time content moderation | `example.moderation` | OutputTag side outputs | `./examples-bin/run-moderation.sh` |
-| RAG research assistant | `example.rag` | Flink-state keyed vector memory | `./examples-bin/run-rag.sh` |
-| Anomaly and incident agent | `example.incident` | Flink CEP pattern matching | `./examples-bin/run-incident.sh` |
-| Live research and RAG | `example.research` | crawler frontier as Flink operators | `./examples-bin/run-live-research.sh` |
-| Markets (bond, crypto) | `example.markets` | Kafka and Flink streaming | `./examples-bin/run-bond-market.sh` |
-| Quick start | `example.QuickStartExample` | minimal agent, one tool | currently fails in `AgentBuilder.build()` (`Initial state has no outgoing transitions`); see [Quick start](#quick-start) |
-
-</details>
-
-For shorter recipes, see [docs/cookbook.md](docs/cookbook.md).
-
-</details>
-
-<details>
-<summary><b>Documentation index</b></summary>
-
-| Document | Description |
-|----------|-------------|
-| [docs/examples/banking-everywhere.md](docs/examples/banking-everywhere.md) | the same banking agent on every runtime: one spec, the run command per runtime |
-| [agentic-pekko/README.md](agentic-pekko/README.md) | Agentic Pekko, the event-sourced sharded actor runtime |
-| [agentic-clj/README.md](agentic-clj/README.md) | Agentic Clojure, pure Clojure on Datomic |
-| [docs/portability/pekko.md](docs/portability/pekko.md), [clojure.md](docs/portability/clojure.md) | per-engine design notes for the two newest runtimes |
-| [docs/portability/pipelines.md](docs/portability/pipelines.md) | declarative `pipeline.yaml` schema and loaders (Python, JVM) |
-| [docs/security.md](docs/security.md) | token model, egress policy and dev-only defaults for the network-facing services |
-| [docs/capabilities.md](docs/capabilities.md) | the generated agentic/v1 capability matrix, the only place a capability status is authored |
-| [docs/runtimes/](docs/runtimes/README.md) | one page per runtime: common primitives, Flink, Pekko, Clojure, pure Python, Python facade, PyFlink |
-| [docs/portability/choosing-a-backend.md](docs/portability/choosing-a-backend.md) | decision guide across the runtimes |
-| [docs/portability/stream-stateful-core.md](docs/portability/stream-stateful-core.md) | the stream-stateful core: CEP, timers, windows, replay, suspend/resume, tracing |
-| [docs/concepts.md](docs/concepts.md) | core concepts: agents, events, tools, memory, the routed graph |
-| [docs/configuration.md](docs/configuration.md) | configuration reference (env vars, resolution order) |
-| [docs/api-stability.md](docs/api-stability.md) | the `@Public`, `@Experimental` and `@Internal` markers on the Flink framework and the deprecation policy |
-| [docs/a2a.md](docs/a2a.md) | the Agent-to-Agent protocol: peer-as-tool, gateway, bridges |
-| [docs/memory.md](docs/memory.md) | Flink-state-first memory model, vector memory, feeds |
-| [docs/inference.md](docs/inference.md) | DL models as tools, guardrails, scorers, embedders |
-| [docs/channels.md](docs/channels.md) | `Channel<T>` SPI: Kafka, Postgres CDC, Redis, webhook, tool transport |
-| [docs/corpus.md](docs/corpus.md) | the `Corpus` abstraction and its three flavours |
-| [docs/web-toolkit.md](docs/web-toolkit.md) | Jsoup, crawler-commons, Tika: robots-aware fetch and extract |
-| [docs/python.md](docs/python.md) | the two-level Python API on agentic/v1 (pure Python, JVM facade, PyFlink) and the legacy Flink DSL |
-| [docs/pyflink.md](docs/pyflink.md) | the three ways Flink is reachable from Python, told apart |
-| [docs/pyflink-integration.md](docs/pyflink-integration.md) | the legacy DSL's declarative plan compiler for PyFlink |
-| [docs/cookbook.md](docs/cookbook.md) | short recipes for common SPI combinations |
-| [docs/examples/](docs/examples/) | long-form walkthroughs of the headline use cases |
-| [docs/getting-started.md](docs/getting-started.md) | setup guide and first steps |
-| [docs/guides/context-management.md](docs/guides/context-management.md) | MoSCoW prioritization and compaction |
-| [docs/guides/storage-quickstart.md](docs/guides/storage-quickstart.md) | storage backend setup |
-| [docs/guides/openai-setup.md](docs/guides/openai-setup.md) | configuring OpenAI as the chat backend |
-| [docs/guides/flink-agents-integration.md](docs/guides/flink-agents-integration.md) | the optional Apache Flink Agents bridge |
-| [docs/reference/agent-framework.md](docs/reference/agent-framework.md) | framework reference and agent patterns |
-| [docs/reference/storage-architecture.md](docs/reference/storage-architecture.md) | storage design |
-| [docs/reference/troubleshooting.md](docs/reference/troubleshooting.md) | common issues and fixes |
-
-</details>
-
-<details>
-<summary><b>Relationship to Apache Flink Agents, and work in progress</b></summary>
-
-Agentic Streaming predates upstream Apache Flink Agents and stays compatible in vocabulary
-without taking a hard dependency. User-facing SPI names (`ChatConnection`, `ChatSetup`,
-`Skill`, `OutputSchema`, `MemorySet`) mirror upstream's, so a bridge stays thin. The optional
-`plugins/flintagents/` module, gated by the `flink-agents` Maven profile, provides
-bidirectional adapters.
-
-In development:
-
-- advanced CEP patterns for multi-agent coordination
-- a JMH benchmark suite for the chat, embedding, and vector-memory hot paths
-- an HNSW-backed `VectorMemorySpec` (JVector or Lucene) as a drop-in upgrade
-- a native PyFlink port of the memory primitives
-- a plugin refresh to upstream Flink Agents 0.3-SNAPSHOT
-
-</details>
-
-## Requirements
-
-- Java 21 and the committed `./mvnw` (Maven 3.9.x; the build rejects older system Maven) for the
-  Flink framework (Apache Flink 2.2.1, native FLIP-27/143), Agentic Pekko and the other JVM
-  modules. `./mvnw -f reactor/pom.xml verify` builds all of them in dependency order; a single
-  module still builds with `./mvnw -f <module>/pom.xml` after
-  `./mvnw -f ports/jagentic-core/pom.xml install -DskipTests` (see [docs/getting-started.md](docs/getting-started.md))
-- Clojure CLI (tools.deps) for Agentic Clojure under `agentic-clj/`
-- Python 3.11+ for the pure-Python cores and ports (the packages
-  themselves declare `>=3.9` or `>=3.10`; see [docs/versioning.md](docs/versioning.md))
-- Podman (with `podman compose`) for the optional Postgres, Redis, and Ollama services
-- Ollama for the local LLM examples
+| Page | What it covers |
+|---|---|
+| [docs/getting-started.md](docs/getting-started.md) | From a clone to a running agent |
+| [docs/runtimes/](docs/runtimes/README.md) | What each runtime is made of, and where conformance results are |
+| [docs/portability/pipelines.md](docs/portability/pipelines.md) | The `pipeline.yaml` schema |
+| [docs/python.md](docs/python.md) | The Python API |
+| [docs/concepts.md](docs/concepts.md) | Core concepts |
+| [docs/configuration.md](docs/configuration.md) | Configuration reference |
+| [docs/security.md](docs/security.md) | What the code does and does not do about security |
+| [docs/guides/flink-agents-integration.md](docs/guides/flink-agents-integration.md) | How this compares with Apache Flink Agents, which is the better choice today if you are on Flink |
+| [docs/testing.md](docs/testing.md) | How to run each test suite |
+| [docs/versioning.md](docs/versioning.md) | Versioning and the compatibility matrix |
 
 ## Install
 
-Nothing is published yet: there are no releases on Maven Central, PyPI or Clojars and no git
-tags. Every artifact is built from a checkout. The version of every JVM module is
-`1.0.0-SNAPSHOT`; the Python and Clojure artifacts build as development versions until a tag
-exists ([docs/release.md](docs/release.md)).
-
-**Java, any JVM module.** Install the reactor into your local Maven repository once, then
-depend on the module you need. The Flink framework is `org.jagentic:agentic-flink`; the
-portable core is `org.jagentic:jagentic-core`; the actor runtime is `org.jagentic:agentic-pekko`.
+Nothing is published to Maven Central or PyPI. Everything is built from a checkout. The PyPI name
+`pyagentic` belongs to someone else, so the Python core cannot be published under it.
 
 ```bash
-git clone https://github.com/Ugbot/Agentic-Streaming.git
-cd Agentic-Streaming
-./mvnw -f reactor/pom.xml -DskipTests install
+./mvnw -f reactor/pom.xml -DskipTests install    # org.jagentic:jagentic-core, agentic-flink, agentic-pekko
 ```
 
-```xml
-<dependency>
-  <groupId>org.jagentic</groupId>
-  <artifactId>agentic-flink</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
-</dependency>
-```
-
-The same command installs a `-sources.jar` and a `-javadoc.jar` next to each module jar
-(`banking-job` has no Java sources and gets only the former). For
-`flink run`, the shaded jar is `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar` (it excludes the
-Flink runtime a cluster provides).
-
-**Python, from the checkout.** Four distributions; the two Flink facades need the uber jar
-from the Maven build above.
-
-```bash
-python -m pip install -e ports/pyagentic          # pyagentic: the pure Python core (spec runtime)
-python -m pip install -e ports/agentic-pipeline   # agentic-pipeline: the pipeline.yaml CLI (needs pyagentic)
-python -m pip install -e python                   # agentic-flink: JPype facade over the Flink framework
-python -m pip install -e pyflink                  # agentic-pyflink: the PyFlink binding
-```
-
-**Clojure, as a git dependency.** `agentic-clj` lives in a subdirectory, so the coordinate
-needs `:deps/root`; pin the commit you want with `:git/sha`.
-
-```clojure
-{:deps {io.github.ugbot/agentic-clj
-        {:git/url "https://github.com/Ugbot/Agentic-Streaming.git"
-         :git/sha "<commit sha>"
-         :deps/root "agentic-clj"}}}
-```
-
-A local jar with the same `io.github.ugbot/agentic-clj` coordinate comes from
-`clojure -T:build install` inside `agentic-clj/` ([agentic-clj/README.md](agentic-clj/README.md)).
-
-### Optional dependencies of the Flink framework
-
-`org.jagentic:agentic-flink` (the thin jar, installed by `./mvnw -f reactor/pom.xml install`)
-pulls in `jagentic-core`, `langchain4j`, `flink-cep`, Jackson and `slf4j-api` at compile scope
-and nothing else: the Flink runtime is `provided`, and every backend driver and provider SDK is
-`<optional>true</optional>`. `flink-cep` stays compile scope because the DSL job generator and
-the pipeline runner use it and a Flink distribution does not ship it, so your job jar has to
-shade it. Add the optional ones your job uses to your own pom; the versions are managed by the
-reactor, so `flink.version` and `langchain4j.version` are the ones in `reactor/pom.xml`.
-
-| You use | Add |
-|---|---|
-| `LangChain4jChatConnection.ollama(...)` | `dev.langchain4j:langchain4j-ollama` |
-| `LangChain4jChatConnection.openai(...)` | `dev.langchain4j:langchain4j-open-ai` |
-| `LangChain4jChatConnection.anthropic(...)` | `dev.langchain4j:langchain4j-anthropic` |
-| `LangChain4jChatConnection.gemini(...)` | `dev.langchain4j:langchain4j-google-ai-gemini` |
-| the `postgres` conversation, vector or A2A task store | `org.postgresql:postgresql` and `com.zaxxer:HikariCP` |
-| the `redis` stores or the Redis A2A bridge | `redis.clients:jedis` |
-| the ZeroMQ A2A bridge | `org.zeromq:jeromq` |
-| the outbound A2A client | the `io.github.a2asdk:a2a-java-sdk-*` modules |
-| DJL inference, the web toolkit, Kafka channels, Fluss | see the `<optional>` entries in the root `pom.xml` |
-
-A logging backend is your choice as well: the library logs through `slf4j-api` and ships no
-binding (the Log4j backend is test scope). `slf4j-api` is the 2.x line, so pick a 2.x provider
-such as `org.apache.logging.log4j:log4j-slf4j2-impl` (banking-job does); the 1.7-era
-`log4j-slf4j-impl` is ignored by SLF4J 2 and logging silently becomes a no-op. The two runtime
-artifacts need none of this: the `agentic-flink-<version>-uber.jar` classifier and
-`banking-job/target/banking-job.jar` bundle every optional dependency they use, and
-`bash tools/check-jar-launch.sh` boots both under JDK 21.
+For `flink run`, the shaded jar is `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar`; it excludes the
+Flink runtime a cluster provides. `bash tools/check-jar-launch.sh` boots it under JDK 21. The thin
+`agentic-flink` jar marks its provider SDKs and drivers optional, so add the ones you use to your own
+pom; see the `<optional>` entries in the root `pom.xml`.
 
 ## Contributing
 
-Contributions are welcome; open an issue or a PR. [CONTRIBUTING.md](CONTRIBUTING.md) describes
-the toolchain, every local check and what a pull request needs; the versioning and deprecation
-rules are in [docs/versioning.md](docs/versioning.md), the changes so far in
-[CHANGELOG.md](CHANGELOG.md), and vulnerability reporting in [SECURITY.md](SECURITY.md).
-Participation is subject to the [code of conduct](CODE_OF_CONDUCT.md). Additional
-`ChatConnection`, `EmbeddingConnection`, `LongTermMemoryStore`, `VectorStore`,
-`InferenceConnection`, and `Channel<T>` implementations are especially useful.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) describes the toolchain, the local
+checks and what a pull request needs. Changes so far are in [CHANGELOG.md](CHANGELOG.md), and
+vulnerability reporting is in [SECURITY.md](SECURITY.md). Participation is subject to the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
