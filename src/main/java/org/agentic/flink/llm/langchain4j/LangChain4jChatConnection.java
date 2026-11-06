@@ -248,8 +248,8 @@ public final class LangChain4jChatConnection implements ChatConnection {
       dev.langchain4j.model.chat.response.ChatResponse response, String modelName) {
     String text = response.aiMessage() != null ? response.aiMessage().text() : "";
     List<org.agentic.flink.llm.ChatToolCall> toolCalls = toolCallsOf(response.aiMessage());
-    Long tokens =
-        response.tokenUsage() == null ? null : (long) response.tokenUsage().totalTokenCount();
+    Integer total = response.tokenUsage() == null ? null : response.tokenUsage().totalTokenCount();
+    Long tokens = total == null ? null : total.longValue();
     org.agentic.flink.llm.ChatResponse.FinishReason fr =
         org.agentic.flink.llm.ChatResponse.FinishReason.STOP;
     if (response.finishReason() != null) {

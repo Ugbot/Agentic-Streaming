@@ -267,8 +267,16 @@ ollama pull llama3.1:latest
 ollama pull nomic-embed-text
 ```
 
-`SimpleAgentExample` and `QuickStartExample` are configured for `llama3.1:latest` at
-`http://localhost:11434`, but neither reaches Ollama on a fresh clone; see Part 5. To point
+`SimpleAgentExample` is configured for `llama3.1:latest` at `http://localhost:11434`, but does not
+reach Ollama on a fresh clone; see Part 5. `QuickStartExample` uses `qwen2.5:3b` at the same address
+and exits non-zero if the model call fails:
+
+```bash
+./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample \
+  -Dexec.classpathScope=test
+```
+
+To point
 `examples/pipelines/banking-llm.yaml` at a model instead of the script, change the `llm` block
 to `provider: ollama` and `model: qwen2.5:3b` (pull that model first); `provider: openai` reads
 `OPENAI_API_KEY`. [configuration.md](configuration.md) lists the provider keys.
@@ -327,7 +335,6 @@ time on them.
 | `java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample` | `NoClassDefFoundError: org/apache/flink/configuration/ReadableConfig`. The uber jar excludes the provided Flink runtime. |
 | `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `Invalid classpath scope: provided` from exec-maven-plugin 3.2.0, which accepts only `compile`, `runtime` and `test`. |
 | the same with `test-compile` and `-Dexec.classpathScope=test` | `Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable` during job graph construction. |
-| `./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample -Dexec.classpathScope=test` | `Initial state has no outgoing transitions` from `AgentBuilder.build()`, before any Ollama call. |
 
 There is no `MyFirstAgentExample` in the repository; an earlier version of this page invented
 it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem

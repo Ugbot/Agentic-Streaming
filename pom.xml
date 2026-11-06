@@ -129,6 +129,14 @@
             <artifactId>langchain4j-ollama</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- The provider SDKs bring this at runtime scope only, so anything run on the compile
+             classpath (exec:java with classpathScope=compile) failed with "No HTTP client has
+             been found". Version from the langchain4j BOM. -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-http-client-jdk</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>

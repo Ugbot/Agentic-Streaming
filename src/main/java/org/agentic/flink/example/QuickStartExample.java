@@ -1,6 +1,6 @@
 package org.agentic.flink.example;
 
-import java.util.concurrent.CompletableFuture;
+import java.io.PrintStream;
 import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.config.ConfigKeys;
 import org.agentic.flink.core.AgentEvent;
@@ -41,23 +41,32 @@ import org.agentic.flink.tool.ToolRegistry;
  * <p><b>To run:</b>
  *
  * <pre>
- * mvn exec:java -Dexec.mainClass="org.agentic.flink.example.QuickStartExample"
+ * ./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample \
+ *     -Dexec.classpathScope=test
  * </pre>
+ *
+ * <p>The process exits non-zero when the model call fails.
  *
  * @author Agentic Flink Team
  */
 @Internal
 public class QuickStartExample {
 
+  static final String SUCCESS_BANNER = "Real LangChain4J integration working!";
+
+  private static final String MODEL = "qwen2.5:3b";
+  private static final String QUESTION = "What is Apache Flink and why is it useful for AI?";
+
   public static void main(String[] args) throws Exception {
-    System.out.println("=".repeat(80));
-    System.out.println("  Quick Start - Real LangChain4J Integration");
-    System.out.println("=".repeat(80));
-    System.out.println();
+    System.exit(run(ConfigKeys.DEFAULT_OLLAMA_BASE_URL, System.out));
+  }
 
-    // ==================== Step 1: Define Agent ====================
-
-    System.out.println("📝 Step 1: Defining agent...\n");
+  /** Runs the example against the Ollama at {@code baseUrl}. Returns the process exit code. */
+  static int run(String baseUrl, PrintStream out) throws Exception {
+    out.println("=".repeat(80));
+    out.println("  Quick Start - Real LangChain4J Integration");
+    out.println("=".repeat(80));
+    out.println();
 
     Agent agent =
         Agent.builder()
@@ -67,85 +76,45 @@ public class QuickStartExample {
             .withSystemPrompt(
                 "You are a helpful AI assistant. Answer questions clearly and concisely. "
                     + "If you don't know something, say so.")
-            .withChatSetup(
-                ChatSetup.builder().withModel("qwen2.5:latest").withTemperature(0.7).build())
+            .withChatSetup(ChatSetup.builder().withModel(MODEL).withTemperature(0.7).build())
             .withMaxIterations(3)
             .build();
-
-    System.out.println("✅ Agent created: " + agent.getAgentName());
-    System.out.println("   Model: " + agent.getLlmModel());
-    System.out.println();
-
-    // ==================== Step 2: Create LLM Client ====================
-
-    System.out.println("🔗 Step 2: Creating LLM client...\n");
+    out.println("Agent: " + agent.getAgentName() + ", model " + agent.getLlmModel());
 
     LLMClient llmClient =
-        LLMClient.builder()
-            .withModel("qwen2.5:latest")
-            .withTemperature(0.7)
-            .withBaseUrl(ConfigKeys.DEFAULT_OLLAMA_BASE_URL)
-            .build();
+        LLMClient.builder().withModel(MODEL).withTemperature(0.7).withBaseUrl(baseUrl).build();
+    out.println("Ollama at " + baseUrl);
+    out.println();
 
-    System.out.println("✅ LLM client created (Ollama @ localhost:11434)");
-    System.out.println();
+    AgentEvent inputEvent =
+        new AgentEvent("flow-001", "user-001", "assistant", AgentEventType.FLOW_STARTED);
+    inputEvent.putData("user_message", QUESTION);
+    out.println("Question: " + QUESTION);
+    out.println();
 
-    // ==================== Step 3: Create Agent Executor ====================
-
-    System.out.println("⚙️  Step 3: Creating agent executor...\n");
-
-    AgentExecutor executor =
+    ExecutionResult result;
+    try (AgentExecutor executor =
         AgentExecutor.builder()
             .withAgent(agent)
             .withToolRegistry(ToolRegistry.empty())
             .withLlmClient(llmClient)
-            .build();
-
-    System.out.println("✅ Agent executor ready");
-    System.out.println();
-
-    // ==================== Step 4: Execute Agent ====================
-
-    System.out.println("🚀 Step 4: Executing agent with real LLM...\n");
-    System.out.println("-".repeat(80));
-
-    // Create input event
-    AgentEvent inputEvent =
-        new AgentEvent("flow-001", "user-001", "assistant", AgentEventType.FLOW_STARTED);
-    inputEvent.putData("user_message", "What is Apache Flink and why is it useful for AI?");
-
-    System.out.println("❓ Question: What is Apache Flink and why is it useful for AI?");
-    System.out.println();
-    System.out.println("⏳ Calling Ollama... (this may take a few seconds)");
-    System.out.println();
-
-    // Execute!
-    CompletableFuture<ExecutionResult> future = executor.execute(inputEvent);
-    ExecutionResult result = future.get();
-
-    // ==================== Step 5: Show Results ====================
-
-    System.out.println("-".repeat(80));
-    System.out.println();
-
-    if (result.isSuccess()) {
-      System.out.println("✅ SUCCESS!");
-      System.out.println();
-      System.out.println("📄 Response:");
-      System.out.println(result.getOutput());
-      System.out.println();
-      System.out.println("📊 Metrics:");
-      System.out.println("   - Events generated: " + result.getEvents().size());
-      System.out.println(
-          "   - Tool calls: " + (result.getToolCalls() != null ? result.getToolCalls().size() : 0));
-    } else {
-      System.out.println("❌ FAILED!");
-      System.out.println("Error: " + result.getErrorMessage());
+            .build()) {
+      result = executor.execute(inputEvent).get();
     }
 
-    System.out.println();
-    System.out.println("=".repeat(80));
-    System.out.println("  Real LangChain4J integration working! 🎉");
-    System.out.println("=".repeat(80));
+    if (!result.isSuccess()) {
+      out.println("FAILED: " + result.getErrorMessage());
+      return 1;
+    }
+    out.println("Response:");
+    out.println(result.getOutput());
+    out.println();
+    out.println("Events generated: " + result.getEvents().size());
+    out.println("Tool calls: " + (result.getToolCalls() == null ? 0 : result.getToolCalls().size()));
+    out.println();
+    out.println("=".repeat(80));
+    out.println("  " + SUCCESS_BANNER);
+    out.println("=".repeat(80));
+    return 0;
   }
 }
