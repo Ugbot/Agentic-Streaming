@@ -1,0 +1,30 @@
+id: llm-transient-retry
+description: "A transient model failure is retried under policies.retry inside the turn. The step's x-fail-attempts makes the stub fail that many model calls. When the budget covers them the turn completes, and the tool the model already called is not called again, because only the model call is retried."
+requires: [llm_brain, retry, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: flaky
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: llm, tools: [lookup_order]}
+    verifier: {kind: none}
+  llm:
+    provider: stub
+    script:
+      - {tool: lookup_order, args: {order: "77"}}
+      - {text: "your order shipped", x-fail-attempts: 2}
+  policies:
+    retry: {kind: fixed, max_attempts: 3, initial_delay_ms: 0, max_delay_ms: 0, jitter: false}
+  tools:
+    - {id: lookup_order, kind: constant, value: "shipped"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "where is my order?"}
+expect:
+  - turn_id: t1
+    status: completed
+    reply: "your order shipped"
+    tool_calls:
+      - {tool: lookup_order, index: 0, attempt: 1}
+    events_include: [turn_received, routed, brain_started, tool_called, turn_completed]

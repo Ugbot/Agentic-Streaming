@@ -266,9 +266,17 @@ public final class RoutedGraph {
       return resume(event, ctx, before.suspended().get(event.turnId()));
     }
     ConversationState.TurnRecord prior = before.turn(event.turnId());
+    boolean rerun = prior != null && prior.retryable();
     if (policies.idempotency() == Policies.Idempotency.TURN_ID && prior != null
-        && prior.status() != null) {
+        && prior.status() != null && !rerun) {
       return recorded(ctx, prior).asDuplicate(before.reduced());
+    }
+    if (rerun) {
+      ctx.continueToolIndexAfter(prior.calls());
+      if (event.isResume()) {
+        return resume(event, ctx,
+            new ConversationState.Suspended(prior.turnId(), prior.path(), prior.text(), null));
+      }
     }
 
     for (AgentListener l : listeners) {
@@ -292,7 +300,9 @@ public final class RoutedGraph {
     if (processingNow != null) {
       received.put(LogicalClock.PROCESSING_TIME_KEY, processingNow);
     }
-    ctx.record(EventType.TURN_RECEIVED, received);
+    if (!rerun) {
+      ctx.record(EventType.TURN_RECEIVED, received);
+    }
     if (firstTurn && processingNow != null) {
       WorkflowTimers.schedule(timers, ctx, processingNow, watermark);
     }
@@ -377,6 +387,10 @@ public final class RoutedGraph {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
       } catch (ToolRegistry.UnknownTool | ToolNotPermitted e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
+      } catch (TransientFailure e) {
+        return fail(ctx, path, TurnError.ErrorClass.TRANSIENT, e);
+      } catch (LogUnavailable e) {
+        throw e;
       } catch (RuntimeException e) {
         for (AgentListener l : listeners) {
           l.onError("brain:" + path, e, ctx);

@@ -48,6 +48,13 @@ class ToolError(AgenticError):
     error_class = "tool"
 
 
+class TransientError(AgenticError):
+    """A failure that may pass if the same request is made again: a model or network outage.
+    Retried under `policies.retry`; a turn that outlasts the budget does not spend its turn_id."""
+
+    error_class = "transient"
+
+
 class LogUnavailable(AgenticError):
     """The event log could not be read or written: storage, not anything a turn did. The one
     failure the turn boundary lets through, since a turn cannot record its end in that log."""

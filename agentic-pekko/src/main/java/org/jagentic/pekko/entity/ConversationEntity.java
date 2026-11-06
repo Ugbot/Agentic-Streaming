@@ -319,7 +319,7 @@ public final class ConversationEntity
     ConversationState folded = state.folded;
     boolean resumesSuspended = event.isResume() && folded.suspended().containsKey(event.turnId());
     ConversationState.TurnRecord prior = folded.turn(event.turnId());
-    if (!resumesSuspended && prior != null && prior.status() != null
+    if (!resumesSuspended && prior != null && prior.status() != null && !prior.retryable()
         && deps.policies().idempotency() == Policies.Idempotency.TURN_ID) {
       TurnReply dup = TurnReply.of(recorded(prior).asDuplicate(folded.reduced()));
       return Effect().none().thenReply(cmd.replyTo(), s -> dup);

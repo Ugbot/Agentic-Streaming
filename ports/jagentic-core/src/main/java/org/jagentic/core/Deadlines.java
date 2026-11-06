@@ -11,7 +11,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 import org.jagentic.core.llm.ChatClient;
-import org.jagentic.core.llm.ChatResult;
 
 /**
  * Time limits on anything that leaves the process. The turn still blocks the calling thread; what
@@ -63,11 +62,14 @@ public final class Deadlines {
     return params -> call(what, timeoutMs, () -> fn.apply(params), onTimeout);
   }
 
-  /** {@code client} limited to {@code timeoutMs} per model call. */
+  /** {@code client} limited to {@code timeoutMs} per model call; a timeout is transient. */
   public static ChatClient bound(String what, long timeoutMs, ChatClient client) {
     return (messages, tools) -> {
-      ChatResult r = call(what, timeoutMs, () -> client.chat(messages, tools), () -> { });
-      return r;
+      try {
+        return call(what, timeoutMs, () -> client.chat(messages, tools), () -> { });
+      } catch (DeadlineExceeded e) {
+        throw new TransientFailure(e.getMessage(), e);
+      }
     };
   }
 

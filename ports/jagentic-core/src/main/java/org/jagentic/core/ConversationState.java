@@ -24,6 +24,12 @@ public final class ConversationState implements Serializable {
     public boolean terminal() {
       return status != null && status != TurnStatus.SUSPENDED;
     }
+
+    /** A transient failure has not applied the turn: a redelivery runs it again (section 4). */
+    public boolean retryable() {
+      return status == TurnStatus.FAILED && error != null
+          && error.errorClass() == TurnError.ErrorClass.TRANSIENT;
+    }
   }
 
   /** A turn parked by {@code turn_suspended} and not yet resumed. */

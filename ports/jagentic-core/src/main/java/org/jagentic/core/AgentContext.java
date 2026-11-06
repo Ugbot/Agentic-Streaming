@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 import java.util.random.RandomGenerator;
 
 /**
@@ -84,6 +85,38 @@ public final class AgentContext {
   /** Reserves the next {@code call_index} for this turn. */
   public int nextToolIndex() {
     return nextToolIndex++;
+  }
+
+  /** A re-run turn keeps counting: {@code (turn_id, index)} identifies one call across runs. */
+  public void continueToolIndexAfter(List<ToolCall> earlier) {
+    for (ToolCall c : earlier) {
+      nextToolIndex = Math.max(nextToolIndex, c.index() + 1);
+    }
+  }
+
+  /**
+   * One model call under {@code policies.retry}: a {@link TransientFailure} is retried, anything
+   * else propagates. Only the call is retried, so tools the model has already called this turn are
+   * not called again.
+   */
+  public <T> T callModel(Supplier<T> call) {
+    Policies.RetryPolicy retry = policies.retry();
+    for (int attempt = 1; ; attempt++) {
+      try {
+        return call.get();
+      } catch (TransientFailure e) {
+        for (AgentListener l : listeners) {
+          l.onError("model", e, this);
+        }
+        if (attempt >= retry.attempts()) {
+          throw e;
+        }
+        long delay = retry.delayBefore(attempt + 1, random);
+        if (delay > 0) {
+          sleeper.accept(delay);
+        }
+      }
+    }
   }
 
   /** {@code invoke} with {@code tool_called}/{@code delegated} recorded on success. */

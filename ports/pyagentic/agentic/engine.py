@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
-from .errors import AgenticError, LogUnavailable, ToolError, ValidationError
+from .errors import AgenticError, LogUnavailable, ToolError, TransientError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec
@@ -121,6 +121,7 @@ class Engine:
         self._suspended: Dict[Tuple[str, str], _Pending] = {}
         self._guard = threading.Lock()
         self._schema_validators: Dict[int, Draft202012Validator] = {}
+        self._model_failures: Dict[int, int] = {}
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -195,7 +196,8 @@ class Engine:
             if pending is None:
                 return self._fail_validation(ctx, None, f"no suspended turn {turn.turn_id!r} to resume")
             return self._resume(turn, pending)
-        if idempotent and prior is not None:
+        rerun = prior is not None and (prior.get("error") or {}).get("class") == "transient"
+        if idempotent and prior is not None and not rerun:
             duplicate = dict(prior)
             duplicate["status"] = "duplicate"
             duplicate["events"] = []
@@ -203,13 +205,17 @@ class Engine:
             return duplicate
 
         history = self.log.read(turn.conversation_id)
+        if rerun:  # (turn_id, index) identifies one call across runs of the turn
+            ctx.next_index = 1 + max((int(e.payload["index"]) for e in history
+                                      if e.turn_id == turn.turn_id and "index" in e.payload), default=-1)
         try:
             self.timers.fire_due(turn, history, lambda kind, payload: self._append(ctx, kind, payload),
                                  lambda tool_id, args: self._invoke(ctx, tool_id, args))
         except ToolError as exc:
             return self._finish(ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
                                 event=("turn_failed", {"status": "failed", "reason": str(exc)}))
-        self._append(ctx, "turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
+        if not rerun:
+            self._append(ctx, "turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
         self.timers.schedule(turn, history, lambda kind, payload: self._append(ctx, kind, payload))
         try:
             blocked = self._check_guardrails(self.global_guardrails, "input", turn.text)
@@ -268,6 +274,9 @@ class Engine:
                 reply = self._draft(ctx, path)
             except ToolError as exc:
                 return self._finish(ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
+                                    event=("turn_failed", {"status": "failed", "reason": str(exc)}))
+            except TransientError as exc:
+                return self._finish(ctx, "failed", path, None, {"class": "transient", "message": str(exc)},
                                     event=("turn_failed", {"status": "failed", "reason": str(exc)}))
             self._append(ctx, "reply_drafted", {"reply": reply})
             blocked = self._check_guardrails(list(self.global_guardrails) + self._path_guardrails(spec),
@@ -330,6 +339,7 @@ class Engine:
                                   f"only the scripted stub provider runs locally", "/llm/provider")
         allowed = set(self.paths[path].get("tools") or [])
         for i, step in enumerate(self.llm.get("script") or []):
+            self._call_model(i, step)
             if "tool" in step:
                 if allowed and step["tool"] not in allowed:
                     raise ValidationError(f"scripted tool {step['tool']!r} is not in the path's tools",
@@ -338,6 +348,23 @@ class Engine:
             else:
                 return str(step["text"])
         raise ValidationError("the llm script ended without a final text", "/llm/script")
+
+    def _call_model(self, index: int, step: Mapping[str, Any]) -> None:
+        """One scripted model call under `policies.retry`. Only the call is retried, so a tool
+        the model already called is not called again."""
+        retry = self.policies.get("retry") or {}
+        max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
+        for attempt in range(1, max_attempts + 1):
+            with self._guard:
+                seen = self._model_failures.get(index, 0) + 1
+                self._model_failures[index] = seen
+            if seen > step.get("x-fail-attempts", 0):
+                return
+            if attempt < max_attempts:
+                delay = retry_delay_ms(retry, attempt, self.rng)
+                if delay:
+                    self.sleep(delay / 1000.0)
+        raise TransientError("stub model unavailable")
 
     def _run_saga(self, ctx: _TurnContext, path: str) -> Dict[str, Any]:
         assert self.saga is not None

@@ -219,6 +219,33 @@ class WorkflowTurnBoundaryTest {
     }
   }
 
+  @Test
+  void aTransientModelFailureGoesToTheSideOutputAndRunsAgainOnRedelivery() throws Exception {
+    Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> agent = new LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
+    agent.put("paths", Map.of("general", Map.of("brain", "llm"), "billing", Map.of("brain", "llm")));
+    wf.put("agent", agent);
+    wf.put(
+        "llm",
+        Map.of(
+            "provider", "stub", "script", List.of(Map.of("text", "ok", "x-fail-attempts", 1))));
+    String cid = rnd("c");
+    String tid = rnd("t");
+    try (var h = harness(wf)) {
+      h.open();
+      h.processElement(new StreamRecord<>(Event.turn(cid, tid, "u", "hello"), 1));
+      TurnResult failed = outputs(h).get(0);
+      assertEquals(TurnStatus.FAILED, failed.status);
+      assertEquals("transient", failed.error.errorClass().wire());
+      assertEquals(1, sideOutput(h).size());
+
+      h.processElement(new StreamRecord<>(Event.turn(cid, tid, "u", "hello"), 2));
+      assertEquals(TurnStatus.COMPLETED, outputs(h).get(1).status);
+      assertEquals(1, sideOutput(h).size());
+    }
+  }
+
   /** Port of the review's Loop.java: one turn on a real job used to make six external calls. */
   @Test
   void aFailingCompensationDoesNotRestartTheJobOrRepeatTheEffect() throws Exception {

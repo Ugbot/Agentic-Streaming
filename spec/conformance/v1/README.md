@@ -36,6 +36,8 @@ Python owners.
 | `path-verifier-fallback` | a path without a verifier is judged by `agent.verifier` |
 | `compensation-failure` | a failing compensation ends the turn `fatal`, the rest still run, and it never escapes the turn |
 | `tool-timeout` | a tool that never answers fails its attempt at `timeout_ms`, and the attempts are numbered |
+| `llm-transient-retry` | a transient model failure is retried inside the turn without repeating tools |
+| `llm-transient-redelivery` | a transient failure past the budget does not spend the `turn_id`; a redelivery runs the turn |
 | `timer-tool-failure` | a failing timer tool fails the turn that observed the deadline, and the next turn runs |
 
 Run them against the reference runtime:

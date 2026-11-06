@@ -8,10 +8,13 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.RetriableException;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ResponseFormat;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+
+import org.jagentic.core.TransientFailure;
 
 /**
  * Real chat via LangChain4J (Ollama / OpenAI / Anthropic / Gemini), behind the framework
@@ -33,7 +36,8 @@ public final class LangChain4jChatClient implements ChatClient {
       OpenAiChatModel.OpenAiChatModelBuilder b = OpenAiChatModel.builder()
           .apiKey(envOr("OPENAI_API_KEY", "no-key"))
           .modelName(modelName == null || modelName.isBlank() ? "gpt-4o-mini" : modelName)
-          .responseFormat("json_object");
+          .responseFormat("json_object")
+          .maxRetries(0); // policies.retry decides
       if (baseUrl != null && !baseUrl.isBlank()) {
         b.baseUrl(baseUrl);
       }
@@ -43,6 +47,7 @@ public final class LangChain4jChatClient implements ChatClient {
         .baseUrl(baseUrl == null || baseUrl.isBlank() ? "http://localhost:11434" : baseUrl)
         .modelName(modelName == null || modelName.isBlank() ? "llama3.2" : modelName)
         .responseFormat(ResponseFormat.JSON)
+        .maxRetries(0) // policies.retry decides
         .build();
     return new LangChain4jChatClient(m);
   }
@@ -64,7 +69,11 @@ public final class LangChain4jChatClient implements ChatClient {
         default -> lc.add(UserMessage.from(content)); // user + tool observations
       }
     }
-    String text = model.chat(lc).aiMessage().text();
-    return AbstractHttpChatClient.parseChatJson(text);
+    try {
+      String text = model.chat(lc).aiMessage().text();
+      return AbstractHttpChatClient.parseChatJson(text);
+    } catch (RetriableException e) {
+      throw new TransientFailure("chat call failed: " + e.getMessage(), e);
+    }
   }
 }
