@@ -8,8 +8,9 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 /**
  * The same classic-Flink-then-agentic graph as {@link BondMarketAgentExample}, but pointed at the
  * live Coinbase market data feed (via {@link
- * org.agentic.flink.example.markets.producer.CoinbaseProducer}, which subscribes to the public Coinbase WebSocket and
- * writes per-product bid/offer levels + trades to Kafka in the same JSON shape).
+ * org.agentic.flink.example.markets.producer.CoinbaseProducer}, which subscribes to the public
+ * Coinbase WebSocket and writes per-product bid/offer levels + trades to Kafka in the same JSON
+ * shape).
  *
  * <p>Crypto has no security master, so the {@code coinbase-securities} topic carries a small static
  * product list (one row per BTC-USD, ETH-USD, SOL-USD …) and is broadcast like the bond security

@@ -7,8 +7,7 @@ import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Trade;
 
 /**
- * Synthesizes anonymised trades
- * and publishes JSON to the {@code fnd-trades} topic.
+ * Synthesizes anonymised trades and publishes JSON to the {@code fnd-trades} topic.
  *
  * <pre>
  *   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \

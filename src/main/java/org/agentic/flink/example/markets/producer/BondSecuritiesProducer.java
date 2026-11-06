@@ -8,9 +8,8 @@ import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Security;
 
 /**
- * Publishes a slow stream of
- * security-master rows to the {@code fnd-securities} topic. The Flink job broadcasts these into the
- * inventory enrichment stage.
+ * Publishes a slow stream of security-master rows to the {@code fnd-securities} topic. The Flink
+ * job broadcasts these into the inventory enrichment stage.
  *
  * <pre>
  *   java -cp target/agentic-flink-1.0.0-SNAPSHOT.jar \

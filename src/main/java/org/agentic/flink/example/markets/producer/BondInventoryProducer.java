@@ -8,8 +8,8 @@ import org.agentic.flink.annotation.Internal;
 import org.agentic.flink.example.markets.model.MarketRecords.Inventory;
 
 /**
- * Synthesizes anonymised
- * dealer bid/offer quotes and publishes JSON to the {@code fnd-inventory} Kafka topic.
+ * Synthesizes anonymised dealer bid/offer quotes and publishes JSON to the {@code fnd-inventory}
+ * Kafka topic.
  *
  * <p>Run with:
  *
