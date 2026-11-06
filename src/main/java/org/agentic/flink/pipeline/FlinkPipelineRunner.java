@@ -41,7 +41,8 @@ import org.jagentic.core.TurnResult;
  * <p>The agent graph itself is the canonical core ({@code org.jagentic.core}) hosted by {@link
  * WorkflowTurnFunction}: the keyed operator holds the conversation event log as Flink state and
  * emits normalized {@link TurnResult}s. {@link #assembleResults} exposes that stream; {@link
- * #assemble} keeps the pre-spec one-line summary per turn.
+ * #assemble} keeps the pre-spec one-line summary per turn. {@link KafkaPipelineJob} runs it between
+ * Kafka topics, which is the way to run an agent on a cluster.
  */
 @Public
 public final class FlinkPipelineRunner {
@@ -211,6 +212,16 @@ public final class FlinkPipelineRunner {
 
   // ---- CLI ----
 
+  /**
+   * One seed event by default. With {@code --input-topic} this is the long-running Kafka job; see
+   * {@link KafkaPipelineJob}.
+   *
+   * <pre>
+   * FlinkPipelineRunner pipeline.yaml [--text T] [--conversation C]
+   * FlinkPipelineRunner pipeline.yaml --input-topic turns [--kafka-bootstrap H:P]
+   *     [--output-topic T] [--failures-topic T] [--group-id G]
+   * </pre>
+   */
   public static void main(String[] args) throws Exception {
     String yaml = "examples/pipelines/banking.yaml";
     String text = null;
@@ -220,15 +231,25 @@ public final class FlinkPipelineRunner {
         text = args[++i];
       } else if ("--conversation".equals(args[i]) && i + 1 < args.length) {
         cid = args[++i];
-      } else if (!args[i].startsWith("--")) {
+      } else if (args[i].startsWith("--")) {
+        i++; // a flag of the Kafka job, read by KafkaPipelineJob.Options
+      } else {
         yaml = args[i];
       }
     }
     Map<String, Object> spec = loadYaml(Path.of(yaml));
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-    env.setParallelism(1);
     FlinkJobDefaults.fromEnvironment().apply(env);
 
+    KafkaPipelineJob.Options kafka =
+        KafkaPipelineJob.Options.parse(args, System.getenv(), agentId(spec));
+    if (kafka != null) {
+      KafkaPipelineJob.assemble(env, spec, kafka);
+      env.execute("agentic-flink: " + agentId(spec) + " from " + kafka.inputTopic());
+      return;
+    }
+
+    env.setParallelism(1);
     Event seed = new Event(cid, "user", text == null ? "what is my balance?" : text, Map.of());
     DataStream<Event> source = env.fromData(List.of(seed), WorkflowTurnFunction.EVENT_TYPE);
 
@@ -242,5 +263,12 @@ public final class FlinkPipelineRunner {
         .returns(TypeInformation.of(String.class))
         .print();
     env.execute("agentic-flink: " + yaml);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String agentId(Map<String, Object> spec) {
+    Object agent = spec.get("agent");
+    Object id = agent instanceof Map<?, ?> a ? ((Map<String, Object>) a).get("id") : null;
+    return id == null ? "pipeline" : String.valueOf(id);
   }
 }
