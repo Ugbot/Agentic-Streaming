@@ -48,14 +48,8 @@ were moved out; the code as it stood is at [tag `pre-cornerstone`](https://githu
 
 | Doc | Engine | Lang | Verdict in one line |
 |-----|--------|------|---------------------|
-| [`faust.md`](faust.md) | Faust (faust-streaming) | Python | Native fit: faust *agents* + *Tables* ≈ our agent + ConversationStore. |
 | [`pekko.md`](pekko.md) | Apache Pekko | Java | **First-class** ([`agentic-pekko/`](../../agentic-pekko/)), event-sourced, cluster-sharded entity per conversation (C1+C2+C3 native). |
 | [`clojure.md`](clojure.md) | Clojure (Datomic) | Clojure | **First-class, pure-Clojure** reimplementation; immutable datoms = the conversation log + time-travel (C3 native). |
-| [`ray.md`](ray.md) | Ray | Python | Actor-per-conversation = stateful agent; durability + streaming are external. |
-| [`quarkus.md`](quarkus.md) | Quarkus | Java | Reactive messaging + Mutiny; keyed state external. Already our proxy. |
-| [`spring.md`](spring.md) | Spring | Java | Cloud Stream + StateMachine + Spring AI; dataflow → message channels. |
-| [`dask.md`](dask.md) | Dask | Python | Great for batch/parallel RAG + eval; weak for live keyed streaming. |
-| [`airflow.md`](airflow.md) | Airflow | Python | Routed graph → DAG; batch/scheduled agentic + RAG ingestion; not streaming. |
 
 For the Python engines (Faust, Ray, Dask, Airflow) the target is **pure Python**. For the JVM
 engines (Pekko, Quarkus, Spring) the existing Java core types are reused behind the Engine SPI.

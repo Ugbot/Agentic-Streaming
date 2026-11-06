@@ -3,7 +3,7 @@
 This is the single most important abstraction in the port: durable, per-key state
 shared across operators and turns, keyed by ``conversation_id`` and indexable by
 ``user_id``. In Flink this rode on keyed state; here it's a plain SPI with swappable
-backends so every engine adapter (Faust Table, Ray actor field, Redis, …) can plug in.
+backends so every engine adapter can plug in.
 """
 
 from __future__ import annotations
@@ -155,7 +155,7 @@ class KeyedStateStore(Protocol):
     """The portable form of Flink keyed ``ValueState`` — per-(key,name) scalar slot.
 
     Engine adapters back this with their native keyed state (Kafka Streams
-    ``KeyValueStore``, Faust ``Table``, a Ray actor field) or Redis. The
+    ``KeyValueStore``) or Redis. The
     ``ConversationStore`` is the richer, transcript-aware sibling; this is the
     minimal get/put used for things like a per-conversation routing budget.
     """

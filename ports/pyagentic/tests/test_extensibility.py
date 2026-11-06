@@ -1,7 +1,7 @@
 """Extensibility guard for the pyagentic core.
 
 The whole point of the port architecture is that the *core* is the single source of
-truth: every engine adapter (Faust, Ray, Dask, Airflow, Celery, …) imports the same
+truth: every engine adapter imports the same
 abstractions and runs ``RoutedGraph.handle`` — it never re-implements routing, tools,
 or retrieval. So a new tool / new path / new brain added through the public API must
 "just work", and by construction every adapter then gets it for free.

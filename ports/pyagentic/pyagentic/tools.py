@@ -1,7 +1,7 @@
 """Tools — the portable analogue of ``ToolExecutor`` / ``ToolRegistry``.
 
 A tool is a named ``params -> result`` function. Sync here for simplicity; engine
-adapters that have async (Faust/Ray) wrap these in ``await loop.run_in_executor``
+adapters that have async wrap these in ``await loop.run_in_executor``
 or call native async tools. Mirrors ``org.agentic.flink.tools.ToolExecutor``.
 """
 

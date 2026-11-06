@@ -3,7 +3,7 @@ package org.jagentic.core.pipeline;
 import org.jagentic.core.ConversationStore;
 import org.jagentic.core.Runtime;
 
-/** ServiceLoader SPI that lets an engine module (Pekko / Kafka-Streams / Temporal / Pulsar)
+/** ServiceLoader SPI that lets an engine module (such as Pekko)
  * supply a {@link Runtime} for a backend name, so {@code backend: <name>} in a pipeline.yaml
  * resolves without the core hard-coding every engine. The core ships {@code local}; a module
  * registers a provider via {@code META-INF/services/org.jagentic.core.pipeline.BackendProvider}. */

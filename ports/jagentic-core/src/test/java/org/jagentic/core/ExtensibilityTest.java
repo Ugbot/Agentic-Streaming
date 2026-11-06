@@ -12,14 +12,13 @@ import org.junit.jupiter.api.Test;
  * Extensibility guard for jagentic-core — the Java mirror of
  * {@code pyagentic/tests/test_extensibility.py}.
  *
- * <p>Every JVM adapter (Kafka Streams, Pekko, Pulsar, Spring, Quarkus) consumes the
+ * <p>Every JVM adapter consumes the
  * core factories ({@code Banking.buildGraph()/defaultTools()/retriever()}) and runs
  * {@code RoutedGraph.handle} — none reimplements routing, tools, or retrieval. So a
  * new tool / new path added through the public API must "just work", and by
  * construction every adapter then inherits it. This test adds a brand-new
  * {@code freeze_card} tool and a brand-new {@code fraud} path using only the public
  * abstractions (no framework edits) and proves the core routes to and invokes them.
- * The adapter-level counterpart lives in the pulsar module's {@code BankingFunctionTest}.
  */
 class ExtensibilityTest {
 

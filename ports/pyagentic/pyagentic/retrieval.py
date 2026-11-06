@@ -40,7 +40,7 @@ def hashing_embedder(dim: int = 64) -> Callable[[str], List[float]]:
     """Deterministic bag-of-words hashing embedder. Documents sharing vocabulary
     land near each other in cosine space — enough to exercise retrieval end-to-end
     without an external model. Uses FNV-1a so vectors are identical across the
-    Python/Java/Go cores and stable across processes (Celery workers, NATS consumers)."""
+    Python and Java cores and stable across processes."""
 
     def embed(text: str) -> List[float]:
         v = [0.0] * dim
