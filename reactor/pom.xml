@@ -46,8 +46,8 @@
 
     <!--
     Layout decision (C1). The root pom.xml stays the Flink framework module (its sources live at
-    src/, its shaded jar at target/agentic-flink-*-uber.jar, and python/, pyflink/, the compose
-    files and every documented `./mvnw ...` command at the repository root depend on that). The
+    src/, its shaded jar at target/agentic-flink-*-uber.jar, and the compose files and every
+    documented `./mvnw ...` command at the repository root depend on that). The
     aggregator therefore lives here, one level down, and lists the root module as "..".
     Every module names this pom as its parent through <relativePath>, so no install of the parent
     is needed before a single module can be built. When a module is installed on its own
@@ -57,19 +57,14 @@
     build resolves that parent from the local repository, not through <relativePath>.
 
     One groupId (org.jagentic) and one version (1.0.0-SNAPSHOT) for the whole reactor. The
-    framework jar keeps its artifactId, so the file name agentic-flink-1.0.0-SNAPSHOT-uber.jar
-    the Python packages glob for is unchanged. Java package names (org.agentic.flink.*,
-    org.jagentic.*) are unaffected by the Maven groupId.
+    framework jar keeps its artifactId, so the file name is agentic-flink-1.0.0-SNAPSHOT-uber.jar.
+    Java package names (org.agentic.flink.*, org.jagentic.*) are unaffected by the Maven groupId.
     -->
 
     <modules>
         <module>../ports/jagentic-core</module>
         <module>..</module>
         <module>../agentic-pekko</module>
-        <module>../pyflink/java</module>
-        <module>../tool-services/tool-services-packs</module>
-        <module>../tool-services/tool-services-app</module>
-        <module>../banking-job</module>
     </modules>
 
     <properties>
@@ -83,7 +78,6 @@
         <langchain4j.version>1.16.3</langchain4j.version>
         <junit.version>5.10.2</junit.version>
         <testcontainers.version>1.21.4</testcontainers.version>
-        <quarkus.platform.version>3.30.6</quarkus.platform.version>
         <postgresql.version>42.7.13</postgresql.version>
         <hikaricp.version>5.0.1</hikaricp.version>
         <!-- SLF4J 2.x API line; the matching log4j binding is log4j-slf4j2-impl (log4j 2.19+). -->
@@ -111,9 +105,10 @@
     <!-- Every cross-module coordinate is managed here, so no module states another module's
          version: a module declares `org.jagentic:agentic-flink` with no <version>. Consumers
          outside the reactor import this pom as a BOM instead of inheriting from it. The
-         LangChain4J BOM, flink-cep and the postgres/Hikari versions are managed here too: the Flink framework (root pom) marks the provider SDKs and the
-         postgres driver/pool optional, so the modules that need them at runtime (banking-job,
-         a2a-gateway) declare them explicitly and must resolve to the same versions. -->
+         LangChain4J BOM, flink-cep and the postgres/Hikari versions are managed here too: the
+         Flink framework (root pom) marks the provider SDKs and the postgres driver/pool optional,
+         so a consumer that needs them at runtime declares them and must resolve to the same
+         versions. -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -147,31 +142,6 @@
             <dependency>
                 <groupId>org.jagentic</groupId>
                 <artifactId>agentic-pekko</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jagentic</groupId>
-                <artifactId>agentic-pyflink</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jagentic</groupId>
-                <artifactId>tool-services-packs</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jagentic</groupId>
-                <artifactId>tool-services-app</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jagentic</groupId>
-                <artifactId>agentic-flink-banking-job</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.jagentic</groupId>
-                <artifactId>agentic-flink-a2a-gateway</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -393,16 +363,6 @@
                     </plugin>
                 </plugins>
             </build>
-        </profile>
-
-        <!-- The Quarkus A2A gateway is part of the reactor but opt-in: it is the slowest module
-             (Quarkus augmentation plus its own Flink stack) and nothing else depends on it.
-                 ./mvnw -f reactor/pom.xml -P a2a-gateway verify -->
-        <profile>
-            <id>a2a-gateway</id>
-            <modules>
-                <module>../a2a-gateway</module>
-            </modules>
         </profile>
     </profiles>
 </project>
