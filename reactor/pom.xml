@@ -392,8 +392,7 @@
         <!-- Runs the *IT.java classes of every module through maven-failsafe-plugin in the
              integration-test and verify phases, on top of the unit suite:
                  ./mvnw -f reactor/pom.xml verify -P integration-tests
-             The classes start the services they need (PostgreSQL, pgvector, Redis, Qdrant,
-             Fluss) through Testcontainers and fail with an explicit message when no container
+             The classes start the services they need through Testcontainers and fail with an explicit message when no container
              runtime is reachable; they never skip themselves. Locally that runtime is Podman:
                  export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
                  export TESTCONTAINERS_RYUK_DISABLED=true

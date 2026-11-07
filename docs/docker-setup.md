@@ -1,15 +1,15 @@
 # Docker Setup Guide
 
-**Quick start guide for running Agentic Flink infrastructure with Docker Compose**
+**Running the optional infrastructure with Docker Compose. A Flink job keeps its log in keyed state and needs none of this unless a document declares it.**
 
 ## What's Included
 
 This Docker Compose setup provides:
 
-- **PostgreSQL 15** - Durable storage for conversations and context
-- **Redis 7** - Fast caching layer for active contexts
-- **Ollama** - Local LLM inference (no API keys needed!)
-- **(Optional) Qdrant** - Vector database for RAG (commented out by default)
+- **PostgreSQL 15** - `stores.long_term` on the Java core and Pekko
+- **Redis 7** - `stores.conversation` on the Java core and Pekko
+- **Ollama** - `llm: {provider: ollama}`, with no API keys
+- **(Optional) Qdrant** - `retrieval.vector_store` (commented out by default)
 
 ## Quick Start
 
@@ -245,9 +245,8 @@ ls -la /var/lib/docker/volumes/
 
 ### PostgreSQL Tables Not Created
 
-The Postgres stores create their own tables on first use (`PostgresConversationStore` creates
-`agent_contexts` and `agent_facts`, `PostgresA2ATaskStore` creates `a2a_tasks` and
-`a2a_push_configs`, `PgVectorStore` creates its configured table). There is no initdb script.
+The Postgres stores create their own tables on first use (`PostgresLongTermStore` creates a schema
+with `turns` and `facts`, `PgVectorStore` creates its configured table). There is no initdb script.
 If a table is missing, check that the job connected to the right database:
 
 ```bash
@@ -333,10 +332,9 @@ docker volume ls | grep agentic-flink | awk '{print $2}' | xargs docker volume r
 
 Once your infrastructure is running:
 
-1. Build the project: `mvn clean compile`
-2. Run tests: `mvn test` (once implemented)
-3. Try the examples in `src/main/java/org/agentic/flink/example/`
-4. Read [getting-started.md](getting-started.md) for usage guide
+1. Build the project: `./mvnw -f reactor/pom.xml install -DskipTests`
+2. Try the workflow documents in `examples/pipelines/`
+3. Read [getting-started.md](getting-started.md)
 
 ---
 
@@ -350,4 +348,4 @@ Once your infrastructure is running:
 
 ---
 
-**Questions?** Check [reference/troubleshooting.md](reference/troubleshooting.md) or open an issue!
+**Questions?** Open an issue.

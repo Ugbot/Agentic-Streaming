@@ -18,8 +18,7 @@ import org.jagentic.core.ToolRegistry;
  * {@code java.net.http} and a self-contained HTML extractor (no Jsoup dependency, keeping
  * the core lean). Ships as an opt-in tool, default off: call
  * {@link #register(ToolRegistry)} to expose {@code web_fetch} / {@code web_links} to an
- * agent. Mirrors the Flink {@code web/} toolkit (Jsoup + crawler-commons robots) at a
- * portable subset. */
+ * agent. */
 public final class WebFetcher {
 
   /** Result of a web fetch. */

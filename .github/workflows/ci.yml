@@ -10,9 +10,8 @@ name: CI
 # The conformance matrix is a required check too; it lives in conformance.yml and is
 # not repeated here.
 #
-# Skips are audited. The Maven *IT classes start their own PostgreSQL, pgvector, Redis,
-# Qdrant and Fluss containers through Testcontainers and fail (never skip) without a
-# container runtime; the remaining service-backed tests skip themselves when Postgres,
+# Skips are audited. The Maven *IT classes start their own Redis container through
+# Testcontainers and fail (never skip) without a container runtime; the remaining service-backed tests skip themselves when Postgres,
 # Redis, Kafka, Qdrant or a Python with the MCP SDK is unreachable, so in CI those services
 # are provisioned and tools/ci/skip_audit.py fails the job for any skip whose reason is not
 # written down in tools/ci/skip-allowlist.txt (declared conformance capability gaps, Ollama,
@@ -68,9 +67,8 @@ jobs:
       # jagentic-core McpTest spawns a stdio MCP server with this interpreter.
       AGENTIC_TEST_PYTHON: /tmp/mcp-venv/bin/python
     services:
-      # The *IT classes run by failsafe in the integration-tests profile (Redis, PostgreSQL,
-      # pgvector, Qdrant, Fluss) start their own containers through the runner's Docker
-      # socket; the containers below serve the tests that connect to a fixed localhost
+      # The *IT classes run by failsafe in the integration-tests profile start their own
+      # containers through the runner's Docker socket; the containers below serve the tests that connect to a fixed localhost
       # port instead.
       postgres:
         image: pgvector/pgvector:pg16
@@ -121,20 +119,10 @@ jobs:
       # runs its tests: the unit suite through surefire, then the *IT classes through
       # failsafe in the integration-test phase (the integration-tests profile binds it in
       # reactor/pom.xml).
-      #
-      # One surefire test class of the Flink module is excluded by name (failsafe does not
-      # read -Dtest, so the *IT classes are unaffected):
-      # - ZeroMqChannelTest has no per-test timeout and hangs on some hosts (jeromq
-      #   PUSH/PULL over tcp://127.0.0.1); a hang here would only surface as this job's
-      #   60 minute timeout. Run it locally with `./mvnw test -Dtest=ZeroMqChannelTest`.
-      # - `-Dtest` replaces surefire's include patterns, so `!*IT` keeps the *IT.java classes
-      #   out of surefire; failsafe runs them once in the integration-test phase.
       - name: Maven reactor (integration-tests profile)
         run: >-
           ./mvnw -B -ntp -f reactor/pom.xml install
           -P integration-tests
-          -Dtest='!ZeroMqChannelTest,!*IT'
-          -Dsurefire.failIfNoSpecifiedTests=false
 
       - name: Shaded framework jar is present
         run: |

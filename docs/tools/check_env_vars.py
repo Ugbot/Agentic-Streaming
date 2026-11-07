@@ -4,13 +4,13 @@
     python docs/tools/check_env_vars.py --list     # print the derived table
     python docs/tools/check_env_vars.py --write    # rewrite the generated block in docs/configuration.md
 
-AgenticFlinkConfig resolves a key such as ``ollama.base.url`` from the environment variable
-``AGENTIC_FLINK_OLLAMA_BASE_URL`` (upper case, dots to underscores, ``AGENTIC_FLINK_`` prefix).
+AgenticFlinkConfig resolves a key such as ``checkpoint.interval.ms`` from the environment variable
+``AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS`` (upper case, dots to underscores, ``AGENTIC_FLINK_`` prefix).
 Two kinds of ``AGENTIC_FLINK_*`` names are legitimate in the documentation:
 
 * application keys: the variable maps back to a dotted key that appears as a string literal in a
   Java source file of the repository (every ``ConfigKeys`` constant, plus keys some modules read
-  with a literal, for example ``a2a.auth.dev.mode``);
+  with a literal);
 * runtime and tooling variables read directly by scripts or code; the literal name must appear in a non-documentation source file.
 
 Anything else is drift and fails the check. The block between ``<!-- env-vars: ConfigKeys -->``

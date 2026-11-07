@@ -44,8 +44,7 @@ class ChatMessage:
 class ConversationStore(Protocol):
     """Multi-turn transcript + scalar workflow attributes, keyed by conversation id.
 
-    Mirrors ``org.agentic.flink.memory.conversation.ConversationStore``. Attributes
-    carry small scalars across operators/turns (routing phase, remote contextId);
+    Attributes carry small scalars across operators/turns (routing phase, remote contextId);
     the transcript is the bounded message history. ``user_id`` indexing supports
     "all conversations for a user".
     """
@@ -80,7 +79,7 @@ class InMemoryConversationStore:
     """Process-local, thread-safe ``ConversationStore`` — the embedded default.
 
     Bounded transcript per conversation (LRU on age). For a distributed deployment
-    swap in a Redis/Fluss-backed implementation behind the same Protocol; the agent
+    swap in a Redis-backed implementation behind the same Protocol; the agent
     logic doesn't change.
     """
 

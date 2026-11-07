@@ -2,7 +2,7 @@
 
 A tool is a named ``params -> result`` function. Sync here for simplicity; engine
 adapters that have async wrap these in ``await loop.run_in_executor``
-or call native async tools. Mirrors ``org.agentic.flink.tools.ToolExecutor``.
+or call native async tools.
 """
 
 from __future__ import annotations

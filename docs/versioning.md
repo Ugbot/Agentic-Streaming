@@ -72,8 +72,7 @@ A deprecation ships with all of the following:
 
 A replacement must exist and be documented before an API is deprecated. Deprecating without a
 replacement is not allowed; if a feature is being dropped entirely, the deprecation entry says
-so and states what users should do instead. The legacy Flink `AgentBuilder` DSL is outside the
-conformance path. It is deprecated and stays until the next cleanup.
+so and states what users should do instead.
 
 ## Compatibility matrix
 

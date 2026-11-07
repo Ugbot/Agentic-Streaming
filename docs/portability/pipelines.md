@@ -133,8 +133,8 @@ triggers + retrieval) and needs no `llm:` section, the default everywhere.
 Every external service sits **behind an interface**, selected by a **connection link**:
 
 - **Durable store**: `stores.conversation.{kind,url}` swaps the `ConversationStore`
-  implementation (`memory` → `redis`/Valkey) with no agent-code change. Postgres/Fluss
-  slot in the same way (a class implementing the SPI + a registry entry).
+  implementation (`memory` → `redis`/Valkey) with no agent-code change. A Flink job ignores `stores:`: its log is
+  keyed state.
 - Bring the services up with Compose and point the links at them:
 
   ```bash

@@ -136,13 +136,10 @@ and only on Flink within its checkpoints.
 | [`ports/jagentic-core`](ports/jagentic-core/README.md) | The Java core |
 | [`ports/pyagentic`](ports/pyagentic/README.md) | The Python core: the conformance-tested `agentic` package and the older `pyagentic` package |
 | [`ports/agentic-pipeline`](ports/agentic-pipeline/README.md) | The `pipeline.yaml` CLI; `local` is its only backend |
-| Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) and, for now, the deprecated legacy Flink DSL and its examples |
+| Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) |
 | [`agentic-pekko`](agentic-pekko/README.md) | The Pekko runtime |
 | [`examples/pipelines`](examples/pipelines) | Example workflow documents |
 | `reactor/` | The Maven parent and aggregator for the JVM modules |
-
-The legacy DSL (`Agent.builder()` under `org.agentic.flink.dsl`) is outside the spec and no fixture
-measures it. It is still in the root module and will be removed in a later change.
 
 ## Documentation
 
@@ -152,7 +149,6 @@ measures it. It is still in the root module and will be removed in a later chang
 | [docs/runtimes/](docs/runtimes/README.md) | What each runtime is made of, and where conformance results are |
 | [docs/portability/pipelines.md](docs/portability/pipelines.md) | The `pipeline.yaml` schema |
 | [docs/python.md](docs/python.md) | The Python API |
-| [docs/concepts.md](docs/concepts.md) | Core concepts |
 | [docs/configuration.md](docs/configuration.md) | Configuration reference |
 | [docs/security.md](docs/security.md) | What the code does and does not do about security |
 | [docs/guides/flink-agents-integration.md](docs/guides/flink-agents-integration.md) | How this compares with Apache Flink Agents, which is the better choice today if you are on Flink |
@@ -170,17 +166,9 @@ Nothing is published to Maven Central or PyPI. Everything is built from a checko
 
 For `flink run`, the shaded jar is `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar`; it excludes the
 Flink runtime a cluster provides. `bash tools/check-jar-launch.sh` boots it under JDK 21. The thin
-`agentic-flink` jar marks its provider SDKs and drivers optional, so add the ones you use to your own
-pom; see the `<optional>` entries in the root `pom.xml`.
+`agentic-flink` jar marks the embedding SDKs and the Postgres driver optional, so add the ones you use
+to your own pom; see the `<optional>` entries in the root `pom.xml`.
 
-The uber jar leaves out the Fluss client, which carries old relocated copies of Netty, Jackson, Guava
-and lz4 ([docs/security.md](docs/security.md)). For a Fluss backend, build with `./mvnw -P fluss
-package` or put `com.alibaba.fluss:fluss-client` on the job classpath. Without it, selecting Fluss
-fails at startup and says so.
-
-The Milvus SDK is left out for the same reason: it carries its own relocated gRPC and Netty 4.1. For
-the Milvus backend, build with `./mvnw -P milvus package` or put `io.milvus:milvus-sdk-java` on the
-job classpath. Without it, selecting Milvus fails at startup and says so too.
 
 ## Contributing
 

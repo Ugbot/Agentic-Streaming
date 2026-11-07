@@ -119,6 +119,14 @@ exists.
 
 ### Removed
 
+- The legacy Flink DSL: `Agent.builder()`, `AgentJobGenerator` and everything only they used, in
+  all about 58,000 lines of main code and 25,000 of tests. That takes the Java examples, the old
+  `a2a`, `inference`, `web`, `retrieve`, `corpus`, `ingest`, `channel`, `storage` and `memory`
+  packages, the Fluss and Milvus backends with `-P fluss` and `-P milvus`, the Anthropic and Gemini
+  chat connections, and the `@Experimental` annotation. A workflow document on
+  `WorkflowTurnFunction` is the one way to define an agent on Flink. The code as it stood is at tag
+  `pre-cornerstone`. `OutboundUrlPolicy` moved to `jagentic-core`, and pgvector came across as
+  `retrieval.vector_store` kind `pgvector`.
 - `pyflink/`, `python/`, `agentic-clj/`, `tool-services/`, `a2a-gateway/`, `banking-job/`,
   `banking-kb/`, `notebooks/` and `examples-bin/`, with the compose files, Dockerfile, env examples
   and scripts that only served them. Their entries in the reactor, CI, Dependabot and the conformance
