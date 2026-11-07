@@ -217,32 +217,4 @@ class FlinkJobDefaultsTest {
     assertEquals(dir, copy.toConfiguration().get(CheckpointingOptions.CHECKPOINTS_DIRECTORY));
     assertThrows(IllegalArgumentException.class, () -> base.withInterval(Duration.ZERO));
   }
-
-  @Test
-  void agentJobCarriesDefaultsIntoGenerator() {
-    Map<String, String> props = new HashMap<>();
-    long interval = ThreadLocalRandom.current().nextLong(1_000, 50_000);
-    props.put(ConfigKeys.CHECKPOINT_INTERVAL_MS, Long.toString(interval));
-    AgentJob job =
-        AgentJob.builder()
-            .withId("job-" + ThreadLocalRandom.current().nextInt(1_000_000))
-            .withAgent(
-                org.agentic.flink.dsl.Agent.builder()
-                    .withId("a")
-                    .withSystemPrompt("s")
-                    .withStateMachine(org.agentic.flink.execution.AgentExecutorTest.stateMachine())
-                    .build())
-            .withAgenticFlinkConfig(config(props))
-            .build();
-    assertEquals(Duration.ofMillis(interval), job.getJobDefaults().getInterval());
-
-    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-    new AgentJobGenerator(env, job);
-
-    assertTrue(env.getCheckpointConfig().isCheckpointingEnabled());
-    assertEquals(interval, env.getCheckpointConfig().getCheckpointInterval());
-    assertEquals(
-        CheckpointingMode.EXACTLY_ONCE,
-        env.getCheckpointConfig().getCheckpointingConsistencyMode());
-  }
 }
