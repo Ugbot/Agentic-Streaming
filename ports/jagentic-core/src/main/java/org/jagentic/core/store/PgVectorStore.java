@@ -31,6 +31,13 @@ public final class PgVectorStore implements VectorStore {
     if (!IDENTIFIER.matcher(this.table).matches()) {
       throw new IllegalArgumentException("pgvector table is not a plain identifier: " + this.table);
     }
+    try {
+      // DriverManager registers drivers from the system class loader, which on a Flink cluster
+      // cannot see the job jar.
+      Class.forName("org.postgresql.Driver");
+    } catch (ClassNotFoundException e) {
+      throw new RuntimeException("pgvector needs org.postgresql:postgresql on the classpath", e);
+    }
     try (Connection c = open(); Statement st = c.createStatement()) {
       st.execute("CREATE EXTENSION IF NOT EXISTS vector");
       st.execute("CREATE TABLE IF NOT EXISTS " + this.table + " (id TEXT PRIMARY KEY, "

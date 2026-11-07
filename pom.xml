@@ -18,11 +18,9 @@
     <artifactId>agentic-flink</artifactId>
 
     <name>Agentic Flink</name>
-    <description>Standalone Agentic Framework for Apache Flink with LangChain4J Integration</description>
+    <description>The agentic/v1 runtime on Apache Flink</description>
 
     <properties>
-        <fluss.version>0.7.0</fluss.version>
-        <milvus.version>2.6.27</milvus.version>
         <!-- flink.version, java.version, langchain4j.version and junit.version are inherited from
              the reactor parent. Flink 2.x supports 17/21; 25 is not yet viable (see the Lombok
              note below). slf4j.version and log4j.version come from the reactor too. -->
@@ -44,57 +42,10 @@
             --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
             --add-opens=java.base/java.text=ALL-UNNAMED
         </agentic.test.jvmArgs>
-        <!--
-        A2A (Agent2Agent) Java SDK. groupId io.github.a2asdk. The 1.0 protocol line is
-        currently published only as alphas on Maven Central (newest stable Final is 0.3.x);
-        we pin the 1.0 surface and isolate it behind our own A2AClient SPI so a later Final
-        bump is a one-module change. See docs/a2a.md.
-        -->
-        <a2a.version>1.0.0.Alpha3</a2a.version>
-        <!-- 1.18.40 was the first release to support JDK 25; staying current here keeps a
-             future baseline bump from being blocked by annotation processing. -->
-        <lombok.version>1.18.48</lombok.version>
-        <bouncycastle.version>1.86</bouncycastle.version>
-        <!-- What io.qdrant:client 1.20.0 is built on. -->
-        <grpc.version>1.84.2</grpc.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <!-- Ahead of the A2A BOM on purpose: it manages Jackson too, a module's own imports
-                 come before the parent's, and the first BOM to name an artifact wins. -->
-            <dependency>
-                <groupId>com.fasterxml.jackson</groupId>
-                <artifactId>jackson-bom</artifactId>
-                <version>${jackson.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-bom</artifactId>
-                <version>${netty.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- Ahead of the A2A BOM for the same reason: it holds gRPC at 1.77.0, and
-                 grpc-netty-shaded 1.77.0 carries a relocated Netty 4.1.127 that neither OSV nor the
-                 netty-bom above can see. -->
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-bom</artifactId>
-                <version>${grpc.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <!-- A2A Java SDK BOM — aligns all a2a-java-sdk-* module versions. -->
-            <dependency>
-                <groupId>io.github.a2asdk</groupId>
-                <artifactId>a2a-java-sdk-bom</artifactId>
-                <version>${a2a.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
             <!-- flink-connector-kafka 5.0.0-2.2 is built on the 4.1 line; 4.1.2 is that line's patch
                  for CVE-2026-33557 and CVE-2026-35554. agentic-pekko stays on 3.9.2 through its
                  connector, so this is not managed in the reactor. -->
@@ -102,27 +53,6 @@
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
                 <version>4.1.2</version>
-            </dependency>
-            <!-- Bouncy Castle comes in through Tika's crypto module at 1.82. -->
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcpkix-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcutil-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.bouncycastle</groupId>
-                <artifactId>bcjmail-jdk18on</artifactId>
-                <version>${bouncycastle.version}</version>
             </dependency>
             <!-- Test scope only, both through flink-test-utils. -->
             <dependency>
@@ -135,7 +65,7 @@
                 <artifactId>assertj-core</artifactId>
                 <version>3.27.7</version>
             </dependency>
-            <!-- The LangChain4J BOM, flink-cep, postgresql and HikariCP versions, and every
+            <!-- The LangChain4J BOM, flink-cep and postgresql versions, Jackson and Netty, and every
                  org.jagentic module coordinate are managed in reactor/pom.xml. -->
             <!-- Pin commons-lang3 to the modern version Flink 2.x ships, so neither the uber-jar
                  nor downstream consumers pick up a stale Range/StringUtils from a transitive dep
@@ -164,12 +94,11 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Flink CEP. Deliberately compile scope, unlike the rest of Flink: the DSL's job path
-             (job/AgentJobGenerator, job/AgentExecutionFunction, statemachine/) and the pipeline
-             runner use it, and a Flink distribution does not ship flink-cep in lib/, so every
-             consumer job jar has to shade it. `provided` would fail those jobs at runtime with
-             NoClassDefFoundError; optional would make the default DSL path fail the same way.
-             It adds no transitive dependencies beyond the provided Flink runtime. -->
+        <!-- Flink CEP. Deliberately compile scope, unlike the rest of Flink: the pipeline runner
+             uses it, and a Flink distribution does not ship flink-cep in lib/, so every consumer
+             job jar has to shade it. `provided` would fail those jobs at runtime with
+             NoClassDefFoundError. It adds no transitive dependencies beyond the provided Flink
+             runtime. -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-cep</artifactId>
@@ -185,15 +114,9 @@
             <artifactId>jagentic-core</artifactId>
         </dependency>
 
-        <!-- LangChain4J Core -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j</artifactId>
-        </dependency>
-
-        <!-- LangChain4J provider SDKs. All optional: LangChain4jChatConnection selects the provider
-             class in a switch at runtime, so a consumer adds only the SDK(s) it configures (see
-             the install section of README.md). The uber jar carries all four. -->
+        <!-- LangChain4J provider SDKs, behind the core's `embeddings: {provider: ollama|openai}`.
+             Optional, as in jagentic-core: a consumer of the thin jar adds the one it configures
+             (see the install section of README.md). The uber jar carries both. -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-ollama</artifactId>
@@ -211,58 +134,6 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>
             <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-anthropic</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <!-- Google Gemini (API-key auth). For Vertex project/location auth instead, swap to
-             langchain4j-vertex-ai-gemini. -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-google-ai-gemini</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Apache Fluss client, behind FlussChannel, FlussSink, FlussVectorStore and
-             FlussConversationStore. `provided` keeps it out of the uber jar, because the client
-             carries its own relocated Netty, Jackson, Guava and lz4 that no floor here can reach
-             (docs/security.md). The code still compiles and is unit tested in every build; at
-             runtime FlussClient says what to do when the classes are missing. `-P fluss` bundles
-             it. -->
-        <dependency>
-            <groupId>com.alibaba.fluss</groupId>
-            <artifactId>fluss-client</artifactId>
-            <version>${fluss.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Native Qdrant gRPC client (backs QdrantVectorStore; optional) -->
-        <dependency>
-            <groupId>io.qdrant</groupId>
-            <artifactId>client</artifactId>
-            <version>1.20.0</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Milvus SDK, behind MilvusVectorStore. `provided` keeps it out of the uber jar, because
-             the SDK carries its own relocated gRPC and Netty 4.1 that no floor here can reach
-             (docs/security.md). The code still compiles in every build; at runtime MilvusClient
-             says what to do when the classes are missing. `-P milvus` bundles it. -->
-        <dependency>
-            <groupId>io.milvus</groupId>
-            <artifactId>milvus-sdk-java</artifactId>
-            <version>${milvus.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Lombok for reduced boilerplate -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <scope>provided</scope>
         </dependency>
 
         <!-- Logging: the library logs through the SLF4J API only. The Log4j backend is test scope,
@@ -292,26 +163,11 @@
             <scope>test</scope>
         </dependency>
 
-        <!--
-        Redis Client - OPTIONAL backend.
-
-        Flink keyed state is the canonical short-term memory. Redis is only used
-        if the user opts in to the RedisLongTermStore or RedisPubSubFeed backends.
-        Marked optional so consumers who don't need Redis don't pull it transitively.
-        -->
-        <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
-            <version>5.1.0</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Flink Kafka connector for KafkaMemoryFeed (optional at runtime). -->
+        <!-- Flink Kafka connector for KafkaPipelineJob. A Flink distribution does not ship it. -->
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-connector-kafka</artifactId>
             <version>5.0.0-2.2</version>
-            <optional>true</optional>
         </dependency>
         <!-- DeliveryGuarantee for the Kafka sink. Ships in the Flink distribution. -->
         <dependency>
@@ -319,120 +175,6 @@
             <artifactId>flink-connector-base</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
-        </dependency>
-
-        <!--
-        JeroMQ — pure-Java ZeroMQ. Backs ZeroMqChannel / ZeroMqSink for in-JVM /
-        localhost job-to-job chaining without burning a Kafka or Fluss topic. Optional
-        so consumers who don't use ZMQ pay nothing transitively.
-        -->
-        <dependency>
-            <groupId>org.zeromq</groupId>
-            <artifactId>jeromq</artifactId>
-            <version>0.6.0</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!--
-        A2A (Agent2Agent) Java SDK — OPTIONAL.
-
-        a2a-java-sdk-spec provides the wire POJOs (AgentCard, Message, Part, Task, Artifact);
-        a2a-java-sdk-client + its transport modules implement the outbound client. All marked
-        optional so consumers who don't use A2A pay nothing transitively — the SDK is only
-        touched by org.agentic.flink.a2a.SdkA2AClient (everything else uses our A2AClient SPI).
-        Versions come from the a2a-java-sdk-bom imported above.
-        -->
-        <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-spec</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-client</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-client-transport-jsonrpc</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-client-transport-grpc</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.github.a2asdk</groupId>
-            <artifactId>a2a-java-sdk-client-transport-rest</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <!--
-        DJL (Deep Java Library) — OPTIONAL inference backend.
-
-        Provides a single API over PyTorch, TensorFlow, ONNX, MXNet, and HuggingFace tokenizers.
-        These artifacts are marked optional so consumers who don't use DL pay nothing
-        transitively. Native PyTorch shared libraries (`pytorch-native-cpu`, `pytorch-native-cu118`,
-        `pytorch-native-mps`, etc.) are NOT pulled here — downstream projects pick the right one
-        for their target platform.
-        -->
-        <dependency>
-            <groupId>ai.djl</groupId>
-            <artifactId>api</artifactId>
-            <version>0.40.0</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>ai.djl.huggingface</groupId>
-            <artifactId>tokenizers</artifactId>
-            <version>0.40.0</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>ai.djl.pytorch</groupId>
-            <artifactId>pytorch-engine</artifactId>
-            <version>0.40.0</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!--
-        Web toolkit — OPTIONAL.
-
-        Jsoup for HTML parsing, crawler-commons for robots.txt + sitemap.xml, Apache Tika for
-        multi-format content extraction (PDF, DOC, PPT, EPUB, …). All marked optional so users
-        who don't run a crawler pay nothing transitively.
-        -->
-        <dependency>
-            <groupId>org.jsoup</groupId>
-            <artifactId>jsoup</artifactId>
-            <version>1.24.1</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>com.github.crawler-commons</groupId>
-            <artifactId>crawler-commons</artifactId>
-            <version>1.4</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-core</artifactId>
-            <version>3.3.3</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-parsers-standard-package</artifactId>
-            <version>3.3.3</version>
-            <optional>true</optional>
-        </dependency>
-        <!-- Tika needs commons-io 2.15+ for ChecksumInputStream; Flink pulls an older one. -->
-        <dependency>
-            <groupId>commons-io</groupId>
-            <artifactId>commons-io</artifactId>
-            <version>2.22.0</version>
-            <optional>true</optional>
         </dependency>
 
         <!-- Jackson for JSON and YAML Support -->
@@ -452,25 +194,11 @@
             <artifactId>jackson-module-parameter-names</artifactId>
         </dependency>
 
-        <!-- PostgreSQL JDBC driver and HikariCP pool behind the postgres stores (PostgresConversationStore,
-             PgVectorStore, PostgresA2ATaskStore). Optional: a consumer that selects the postgres
-             backend adds both; versions are managed in reactor/pom.xml. -->
+        <!-- PostgreSQL JDBC driver, behind the core's `vector_store: {kind: pgvector}`. -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Reflections for @Tool annotation scanning -->
-        <dependency>
-            <groupId>org.reflections</groupId>
-            <artifactId>reflections</artifactId>
-            <version>0.10.2</version>
         </dependency>
 
         <!-- Testing -->
@@ -536,20 +264,6 @@
             </exclusions>
         </dependency>
 
-        <!-- Testcontainers for integration tests -->
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
-            <version>${testcontainers.version}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${testcontainers.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -565,13 +279,6 @@
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
 
@@ -625,12 +332,7 @@
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.agentic.flink.pipeline.FlinkPipelineRunner</mainClass>
                                 </transformer>
-                                <!-- Merge META-INF/services so every ServiceLoader provider survives
-                                     the uber-jar: DJL's model-zoo (ai.djl.repository.zoo.ZooProvider,
-                                     needed for the djl:// HuggingFace embedder) and our own SPIs
-                                     (A2AClientFactory, ChatConnection, EmbeddingConnection, VectorStore,
-                                     LongTermMemoryStore). Without this, shade keeps only one file per
-                                     service and the rest are silently dropped. -->
+                                <!-- Merge META-INF/services, which shade otherwise keeps one of per service. -->
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
@@ -639,12 +341,11 @@
                 </executions>
             </plugin>
 
-            <!-- Maven Surefire Plugin - exclude integration + DJL (live-download) tests by default -->
+            <!-- Maven Surefire Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <excludedGroups>integration,djl</excludedGroups>
                     <argLine>${agentic.test.jvmArgs}</argLine>
                 </configuration>
             </plugin>
@@ -687,67 +388,6 @@
     </repositories>
 
     <profiles>
-        <!-- Unit suite plus the integration tests. The *IT.java classes are run by
-             maven-failsafe-plugin (integration-test and verify phases, configured in the reactor
-             parent) and never by surefire, whose default include pattern does not match them:
-                 ./mvnw verify -P integration-tests
-             They need a container runtime for Testcontainers (Podman socket exported as
-             DOCKER_HOST locally, Docker on GitHub-hosted runners) and fail with an explicit
-             message when none is reachable. The surefire override below only lifts the
-             "integration" tag exclusion for tagged *Test classes; the djl group stays excluded
-             (it downloads a native PyTorch runtime; see djl-native). -->
-        <profile>
-            <id>integration-tests</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration>
-                            <excludedGroups>djl</excludedGroups>
-                        </configuration>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-failsafe-plugin</artifactId>
-                        <configuration>
-                            <excludedGroups>djl</excludedGroups>
-                            <argLine>${agentic.test.jvmArgs}</argLine>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-
-        <!-- Bundles the Fluss client into the uber jar, for jobs that use a Fluss backend:
-                 ./mvnw -P fluss package
-             The jar then carries everything listed against fluss-client in docs/security.md. -->
-        <profile>
-            <id>fluss</id>
-            <dependencies>
-                <dependency>
-                    <groupId>com.alibaba.fluss</groupId>
-                    <artifactId>fluss-client</artifactId>
-                    <version>${fluss.version}</version>
-                    <scope>compile</scope>
-                </dependency>
-            </dependencies>
-        </profile>
-
-        <!-- Bundles the Milvus SDK into the uber jar, for jobs that use the Milvus backend:
-                 ./mvnw -P milvus package
-             The jar then carries everything listed against milvus-sdk-java in docs/security.md. -->
-        <profile>
-            <id>milvus</id>
-            <dependencies>
-                <dependency>
-                    <groupId>io.milvus</groupId>
-                    <artifactId>milvus-sdk-java</artifactId>
-                    <version>${milvus.version}</version>
-                    <scope>compile</scope>
-                </dependency>
-            </dependencies>
-        </profile>
 
         <!--
         Examples profile. Flink is a provided dependency, so a plain `exec:java` run lacks
@@ -776,34 +416,6 @@
                             <executable>${java.home}/bin/java</executable>
                             <classpathScope>test</classpathScope>
                             <commandlineArgs>${examples.add.opens} -classpath %classpath ${exec.mainClass} ${exec.args}</commandlineArgs>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-
-        <!--
-        DJL live profile. The default build pulls the DJL API + pytorch-engine but not the native
-        PyTorch shared library (a no-DL build stays small). Enabling this profile selects the live
-        DJL test group ({@code @Tag("djl")}); DJL's pytorch-engine auto-downloads the
-        platform-matched CPU native + JNI on first model load (cached under ~/.djl.ai), so no
-        platform-specific Maven classifier is needed:
-
-            mvn test -P djl-native -Dtest=DjlRecallIT     # live embed + recall + micro-benchmark
-
-        For a fully offline/air-gapped jar, add ai.djl.pytorch:pytorch-native-cpu with your
-        platform's DJL classifier (osx-aarch64 / linux-x86_64 / …) at the call site.
-        -->
-        <profile>
-            <id>djl-native</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration>
-                            <excludedGroups>none</excludedGroups>
-                            <groups>djl</groups>
                         </configuration>
                     </plugin>
                 </plugins>
