@@ -68,7 +68,9 @@ second one's turns with class `policy`. `policies.sharing` (`tenant: true`, or `
 conversation is meant to have several users, all of its tenant.
 
 **Approvals.** A resume comes with the approver's token, and the runtime checks it against
-`policies.approvers`. A refusal is a 403 and `signal_refused` on the log. A resume of a turn the
+`policies.approvers`. A refusal is a 403 and `signal_refused` on the log, once per sender and turn:
+the same sender again, or any unauthenticated signal after one, is refused with nothing appended, so
+a non-approver cannot grow someone else's log (`refused-signal-once`). A resume of a turn the
 conversation does not have is the 404 of no conversation, and a refused signal from someone who is
 neither the owner nor a reader gets the refusal and nothing else of the conversation.
 

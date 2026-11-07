@@ -124,6 +124,18 @@ def _owner_of(log: Sequence[Event]) -> Optional[Dict[str, Any]]:
     return first.payload.get("principal") if first is not None else None
 
 
+def _sender(principal: Optional[Mapping[str, Any]]) -> Optional[tuple]:
+    """Who sent a signal, for counting refusals: tenant and subject, or None for everyone unauthenticated."""
+    return (principal.get("tenant"), principal.get("subject")) if principal else None
+
+
+def _refused_before(log: Sequence[Event], turn: Turn) -> bool:
+    """True when this turn already has a `signal_refused` from this signal's sender."""
+    sender = _sender(turn.principal)
+    return any(e.type == "signal_refused" and e.turn_id == turn.turn_id
+               and _sender(e.payload.get("signal_principal")) == sender for e in log)
+
+
 def _principal_of(turn: Turn) -> Dict[str, Any]:
     return {"principal": dict(turn.principal)} if turn.principal is not None else {}
 
@@ -474,6 +486,9 @@ class Engine:
     def _refuse_signal(self, ctx: _TurnContext, problem: str) -> Dict[str, Any]:
         """Status `failed`, class `policy`. The turn is untouched, and the attempt is on the log."""
         turn = ctx.turn
+        if _refused_before(self.log.read(turn.conversation_id), turn):
+            # Once per sender and turn: a sender who keeps trying cannot grow the log.
+            return self.refused(turn.conversation_id, turn.turn_id, problem, "policy")
         payload = {"turn_id": turn.turn_id, "signal_sender": turn.user_id, "reason": problem}
         if turn.principal is not None:
             payload["signal_principal"] = dict(turn.principal)

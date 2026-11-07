@@ -430,6 +430,10 @@ public final class RoutedGraph {
 
   /** Status {@code failed}, class {@code policy}. The turn is untouched, and the attempt is on the log. */
   private static TurnResult refuseSignal(Event signal, AgentContext ctx, String problem) {
+    if (refusedBefore(signal, ctx)) {
+      // Once per sender and turn: a sender who keeps trying cannot grow the log.
+      return refused(signal, TurnError.ErrorClass.POLICY, problem, ctx.conversationState());
+    }
     ctx.metadata = signal.metadata();
     Map<String, Object> p = map("turn_id", signal.turnId(), "reason", problem);
     p.put("signal_sender", signal.userId() == null ? "anonymous" : signal.userId());
@@ -439,6 +443,23 @@ public final class RoutedGraph {
     ctx.record(EventType.SIGNAL_REFUSED, p);
     return new TurnResult(ctx.conversationId, ctx.turnId, TurnStatus.FAILED, null, null,
         new TurnError(TurnError.ErrorClass.POLICY, problem), List.of(), ctx.segment(), stateOrEmpty(ctx));
+  }
+
+  /** True when this turn already has a {@code signal_refused} from this signal's sender. */
+  private static boolean refusedBefore(Event signal, AgentContext ctx) {
+    List<String> sender = senderOf(signal.principal());
+    for (LogEvent e : ctx.log.events(ctx.conversationId)) {
+      if (e.is(EventType.SIGNAL_REFUSED) && signal.turnId().equals(e.turnId())
+          && java.util.Objects.equals(sender, senderOf(Principal.fromMap(e.payload().get("signal_principal"))))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Who sent a signal, for counting refusals: tenant and subject, or null for everyone unauthenticated. */
+  private static List<String> senderOf(Principal p) {
+    return p == null ? null : java.util.Arrays.asList(p.tenant(), p.subject());
   }
 
   /** A turn as first received, rebuilt from the log: a re-run never trusts the delivery. */

@@ -351,6 +351,13 @@ class ReferenceRuntime:
 
     def _refuse_signal(self, conv: Conversation, turn: Turn, problem: str) -> Dict[str, Any]:
         """Status `failed`, class `policy`. The turn is untouched, and the attempt is on the log."""
+        def sender(principal: Optional[Dict[str, Any]]) -> Optional[tuple]:
+            return (principal.get("tenant"), principal.get("subject")) if principal else None
+
+        if any(e["type"] == "signal_refused" and sender(e["payload"].get("signal_principal")) == sender(turn.principal)
+               for e in self._events_of(conv, turn.turn_id)):
+            # Once per sender and turn: a sender who keeps trying cannot grow the log.
+            return self._refused(conv, turn, problem, "policy")
         ctx = _TurnContext(turn)
         payload = {"turn_id": turn.turn_id, "signal_sender": turn.user_id, "reason": problem}
         if turn.principal is not None:

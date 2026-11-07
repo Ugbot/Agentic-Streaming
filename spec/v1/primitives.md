@@ -654,7 +654,9 @@ or settle an unknown outcome, and a signal with a `user_id` and no principal is 
 A signal for a turn that is on the log is checked before the resume state machine, so the same rule
 covers a resume, a resolution and a redelivered signal. Refusal appends `signal_refused {turn_id,
 signal_sender, signal_principal, reason}` and nothing else. The result is status `failed`, class
-`policy`. The turn stays as it was and the journal is not touched, so the approver can still answer.
+`policy`. The turn stays as it was and the journal is not touched, so the approver can still answer. A sender's refusal is on the log once per turn: the same principal again, or
+any signal with no principal once one without has been refused, is refused the same way with nothing
+appended, so a sender who keeps trying cannot grow the log.
 A signal for a turn that is not on the log is refused as section 10 says, with nothing appended, so
 it cannot grow a log.
 
