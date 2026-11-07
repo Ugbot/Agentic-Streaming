@@ -589,6 +589,7 @@ public final class GraphBuilder {
           command.add(resolveEnv(String.valueOf(a)));
         }
       }
+      McpCommands.check(command);
       try {
         McpStdioClient client = new McpStdioClient(command);
         client.register(tools, m.getOrDefault("name", "mcp") + "_",

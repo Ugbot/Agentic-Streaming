@@ -41,8 +41,21 @@ In scope: any code in this repository that is reachable from an untrusted input.
 Out of scope: vulnerabilities in third-party dependencies that are not exploitable through
 this code (report those upstream; a dependency bump here is welcome as a pull request).
 
+## Trust model
+
+- **A workflow document is trusted input. Treat it as code.** It chooses the tools, the URLs, the
+  prompts and the policy. Validation rejects a malformed document; it does not make a hostile one
+  safe, so load only documents you wrote or reviewed.
+- **A document cannot widen what the operator set.** `mcp[].command` starts a process, so it runs only
+  if the operator listed it in `AGENTIC_MCP_ALLOWED_COMMANDS`, and with no list nothing starts. The
+  same goes for the egress settings. These are environment variables on the host, not document keys.
+- **Text is not trusted.** User text, tool results, retrieved passages and model output can say
+  anything. They cannot grant a tool: that is the tool policy, and it is not a filter.
+- **Whoever delivers an event vouches for its principal.** Anyone who can write to the input topic
+  can claim any identity, so keep that topic to trusted producers.
+
 ## Security posture
 
 `docs/security.md` states what the code does today. In short: the canonical path has no
-authentication, the Pekko HTTP front door has none either, and workflow documents are trusted input that can start processes. Do not expose any of
-this to untrusted callers.
+authentication, the Pekko HTTP front door has none either. Do not expose any of this to untrusted
+callers.

@@ -42,9 +42,15 @@ to `refusal-survives-a-crash` prove it on the reference, Java core, Flink, Pekko
 
 ## Workflow documents are trusted input
 
-Treat a workflow document or `pipeline.yaml` as code. `mcp[].command` starts a process when the
-document is built, with environment expansion on its arguments. Load only documents you wrote or
-reviewed.
+Treat a workflow document or `pipeline.yaml` as code, and load only documents you wrote or reviewed.
+It chooses the tools, the URLs and the policy, and validation does not make a hostile one safe.
+
+`mcp[].command` starts a process when the document is built. It starts only if the operator listed it
+in `AGENTIC_MCP_ALLOWED_COMMANDS` (system property `agentic.mcp.allowed_commands`), and with no list
+nothing starts. Entries are separated by `;`, and each is a command with the arguments it must start
+with, matched word for word after environment expansion: `python3 examples/pipelines/mcp_util_server.py`
+allows that script and not `python3 -c ...`. A bare `python3` allows whatever Python will run. On Flink
+the list is read on the TaskManager.
 
 ## Input guardrails
 

@@ -21,7 +21,8 @@ providers.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+import os
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from .core import ROUTER_KINDS, Agent, RoutedGraph, keyword_router, static_router
 from .guardrails import RegexGuardrail
@@ -134,6 +135,18 @@ def _build_retriever(spec: Optional[Dict[str, Any]], embed, dim: int):
     return TwoTierRetriever(hot, cold, 4, 4)
 
 
+def check_mcp_command(command: List[str], settings: Optional[Mapping[str, str]] = None) -> None:
+    """A document starts only what the operator listed in `AGENTIC_MCP_ALLOWED_COMMANDS`: entries
+    separated by `;`, each a command with the arguments it must start with. Deny by default. A bare
+    interpreter allows whatever it will run, so name the script."""
+    raw = (os.environ if settings is None else settings).get("AGENTIC_MCP_ALLOWED_COMMANDS", "")
+    for entry in raw.split(";"):
+        words = entry.split()
+        if words and command[:len(words)] == words:
+            return
+    raise ValueError(f"mcp command {command} is not in AGENTIC_MCP_ALLOWED_COMMANDS")
+
+
 def _register_mcp(tools: ToolRegistry, specs: Optional[List[Dict[str, Any]]]) -> None:
     """Connect to each declared MCP server and register its tools (id-prefixed by name)."""
     for m in specs or []:
@@ -144,7 +157,9 @@ def _register_mcp(tools: ToolRegistry, specs: Optional[List[Dict[str, Any]]]) ->
             raise ValueError(f"mcp transport {transport!r} not supported (use 'stdio')")
         raw = m["command"]
         command = raw if isinstance(raw, list) else [raw, *m.get("args", [])]
-        client = McpClient([_resolve_env(str(c)) for c in command])
+        resolved = [_resolve_env(str(c)) for c in command]
+        check_mcp_command(resolved)
+        client = McpClient(resolved)
         client.register(tools, prefix=f"{m.get('name', 'mcp')}_")
 
 

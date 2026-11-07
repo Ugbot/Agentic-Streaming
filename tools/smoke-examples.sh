@@ -14,6 +14,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # The peer the multi-agent examples call is on this machine.
 export AGENTIC_EGRESS_ALLOW_PRIVATE=true
+# The one MCP server the examples start. A document can start nothing the operator did not list.
+export AGENTIC_MCP_ALLOWED_COMMANDS="python3 examples/pipelines/mcp_util_server.py"
 SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-300}"
 PEER_PORT="${SMOKE_PEER_PORT:-8085}"
 PYTHON="${PYTHON:-python3}"
