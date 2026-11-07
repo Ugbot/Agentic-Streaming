@@ -132,6 +132,11 @@ public interface EffectJournal extends AutoCloseable {
     /** Makes attempt number {@code attempt}. The retry back-off is the caller's business. */
     Object attempt(int attempt);
 
+    /** What an attempt's error is recorded as. */
+    default String recorded(String error) {
+      return error;
+    }
+
     /** After an attempt returned and before its outcome is journaled. */
     default void afterAttempt() {}
 
@@ -201,7 +206,7 @@ public interface EffectJournal extends AutoCloseable {
           put(entry);
           return entry;
         }
-        String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        String message = call.recorded(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         entry = entry.withAttempt(attempt, message);
         if (attempt >= budget) {
           entry = entry.failed(message);

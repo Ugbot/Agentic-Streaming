@@ -46,6 +46,7 @@ from .journal import (
 )
 from .limits import Limits, Violation, who
 from .opa import Both, from_environment
+from .redact import Redactor
 from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
@@ -249,11 +250,15 @@ class _ToolEffect(EffectCall):
                                                       **_principal_of(self.ctx.turn)})
 
     def on_failed_attempt(self, attempt: Attempt) -> None:
-        self.ctx.tool_calls.append({"tool": self.spec.id, "index": self.index, "args": self.args,
+        self.ctx.tool_calls.append({"tool": self.spec.id, "index": self.index,
+                                    "args": self.engine.redactor.apply(self.args),
                                     "error": attempt.error, "attempt": attempt.attempt})
         self.engine._append(self.ctx, "tool_failed", {"tool": self.spec.id, "index": self.index,
                                                       "attempt": attempt.attempt, "args": self.args,
                                                       "error": attempt.error})
+
+    def recorded(self, error: str) -> str:
+        return self.engine.redactor.apply(error)
 
     def budget(self) -> int:
         return int(self.retry.get("max_attempts", 1)) if self.retry.get("kind", "none") != "none" else 1
@@ -265,7 +270,7 @@ class _ToolEffect(EffectCall):
                 self.engine.sleep(delay / 1000.0)
         self.engine._hit("call", self.spec.id, "before")
         call = ToolCall(self.ctx.turn.conversation_id, self.ctx.turn.turn_id, self.index, self.ctx.text)
-        return self.engine.tools.execute(self.spec.id, self.args, call)
+        return self.engine.redactor.apply(self.engine.tools.execute(self.spec.id, self.args, call))
 
     def after_attempt(self) -> None:
         self.engine._hit("call", self.spec.id, "during")
@@ -324,6 +329,7 @@ class Engine:
         if opa is not None:
             self.policy = Both(self.policy, opa)
         self.limits = Limits(doc)
+        self.redactor = Redactor(doc)
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
         self.global_guardrails = [g for g in self.guardrails if g.get("name") not in path_scoped]
@@ -755,12 +761,18 @@ class Engine:
         re-run takes the same path. A reply recorded for a different `request` is a divergence."""
         index = ctx.take_llm_index()
         key = JournalKey(ctx.turn.conversation_id, ctx.turn.turn_id, LLM, index)
-        intent = model_intent_of(self._scope, f"{request}\0{ctx.text}")
+        intent = model_intent_of(self._scope, self.redactor.apply(f"{request}\0{ctx.text}"))
         fresh = self.journal.get(key) is None
         if fresh:
             self._enforce(ctx, self.limits.admit_model(who(ctx.turn), self.clock()))
-        entry = self.journal.record_or_get(key, intent, READ, _ModelCall(ask))
-        answer: Mapping[str, Any] = entry.result
+        live: List[Mapping[str, Any]] = []
+
+        def recorded() -> Mapping[str, Any]:  # this run acts on the answer; the journal keeps it redacted
+            live.append(ask())
+            return self.redactor.apply(live[0])
+
+        entry = self.journal.record_or_get(key, intent, READ, _ModelCall(recorded))
+        answer: Mapping[str, Any] = live[0] if live else entry.result
         if fresh:
             self.limits.charge_model(who(ctx.turn), self.clock(), len(request) + len(ctx.text) + len(str(answer)))
         model = {"model": self.llm["model"]} if self.llm.get("model") else {}
@@ -977,7 +989,8 @@ class Engine:
         index = ctx.take_index()
         key = JournalKey(turn.conversation_id, turn.turn_id, TOOL, index)
         ikey = idempotency_key(turn.conversation_id, turn.turn_id, index)
-        intent = intent_of(tool_id, args, self._scope)
+        kept = self.redactor.apply(args)
+        intent = intent_of(tool_id, kept, self._scope)
         if ctx.prior is not None and ctx.prior.peek("tool_intent", index) is not None:
             # The log says this call was begun, so a journal that lost it must not read as a first call.
             self.journal.put_if_absent(Entry.pending(key, intent, spec.effect))
@@ -989,7 +1002,7 @@ class Engine:
             raise _UnknownOutcome(tool_id, index)
         if entry.state == SUCCEEDED:
             attempt = len(entry.attempts) + 1
-            ctx.tool_calls.append({"tool": tool_id, "index": index, "args": args,
+            ctx.tool_calls.append({"tool": tool_id, "index": index, "args": kept,
                                    "result": entry.result, "attempt": attempt})
             kind = event or ("delegated" if spec.kind == "agent" else "tool_called")
             self._append(ctx, kind, {"tool": tool_id, "index": index, "attempt": attempt,
@@ -1012,7 +1025,7 @@ class Engine:
             ctx.events.append(kept)
             return kept
         self._hit("event", kind, "before")
-        event = self.log.append(ctx.turn.conversation_id, ctx.turn.turn_id, kind, payload,
+        event = self.log.append(ctx.turn.conversation_id, ctx.turn.turn_id, kind, self.redactor.apply(payload),
                                 self.clock(), ctx.turn.metadata)
         ctx.events.append(event)
         self._hit("event", kind, "after")

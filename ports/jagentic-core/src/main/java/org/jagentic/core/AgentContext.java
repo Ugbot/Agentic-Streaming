@@ -60,6 +60,8 @@ public final class AgentContext {
   public boolean runtimeSignal = false;
   /** The one check every tool call passes; set by RoutedGraph. */
   public ToolPolicy policy = ToolPolicy.DENY_ALL;
+  /** What must not be recorded; set by RoutedGraph. */
+  public Redactor redactor = Redactor.DEFAULT;
   /** This workflow's per-principal limits; set by RoutedGraph. */
   public Limits limits = Limits.NONE;
   /** The path this turn was routed to, once it has been. */
@@ -95,7 +97,8 @@ public final class AgentContext {
   }
 
   /** The {@code append} verb for this turn: records the event and remembers it as this turn's. */
-  public LogEvent record(EventType type, Map<String, Object> payload) {
+  public LogEvent record(EventType type, Map<String, Object> raw) {
+    Map<String, Object> payload = redactor.apply(raw);
     java.util.ArrayDeque<LogEvent> earlier = kept.get(replayKey(type.wire(), payload));
     if (earlier != null && !earlier.isEmpty()) {
       LogEvent e = earlier.poll();
@@ -218,7 +221,7 @@ public final class AgentContext {
   public org.jagentic.core.llm.ChatResult chat(String request, Supplier<org.jagentic.core.llm.ChatResult> call) {
     int index = nextLlmIndex++;
     EffectJournal.Key key = new EffectJournal.Key(conversationId, turnId, EffectJournal.LLM, index);
-    String intent = EffectJournal.modelIntentOf(journalScope, request);
+    String intent = EffectJournal.modelIntentOf(journalScope, redactor.apply(request));
     EffectJournal.Entry recorded = journal.get(key).orElse(null);
     if (recorded != null && !intent.equals(recorded.intent())) {
       throw new EffectJournal.Divergence(key, recorded.intent(), intent);
@@ -234,7 +237,7 @@ public final class AgentContext {
       } else {
         answer.put("text", fresh.text());
       }
-      journal.put(EffectJournal.Entry.pending(key, intent, ToolEffect.READ).succeeded(answer));
+      journal.put(EffectJournal.Entry.pending(key, intent, ToolEffect.READ).succeeded(redactor.apply(answer)));
       limits.chargeModel(who(), now(), request.length() + String.valueOf(answer).length());
     }
     Map<String, Object> p = new LinkedHashMap<>();
@@ -425,7 +428,8 @@ public final class AgentContext {
     ToolRegistry.CallIdentity identity = new ToolRegistry.CallIdentity(conversationId, turnId, index, key);
     Policies.RetryPolicy retry = policies.retry();
     EffectJournal.Key journalKey = new EffectJournal.Key(conversationId, turnId, EffectJournal.TOOL, index);
-    String intent = EffectJournal.intentOf(journalScope, toolId, args);
+    Map<String, Object> recorded = redactor.apply(args);
+    String intent = EffectJournal.intentOf(journalScope, toolId, recorded);
     java.util.ArrayDeque<LogEvent> begun = kept.get(EventType.TOOL_INTENT.wire() + "/" + index + "/null");
     if (begun != null && !begun.isEmpty()) {
       // The log says this call was begun, so a journal that lost it must not read as a first call.
@@ -449,7 +453,7 @@ public final class AgentContext {
 
           @Override
           public void onFailedAttempt(EffectJournal.Attempt failed) {
-            calls.add(ToolCall.failed(toolId, index, args, failed.error(), failed.attempt()));
+            calls.add(ToolCall.failed(toolId, index, recorded, failed.error(), failed.attempt()));
             record(EventType.TOOL_FAILED, payload(toolId, index, failed.attempt(), args, null, failed.error()));
           }
 
@@ -466,13 +470,18 @@ public final class AgentContext {
             }
             probe.beforeCall(toolId);
             try {
-              return tool.execute(args, identity);
+              return redactor.apply(tool.execute(args, identity));
             } catch (RuntimeException e) {
               for (AgentListener l : listeners) {
                 l.onError("tool:" + toolId, e, AgentContext.this);
               }
               throw e;
             }
+          }
+
+          @Override
+          public String recorded(String error) {
+            return redactor.apply(error);
           }
 
           @Override
@@ -488,7 +497,7 @@ public final class AgentContext {
     switch (entry.state()) {
       case SUCCEEDED -> {
         int attempt = entry.attempts().size() + 1;
-        calls.add(ToolCall.succeeded(toolId, index, args, entry.result(), attempt));
+        calls.add(ToolCall.succeeded(toolId, index, recorded, entry.result(), attempt));
         EventType type = successEvent != null ? successEvent
             : tool.peer() ? EventType.DELEGATED : EventType.TOOL_CALLED;
         record(type, payload(toolId, index, attempt, args, entry.result(), null));

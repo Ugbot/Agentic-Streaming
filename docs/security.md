@@ -174,7 +174,7 @@ The key is a SHA-256 of the conversation id, turn id and call index, so it leaks
   and a person answers with a signal. That answer is privileged, because `not_applied` makes the
   call again, so only an approver can give it.
 - A timeout, a lost connection or an HTTP 5xx from a `non_idempotent` tool is unknown in the same way.
-- The journal holds tool arguments and results in plaintext, as the log does. Protect and expire it
+- Without a key vault the journal holds results in plaintext, as the log does. Protect and expire it
   as you would the log, and keep entries longer than the longest rollback or redelivery you allow.
   An entry dropped sooner re-opens that turn to repeat its calls.
 - A worker that lost its lease can still be running a call while its replacement starts. There is no
@@ -230,6 +230,54 @@ What it does not cover:
 - Redirects are not followed at all: a 3xx is a definite failure.
 - `LangChain4jChatClient`, embedders, vector stores and the journal connect to what the operator
   configured. They do not go through this check.
+
+## Secrets and data
+
+**Per-tool secrets are references.** `tools[].auth: {bearer: env:NAME}` or `file:/path`, and the same on
+`a2a[]`. It is resolved at the moment of the call, so it reaches the wire and nothing else, and a
+document that writes the secret itself is rejected when loaded. A `kind: http` tool, a Java A2A peer and
+the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
+
+**Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are
+always covered: fields such as `password`, `token`, `api_key` and `authorization`, and text shaped like
+a bearer token, an OpenAI or AWS key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
+for personal data. It finds what the patterns describe and nothing else, so it narrows what is recorded
+and does not promise it is clean. The reply the caller receives is not redacted, and neither is a
+results topic's `reply` field.
+
+**Deletion on an immutable log is crypto-shredding.** Set `AGENTIC_KEY_VAULT_DIR` and every conversation
+gets its own AES-256-GCM data key: `text`, `reply`, `args`, `result`, `messages`, `signal`, `error` and
+`reason` are sealed before they reach the log or the journal. To honour a deletion request, run
+`org.jagentic.core.privacy.Erase tenant/subject`. It destroys the keys of every conversation that owner
+started, and those fields read as `[erased]` from then on, with the log still folding. Keys are
+per conversation, so a turn after an erasure gets a new key that cannot open the old data.
+`SealingTest` proves this on the Java core and `WorkflowTurnSealedTest` on Flink, through a restore.
+
+What this leaves out, plainly:
+
+- **Pekko's log and Python are not sealed.** On Pekko only the journal is. Crypto-shredding is the Java
+  core and Flink.
+- **The Flink results and failures topics are not sealed.** A result carries the turn's open events, so a
+  deletion request is not honoured there. Keep those topics on a short retention.
+- **What stays readable:** the owner's identifier, tenant, tool ids, paths, event types and times. That
+  is how ownership works, and it is personal data if a subject is. Use an opaque subject.
+- **A journal intent is a digest of the arguments,** so low-entropy arguments can be guessed from one
+  after an erasure.
+- `FileKeyVault` deletes files, which does not scrub a disk, a snapshot or a backup, and every process
+  needs the same directory. For anything real, implement `KeyVault` over a KMS.
+- Text a person pasted into a turn about someone else is sealed under the conversation's owner, so
+  erasing that other person does not reach it.
+- A Flink checkpoint taken earlier still holds the sealed bytes, which is the point: without the key
+  they do not open.
+
+**Retention.** The rules are per store, and there is no single setting:
+
+| Store | What expires it |
+| --- | --- |
+| Flink keyed state | `runtime.flink.state_ttl_ms`: a conversation idle that long is cleared whole, unless a turn is suspended |
+| Kafka topics, Kafka journal | the topic's `retention.ms`, which the operator sets |
+| Postgres journal, Pekko journal | nothing here: the operator must prune them |
+| Python file log | nothing here |
 
 ## Compose stacks
 

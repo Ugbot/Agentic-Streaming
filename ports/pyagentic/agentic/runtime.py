@@ -32,7 +32,7 @@ CAPABILITIES: Tuple[str, ...] = (
     "verifier", "ordering", "idempotency", "retry", "memory", "retrieval", "context_window",
     "replay", "suspend_resume", "timers", "saga", "a2a", "cep", "event_time",
     "checkpoint_recovery", "parallelism", "durable_store", "crash_recovery", "effect_journal",
-    "tool_policy", "principal", "tool_approval", "limits",
+    "tool_policy", "principal", "tool_approval", "limits", "redaction",
 )
 CAPABILITY_VALUES = frozenset({"supported", "partial", "unsupported", "not_tested"})
 
@@ -249,7 +249,7 @@ class LocalRuntime(Runtime):
         "parallelism": "supported", "durable_store": "supported",
         "crash_recovery": "supported", "effect_journal": "supported",
         "tool_policy": "supported", "principal": "supported", "tool_approval": "supported",
-        "limits": "supported",
+        "limits": "supported", "redaction": "supported",
     }
 
     def __init__(

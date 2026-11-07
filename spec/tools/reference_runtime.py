@@ -218,6 +218,7 @@ class ReferenceRuntime:
         self._world: Dict[Any, Any] = {}  # what the `counting` tools and stub model have seen
         self._crash: Optional[Dict[str, Any]] = None
         self.limits: Dict[str, Any] = self.policies.get("limits") or {}
+        self.redact: Dict[str, Any] = self.policies.get("redact") or {}
         self._ledger = _Ledger(self.limits)
 
     # -- lifecycle ---------------------------------------------------------
@@ -687,7 +688,7 @@ class ReferenceRuntime:
         is what the brain was told; a reply recorded for another request is a divergence."""
         index = ctx.next_llm_index()
         key = (ctx.turn.conversation_id, ctx.turn.turn_id, "llm", index)
-        intent = model_intent_of(self._scope, f"{request}\0{ctx.turn.text}")
+        intent = model_intent_of(self._scope, redact(f"{request}\0{ctx.turn.text}", self.redact))
         entry = self.journal.get(key)
         if entry is not None and entry["intent"] != intent:
             raise JournalDivergence(f"model call {index} of turn {ctx.turn.turn_id} was {entry['intent']}, now {intent}")
@@ -699,7 +700,7 @@ class ReferenceRuntime:
                 seen = self._world.get(("llm", step_index), 0) + 1
                 self._world[("llm", step_index)] = seen
                 answer["text"] = f"{answer['text']} #{seen}"
-            entry = self.journal[key] = {"intent": intent, "state": "succeeded", "result": answer}
+            entry = self.journal[key] = {"intent": intent, "state": "succeeded", "result": redact(answer, self.redact)}
             self._charge_model(ctx, f"{request}\0{ctx.turn.text}", answer)
         self._append(conv, ctx, "llm_called", {"index": index, **entry["result"]})
         return entry["result"]
@@ -935,7 +936,7 @@ class ReferenceRuntime:
         effect = spec.get("effect", "non_idempotent")
         ikey = idempotency_key(turn.conversation_id, turn.turn_id, index)
         kind = event or ("delegated" if spec.get("kind") == "agent" else "tool_called")
-        intent = intent_of(tool_id, args, self._scope)
+        intent = intent_of(tool_id, redact(args, self.redact), self._scope)
         entry = self.journal.get(key)
         fresh = entry is None
         if fresh:
@@ -967,7 +968,7 @@ class ReferenceRuntime:
         for attempt in range(len(entry["attempts"]) + 1, max_attempts + 1):
             self._hit("call", tool_id, "before")
             try:
-                result = self._execute(tool_id, spec, turn.conversation_id, ikey)
+                result = redact(self._execute(tool_id, spec, turn.conversation_id, ikey), self.redact)
             except ToolError as exc:
                 if exc.unknown and once:
                     entry["state"] = "unknown"
@@ -1082,7 +1083,8 @@ class ReferenceRuntime:
             ctx.events.append(kept)
             return
         self._hit("event", kind, "before")
-        event = {"type": kind, "sequence": len(conv.log), "payload": payload, "turn_id": ctx.turn.turn_id,
+        event = {"type": kind, "sequence": len(conv.log), "payload": redact(payload, self.redact),
+                 "turn_id": ctx.turn.turn_id,
                  "timestamp": self.clock_ms, "metadata": dict(ctx.turn.metadata)}
         conv.log.append(event)
         ctx.events.append(event)
@@ -1130,6 +1132,27 @@ def _class_of(exc: Exception) -> str:
     if isinstance(exc, ToolRefused):
         return "policy"
     return "validation" if isinstance(exc, ValidationFailure) else "tool"
+
+
+_SECRET_FIELDS = {"password", "passwd", "secret", "token", "api_key", "apikey", "authorization", "credential",
+                  "credentials", "private_key"}
+_SECRET_SHAPES = [re.compile(p) for p in (
+    r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}", r"\bsk-[A-Za-z0-9_-]{16,}", r"\bAKIA[0-9A-Z]{16}\b",
+    r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")]
+
+
+def redact(value: Any, spec: Dict[str, Any]) -> Any:
+    """primitives.md section 11: what must not be recorded, before it is."""
+    if isinstance(value, str):
+        for pattern in _SECRET_SHAPES + [re.compile(p) for p in spec.get("patterns") or []]:
+            value = pattern.sub("[redacted]", value)
+        return value
+    if isinstance(value, dict):
+        named = _SECRET_FIELDS | {str(f).lower() for f in spec.get("fields") or []}
+        return {k: "[redacted]" if str(k).lower() in named else redact(v, spec) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact(v, spec) for v in value]
+    return value
 
 
 class _Ledger:

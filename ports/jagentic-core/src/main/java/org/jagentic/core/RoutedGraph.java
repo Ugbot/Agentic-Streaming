@@ -59,6 +59,7 @@ public final class RoutedGraph {
   private final ToolPolicy toolPolicy;
   private final Approvers approvers;
   private final Limits limits;
+  private final Redactor redactor;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -139,11 +140,13 @@ public final class RoutedGraph {
     this.toolPolicy = ToolPolicy.DENY_ALL;
     this.approvers = Approvers.NONE;
     this.limits = Limits.NONE;
+    this.redactor = Redactor.DEFAULT;
   }
 
   private RoutedGraph(RoutedGraph base, List<TimerSpec> timers,
                       Map<String, List<Guardrail>> pathGuardrails, String agentId,
-                      ToolPolicy toolPolicy, Approvers approvers, Limits limits) {
+                      ToolPolicy toolPolicy, Approvers approvers, Limits limits,
+                      Redactor redactor) {
     this.router = base.router;
     this.paths = base.paths;
     this.verifier = base.verifier;
@@ -161,6 +164,7 @@ public final class RoutedGraph {
     this.toolPolicy = toolPolicy;
     this.approvers = approvers;
     this.limits = limits;
+    this.redactor = redactor;
   }
 
   /**
@@ -170,32 +174,37 @@ public final class RoutedGraph {
    * for event time.
    */
   public RoutedGraph withTimers(List<TimerSpec> timers) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor);
   }
 
   /** The same graph under this policy. Without one every tool call is refused. */
   public RoutedGraph withToolPolicy(ToolPolicy policy) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits, redactor);
   }
 
   /** The same graph under these approvers. Without them nobody can resume a turn. */
   public RoutedGraph withApprovers(Approvers who) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits, redactor);
   }
 
   /** The same graph under these limits. */
   public RoutedGraph withLimits(Limits l) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l, redactor);
+  }
+
+  /** The same graph under this redactor. Credentials are covered without one. */
+  public RoutedGraph withRedactor(Redactor r) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, r);
   }
 
   /** The same graph with rails that apply to one path alone, after routing. */
   public RoutedGraph withPathGuardrails(Map<String, List<Guardrail>> rails) {
-    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits);
+    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits, redactor);
   }
 
   /** The same graph under the workflow's {@code agent.id}, which scopes its journal entries. */
   public RoutedGraph withAgentId(String id) {
-    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits);
+    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits, redactor);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -248,6 +257,7 @@ public final class RoutedGraph {
     ctx.journalScope = agentId;
     ctx.policy = toolPolicy;
     ctx.limits = limits;
+    ctx.redactor = redactor;
     ctx.principal = event.principal();
     if (event.turnId() == null || event.turnId().isBlank()) {
       return refused(event, TurnError.ErrorClass.VALIDATION,

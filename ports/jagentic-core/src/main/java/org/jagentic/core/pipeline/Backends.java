@@ -24,9 +24,12 @@ public final class Backends {
   public static Runtime create(String name, GraphBuilder.Built built, ConversationStore conversationStore) {
     String key = (name == null ? "local" : name).trim().toLowerCase();
     if ("local".equals(key)) {
+      org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+      org.jagentic.core.ConversationLog log = new org.jagentic.core.ConversationLog.InMemory();
       return new LocalRuntime(built.graph(),
           conversationStore == null ? new ConversationStore.InMemory() : conversationStore,
-          new KeyedStateStore.InMemory(), built.tools(), built.retriever()).withJournal(built.journal());
+          new KeyedStateStore.InMemory(), built.tools(), built.retriever(),
+          vault == null ? log : new org.jagentic.core.privacy.SealedLog(log, vault)).withJournal(built.journal());
     }
     // Engine modules (such as pekko) register a BackendProvider on the
     // classpath via ServiceLoader, so `backend: <name>` resolves without the core knowing them.

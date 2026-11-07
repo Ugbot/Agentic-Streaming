@@ -254,7 +254,7 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
 `context_window`, `replay`, `suspend_resume`, `timers`, `saga`, `a2a`, `cep`, `event_time`,
 `checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`,
-`tool_policy`, `principal`, `tool_approval`, `limits`.
+`tool_policy`, `principal`, `tool_approval`, `limits`, `redaction`.
 
 ## 7. Versioning
 
@@ -712,4 +712,16 @@ a recorded answer costs nothing. The turn is spent, so retrying needs a new `tur
 Tokens are an estimate of four characters each over what went in and came out, because the clients
 read no provider usage. Counters belong to one runtime process. A binding need not keep them across a
 restart or share them between processes.
+
+### What is recorded
+
+Credentials are removed before an event or a journal entry is written, by field name and by shape, and
+`policies.redact` adds a workflow's own `fields` and `patterns`. A tool's result is redacted as it comes
+back, so everything after sees the same value. A model's answer is redacted where it is kept, and this
+run acts on it as given. A journal intent is computed over the redacted form, so a re-run that reads
+redacted text still matches it. A re-run reads what was recorded: a call not yet made when a crash
+came gets the redacted arguments.
+
+A `tools[].auth.bearer` or `a2a[].auth.bearer` is a reference, `env:NAME` or `file:/path`, resolved at the
+moment of the call. A literal is rejected when the document is loaded.
 

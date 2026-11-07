@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Tuple
 
 from jsonschema import Draft202012Validator
 
-from . import egress
+from . import egress, secret_refs
 from .errors import OutcomeUnknown, ToolError, ValidationError
 
 ToolFn = Callable[..., Any]
@@ -110,6 +110,7 @@ class ToolSpec:
     fail_attempts: Optional[int] = None
     peer: Optional[Mapping[str, Any]] = None
     extensions: Dict[str, Any] = field(default_factory=dict)
+    auth: Optional[Mapping[str, Any]] = None
 
     @classmethod
     def from_document(cls, entry: Mapping[str, Any]) -> "ToolSpec":
@@ -126,6 +127,7 @@ class ToolSpec:
             description=entry.get("description", ""),
             fail_attempts=entry.get("x-fail-attempts"),
             extensions={k: v for k, v in entry.items() if k.startswith("x-")},
+            auth=entry.get("auth"),
         )
 
     @classmethod
@@ -276,6 +278,11 @@ class ToolRegistry:
             raise ToolError(f"{spec.id} failed: blocked by egress policy") from exc
         timeout = (spec.timeout_ms or DEFAULT_TOOL_TIMEOUT_MS) / 1000.0
         headers = {"Idempotency-Key": call.idempotency_key}
+        if spec.auth is not None:
+            try:
+                headers["Authorization"] = f"Bearer {secret_refs.resolve(spec.auth['bearer'])}"
+            except secret_refs.SecretUnresolved as exc:
+                raise ToolError(f"{spec.id} failed: {exc}") from exc
         if spec.method == "GET":
             query = urllib.parse.urlencode({k: json.dumps(v) if not isinstance(v, str) else v
                                             for k, v in args.items()})

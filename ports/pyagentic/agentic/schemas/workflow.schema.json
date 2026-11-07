@@ -178,6 +178,15 @@
           },
           "additionalProperties": false
         },
+        "redact": {
+          "description": "What must not be recorded, on top of credentials, which are always covered. Removed before the event or the journal entry is written.",
+          "type": "object",
+          "properties": {
+            "fields": { "type": "array", "items": { "type": "string" } },
+            "patterns": { "type": "array", "items": { "type": "string", "format": "regex" } }
+          },
+          "additionalProperties": false
+        },
         "unattended_tools": {
           "description": "What a timer or a CEP pattern may call. They run outside any path, so a path's tools do not cover them. Deny by default: a tool not listed here is refused.",
           "type": "array",
@@ -193,6 +202,13 @@
       "required": ["id"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
+        "auth": {
+          "description": "How the call authenticates, by reference: env:NAME or file:/path. Resolved at the moment of the call and never recorded.",
+          "type": "object",
+          "properties": { "bearer": { "type": "string", "pattern": "^(env:[A-Za-z_][A-Za-z0-9_]*|file:/.+)$" } },
+          "required": ["bearer"],
+          "additionalProperties": false
+        },
         "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing", "hanging", "counting"], "default": "constant" },
         "description": { "type": "string" },
         "value": {},
@@ -363,6 +379,13 @@
       "properties": {
         "name": { "$ref": "#/$defs/identifier" },
         "id": { "$ref": "#/$defs/identifier" },
+        "auth": {
+          "description": "How the call authenticates, by reference: env:NAME or file:/path. Resolved at the moment of the call and never recorded.",
+          "type": "object",
+          "properties": { "bearer": { "type": "string", "pattern": "^(env:[A-Za-z_][A-Za-z0-9_]*|file:/.+)$" } },
+          "required": ["bearer"],
+          "additionalProperties": false
+        },
         "url": { "type": "string" },
         "transport": { "enum": ["inproc", "http", "grpc"], "default": "http" },
         "description": { "type": "string" },

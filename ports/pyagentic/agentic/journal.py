@@ -113,6 +113,10 @@ class EffectCall(ABC):
     def on_failed_attempt(self, attempt: Attempt) -> None:
         """A failed attempt, either replayed from the journal or just made."""
 
+    def recorded(self, error: str) -> str:
+        """What an attempt's error is recorded as."""
+        return error
+
     def budget(self) -> int:
         """The number of attempts the call may use in all, counting those already recorded."""
         return 1
@@ -182,13 +186,14 @@ class EffectJournal(ABC):
             try:
                 result = call.attempt(attempt)
             except ToolError as exc:
+                message = call.recorded(str(exc))
                 if isinstance(exc, OutcomeUnknown) and once:
-                    entry = entry.unknown(str(exc))
+                    entry = entry.unknown(message)
                     self.put(entry)
                     return entry
-                entry = entry.with_attempt(attempt, str(exc))
+                entry = entry.with_attempt(attempt, message)
                 if attempt >= budget:
-                    entry = entry.failed(str(exc))
+                    entry = entry.failed(message)
                 self.put(entry)
                 call.on_failed_attempt(entry.attempts[-1])
                 continue

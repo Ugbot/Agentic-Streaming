@@ -84,6 +84,7 @@ Python owners.
 | `unattended-tool-cannot-wait` | a timer has nobody to ask, so a gated tool is refused |
 | `turn-rate-limit`, `tool-quota`, `token-budget`, `cost-budget`, `kill-switch` | each limit stops the turn, on the log, for that principal alone |
 | `redelivery-is-not-a-new-turn` | a turn redelivered after a crash is not counted twice |
+| `redaction-on-the-log` | credentials and what the workflow names are gone before anything is recorded |
 | `egress-metadata-address`, `egress-not-http`, `egress-private-address` | a URL the egress policy refuses sends nothing and is a definite failure |
 
 Run them against the reference runtime:

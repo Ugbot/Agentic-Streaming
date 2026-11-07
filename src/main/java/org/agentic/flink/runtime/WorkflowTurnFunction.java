@@ -43,6 +43,9 @@ import org.jagentic.core.cep.SequencePattern;
 import org.jagentic.core.pipeline.GraphBuilder;
 import org.jagentic.core.pipeline.PipelineLoader;
 import org.jagentic.core.pipeline.WorkflowValidator;
+import org.jagentic.core.privacy.KeyVault;
+import org.jagentic.core.privacy.SealedLog;
+import org.jagentic.core.privacy.Vaults;
 
 /**
  * The Flink runtime adapter for an {@code agentic/v1} workflow: one keyed operator that turns
@@ -122,6 +125,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
       new OutputTag<>("turn-failures", TurnResultTypeInfo.INSTANCE);
 
   private transient GraphBuilder.Built built;
+  private transient KeyVault vault;
   private transient ListState<LogEvent> log;
   private transient ValueState<Long> nextSequence;
   private transient MapState<Long, String> timers;
@@ -231,6 +235,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   @Override
   public void open(OpenContext openContext) {
     built = GraphBuilder.build(spec, chatClientFactory);
+    vault = Vaults.fromEnvironment();
 
     ListStateDescriptor<LogEvent> logDesc = new ListStateDescriptor<>(LOG_STATE, LOG_EVENT_TYPE);
     ValueStateDescriptor<Long> seqDesc = new ValueStateDescriptor<>(SEQUENCE_STATE, Types.LONG);
@@ -268,7 +273,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
               + " carried event for "
               + event.conversationId());
     }
-    ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
+    ConversationLog keyedLog = logOf(cid);
     TurnResult result = null;
     try {
       result = handle(event, keyedLog, ctx.timerService(), false);
@@ -291,7 +296,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   public void onTimer(long timestamp, OnTimerContext ctx, Collector<TurnResult> out)
       throws Exception {
     String cid = ctx.getCurrentKey();
-    ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
+    ConversationLog keyedLog = logOf(cid);
     if (ctx.timeDomain() == TimeDomain.PROCESSING_TIME
         && Long.valueOf(timestamp).equals(idleTimer.value())) {
       idleTimer.clear();
@@ -325,6 +330,12 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     }
     armIdleTimer(ctx.timerService());
     emit(withEvents(result, prepend(fired, result.events)), ctx, out);
+  }
+
+  /** Keyed state, holding only sealed payloads when the operator configured a key vault. */
+  private ConversationLog logOf(String cid) {
+    ConversationLog keyed = new KeyedConversationLog(cid, log, nextSequence);
+    return vault == null ? keyed : new SealedLog(keyed, vault);
   }
 
   /** One idle timer per conversation, moved forward by every turn; no-op without a TTL. */

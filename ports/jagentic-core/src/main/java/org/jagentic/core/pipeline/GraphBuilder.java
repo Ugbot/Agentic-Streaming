@@ -260,8 +260,12 @@ public final class GraphBuilder {
     graph = graph.withAgentId(String.valueOf(agent.get("id")))
         .withToolPolicy(toolPolicy(pathGrants, (Map<String, Object>) spec.get("policies")))
         .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")))
-        .withLimits(org.jagentic.core.Limits.fromPolicies((Map<String, Object>) spec.get("policies")));
-    return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
+        .withLimits(org.jagentic.core.Limits.fromPolicies((Map<String, Object>) spec.get("policies")))
+        .withRedactor(org.jagentic.core.Redactor.fromPolicies((Map<String, Object>) spec.get("policies")));
+    org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+    EffectJournal journal = EffectJournals.open(spec);
+    return new Built(graph, tools, retriever, availability.degradations(),
+        vault == null ? journal : new org.jagentic.core.privacy.SealedJournal(journal, vault));
   }
 
   /**
@@ -353,7 +357,7 @@ public final class GraphBuilder {
         }
         long timeout = Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS);
         reg.registerKeyed(id, desc, parameters, effect,
-            Deadlines.boundKeyed(id, timeout, httpTool(id, url, timeout)));
+            Deadlines.boundKeyed(id, timeout, httpTool(id, url, timeout, bearerOf(t))));
       } else if ("failing".equals(kind)) {
         Function<Map<String, Object>, Object> failing = failingTool(id, t);
         reg.registerKeyed(id, desc, parameters, effect, (params, call) -> failing.apply(params));
@@ -424,7 +428,7 @@ public final class GraphBuilder {
    * (spec section 10).
    */
   private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> httpTool(
-      String id, String url, long timeoutMs) {
+      String id, String url, long timeoutMs, String bearer) {
     Duration timeout = Duration.ofMillis(timeoutMs);
     HttpClient http = HttpClient.newBuilder().connectTimeout(timeout).build();
     return (params, call) -> {
@@ -435,12 +439,15 @@ public final class GraphBuilder {
       }
       try {
         String body = JSON.writeValueAsString(params == null ? Map.of() : params);
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))
             .timeout(timeout)
             .header("Content-Type", "application/json")
             .header("Idempotency-Key", call.idempotencyKey())
-            .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (bearer != null) {
+          req.header("Authorization", "Bearer " + org.jagentic.core.Secrets.resolve(bearer));
+        }
+        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() >= 500) {
           throw new OutcomeUnknown(id + " failed: HTTP " + resp.statusCode());
         }
@@ -455,6 +462,11 @@ public final class GraphBuilder {
         throw new IllegalStateException(id + " was interrupted", e);
       }
     };
+  }
+
+  /** The reference in a tool's or a peer's {@code auth}, or null. The value stays where it is until a call. */
+  private static String bearerOf(Map<String, Object> declared) {
+    return declared.get("auth") instanceof Map<?, ?> auth ? (String) auth.get("bearer") : null;
   }
 
   private static Object parseBody(String body) {
@@ -651,7 +663,7 @@ public final class GraphBuilder {
           }
           tools.registerKeyedPeer(name, desc, (String) a.get("effect"), Deadlines.boundKeyed(name,
               Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
-              org.jagentic.core.A2AClient.peerTool(url, peerRetries(a))));
+              org.jagentic.core.A2AClient.peerTool(url, peerRetries(a), bearerOf(a))));
           break;
         case "inproc":
           Runtime peer = inprocPeers == null ? null : inprocPeers.get(name);

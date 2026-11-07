@@ -42,11 +42,11 @@ public final class WorkflowValidator {
       "guardrails", "verifier", "max_iterations", "threshold", "output_schema");
   private static final Set<String> VERIFIER = Set.of("kind", "pattern", "schema", "prompt");
   private static final Set<String> POLICIES = Set.of("ordering", "idempotency", "retry", "verification",
-      "on_tool_error", "unattended_tools", "approvers", "tool_approval", "limits");
+      "on_tool_error", "unattended_tools", "approvers", "tool_approval", "limits", "redact");
   private static final Set<String> RETRY = Set.of("kind", "max_attempts", "initial_delay_ms", "multiplier",
       "max_delay_ms", "jitter");
   private static final Set<String> VERIFICATION = Set.of("max_attempts", "on_exhausted");
-  private static final Set<String> TOOL = Set.of("id", "kind", "description", "value", "url", "method",
+  private static final Set<String> TOOL = Set.of("id", "kind", "description", "value", "url", "method", "auth",
       "timeout_ms", "parameters", "compensation", "effect");
   private static final Set<String> SKILL = Set.of("name", "prompt", "tools", "facts");
   private static final Set<String> GUARDRAIL = Set.of("name", "kind", "stage", "deny", "allow", "reason",
@@ -61,7 +61,7 @@ public final class WorkflowValidator {
   private static final Set<String> CONTEXT = Set.of("max_items", "max_tokens", "compaction");
   private static final Set<String> STORES = Set.of("conversation", "keyed_state", "long_term", "vector",
       "effects");
-  private static final Set<String> PEER = Set.of("name", "id", "url", "transport", "effect", "description", "retries",
+  private static final Set<String> PEER = Set.of("name", "id", "url", "transport", "effect", "description", "auth", "retries",
       "timeout_ms");
   private static final Set<String> SAGA = Set.of("steps");
   private static final Set<String> SAGA_STEP = Set.of("name", "tool", "args", "compensate_with");
@@ -121,6 +121,7 @@ public final class WorkflowValidator {
       if (t.get("compensation") != null) {
         compensations.put(id, requireString(p + ".compensation", t.get("compensation")));
       }
+      requireSecretReference(p, t);
     }
     i = 0;
     for (Map<String, Object> m : listOfMaps("mcp", spec.get("mcp"))) {
@@ -129,6 +130,7 @@ public final class WorkflowValidator {
     i = 0;
     for (Map<String, Object> a : listOfMaps("a2a", spec.get("a2a"))) {
       String p = "a2a[" + i++ + "]";
+      requireSecretReference(p, a);
       keys(p, a, PEER, false);
       Object name = a.get("name") != null ? a.get("name") : a.get("id");
       if (name == null) {
@@ -310,5 +312,17 @@ public final class WorkflowValidator {
       throw new WorkflowValidationException(path, "expected a non-empty string");
     }
     return s;
+  }
+
+  /** A secret is referred to, never written in a document. */
+  private static void requireSecretReference(String where, Map<String, Object> declared) {
+    if (declared.get("auth") == null) {
+      return;
+    }
+    Object bearer = declared.get("auth") instanceof Map<?, ?> auth ? auth.get("bearer") : null;
+    if (!(bearer instanceof String s) || !org.jagentic.core.Secrets.isReference(s)) {
+      throw new WorkflowValidationException(where + ".auth.bearer",
+          "must be a reference, env:NAME or file:/path, never the secret itself");
+    }
   }
 }
