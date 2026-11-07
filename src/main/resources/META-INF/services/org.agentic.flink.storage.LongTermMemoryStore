@@ -1,3 +1,0 @@
-org.agentic.flink.storage.memory.InMemoryLongTermStore
-org.agentic.flink.storage.postgres.PostgresConversationStore
-org.agentic.flink.storage.redis.RedisConversationStore
