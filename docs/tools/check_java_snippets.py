@@ -99,7 +99,7 @@ def ensure_classpath(classpath_file: Path) -> str:
         result = subprocess.run(cmd, cwd=REPO, text=True, capture_output=True)
         if result.returncode != 0:
             raise SystemExit(
-                "could not resolve the module classpath (run ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests first):\n"
+                "could not resolve the module classpath (run ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests and ./mvnw -f agentic-gateway/pom.xml install -DskipTests first):\n"
                 + result.stdout + result.stderr
             )
     deps = classpath_file.read_text(encoding="utf-8").strip()
