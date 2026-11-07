@@ -215,7 +215,8 @@ public final class KafkaPipelineJob {
     org.jagentic.core.Principal principal;
     try {
       principal =
-          org.jagentic.core.Principal.fromMap(JSON.convertValue(node.get("principal"), Object.class));
+          org.jagentic.core.Principal.fromMap(
+              JSON.convertValue(node.get("principal"), Object.class));
     } catch (IllegalArgumentException e) {
       // Thrown out of the decoder it would fail the task on every restart: a poison pill.
       throw new MalformedRecord("principal: " + e.getMessage());
