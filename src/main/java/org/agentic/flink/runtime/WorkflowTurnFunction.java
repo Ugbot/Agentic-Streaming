@@ -287,13 +287,12 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
             payload("timer_id", timerId, "turn_id", turnId, "fired_at", timestamp));
     timersFired.inc();
 
-    ConversationState state = keyedLog.state(cid);
-    if (!state.suspended().containsKey(turnId)) {
-      return; // resumed by an explicit signal before the timer fired; the firing is recorded only
-    }
     Map<String, Object> signal = payload("kind", TIMER_SIGNAL_KIND, "timer_id", timerId);
     TurnResult result;
     try {
+      if (!keyedLog.state(cid).suspended().containsKey(turnId)) {
+        return; // resumed by an explicit signal before the timer fired; the firing is recorded only
+      }
       result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
     } catch (LogUnavailable e) {
       throw e;

@@ -227,4 +227,85 @@ class WorkflowTurnIdleExpiryTest {
       assertTrue(((Number) next.state.get("turn_count")).longValue() == 2L);
     }
   }
+
+  /**
+   * A suspended turn whose log lost its head, with its resume timer still pending: the state an old
+   * job's element-wise TTL can leave in a savepoint.
+   */
+  private static final class GappedLogWriter
+      extends KeyedProcessFunction<String, Event, TurnResult> {
+    private final long fireAt;
+    private transient ListState<LogEvent> log;
+    private transient ValueState<Long> next;
+    private transient org.apache.flink.api.common.state.MapState<Long, String> timers;
+
+    GappedLogWriter(long fireAt) {
+      this.fireAt = fireAt;
+    }
+
+    @Override
+    public void open(OpenContext ctx) {
+      log =
+          getRuntimeContext()
+              .getListState(
+                  new ListStateDescriptor<>(
+                      WorkflowTurnFunction.LOG_STATE, JsonTypeInfo.of(LogEvent.class)));
+      next =
+          getRuntimeContext()
+              .getState(new ValueStateDescriptor<>(WorkflowTurnFunction.SEQUENCE_STATE, Types.LONG));
+      timers =
+          getRuntimeContext()
+              .getMapState(
+                  new MapStateDescriptor<>(
+                      WorkflowTurnFunction.TIMER_STATE, Types.LONG, Types.STRING));
+    }
+
+    @Override
+    public void processElement(Event e, Context ctx, Collector<TurnResult> out) throws Exception {
+      Map<String, Object> p = new LinkedHashMap<>();
+      p.put("turn_id", e.turnId());
+      p.put("path", "general");
+      p.put("text", e.text());
+      log.add(
+          new LogEvent(e.conversationId(), 6, e.turnId(), EventType.TURN_SUSPENDED.wire(), p));
+      next.update(7L);
+      timers.put(fireAt, e.turnId());
+      ctx.timerService().registerProcessingTimeTimer(fireAt);
+    }
+  }
+
+  @Test
+  void aResumeTimerOnALogThatNoLongerFoldsFailsThatTurnNotTheJob() throws Exception {
+    String cid = rnd("c");
+    String tid = rnd("t");
+    long fireAt = 5_000;
+    OperatorSubtaskState savepoint;
+    try (var old =
+        new KeyedOneInputStreamOperatorTestHarness<String, Event, TurnResult>(
+            new KeyedProcessOperator<>(new GappedLogWriter(fireAt)),
+            Event::conversationId,
+            Types.STRING)) {
+      old.setup(
+          TurnResultTypeInfo.INSTANCE.createSerializer(
+              old.getExecutionConfig().getSerializerConfig()));
+      old.open();
+      old.processElement(new StreamRecord<>(Event.turn(cid, tid, "u", "refund please"), 1));
+      savepoint = old.snapshot(1, 1);
+    }
+    Map<String, Object> wf =
+        Workflows.withFlink(Workflows.approval(), Map.of("resume_after_ms", 1000));
+    try (var h = harness(wf)) {
+      h.initializeState(savepoint);
+      h.open();
+      clockAt(h, fireAt);
+      TurnResult r = last(h);
+      assertEquals(TurnStatus.FAILED, r.status);
+      assertEquals("fatal", r.error.errorClass().wire());
+      assertEquals(tid, r.turnId);
+      assertEquals(
+          1,
+          h.getSideOutput(WorkflowTurnFunction.TURN_FAILURES).size(),
+          "it reaches the dead letter stream");
+    }
+  }
 }
