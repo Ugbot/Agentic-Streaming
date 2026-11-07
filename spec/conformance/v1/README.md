@@ -151,8 +151,11 @@ document listing every fixture in the directory, in file order:
   `@@AGENTIC_CONFORMANCE@@` and `@@END@@`, so build tools may interleave their own output
   around it. Only one such block is printed per run.
 
-A binding that only reports through its test framework (JUnit XML, pytest) is still
-conformant; the matrix then records its comparison as made *inside the binding*.
+The JVM bindings report through JUnit and leave their normalized results in
+`target/conformance-results/<fixture id>.json` of their module. The matrix reads skips from the
+JUnit XML and compares the results itself, so every runtime goes through
+`run_conformance.check_expectation`. The ports of that comparator in `ConformanceHarness.java` and
+`agentic/conformance.py` serve a plain `mvn test` or `pytest`; they are not the record.
 
 ## Comparison rules
 
