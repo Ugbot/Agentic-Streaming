@@ -95,3 +95,33 @@ def test_no_spelling_of_the_closing_tag_survives_the_marking(close: str) -> None
     inside = marked[marked.index("\n") + 1:marked.rindex("\n")]
     assert not any(c in inside for c in "<＜﹤"), inside
     assert mark("tool:x", "a <b>bold</b>") == '<untrusted source="tool:x">\na <b>bold</b>\n</untrusted>'
+
+
+def test_a_failed_turns_error_is_redacted_in_the_result_as_on_the_log() -> None:
+    """The log had the credential removed and the result, which a caller and a results topic get,
+    carried the exception's own message."""
+    import uuid
+
+    from agentic.bindings import Bindings
+    from agentic.events import InMemoryEventLog, Turn
+    from agentic.runtime import LocalRuntime, _Deployable
+
+    doc = {"spec_version": "agentic/v1",
+           "agent": {"id": "a", "router": {"kind": "static", "default": "p"}, "verifier": {"kind": "none"},
+                     "paths": {"p": {"brain": "rule", "x-brain": "leaky"}}},
+           "policies": {"redact": {"patterns": [r"acct \d+"]}}}
+
+    def leaky(view: Any) -> str:
+        raise RuntimeError("upstream said: Authorization: Bearer abcdefghijklmnop1234 for acct 4111")
+
+    bindings = Bindings()
+    bindings.brains["leaky"] = leaky
+    log = InMemoryEventLog()
+    runtime = LocalRuntime(log=log)
+    runtime.deploy(_Deployable(doc, bindings))
+    cid = f"c-{uuid.uuid4()}"
+    result = runtime.submit(Turn(cid, "t", "hi"))
+    assert result["status"] == "failed"
+    assert "abcdefghijklmnop1234" not in str([e.payload for e in log.read(cid)]), "the log was already clean"
+    assert "abcdefghijklmnop1234" not in json.dumps(result), result["error"]
+    assert "acct 4111" not in json.dumps(result), result["error"]

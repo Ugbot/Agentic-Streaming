@@ -248,7 +248,7 @@ always covered: fields such as `password`, `token`, `api_key` and `authorization
 a bearer token, an OpenAI or AWS key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
 for personal data. It finds what the patterns describe and nothing else, so it narrows what is recorded
 and does not promise it is clean. The reply the caller receives is not redacted, and neither is a
-results topic's `reply` field.
+results topic's `reply` field. A failed turn's `error` is redacted in the result as on the log.
 
 **Deletion on an immutable log is crypto-shredding.** Set `AGENTIC_KEY_VAULT_DIR` and every conversation
 gets its own AES-256-GCM data key: `text`, `reply`, `args`, `result`, `messages`, `signal`, `error` and

@@ -1060,7 +1060,8 @@ class Engine:
             "state": self._state_or_empty(ctx.turn.conversation_id),
             "tool_calls": list(ctx.tool_calls),
             "events": [e.normalized() for e in ctx.segment()],
-            "error": error,
+            # The result leaves the process, to a caller and a results topic: redacted as the log is.
+            "error": self.redactor.apply(error),
             "runtime_detail": {"runtime": "local", "started_ms": ctx.started_ms,
                                "elapsed_ms": self.clock() - ctx.started_ms},
         }

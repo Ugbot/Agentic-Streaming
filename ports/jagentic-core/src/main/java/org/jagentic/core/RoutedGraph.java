@@ -288,7 +288,16 @@ public final class RoutedGraph {
       ctx.record(EventType.TURN_FAILED, p);
     }
     return new TurnResult(ctx.conversationId, ctx.turnId, TurnStatus.FAILED, routedPath(ctx), null,
-        error, ctx.calls, ctx.segment(), stateOrEmpty(ctx));
+        redacted(ctx, error), ctx.calls, ctx.segment(), stateOrEmpty(ctx));
+  }
+
+  /**
+   * The error as the log has it. A result leaves the process, to a caller and to a results topic, so
+   * it is redacted as the log is.
+   */
+  private static TurnError redacted(AgentContext ctx, TurnError error) {
+    return error == null || error.message() == null ? error
+        : new TurnError(error.errorClass(), ctx.redactor.apply(error.message()));
   }
 
   private static boolean endedOnTheLog(AgentContext ctx) {
@@ -822,8 +831,8 @@ public final class RoutedGraph {
     }
     ctx.store.putAttribute(ctx.conversationId, PHASE_ATTR,
         status == TurnStatus.SUSPENDED ? "suspended" : "done");
-    TurnResult result = new TurnResult(ctx.conversationId, ctx.turnId, status, path, reply, error,
-        ctx.calls, ctx.segment(), stateOrEmpty(ctx));
+    TurnResult result = new TurnResult(ctx.conversationId, ctx.turnId, status, path, reply,
+        redacted(ctx, error), ctx.calls, ctx.segment(), stateOrEmpty(ctx));
     for (AgentListener l : listeners) {
       l.onTurnEnd(result, ctx);
     }
