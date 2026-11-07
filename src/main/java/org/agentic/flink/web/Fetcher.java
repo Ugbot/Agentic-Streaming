@@ -9,7 +9,7 @@ import java.net.http.HttpResponse;
 import java.util.Objects;
 import java.util.Optional;
 import org.agentic.flink.annotation.Experimental;
-import org.agentic.flink.net.OutboundUrlPolicy;
+import org.jagentic.core.net.OutboundUrlPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

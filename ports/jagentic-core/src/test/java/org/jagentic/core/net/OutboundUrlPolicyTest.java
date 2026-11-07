@@ -1,4 +1,4 @@
-package org.agentic.flink.net;
+package org.jagentic.core.net;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
-import org.agentic.flink.net.OutboundUrlPolicy.BlockedUrlException;
+import org.jagentic.core.net.OutboundUrlPolicy.BlockedUrlException;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 

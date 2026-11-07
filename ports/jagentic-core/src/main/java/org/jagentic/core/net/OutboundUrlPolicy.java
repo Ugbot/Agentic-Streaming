@@ -1,4 +1,4 @@
-package org.agentic.flink.net;
+package org.jagentic.core.net;
 
 import java.io.Serializable;
 import java.net.IDN;
@@ -12,7 +12,6 @@ import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import org.agentic.flink.annotation.Experimental;
 
 /**
  * Egress policy for URLs that originate from untrusted input (model output, request bodies, webhook
@@ -32,7 +31,6 @@ import org.agentic.flink.annotation.Experimental;
  * and stop after {@link #getMaxRedirects()} hops. Resolution runs through a pluggable {@link
  * Resolver} so tests can pin hostnames to addresses without touching DNS.
  */
-@Experimental
 public final class OutboundUrlPolicy implements Serializable {
   private static final long serialVersionUID = 1L;
 

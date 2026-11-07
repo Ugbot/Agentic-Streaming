@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import org.agentic.flink.net.OutboundUrlPolicy;
+import org.jagentic.core.net.OutboundUrlPolicy;
 import org.agentic.flink.tools.mcp.McpClient;
 import org.agentic.flink.tools.mcp.McpServerSpec;
 import org.agentic.flink.web.WebFetchTool;

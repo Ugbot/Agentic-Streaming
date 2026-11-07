@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.agentic.flink.net.OutboundUrlPolicy;
+import org.jagentic.core.net.OutboundUrlPolicy;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.InstantiationUtil;
 import org.junit.jupiter.api.AfterEach;
