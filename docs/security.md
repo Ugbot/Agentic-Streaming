@@ -133,6 +133,8 @@ enough.
   turn suspends before the call and an approver answers `approved` true or false, which is
   `injected-text-reaches-the-human-gate`. A timer or a CEP pattern has nobody to ask, so such a tool is
   refused there. Without this block an allowed tool runs when a model asks for it, injected or not.
+  An approval is for the call it was asked about: the same tool, index and arguments. A re-run that
+  asks the model again and gets another call at that index waits for a new approval.
 - Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
   the system prompt says what that means. This helps a model. It is not a boundary.
 

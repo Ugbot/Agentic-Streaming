@@ -224,11 +224,12 @@ class _UnknownOutcome(Exception):
     """A call has no answer and cannot be made again, or needs a person first. The turn suspends
     for a person, `until` saying which."""
 
-    def __init__(self, tool: str, index: int, until: str = "unknown_outcome") -> None:
+    def __init__(self, tool: str, index: int, until: str = "unknown_outcome", intent: Optional[str] = None) -> None:
         super().__init__(f"{tool} waits for a person")
         self.tool = tool
         self.index = index
         self.until = until
+        self.intent = intent  # for an approval, the call the approver is shown
 
 
 class _ToolEffect(EffectCall):
@@ -537,6 +538,8 @@ class Engine:
                 return self.refused(turn.conversation_id, turn.turn_id,
                                     f"signal needs approved true or false, got {approved!r}")
             resumed["approval"] = {"tool": suspended["tool"], "index": suspended["index"], "approved": approved}
+            if suspended.get("intent") is not None:
+                resumed["approval_intent"] = suspended["intent"]
         self._adopt(ctx, log, events, resuming_now=True)
         self._append(ctx, "turn_resumed", resumed)
         return self._continue(ctx, resuming=True)
@@ -572,6 +575,8 @@ class Engine:
         except _UnknownOutcome as exc:
             payload = {"turn_id": ctx.turn.turn_id, "path": ctx.path, "text": ctx.turn.text,
                        "user_id": ctx.turn.user_id, "until": exc.until, "tool": exc.tool, "index": exc.index}
+            if exc.intent is not None:
+                payload["intent"] = exc.intent  # the approval is for this call and no other
             self._append(ctx, "turn_suspended", payload)
             return self._finish(ctx, "suspended", ctx.path, None, None)
         except ValidationError as exc:
@@ -962,24 +967,27 @@ class Engine:
         if decision.verdict == DENY:
             self._refuse(ctx, tool_id, origin, decision.reason)
         if decision.verdict == ASK_A_PERSON:
-            self._gate(ctx, tool_id, origin)
+            self._gate(ctx, tool_id, origin, args)
 
     def _refuse(self, ctx: _TurnContext, tool_id: str, origin: str, reason: str) -> None:
         self._append(ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path,
                                            "reason": reason, **_principal_of(ctx.turn)})
         raise ToolRefused(reason)
 
-    def _gate(self, ctx: _TurnContext, tool_id: str, origin: str) -> None:
-        """A tool that needs a person waits for one. A timer or a pattern has nobody to ask."""
+    def _gate(self, ctx: _TurnContext, tool_id: str, origin: str, args: Mapping[str, Any]) -> None:
+        """A tool that needs a person waits for one. A timer or a pattern has nobody to ask. An answer
+        about another call at this index, other arguments after a re-run, is no answer."""
         if origin in ("timer", "cep"):
             self._refuse(ctx, tool_id, origin, f"tool {tool_id} needs a person and {origin} has nobody to ask")
         index = ctx.next_index
+        intent = intent_of(tool_id, self.redactor.apply(dict(args)), self._scope)
         answers = [e.payload["approval"] for e in self.log.read(ctx.turn.conversation_id)
                    if e.type == "turn_resumed" and e.turn_id == ctx.turn.turn_id
                    and (e.payload.get("approval") or {}).get("index") == index
-                   and e.payload["approval"]["tool"] == tool_id]
+                   and e.payload["approval"]["tool"] == tool_id
+                   and e.payload.get("approval_intent") in (None, intent)]
         if not answers:
-            raise _UnknownOutcome(tool_id, index, "tool_approval")
+            raise _UnknownOutcome(tool_id, index, "tool_approval", intent)
         if not answers[-1]["approved"]:
             self._refuse(ctx, tool_id, origin, f"an approver refused tool {tool_id}")
 

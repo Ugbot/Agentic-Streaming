@@ -187,3 +187,35 @@ def test_a_rerun_cannot_call_a_tool_the_document_denies_at_an_index_another_tool
     with pytest.raises(ToolRefused):
         engine._invoke(rerun, "wire", {})
     assert called == ["look"], "wire is not in the path's tools and must never run"
+
+
+def test_an_approval_is_for_the_call_the_approver_was_shown() -> None:
+    """An approval named the tool and its index. A resume after the journal is gone asks the model
+    again, and the call it then made at that index ran on the approval given for another."""
+    from agentic.bindings import Bindings
+    from agentic.events import InMemoryEventLog, Turn
+    from agentic.runtime import LocalRuntime, _Deployable
+
+    sent: List[Any] = []
+    amount = [10]
+    doc = {"spec_version": "agentic/v1",
+           "agent": {"id": "a", "router": {"kind": "static", "default": "main"}, "verifier": {"kind": "none"},
+                     "paths": {"main": {"brain": "rule", "x-brain": "pay", "tools": ["wire"]}}},
+           "policies": {"approvers": {"roles": ["approver"]}, "tool_approval": {"tools": ["wire"]}},
+           "tools": [{"id": "wire", "kind": "function", "effect": "non_idempotent"}]}
+
+    def runtime(log: Any) -> LocalRuntime:
+        bindings = Bindings()
+        bindings.tools["wire"] = lambda args: sent.append(args["amount"]) or "sent"
+        bindings.brains["pay"] = lambda view: str(view.invoke("wire", {"amount": amount[0]}))
+        rt = LocalRuntime(log=log)
+        rt.deploy(_Deployable(doc, bindings))
+        return rt
+
+    log = InMemoryEventLog()
+    assert runtime(log).submit(Turn("c", "t", "pay 10"))["status"] == "suspended"
+    amount[0] = 10_000  # the model, asked again, wants something else
+    result = runtime(log).submit(Turn("c", "t", "", signal={"approved": True},
+                                      principal={"subject": "ops", "roles": ["approver"]}))
+    assert sent == [], "nobody approved 10000"
+    assert result["status"] == "suspended", "the new call waits for its own approval"

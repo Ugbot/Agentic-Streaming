@@ -357,7 +357,7 @@ public final class AgentContext {
       refuse(origin, toolId, decision.reason());
     }
     if (decision.needsPerson()) {
-      gate(origin, toolId);
+      gate(origin, toolId, args);
     }
   }
 
@@ -397,26 +397,31 @@ public final class AgentContext {
   }
 
   /** A tool that needs a person waits for one. A timer or a pattern has nobody to ask. */
-  private void gate(ToolOrigin origin, String toolId) {
+  private void gate(ToolOrigin origin, String toolId, Map<String, Object> args) {
     if (origin.unattended()) {
       refuse(origin, toolId, "tool " + toolId + " needs a person and " + origin.wire() + " has nobody to ask");
     }
-    Boolean answer = approvalOf(toolId, nextToolIndex);
+    String intent = EffectJournal.intentOf(journalScope, toolId, redactor.apply(args));
+    Boolean answer = approvalOf(toolId, nextToolIndex, intent);
     if (answer == null) {
-      throw new TurnSuspendedOnUnknown(toolId, nextToolIndex, ConversationState.TOOL_APPROVAL);
+      throw new TurnSuspendedOnUnknown(toolId, nextToolIndex, ConversationState.TOOL_APPROVAL, intent);
     }
     if (!answer) {
       refuse(origin, toolId, "an approver refused tool " + toolId);
     }
   }
 
-  /** What the log says an approver answered about this call, the last answer standing. */
-  private Boolean approvalOf(String toolId, int index) {
+  /**
+   * What the log says an approver answered about this call, the last answer standing. An answer
+   * about another call at the same index, other arguments after a re-run, is no answer.
+   */
+  private Boolean approvalOf(String toolId, int index, String intent) {
     Boolean answer = null;
     for (LogEvent e : log.events(conversationId)) {
       if (e.is(EventType.TURN_RESUMED) && turnId.equals(e.turnId())
           && e.payload().get("approval") instanceof Map<?, ?> a
-          && toolId.equals(a.get("tool")) && a.get("index") instanceof Number n && n.intValue() == index) {
+          && toolId.equals(a.get("tool")) && a.get("index") instanceof Number n && n.intValue() == index
+          && (e.payload().get("approval_intent") == null || intent.equals(e.payload().get("approval_intent")))) {
         answer = Boolean.TRUE.equals(a.get("approved"));
       }
     }

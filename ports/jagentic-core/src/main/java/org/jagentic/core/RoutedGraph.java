@@ -487,6 +487,9 @@ public final class RoutedGraph {
       Map<String, Object> approval = map("tool", parked.tool(), "index", parked.index());
       approval.put("approved", approved);
       resumed.put("approval", approval);
+      if (parked.intent() != null) {
+        resumed.put("approval_intent", parked.intent()); // the call the approver was shown, and no other
+      }
     }
     ctx.replayOverAndResume(prior.events());
     Event turn = original(signal, prior, ctx);
@@ -674,6 +677,9 @@ public final class RoutedGraph {
       p.put("until", e.until);
       p.put("tool", e.tool);
       p.put("index", e.index);
+      if (e.intent != null) {
+        p.put("intent", e.intent); // the approval is for this call and no other
+      }
       ctx.record(EventType.TURN_SUSPENDED, p);
       return finish(ctx, TurnStatus.SUSPENDED, path, null, null, null);
     }
