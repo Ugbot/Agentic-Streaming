@@ -50,7 +50,9 @@ read `X-Forwarded-*`, so nothing a proxy passes on changes who it thinks is call
 
 A token is checked against the issuer's JWKS, then for issuer, audience, expiry and not-before. Only
 RS256, PS256 and ES256 are accepted, so `alg: none` and an HMAC made with the public key both fail.
-`OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403.
+`OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403,
+and so does one whose tenant claim is not a string. Expiry and not-before allow 60 seconds of clock
+skew. A `typ` other than `JWT` is refused, which includes RFC 9068's `at+jwt`.
 
 **A request body cannot say who is calling.** `user_id`, `principal` and `tenant` in a body are not
 read. The principal comes from the token.
