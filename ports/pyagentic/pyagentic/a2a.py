@@ -28,8 +28,8 @@ class A2AClient:
         self.timeout = timeout
 
     def _get(self, path: str) -> Dict[str, Any]:
-        egress.check(self.base_url + path)
-        with egress.urlopen(urllib.request.Request(self.base_url + path), self.timeout) as resp:
+        pin = egress.check(self.base_url + path)
+        with egress.urlopen(urllib.request.Request(self.base_url + path), self.timeout, pin) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     def _headers(self) -> Dict[str, str]:
@@ -39,7 +39,7 @@ class A2AClient:
         return headers
 
     def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
-        egress.check(self.base_url + path)
+        pin = egress.check(self.base_url + path)
         last: Optional[Exception] = None
         for attempt in range(self.retries + 1):
             try:
@@ -47,7 +47,7 @@ class A2AClient:
                     self.base_url + path, data=json.dumps(body).encode("utf-8"),
                     headers=self._headers(), method="POST")
                 # No redirect is followed: urllib would carry the bearer to wherever it pointed.
-                with egress.urlopen(req, self.timeout) as resp:
+                with egress.urlopen(req, self.timeout, pin) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except Exception as exc:  # transient network error
                 last = exc

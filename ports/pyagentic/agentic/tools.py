@@ -273,7 +273,7 @@ class ToolRegistry:
         if not spec.url:
             raise ValidationError(f"http tool {spec.id!r} has no url")
         try:
-            egress.check(spec.url)
+            pin = egress.check(spec.url)
         except egress.EgressBlocked as exc:
             raise ToolError(f"{spec.id} failed: blocked by egress policy") from exc
         timeout = (spec.timeout_ms or DEFAULT_TOOL_TIMEOUT_MS) / 1000.0
@@ -293,7 +293,7 @@ class ToolRegistry:
             request = urllib.request.Request(spec.url, data=body, method="POST",
                                              headers={**headers, "Content-Type": "application/json"})
         try:
-            with egress.urlopen(request, timeout) as response:
+            with egress.urlopen(request, timeout, pin) as response:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             failure = OutcomeUnknown if exc.code >= 500 else ToolError
