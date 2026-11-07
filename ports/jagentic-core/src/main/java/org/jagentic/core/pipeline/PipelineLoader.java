@@ -18,6 +18,8 @@ import org.jagentic.core.Runtime;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.llm.ChatClient;
 import org.jagentic.core.llm.OllamaChatClient;
+import org.jagentic.core.llm.AnthropicChatClient;
+import org.jagentic.core.llm.GeminiChatClient;
 import org.jagentic.core.llm.OpenAIChatClient;
 import org.jagentic.core.llm.ScriptedChatClient;
 
@@ -181,13 +183,17 @@ public final class PipelineLoader {
       }
     }
     String provider = String.valueOf(spec.getOrDefault("provider", "ollama"));
-    if (!List.of("ollama", "openai", "stub").contains(provider)) {
-      throw new IllegalArgumentException("unknown llm provider " + provider + "; choose ollama|openai|stub");
+    if (!List.of("ollama", "openai", "anthropic", "gemini", "stub").contains(provider)) {
+      throw new IllegalArgumentException(
+          "unknown llm provider " + provider + "; choose ollama|openai|anthropic|gemini|stub");
+    }
+    if ("gemini".equals(provider) && spec.get("model") == null) {
+      throw new IllegalArgumentException("llm.provider gemini needs llm.model");
     }
   }
 
   /**
-   * Build a ChatClient from the {@code llm:} section (ollama/openai/stub), honouring {@code model},
+   * Build a ChatClient from the {@code llm:} section (ollama/openai/anthropic/gemini/stub), honouring {@code model},
    * {@code base_url}, {@code temperature} and {@code max_tokens}. A sampling setting is sent only
    * when declared, since newer models refuse it.
    */
@@ -206,6 +212,11 @@ public final class PipelineLoader {
       case "openai":
         return new OpenAIChatClient((String) spec.getOrDefault("model", "gpt-6-luna"), baseUrl,
             temperature, maxTokens);
+      case "anthropic":
+        return new AnthropicChatClient(
+            (String) spec.getOrDefault("model", AnthropicChatClient.DEFAULT_MODEL), baseUrl, temperature, maxTokens);
+      case "gemini":
+        return new GeminiChatClient((String) spec.get("model"), baseUrl, temperature, maxTokens);
       default:
         return ScriptedChatClient.fromSpec(spec);
     }

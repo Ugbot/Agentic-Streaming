@@ -141,11 +141,12 @@ public final class ScriptedChatClient implements ChatClient {
     int taken = 0;
     for (int i = messages.size() - 1; i >= 0; i--) {
       String role = messages.get(i).get("role");
-      if ("user".equals(role)) {
-        break;
-      }
-      if ("tool".equals(role)) {
+      boolean observation = "user".equals(role)
+          && String.valueOf(messages.get(i).get("content")).startsWith(LlmBrain.OBSERVATION);
+      if (observation) {
         taken++;
+      } else if ("user".equals(role)) {
+        break;
       }
     }
     return taken;

@@ -354,6 +354,11 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>${agentic.test.jvmArgs}</argLine>
+                    <!-- Not credentials: the local stubs in WorkflowTurnRealModelTest expect these. -->
+                    <environmentVariables>
+                        <ANTHROPIC_API_KEY>stub-anthropic-key</ANTHROPIC_API_KEY>
+                        <GEMINI_API_KEY>stub-gemini-key</GEMINI_API_KEY>
+                    </environmentVariables>
                 </configuration>
             </plugin>
 
