@@ -718,7 +718,7 @@ a recorded answer costs nothing. The turn is spent, so retrying needs a new `tur
 
 Tokens are an estimate of four characters each over what went in and came out, because the clients
 read no provider usage. Counters belong to one runtime process. A binding need not keep them across a
-restart or share them between processes.
+restart or share them between processes. A day's counters are dropped once the day is over.
 
 ### What is recorded
 

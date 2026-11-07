@@ -172,6 +172,8 @@ Three things to know:
 - **The counters are in memory.** They are per process and a restart clears them. On Flink that means
   per subtask, so with parallelism 4 one principal can get up to four times a limit, across
   conversations on different subtasks. A limit here slows a principal down. It is not a hard ceiling.
+  A day's counters are dropped once the day is over, so memory does not grow with every principal.
+  Windows are calendar minutes and days, so a burst across a boundary can reach twice a limit.
 - **Tokens are an estimate,** four characters each. The clients read no provider usage, so a budget is
   not what the provider will bill.
 - A turn stopped by a limit is spent, so retry with a new `turn_id`.

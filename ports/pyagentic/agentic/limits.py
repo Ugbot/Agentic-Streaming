@@ -28,6 +28,17 @@ class Limits:
         self.env = os.environ if env is None else env
         self.counts: Dict[Tuple[Any, ...], float] = {}
         self.turns: Dict[Tuple[str, int], Set[str]] = {}
+        self._day = -1
+
+    def _today(self, now_ms: int) -> int:
+        """The day of `now_ms`. When it is a new one, the counters of days that are over are dropped,
+        so they do not grow with every principal that ever called."""
+        day = now_ms // DAY
+        if day > self._day:
+            self._day = day
+            for slot in [s for s in self.counts if s[-1] < day]:
+                del self.counts[slot]
+        return day
 
     def stopped(self) -> bool:
         """The document's switch, `AGENTIC_KILL_SWITCH=true`, or the `AGENTIC_KILL_SWITCH_FILE` existing."""
@@ -73,11 +84,12 @@ class Limits:
 
     def charge_model(self, principal: str, now_ms: int, characters: int) -> None:
         tokens = max(1, characters // 4)
-        slot = ("tokens", principal, now_ms // DAY)
+        today = self._today(now_ms)
+        slot = ("tokens", principal, today)
         self.counts[slot] = self.counts.get(slot, 0.0) + tokens
         rate = self.settings.get("cost_per_1k_tokens")
         if rate is not None:
-            slot = ("cost", principal, now_ms // DAY)
+            slot = ("cost", principal, today)
             self.counts[slot] = self.counts.get(slot, 0.0) + tokens / 1000.0 * rate
 
     def has_quota(self, tool: str) -> bool:
@@ -87,6 +99,6 @@ class Limits:
         if self.stopped():
             return "kill_switch", {"tool": tool}
         quota = (self.settings.get("tool_calls_per_day") or {}).get(tool)
-        if not begun and quota is not None and not self._take(("tool", principal, tool, now_ms // DAY), quota):
+        if not begun and quota is not None and not self._take(("tool", principal, tool, self._today(now_ms)), quota):
             return "tool_calls_per_day", {"tool": tool, "max": quota}
         return None
