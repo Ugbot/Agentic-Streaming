@@ -575,4 +575,15 @@ class EffectJournalAttackTest {
     assertEquals(TurnError.ErrorClass.FATAL, rerun.error.errorClass());
     assertEquals(1, FixtureWorld.count(world, "pay/c", "", false) - 1, "one call, then this look");
   }
+
+  @Test
+  void aPeerMayDeclareItsEffect() {
+    Map<String, Object> workflow = Map.of(
+        "spec_version", "agentic/v1",
+        "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
+            "paths", Map.of("p", Map.of("brain", "rule")), "verifier", Map.of("kind", "none")),
+        "a2a", List.of(Map.of("name", "peer", "transport", "inproc", "effect", "idempotent")));
+    org.jagentic.core.pipeline.WorkflowValidator.validate(workflow);
+    assertEquals(ToolEffect.IDEMPOTENT, GraphBuilder.build(workflow, null).tools().get("peer").effect());
+  }
 }

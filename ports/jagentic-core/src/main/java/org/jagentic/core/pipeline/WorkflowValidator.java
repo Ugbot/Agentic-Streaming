@@ -61,7 +61,7 @@ public final class WorkflowValidator {
   private static final Set<String> CONTEXT = Set.of("max_items", "max_tokens", "compaction");
   private static final Set<String> STORES = Set.of("conversation", "keyed_state", "long_term", "vector",
       "effects");
-  private static final Set<String> PEER = Set.of("name", "id", "url", "transport", "description", "retries",
+  private static final Set<String> PEER = Set.of("name", "id", "url", "transport", "effect", "description", "retries",
       "timeout_ms");
   private static final Set<String> SAGA = Set.of("steps");
   private static final Set<String> SAGA_STEP = Set.of("name", "tool", "args", "compensate_with");
