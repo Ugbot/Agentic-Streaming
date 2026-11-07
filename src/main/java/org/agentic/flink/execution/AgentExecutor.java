@@ -205,6 +205,10 @@ public class AgentExecutor implements Serializable, AutoCloseable {
     }
   }
 
+  LLMClient llmClient() {
+    return llmClient;
+  }
+
   /**
    * Test hook: replaces {@link Thread#sleep(long)} for backoff waits. It sees every backoff,
    * including the zero wait that full jitter can draw.
@@ -685,7 +689,7 @@ public class AgentExecutor implements Serializable, AutoCloseable {
       }
       if (llmClient == null) {
         // Create default LLM client
-        llmClient = LLMClient.createDefault(agent.getLlmModel(), agent.getTemperature());
+        llmClient = LLMClient.createDefault(agent.getLlmModel(), agent.getDeclaredTemperature());
       }
       if (agent.hasGuardrails() && !llmClient.hasGuardrails()) {
         List<AgentEventListener> listeners = agent.getListeners();

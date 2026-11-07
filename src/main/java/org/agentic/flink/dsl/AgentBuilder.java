@@ -86,7 +86,8 @@ public class AgentBuilder {
   // LLM configuration
   String systemPrompt;
   // Type-default temperature, folded into the implicit ChatSetup when none is set explicitly.
-  double temperature = 0.7;
+  // Null for an agent type with no opinion, so the provider's own default applies.
+  Double temperature;
 
   // Tool configuration
   Set<String> allowedTools = new HashSet<>();

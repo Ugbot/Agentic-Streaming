@@ -3,6 +3,7 @@ package org.agentic.flink.execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -192,6 +193,13 @@ public class AgentExecutorTest {
             .build();
     ex.setSleeper(ms -> 0L);
     return ex;
+  }
+
+  @Test
+  void theDefaultClientSendsNoTemperatureNobodyDeclared() {
+    try (AgentExecutor executor = AgentExecutor.builder().withAgent(agent(1)).build()) {
+      assertNull(executor.llmClient().getDeclaredTemperature());
+    }
   }
 
   @Test

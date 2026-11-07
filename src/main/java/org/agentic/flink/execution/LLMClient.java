@@ -374,8 +374,8 @@ public class LLMClient implements Serializable {
     return chatMessages;
   }
 
-  /** Creates a default LLM client with Ollama. */
-  public static LLMClient createDefault(String modelName, double temperature) {
+  /** Creates a default LLM client with Ollama; a null temperature is left to the provider. */
+  public static LLMClient createDefault(String modelName, Double temperature) {
     return new LLMClientBuilder().withModel(modelName).withTemperature(temperature).build();
   }
 
@@ -390,6 +390,11 @@ public class LLMClient implements Serializable {
 
   public double getTemperature() {
     return temperature == null ? ChatSetup.DEFAULT_TEMPERATURE : temperature;
+  }
+
+  /** What goes on the wire: null unless a caller set one. */
+  public Double getDeclaredTemperature() {
+    return temperature;
   }
 
   public int getMaxTokens() {
