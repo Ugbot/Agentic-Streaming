@@ -1,7 +1,8 @@
 # Agentic Streaming primitive specification, v1
 
 Status: frozen for conformance fixtures 01 to 24. Version: `agentic/v1`. See section 7 for what
-may still change under this version.
+may still change under this version. Section 10 (effects and recovery) was added under the
+additive rules of section 7.
 
 This is the normative vocabulary every runtime implements. A runtime is conformant when it
 executes the workflow IR (`workflow.schema.json`) and produces the normalized turn result
@@ -58,7 +59,9 @@ Event {
 `tool_failed`, `retrieved`, `reply_drafted`, `verification_failed`, `memory_written`,
 `turn_completed`, `turn_failed`, `turn_suspended`, `turn_resumed`, `timer_scheduled`,
 `timer_fired`, `compensation_started`, `compensation_step`, `compensation_completed`,
-`delegated`.
+`delegated`, `llm_called`, `tool_intent`, `compensation_failed`, `unknown_outcome`.
+
+The last four were added under section 7 and are defined in section 10.
 
 Unknown event types must be preserved on replay and ignored by reducers, so a runtime on
 an older spec version can still rebuild state written by a newer one.
@@ -73,7 +76,7 @@ A turn ends in exactly one terminal status:
 | `rejected` | an input or output guardrail blocked the turn |
 | `unverified` | the verifier rejected the reply after all retries |
 | `failed` | an unrecoverable error; the log records `turn_failed` |
-| `suspended` | the turn awaits an external signal or timer |
+| `suspended` | the turn awaits an external signal, a timer, or a person deciding an unknown outcome |
 | `duplicate` | the `turn_id` was already applied; the prior result is returned verbatim |
 
 ## 2. Verbs
@@ -92,7 +95,8 @@ A turn ends in exactly one terminal status:
 | `retry` | `(attempt, policy) -> delay \| give_up` | bounded by `policies.retry` |
 | `compensate` | `(saga, failed_step) -> unit` | executes compensations in reverse order |
 | `suspend` | `(turn, reason) -> suspended` | state is durable across the pause |
-| `resume` | `(conversation_id, turn_id, signal) -> TurnResult` | continues the suspended turn |
+| `resume` | `(conversation_id, turn_id, signal) -> TurnResult` | continues the suspended turn (section 10) |
+| `record_or_get` | `(key, intent, call) -> outcome` | the effect journal: runs `call` at most once per recorded outcome (section 10) |
 | `delegate` | `(peer, turn) -> result` | a peer agent invoked as a tool |
 | `publish` | `(channel, message) -> unit` | outbound transport |
 | `subscribe` | `(channel) -> stream<event>` | inbound transport |
@@ -120,11 +124,14 @@ A turn ends in exactly one terminal status:
   the brain of that turn again. Tools the first run called are called again, under the next
   free indices, so `(turn_id, index)` still names one call. Every other failed turn is applied.
 - Tool calls are idempotent per `(turn_id, call_index)`. A retried turn must not double-apply
-  a tool whose result is already recorded.
-- Effects that leave the system (`publish`, `delegate`) carry `(conversation_id, turn_id,
-  call_index)` so the receiver can deduplicate.
-- Exactly-once is a property of state, not of side effects: the conversation log is the
-  source of truth, external effects are at-least-once with a deduplication key.
+  a tool whose result is already recorded. The effect journal of section 10 is what makes this
+  true, including after a rollback that loses the log's own record of the call.
+- Every tool call and every effect that leaves the system (`publish`, `delegate`) carries a
+  deterministic `Idempotency-Key` derived from `(conversation_id, turn_id, call_index)`, so the
+  receiver can deduplicate (section 10).
+- State is exactly-once. Effects are at-least-once under a stable key. Anything that cannot take
+  a key is an explicit human decision: `effect: non_idempotent` tools are never called twice by
+  the runtime, and an unknown outcome suspends the turn for a person (section 10).
 
 ## 5. Errors and retries
 
@@ -162,11 +169,11 @@ which is an infrastructure failure: the turn cannot record its end there, so the
 as a whole and recovers.
 
 Failed compensation. A compensation that fails, after `policies.retry`, is recorded as
-`tool_failed` and does not stop the others: every remaining compensation still runs, in reverse
-order. `on_tool_error: continue` does not apply to compensations. `compensation_completed` is
-written only when every compensation succeeded. When any failed it is absent, and the turn ends
-`failed` with class `fatal` whatever the failed step's class was, because the saga is partly
-applied and needs repair by hand.
+`tool_failed` followed by `compensation_failed`, and does not stop the others: every remaining
+compensation still runs, in reverse order. `on_tool_error: continue` does not apply to
+compensations. `compensation_completed` is written only when every compensation succeeded. When
+any failed it is absent, and the turn ends `failed` with class `fatal` whatever the failed step's
+class was, because the saga is partly applied and needs repair by hand.
 
 Time limits. Every tool attempt and every model call has a limit. A tool's `timeout_ms` bounds
 one attempt, default 10000; a peer's bounds one delegation, default 30000; `llm.timeout_ms`
@@ -242,7 +249,7 @@ the list of those tests is kept in the repository README under Runtimes.
 Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured_tool_args`,
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
 `context_window`, `replay`, `suspend_resume`, `timers`, `saga`, `a2a`, `cep`, `event_time`,
-`checkpoint_recovery`, `parallelism`, `durable_store`.
+`checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`.
 
 ## 7. Versioning
 
@@ -358,9 +365,10 @@ contract; a runtime that differs on any of them fails the corresponding fixture.
 names the code it was checked against.
 
 - Default user. A turn without `user_id` has `user_id` equal to the string `anonymous`
-  (`Turn.user_id` default). A resumed turn is rebuilt from the suspended record and also
-  carries `anonymous`, whatever the original turn said. Fixture `03-tool-invocation` asserts
-  the resulting tool argument.
+  (`Turn.user_id` default). `turn_received` records it. A resumed turn keeps the user of the
+  original turn, read from the log; whoever sent the signal is recorded separately, as
+  `signal_sender` on `turn_resumed` (section 10). Fixture `03-tool-invocation` asserts the
+  resulting tool argument.
 - Rule-brain tool arguments. When a `tool_triggers` keyword matches (case-insensitive
   substring on the turn text, first match in declaration order), the rule brain invokes the
   tool with exactly one argument, `{"user": <user_id>}`, and replies
@@ -388,15 +396,182 @@ names the code it was checked against.
 - Guardrail stages. A guardrail's `stage` is `input` (default), `output`, or `both`. Input
   guardrails run on the turn text after `turn_received` and before routing; a match appends
   `guardrail_rejected` and ends the turn `rejected` with error class `guardrail`, so no
-  `routed` event is emitted for a rejected turn (`_check_guardrails`, `_handle`). The reference
-  runtime evaluates `input` and `both` rails at the input stage only and skips `output`
-  rails entirely; no v1 fixture exercises an output-stage rail. A runtime that implements
-  output rails runs them on the drafted reply after the verifier accepts it and before
-  `memory_written`, and a match ends the turn `rejected`; that placement is stated here so
-  implementations agree, but it is not conformance tested in v1 and a runtime may not describe
-  output guardrails as `supported` on the strength of the shared fixtures.
+  `routed` event is emitted for a rejected turn (`_check_guardrails`, `_handle`). A
+  rail runs its `allow` patterns first, and every one must match or the turn is rejected; then
+  its `deny` patterns, and any match rejects. A rail named in a path's `guardrails` list applies
+  to that path only, after `routed`; every other rail is global. `output` and `both` rails run on
+  the drafted reply after the verifier accepts it and before `memory_written`, and a match ends
+  the turn `rejected`. Fixtures `allow-rail`, `path-guardrail` and `output-rail-after-verifier`
+  prove this.
+- Tool arguments. When a tool declares `parameters`, every call's arguments are validated against
+  that JSON Schema before the call is journaled or given an index. Failure is class `validation`:
+  nothing reaches the tool. Fixture `argument-schema` proves it.
+- HTTP tools. A 2xx answer is the result. Anything else, and a timeout, is a failed attempt.
+  Fixture `tool-http-5xx` proves it.
+- Router kinds. `keyword` and `static` are implemented by every runtime. `static` always selects
+  `router.default`.
 - Sequence numbers. `sequence` is the position of the event in the conversation log, so it is
   dense per conversation within one runtime (`_append`). Absolute values are not compared
   across runtimes; see the comparison rules in `spec/conformance/v1/README.md` for why.
 - Retry observability. Section 5: attempts are observable through `attempt` numbers on
   `tool_called` and `tool_failed` events and on `tool_calls`; delays are not observed.
+
+## 10. Effects and recovery
+
+This section is the contract for the sentence in section 4. It holds on every runtime, including
+one whose log can roll back behind the outside world, as Flink's keyed state does.
+
+### What is and is not guaranteed
+
+| Thing | Guarantee |
+|---|---|
+| Conversation state and log | Exactly-once. A recovered turn leaves the same log an uninterrupted run would |
+| Model calls | The recorded reply is reused by index. A crash during a model call asks the model again |
+| `effect: read` tools | Recorded results are reused. No recorded result means the read runs again |
+| `effect: idempotent` tools | At-least-once under a stable `Idempotency-Key`. No recorded result means the call is made again, under the same key. Exactly one effect only if the tool honours the key |
+| `effect: non_idempotent` tools | The runtime never makes a second call. A call with no recorded result is `unknown_outcome` and waits for a person |
+
+**The limit, stated plainly.** A crash during a call to a `non_idempotent` tool leaves the outcome
+unknown. The journal cannot tell whether the effect landed, nothing in this specification can, and
+no runtime may guess. The call is neither retried nor treated as failed until a person says what
+happened. A journal gives reuse of recorded outcomes. It does not make an outside system
+transactional.
+
+### Tool effect classes
+
+A tool declares `effect: read`, `idempotent` or `non_idempotent`. A tool that declares nothing is
+`idempotent`: it is sent a key and may be called again under it. That keeps every earlier
+workflow's behaviour, and it means a tool that moves money must say `non_idempotent`.
+
+`policies.retry` applies to `read` and `idempotent` tools. A `non_idempotent` tool gets one attempt
+per call, whatever the policy says.
+
+### The idempotency key
+
+Every tool call carries a key derived from recorded input alone, so a re-run regenerates it:
+
+```
+Idempotency-Key = lowercase hex SHA-256 of
+                  UTF-8(conversation_id) 0x00 UTF-8(turn_id) 0x00 ASCII(decimal index)
+```
+
+Every attempt at one call carries the same key; a compensation has its own index and so its own
+key. An `http` or `agent` tool sends it as the header `Idempotency-Key`. A tool bound in process
+receives it with the call's identity `(conversation_id, turn_id, index)`. MCP tools receive it in
+the request's `_meta`.
+
+### The journal
+
+`EffectJournal` is a keyed store outside the runtime's own state, so it survives whatever rolls the
+log back. One entry per call:
+
+```
+key      : (conversation_id, turn_id, kind, index)    # kind is tool or llm
+intent   : tool id and a hash of the arguments         # empty for llm
+effect   : read | idempotent | non_idempotent
+state    : pending | succeeded | failed | unknown
+attempts : [{attempt, error}]                          # the failed attempts, in order
+result   : the recorded result, or the reply for llm
+error    : the final error, when failed
+```
+
+`record_or_get(key, intent, call)` is the only way a tool or model is reached:
+
+1. If an entry with a final state exists, return it. Nothing is called.
+2. If the entry is `pending`, the previous run stopped without an answer. A `read` or `idempotent`
+   call continues at its next attempt, under the same key. A `non_idempotent` call becomes
+   `unknown`.
+3. If there is no entry, write `pending` durably **before** calling. A store that cannot be written
+   is an infrastructure failure, as for the log (section 5): the call is not made.
+4. Call, then write the outcome durably before anything else happens.
+
+An entry is written whole, so a store only needs a keyed upsert: a table with a primary key or a
+compacted topic. Writes are synchronous. An entry whose intent differs from the call now being made
+means the turn did not replay deterministically, for instance because the workflow changed under
+it. Nothing is called and the turn ends `failed` with class `fatal`.
+
+Model calls use the same entry shape with `kind: llm`, counted by their own index within the turn.
+They are recorded when they answer; no `pending` is written, because asking again costs money but
+changes nothing. Retrieval is not journaled, since section 2 makes it deterministic for a fixed
+index.
+
+A journal is declared as `stores.effects`. Implementations: `memory` (a process-wide store for
+tests and local use), `file` (Python), `postgres` and `kafka` (JVM; a compacted topic). A runtime
+whose log rolls back must not run a `non_idempotent` tool without a journal that outlives the
+rollback: it rejects the workflow at build time. Retention must outlast the longest rollback or
+redelivery a deployment allows, and an entry dropped sooner re-opens that turn to repeat calls.
+
+### New events
+
+| Event | Written | Payload |
+|---|---|---|
+| `tool_intent` | once per call, before the first attempt | `tool`, `index`, `args`, `effect`, `idempotency_key` |
+| `llm_called` | after each model answer, recorded or reused | `index`, `model` where known, `tool` and `args` or `text` |
+| `unknown_outcome` | when a call's outcome cannot be known | `tool`, `index`, `args`, `idempotency_key`, `reason` |
+| `compensation_failed` | after the `tool_failed` of an undo whose budget is spent | `tool`, `index`, `step`, `error` |
+
+`tool_called` and `delegated` also carry `result`.
+
+### Replay of a turn
+
+A run of a turn starts from the top every time: after a crash, after a rollback, and on a resume. It
+re-derives each step and consults the journal, so what was recorded is reused and the sequence of
+calls is the same. Appending is at-most-once per `(turn_id, type, index, attempt)`, or per
+occurrence for events without an index: an event already on the log is reused, not appended again.
+A log that lost the turn gets every event again; a log that kept part of it gets the rest. Both end
+up with the log an uninterrupted run would have written.
+
+A turn's `events` in a result are its events from the start, or from its last `turn_resumed`.
+
+Timers are evaluated against the log as it stood before the turn's first event, so a re-run gives
+the same tool indices. A turn that ended `failed` with class `transient` is not replayed: section 4
+says what its redelivery does, and its calls take the next free indices.
+
+### Sagas
+
+A compensation receives `{"forward_args": <args>, "forward_result": <result>}` of the step it
+undoes. Any failure of a step compensates, whatever its class: a tool failure, bad arguments or an
+unknown tool. A step's or an undo's `unknown_outcome` suspends the turn, and the saga carries on
+when a person resolves it. An incomplete saga resumes from the log: redelivery replays the steps
+from the journal and carries on where the crash left it, forward or backward, and no completed step
+or undo runs twice. A failed compensation is terminal (section 5).
+
+### The resume state machine
+
+Every delivery of a turn or signal falls in exactly one cell. Each state comes from the fold of the
+log; `running` is any turn with events and no terminal status, which only a crash can leave.
+
+| State of the `turn_id` | A turn arrives | A signal arrives |
+|---|---|---|
+| absent | run it | **refused** |
+| `running`, no `turn_resumed` yet | replay it | **refused** |
+| `running`, after `turn_resumed` | replay it | replay it |
+| `suspended` | `duplicate`; nothing runs | **resume** |
+| `suspended`, `until: unknown_outcome` | `duplicate`; nothing runs | **resolve**, or **refused** when the signal has no valid `resolution` |
+| terminal, class `transient` | run again (section 4) | run again (section 4) |
+| terminal | `duplicate` | `duplicate` |
+
+**Refused** means status `failed`, class `validation`, with **nothing appended**, so the `turn_id`
+stays unspent. A signal that overtakes its turn must not burn it. The same applies to a turn
+delivered with an empty or missing `turn_id`, which section 4 forbids: it cannot be deduplicated, so
+it is refused rather than given an invented id.
+
+**Resume** appends `turn_resumed {turn_id, signal, signal_sender}` once, then replays the turn past
+its suspension. The turn runs as the user of `turn_received`. `signal_sender` is the user the signal
+arrived with, and has no effect on what runs. After a resume the turn continues as it would have:
+into the saga if the workflow declares one, otherwise into the brain.
+
+**Resolve** is a resume whose signal answers an unknown outcome:
+
+| `signal.resolution` | Meaning | Effect |
+|---|---|---|
+| `applied` | it happened; `signal.result` is what it returned | the entry becomes `succeeded` with that result, and the turn carries on |
+| `not_applied` | it did not happen; call it again | a person's decision: the entry is cleared, and the call runs under the same key |
+| `failed` | it failed | the entry becomes `failed` and the turn fails as if the tool had; a saga compensates |
+
+An unknown outcome is never retried without one of these. Redelivering the turn answers `duplicate`.
+
+A `non_idempotent` call also becomes `unknown` when its one attempt ends without a definite answer:
+a timeout, a lost connection, or an HTTP 5xx, which may have landed. A 4xx or a tool that raises is
+a definite failure. The turn appends `unknown_outcome`, then `turn_suspended` with `until:
+unknown_outcome` and the `tool` and `index` in question.

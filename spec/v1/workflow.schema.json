@@ -157,7 +157,7 @@
       "required": ["id"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
-        "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing", "hanging"], "default": "constant" },
+        "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing", "hanging", "counting"], "default": "constant" },
         "description": { "type": "string" },
         "value": {},
         "url": { "type": "string" },
@@ -167,7 +167,8 @@
           "description": "JSON Schema for the tool's arguments. Arguments are structured objects; a runtime must not parse them out of reply text.",
           "type": "object"
         },
-        "compensation": { "type": "string", "description": "tool id that undoes this tool, used by saga compensation" }
+        "compensation": { "type": "string", "description": "tool id that undoes this tool, used by saga compensation" },
+        "effect": { "enum": ["read", "idempotent", "non_idempotent"], "default": "idempotent", "description": "what a repeated call does (primitives.md, section 10). A non_idempotent tool is never called twice by the runtime." }
       },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
@@ -312,7 +313,8 @@
         "conversation": { "$ref": "#/$defs/store" },
         "keyed_state": { "$ref": "#/$defs/store" },
         "long_term": { "$ref": "#/$defs/store" },
-        "vector": { "$ref": "#/$defs/store" }
+        "vector": { "$ref": "#/$defs/store" },
+        "effects": { "$ref": "#/$defs/store", "description": "the effect journal (primitives.md, section 10): memory, file, postgres or kafka" }
       },
       "additionalProperties": false
     },
