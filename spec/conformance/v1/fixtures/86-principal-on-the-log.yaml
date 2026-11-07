@@ -1,0 +1,29 @@
+id: principal-on-the-log
+description: "The authenticated principal is the turn's user, and it is on turn_received and on every call."
+requires: [principal, tools, rule_brain]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice, tenant: acme}}
+expect:
+- turn_id: t1
+  status: completed
+  tool_calls:
+  - {tool: pay, index: 0, args: {user: alice}}
+  event_payloads:
+  - type: turn_received
+    payload: {user_id: alice, principal: {subject: alice, tenant: acme}}
+  - type: tool_intent
+    payload: {principal: {subject: alice, tenant: acme}}

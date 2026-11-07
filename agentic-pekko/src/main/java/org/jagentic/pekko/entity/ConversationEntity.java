@@ -501,6 +501,7 @@ public final class ConversationEntity
     m.put("text", e.text());
     m.put("metadata", e.metadata() == null ? Map.of() : new LinkedHashMap<>(e.metadata()));
     m.put("signal", e.signal() == null ? null : new LinkedHashMap<>(e.signal()));
+    m.put("principal", e.principal() == null ? null : e.principal().toMap());
     return m;
   }
 
@@ -517,7 +518,7 @@ public final class ConversationEntity
     Map<String, Object> signal = m.get("signal") instanceof Map<?, ?> s
         ? new LinkedHashMap<>((Map<String, Object>) s) : null;
     return new Event(str(m.get("conversation_id")), str(m.get("turn_id")), str(m.get("user_id")),
-        str(m.get("text")), metadata, signal);
+        str(m.get("text")), metadata, signal, org.jagentic.core.Principal.fromMap(m.get("principal")));
   }
 
   private static String str(Object o) {

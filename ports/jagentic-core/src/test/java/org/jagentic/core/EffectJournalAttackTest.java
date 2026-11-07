@@ -465,7 +465,7 @@ class EffectJournalAttackTest {
     GraphBuilder.Built built = GraphBuilder.build(workflow("pay", "resolve-" + System.nanoTime()), null);
     ConversationLog log = new ConversationLog.InMemory();
     Flaky journal = new Flaky();
-    LocalRuntime dying = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+    LocalRuntime dying = new LocalRuntime(built.graph().withApprovers(Approvers.ofRoles("approver")), new ConversationStore.InMemory(),
         new KeyedStateStore.InMemory(), built.tools(), null, log).withJournal(journal)
         .withProbe(new TurnProbe() {
           private static final long serialVersionUID = 1L;
@@ -476,13 +476,14 @@ class EffectJournalAttackTest {
           }
         });
     assertThrows(Died.class, () -> dying.submit(Event.turn("c", "t", "u", "pay now")));
-    LocalRuntime rt = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+    LocalRuntime rt = new LocalRuntime(built.graph().withApprovers(Approvers.ofRoles("approver")),
+        new ConversationStore.InMemory(),
         new KeyedStateStore.InMemory(), built.tools(), null, log).withJournal(journal);
     assertEquals(TurnStatus.SUSPENDED, rt.submit(Event.turn("c", "t", "u", "pay now")).status);
     long before = log.events("c").size();
     journal.refuseRead.set(true);
     assertThrows(EffectJournal.Unavailable.class,
-        () -> rt.submit(Event.resume("c", "t", Map.of("resolution", "not_applied"))));
+        () -> rt.submit(Event.resume("c", "t", Map.of("resolution", "not_applied")).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"))));
     assertEquals(before, log.events("c").size());
   }
 

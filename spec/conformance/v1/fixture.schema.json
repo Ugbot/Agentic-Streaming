@@ -22,7 +22,7 @@
           "guardrails", "verifier", "ordering", "idempotency", "retry", "memory",
           "retrieval", "context_window", "replay", "suspend_resume", "timers",
           "saga", "a2a", "cep", "event_time", "checkpoint_recovery", "parallelism",
-          "durable_store", "crash_recovery", "effect_journal", "tool_policy"
+          "durable_store", "crash_recovery", "effect_journal", "tool_policy", "principal"
         ]
       }
     },
@@ -53,7 +53,19 @@
             "type": "boolean",
             "default": false
           },
-          "user_id": { "type": "string", "description": "the user the turn or signal arrives with; default anonymous" },
+          "user_id": { "type": "string", "description": "the user the turn or signal claims; default anonymous. Beside a principal it means nothing" },
+          "principal": {
+            "description": "who the turn or signal is authenticated as, as a gateway or an embedding program vouches for it",
+            "type": "object",
+            "required": ["subject"],
+            "properties": {
+              "subject": { "type": "string" },
+              "tenant": { "type": "string" },
+              "roles": { "type": "array", "items": { "type": "string" } },
+              "issuer": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
           "crash_at": {
             "description": "kill this delivery at a named point, then recover the runtime from whatever it keeps across a crash. The delivery's result has status crashed.",
             "type": "object",

@@ -30,6 +30,8 @@ from agentic.journal import (
 )
 from agentic.runtime import LocalRuntime
 
+OPS = {"subject": "ops", "roles": ["approver"]}
+
 
 def rid(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
@@ -80,7 +82,7 @@ def pay_runtime(journal: Any, log: Any = None, trigger: str = "pay", effect: str
         calls.append(1)
         return f"paid {len(calls)}"
 
-    spec = (Agent(name).path("main", tools=["pay"], tool_triggers={trigger: "pay"}).use_tool("pay", pay, effect=effect)
+    spec = (Agent(name).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={trigger: "pay"}).use_tool("pay", pay, effect=effect)
             .verifier("none").build())
     rt = LocalRuntime(journal=journal, log=log if log is not None else InMemoryEventLog())
     rt.deploy(spec)
@@ -207,7 +209,7 @@ def test_an_outage_inside_a_saga_is_an_outage_not_a_step_failure():
 def test_a_journal_that_cannot_open_is_not_degraded_under_a_non_idempotent_tool(tmp_path):
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("x")
-    spec = (Agent(rid("a")).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).use_tool("pay", lambda **_: "ok", effect="non_idempotent")
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).use_tool("pay", lambda **_: "ok", effect="non_idempotent")
             .with_journal("file", url=str(blocked), on_unavailable="degrade").verifier("none").build())
     with pytest.raises((LogUnavailable, ValidationError)):
         LocalRuntime().deploy(spec)
@@ -216,7 +218,7 @@ def test_a_journal_that_cannot_open_is_not_degraded_under_a_non_idempotent_tool(
 def test_a_journal_may_degrade_when_every_tool_is_safe_to_repeat(tmp_path):
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("x")
-    spec = (Agent(rid("a")).path("main", tools=["look"], tool_triggers={"look": "look"}).use_tool("look", lambda **_: "ok", effect="read")
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["look"], tool_triggers={"look": "look"}).use_tool("look", lambda **_: "ok", effect="read")
             .with_journal("file", url=str(blocked), on_unavailable="degrade").verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -236,7 +238,7 @@ def test_an_outage_before_a_resolution_changes_nothing():
     before = len(log.read("c"))
     journal.refuse_read = True
     with pytest.raises(LogUnavailable):
-        rt.submit({"conversation_id": "c", "turn_id": "t", "signal": {"resolution": "not_applied"}})
+        rt.submit({"conversation_id": "c", "turn_id": "t", "principal": OPS, "signal": {"resolution": "not_applied"}})
     assert len(log.read("c")) == before
     assert len(calls) == 1
 

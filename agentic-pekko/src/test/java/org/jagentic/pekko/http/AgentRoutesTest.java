@@ -124,7 +124,7 @@ class AgentRoutesTest {
 
     Map<String, Object> resumed = TurnWire.readObject(post(TurnWire.write(
         Map.of("conversation_id", cid, "turn_id", t1, "signal", Map.of("kind", "approval", "approved", true)))).body());
-    assertEquals("completed", resumed.get("status"));
+    assertEquals("failed", resumed.get("status"), "a request body can never be an approver");
     assertEquals(t1, resumed.get("turn_id"));
   }
 

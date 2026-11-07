@@ -28,7 +28,8 @@ public enum EventType {
   TOOL_INTENT,
   COMPENSATION_FAILED,
   UNKNOWN_OUTCOME,
-  TOOL_REFUSED;
+  TOOL_REFUSED,
+  SIGNAL_REFUSED;
 
   /** The snake_case wire name used in logs and normalized results. */
   public String wire() {

@@ -122,6 +122,11 @@ class Turn:
     user_id: str = "anonymous"
     signal: Optional[Dict[str, Any]] = None
     metadata: Dict[str, str] = field(default_factory=dict)
+    principal: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self) -> None:
+        if self.principal is not None:  # a claimed user_id means nothing beside a principal
+            self.user_id = self.principal["subject"]
 
     def event_time_ms(self) -> Optional[int]:
         raw = self.metadata.get("event_time_ms")
@@ -267,6 +272,13 @@ class ReferenceRuntime:
         state = self._turn_state(conv, turn.turn_id)
         retryable = state == "transient" and idempotent
 
+        foreign = self._foreign_tenant(conv, turn)
+        if foreign is not None:
+            return self._refused(conv, turn, foreign, "policy")
+        if turn.signal is not None and state != "absent":
+            problem = self._not_an_approver(conv, turn)
+            if problem is not None:
+                return self._refuse_signal(conv, turn, problem)
         if turn.signal is not None:
             if state == "suspended":
                 return self._resume(conv, turn)
@@ -276,8 +288,7 @@ class ReferenceRuntime:
                 return self._run(conv, turn, resuming=True)
             if retryable and self._reached_non_idempotent(conv, turn.turn_id):
                 ctx = self._context(conv, turn, rerun=False)
-                self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
-                                                         "signal_sender": turn.user_id})
+                self._append(conv, ctx, "turn_resumed", self._resumed_payload(turn))
                 return self._continue(conv, turn, ctx, resuming=True)
             if retryable:
                 return self._rerun_resumed(conv, turn)
@@ -292,6 +303,45 @@ class ReferenceRuntime:
         if state != "absent" and idempotent:
             return self._duplicate(conv, turn)
         return self._run(conv, turn, fresh=not idempotent)
+
+    @staticmethod
+    def _tenant_of(conv: Conversation) -> Optional[str]:
+        first = next((e for e in conv.log if e["type"] == "turn_received"), None)
+        return ((first["payload"].get("principal") or {}).get("tenant")) if first else None
+
+    def _foreign_tenant(self, conv: Conversation, turn: Turn) -> Optional[str]:
+        """primitives.md section 11: a conversation belongs to the tenant that started it."""
+        owner = self._tenant_of(conv)
+        if owner is None or turn.signal is not None or (turn.principal or {}).get("tenant") == owner:
+            return None  # a signal is answered by the approver check, on the log
+        return f"conversation {conv.conversation_id} belongs to another tenant"
+
+    def _not_an_approver(self, conv: Conversation, turn: Turn) -> Optional[str]:
+        """Who may answer a suspended turn. Deny by default, and a name alone is nobody."""
+        principal = turn.principal
+        if principal is None:
+            return "a signal needs an authenticated principal"
+        owner = self._tenant_of(conv)
+        if owner is not None and principal.get("tenant") != owner:
+            return f"{principal['subject']} is not of this conversation's tenant"
+        approvers = self.policies.get("approvers") or {}
+        if principal["subject"] in (approvers.get("subjects") or []):
+            return None
+        if set(principal.get("roles") or []) & set(approvers.get("roles") or []):
+            return None
+        return f"{principal['subject']} is not an approver"
+
+    def _refuse_signal(self, conv: Conversation, turn: Turn, problem: str) -> Dict[str, Any]:
+        """Status `failed`, class `policy`. The turn is untouched, and the attempt is on the log."""
+        ctx = _TurnContext(turn)
+        payload = {"turn_id": turn.turn_id, "signal_sender": turn.user_id, "reason": problem}
+        if turn.principal is not None:
+            payload["signal_principal"] = dict(turn.principal)
+        self._append(conv, ctx, "signal_refused", payload)
+        return {"conversation_id": turn.conversation_id, "turn_id": turn.turn_id, "status": "failed", "path": None,
+                "reply": None, "state": reduce_state(conv.log, self.context), "tool_calls": [],
+                "events": [{k: e[k] for k in ("type", "sequence", "payload", "timestamp", "metadata")} for e in ctx.events],
+                "error": {"class": "policy", "message": problem}}
 
     @staticmethod
     def _events_of(conv: Conversation, turn_id: str) -> List[Dict[str, Any]]:
@@ -318,11 +368,11 @@ class ReferenceRuntime:
                 state = "running"
         return state
 
-    def _refused(self, conv: Conversation, turn: Turn, message: str) -> Dict[str, Any]:
-        """Status `failed`, class `validation`, nothing appended: the turn_id stays unspent."""
+    def _refused(self, conv: Conversation, turn: Turn, message: str, cls: str = "validation") -> Dict[str, Any]:
+        """Status `failed`, nothing appended: the turn_id stays unspent."""
         return {"conversation_id": turn.conversation_id, "turn_id": turn.turn_id, "status": "failed",
                 "path": None, "reply": None, "state": reduce_state(conv.log, self.context),
-                "tool_calls": [], "events": [], "error": {"class": "validation", "message": message}}
+                "tool_calls": [], "events": [], "error": {"class": cls, "message": message}}
 
     def _duplicate(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
         recorded = conv.results.get(turn.turn_id) or self._result_from_log(conv, turn.turn_id)
@@ -362,7 +412,8 @@ class ReferenceRuntime:
         original = turn
         if received is not None and not fresh:
             original = Turn(turn.conversation_id, turn.turn_id, received["text"],
-                            received.get("user_id", "anonymous"), None, dict(received.get("metadata") or {}))
+                            received.get("user_id", "anonymous"), None, dict(received.get("metadata") or {}),
+                            received.get("principal"))
         ctx = _TurnContext(original)
         if rerun:
             ctx._tool_index = conv.tool_indices.get(turn.turn_id, 0)
@@ -370,6 +421,13 @@ class ReferenceRuntime:
         elif not fresh:
             ctx.prior = _Prior(events)
         return ctx
+
+    @staticmethod
+    def _resumed_payload(turn: Turn) -> Dict[str, Any]:
+        payload = {"turn_id": turn.turn_id, "signal": turn.signal, "signal_sender": turn.user_id}
+        if turn.principal is not None:
+            payload["signal_principal"] = dict(turn.principal)
+        return payload
 
     def _resume(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
         pending = conv.suspended[turn.turn_id]
@@ -380,8 +438,7 @@ class ReferenceRuntime:
         conv.suspended.pop(turn.turn_id)
         ctx = self._context(conv, turn, rerun=False)
         ctx.prior.answered()
-        self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
-                                                 "signal_sender": turn.user_id})
+        self._append(conv, ctx, "turn_resumed", self._resumed_payload(turn))
         return self._continue(conv, turn, ctx, resuming=True)
 
     def _resolve(self, turn: Turn, pending: Dict[str, Any]) -> Optional[str]:
@@ -406,8 +463,7 @@ class ReferenceRuntime:
     def _rerun_resumed(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
         ctx = self._context(conv, turn, rerun=True)
         path = next(e["payload"]["path"] for e in self._events_of(conv, turn.turn_id) if e["type"] == "routed")
-        self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
-                                                 "signal_sender": turn.user_id})
+        self._append(conv, ctx, "turn_resumed", self._resumed_payload(turn))
         return self._after_routing(conv, ctx, path)
 
     def _run(self, conv: Conversation, turn: Turn, resuming: bool = False, rerun: bool = False,
@@ -440,6 +496,8 @@ class ReferenceRuntime:
             received["event_time_ms"] = event_time
         if turn.metadata:
             received["metadata"] = dict(turn.metadata)
+        if turn.principal is not None:
+            received["principal"] = dict(turn.principal)
         if not rerun:
             self._append(conv, ctx, "turn_received", received)
         if first_turn:
@@ -765,7 +823,8 @@ class ReferenceRuntime:
             return
         scope = "policies.unattended_tools" if unattended else f"the tools of path {ctx.path}"
         reason = f"tool {tool_id} is not in {scope}"
-        self._append(conv, ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path, "reason": reason})
+        self._append(conv, ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path, "reason": reason,
+                                                  **_principal_of(ctx.turn)})
         raise ToolRefused(reason)
 
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,
@@ -792,8 +851,8 @@ class ReferenceRuntime:
                                          "attempts": [], "result": None, "error": None}
         elif entry["intent"] != intent:
             raise JournalDivergence(f"call {index} of turn {turn.turn_id} was {entry['intent']}, now {intent}")
-        self._append(conv, ctx, "tool_intent", {"tool": tool_id, "index": index, "args": args,
-                                                "effect": effect, "idempotency_key": ikey})
+        self._append(conv, ctx, "tool_intent", {"tool": tool_id, "index": index, "args": args, "effect": effect,
+                                                "idempotency_key": ikey, **_principal_of(turn)})
         for attempt in entry["attempts"]:
             self._record_failure(conv, ctx, tool_id, index, args, attempt["attempt"], attempt["error"])
 
@@ -967,6 +1026,10 @@ class ReferenceRuntime:
         conv.tool_indices[ctx.turn.turn_id] = ctx._tool_index
         conv.llm_indices[ctx.turn.turn_id] = ctx._llm_index
         return result
+
+
+def _principal_of(turn: Turn) -> Dict[str, Any]:
+    return {"principal": dict(turn.principal)} if turn.principal is not None else {}
 
 
 def _class_of(exc: Exception) -> str:

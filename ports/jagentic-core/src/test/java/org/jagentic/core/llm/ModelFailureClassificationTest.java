@@ -118,6 +118,7 @@ class ModelFailureClassificationTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> path = (Map<String, Object>) ((Map<String, Object>) agent.get("paths")).get("main");
     path.put("x-suspend-until", "approval");
+    wf.put("policies", Map.of("approvers", Map.of("roles", java.util.List.of("approver"))));
     AtomicInteger calls = new AtomicInteger();
     List<String> seen = new ArrayList<>();
     ChatClient client = (messages, tools) -> {
@@ -130,8 +131,8 @@ class ModelFailureClassificationTest {
     Runtime rt = runtime(wf, client);
     String cid = "c-" + UUID.randomUUID();
     assertEquals(TurnStatus.SUSPENDED, rt.submit(Event.turn(cid, "t", "u", "refund")).status);
-    assertEquals(TurnStatus.FAILED, rt.submit(Event.resume(cid, "t", Map.of("ok", true))).status);
-    TurnResult again = rt.submit(Event.resume(cid, "t", Map.of("ok", true)));
+    assertEquals(TurnStatus.FAILED, rt.submit(Event.resume(cid, "t", Map.of("ok", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"))).status);
+    TurnResult again = rt.submit(Event.resume(cid, "t", Map.of("ok", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
     assertEquals(TurnStatus.COMPLETED, again.status);
     assertEquals(List.of("refund", "refund"), seen, "the original text, not the signal's");
   }

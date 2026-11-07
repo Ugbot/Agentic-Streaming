@@ -38,6 +38,20 @@ public final class TurnWire {
     }
   }
 
+  /**
+   * As {@link #parse(String, Supplier)} for a channel that vouches for what it carries: a Kafka topic
+   * only the gateway and other trusted producers can write to. {@code principal} is believed here and
+   * nowhere else, so a parsed request body can never claim one.
+   */
+  public static Event parseVouched(String json, Supplier<String> fallbackTurnId) {
+    Event event = parse(json, fallbackTurnId);
+    try {
+      return event.withPrincipal(org.jagentic.core.Principal.fromMap(JSON.readValue(json, OBJECT).get("principal")));
+    } catch (java.io.IOException | IllegalArgumentException e) {
+      throw new MalformedTurn("principal is malformed", e);
+    }
+  }
+
   /** Parse with a fresh random {@code turn_id} when the payload has none (HTTP: each request is a new turn). */
   public static Event parse(String json) {
     return parse(json, () -> UUID.randomUUID().toString());
@@ -69,7 +83,7 @@ public final class TurnWire {
     String uid = text(n, "user_id", "userId");
     Map<String, Object> signal = n.hasNonNull("signal") ? convert(n.get("signal"), OBJECT, "signal") : null;
     if (signal != null) {
-      return Event.resume(cid, turnId, signal);
+      return Event.resume(cid, turnId, uid, signal);
     }
     String txt = text(n, "text");
     Map<String, String> metadata = n.hasNonNull("metadata")

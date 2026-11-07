@@ -25,7 +25,7 @@ EVENT_TYPES: FrozenSet[str] = frozenset({
     "tool_failed", "retrieved", "reply_drafted", "verification_failed", "memory_written",
     "turn_completed", "turn_failed", "turn_suspended", "turn_resumed", "timer_scheduled",
     "timer_fired", "compensation_started", "compensation_step", "compensation_completed",
-    "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome", "tool_refused",
+    "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome", "tool_refused", "signal_refused",
 })
 
 TERMINAL_STATUSES: FrozenSet[str] = frozenset({
@@ -58,6 +58,8 @@ class Turn:
     """One inbound request. `turn_id` is the idempotency key and is mandatory.
 
     A `signal` resumes the suspended turn with the same `turn_id` instead of starting one.
+    `principal` is who it is authenticated as, in the wire form of `agentic.policy.Principal`. Whoever
+    builds the `Turn` vouches for it. Beside a principal, `user_id` is the principal's subject.
     """
 
     conversation_id: str
@@ -66,8 +68,11 @@ class Turn:
     user_id: str = "anonymous"
     signal: Optional[Mapping[str, Any]] = None
     metadata: Mapping[str, str] = field(default_factory=dict)
+    principal: Optional[Mapping[str, Any]] = None
 
     def __post_init__(self) -> None:
+        if self.principal is not None:
+            object.__setattr__(self, "user_id", self.principal["subject"])
         if not self.conversation_id:
             raise ValidationError("a turn needs a non-empty conversation_id")
         if not self.turn_id:

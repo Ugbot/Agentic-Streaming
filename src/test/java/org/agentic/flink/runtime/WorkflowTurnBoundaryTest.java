@@ -231,7 +231,10 @@ class WorkflowTurnBoundaryTest {
       assertTrue(r.error.message().contains("timestamps"), r.error.message());
       assertEquals(1, sideOutput(h).size());
 
-      h.processElement(new StreamRecord<>(Event.resume(cid, tid, Map.of("approved", true))));
+      h.processElement(
+          new StreamRecord<>(
+              Event.resume(cid, tid, Map.of("approved", true))
+                  .withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"))));
       assertEquals(
           TurnStatus.DUPLICATE, outputs(h).get(1).status, "a failed turn is no longer suspended");
     }

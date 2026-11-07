@@ -19,11 +19,14 @@ workflow:
   saga:
     steps:
     - {name: a, tool: a}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - {conversation_id: c1, turn_id: t1, text: pay the invoice}
 - conversation_id: c1
   turn_id: t1
   signal: {kind: approval}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: suspended}
 - turn_id: t1

@@ -37,7 +37,7 @@ REFERENCE_CAPABILITIES = {
     "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
     "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay",
     "suspend_resume", "timers", "saga", "a2a", "cep", "event_time", "checkpoint_recovery",
-    "parallelism", "durable_store", "crash_recovery", "effect_journal", "tool_policy",
+    "parallelism", "durable_store", "crash_recovery", "effect_journal", "tool_policy", "principal",
 }
 
 
@@ -146,6 +146,7 @@ def execute(fixture: Dict[str, Any]) -> List[Dict[str, Any]]:
                 user_id=spec.get("user_id", "anonymous"),
                 signal=spec.get("signal"),
                 metadata=dict(spec.get("metadata") or {}),
+                principal=spec.get("principal"),
             ), spec.get("crash_at")))
         return results
 

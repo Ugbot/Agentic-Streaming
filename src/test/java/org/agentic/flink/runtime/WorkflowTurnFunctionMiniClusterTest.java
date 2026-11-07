@@ -245,7 +245,9 @@ class WorkflowTurnFunctionMiniClusterTest {
       d.start();
       d.submit(Event.turn(cid, tid, "u", "refund"));
       TurnResult resumed =
-          d.submit(Event.resume(cid, tid, Map.of("kind", "approval", "approved", true)));
+          d.submit(
+              Event.resume(cid, tid, Map.of("kind", "approval", "approved", true))
+                  .withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
       assertEquals(TurnStatus.COMPLETED, resumed.status, () -> d.allResults().toString());
       Thread.sleep(1200);
       TurnResult after = d.submit(Event.turn(cid, rnd("t"), "u", "another refund"));

@@ -13,7 +13,8 @@ import java.util.Set;
 public interface ToolPolicy {
 
   /** What is being asked for. {@code effect} is null when no such tool is registered. */
-  record Request(String tool, ToolOrigin origin, String path, String effect, Map<String, Object> args) {}
+  record Request(String tool, ToolOrigin origin, String path, String effect, Map<String, Object> args,
+                 Principal principal) {}
 
   /** The answer, with the reason a refusal gives. */
   record Decision(boolean allowed, String reason) {

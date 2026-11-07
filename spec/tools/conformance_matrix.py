@@ -75,7 +75,7 @@ CAPABILITIES: List[str] = [
     "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails",
     "verifier", "ordering", "idempotency", "retry", "memory", "retrieval", "context_window",
     "replay", "suspend_resume", "timers", "saga", "a2a", "cep", "event_time",
-    "checkpoint_recovery", "parallelism", "durable_store", "crash_recovery", "effect_journal", "tool_policy",
+    "checkpoint_recovery", "parallelism", "durable_store", "crash_recovery", "effect_journal", "tool_policy", "principal",
 ]
 
 CELL_VALUES = ("supported", "partial", "unsupported", "not_tested")

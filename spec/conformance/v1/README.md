@@ -74,6 +74,11 @@ Python owners.
 | `timer-tool-refused`, `cep-tool-refused` | what runs outside any path needs `policies.unattended_tools` |
 | `saga-step-refused`, `compensation-refused` | a refused step compensates; a refused undo ends the turn `fatal` |
 | `refusal-survives-a-crash` | a crash around a refusal changes nothing |
+| `principal-on-the-log`, `spoofed-user` | the authenticated principal is the turn's user, whatever the body claims |
+| `resume-keeps-the-principal` | a resumed turn runs as the principal that started it; the approver is recorded apart |
+| `unauthorised-approver`, `no-approvers-means-none`, `unauthenticated-signal`, `wrong-tenant-approver` | who cannot answer a suspended turn, and that the attempt is on the log |
+| `unauthorised-settlement` | someone who is not an approver cannot settle an unknown outcome |
+| `wrong-tenant-turn` | a conversation belongs to the tenant that started it |
 
 Run them against the reference runtime:
 
@@ -97,8 +102,8 @@ python spec/tools/run_conformance.py duplicate-turn   # one fixture
    is rebuilt from the log; it does not prove the store survives a process crash. Crash
    durability is claimed and tested per runtime (see the Runtimes section of the
    repository README for the list of those tests).
-   `crash_at` kills the delivery at the named point (see below), and `user_id` is the user the
-   turn or signal arrives with.
+   `crash_at` kills the delivery at the named point (see below), `user_id` is the user the turn or
+   signal claims, and `principal` is who it is authenticated as.
 4. Emit one normalized result per turn (`spec/v1/result.schema.json`).
 5. Compare with `check_expectation` in `spec/tools/run_conformance.py`, or an equivalent
    implementation of the rules below.

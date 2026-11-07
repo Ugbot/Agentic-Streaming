@@ -271,7 +271,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
     TurnResult result = null;
     try {
-      result = handle(event, keyedLog, ctx.timerService());
+      result = handle(event, keyedLog, ctx.timerService(), false);
       if (result.status == TurnStatus.SUSPENDED
           && options.timerResume()
           && !result.awaitsAPerson()) {
@@ -317,7 +317,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
       if (!keyedLog.state(cid).suspended().containsKey(turnId)) {
         return; // resumed by an explicit signal before the timer fired; the firing is recorded only
       }
-      result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
+      result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService(), true);
     } catch (LogUnavailable e) {
       throw e;
     } catch (RuntimeException e) {
@@ -404,7 +404,11 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
         partial == null ? Map.of() : partial.state);
   }
 
-  private TurnResult handle(Event event, ConversationLog keyedLog, TimerService timerService) {
+  /**
+   * @param runtimeSignal this operator's own resume timer fired; no approver is involved
+   */
+  private TurnResult handle(
+      Event event, ConversationLog keyedLog, TimerService timerService, boolean runtimeSignal) {
     ConversationState before = keyedLog.state(event.conversationId());
     ConversationStore store = new ConversationStore.InMemory();
     for (ChatMessage m : before.transcript()) {
@@ -425,6 +429,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     agentCtx.clock = () -> clock.nowMs(timerService);
     agentCtx.probe = options.probe();
     agentCtx.journal = built.journal();
+    agentCtx.runtimeSignal = runtimeSignal;
     return built.graph().handle(event, agentCtx);
   }
 

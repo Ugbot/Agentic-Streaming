@@ -77,7 +77,7 @@ public final class KafkaStreamApp {
       String outTopic, Duration timeout) {
     Event event;
     try {
-      event = TurnWire.parse(in.value(), () -> turnId(in));
+      event = TurnWire.parseVouched(in.value(), () -> turnId(in));
     } catch (TurnWire.MalformedTurn e) {
       return CompletableFuture.completedFuture(
           new ProducerRecord<>(outTopic, in.key(), TurnWire.write(malformed(in, e))));

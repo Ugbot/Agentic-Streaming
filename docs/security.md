@@ -4,23 +4,26 @@ This page states what the code does today, including where it does nothing. The 
 experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments:
 the effect journal below stops repeated calls, but nothing here authenticates who asked for one.**
 
-## The canonical path has no authentication
+## Who is calling
 
-The canonical path is the `agentic/v1` runtimes: `WorkflowTurnFunction` on Flink, `LocalRuntime` in
-the Java and Python cores, and the Pekko entity.
+An event can carry a `Principal` (`subject`, `tenant`, `roles`, `issuer`). Beside one, `user_id` means
+nothing: the turn runs as the principal, and it is recorded on `turn_received`, `tool_intent` and
+`tool_refused`. Whatever delivers the event vouches for it, so **anyone who can write to the input
+topic can claim any principal**. Keep that topic to trusted producers.
 
-- None of them authenticates a caller. There is no principal in `AgentContext`: `user_id` is a string
-  the event carries, and nothing checks it.
+Only an authenticated principal named by `policies.approvers` can resume a suspended turn or settle
+an unknown outcome. Nobody can if the block is absent. A refused signal is `signal_refused` on the log
+and changes nothing. A resumed turn keeps the principal that started it, and the approver is recorded
+apart. The fixtures `principal-on-the-log` to `wrong-tenant-turn` prove this on all five runtimes.
+
 - The Pekko HTTP front door has no authentication. `POST /agent` runs a turn, and
   `GET /conversations/{id}` returns the whole event log, tool results included, to anyone who can
-  reach the port. `HttpMain` binds `0.0.0.0` unless `AGENTIC_PEKKO_HTTP_HOST` says otherwise. Set it
-  to `127.0.0.1` on any machine you do not fully control.
+  reach the port. A request body cannot carry a principal, so it cannot resume anything.
+  `HttpMain` binds `0.0.0.0` unless `AGENTIC_PEKKO_HTTP_HOST` says otherwise. Set it to `127.0.0.1` on
+  any machine you do not fully control.
 - The Flink JobManager REST API in `docker-compose-session.yml` has no authentication and accepts jar
   uploads and job submission. It is published on `127.0.0.1` only and must never be exposed beyond
   the host.
-
-The bearer-token model that earlier versions of this page described belonged to the A2A gateway and
-the tool services, which have moved out of this repository.
 
 ## The tool boundary
 
@@ -61,9 +64,8 @@ The key is a SHA-256 of the conversation id, turn id and call index, so it leaks
   for a peer, whose client retries are switched off, and an MCP server.
 - **A crash during a call to a `non_idempotent` tool leaves the outcome unknown.** The journal cannot
   tell whether the effect landed. The call is not repeated: the turn suspends with `unknown_outcome`
-  and a person answers with a signal. Treat that person's answer as privileged, because
-  `not_applied` makes the call again. Nothing yet checks who sent it; the sender is recorded as
-  `signal_sender` and is not authenticated.
+  and a person answers with a signal. That answer is privileged, because `not_applied` makes the
+  call again, so only an approver can give it.
 - A timeout, a lost connection or an HTTP 5xx from a `non_idempotent` tool is unknown in the same way.
 - The journal holds tool arguments and results in plaintext, as the log does. Protect and expire it
   as you would the log, and keep entries longer than the longest rollback or redelivery you allow.

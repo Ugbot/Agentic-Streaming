@@ -1,0 +1,27 @@
+id: spoofed-user
+description: 'A user_id in the body means nothing beside a principal: the turn runs as the principal, and the spoofed name appears nowhere.'
+requires: [principal, tools, rule_brain]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, user_id: mallory, principal: {subject: alice, tenant: acme}}
+expect:
+- turn_id: t1
+  status: completed
+  tool_calls:
+  - {tool: pay, index: 0, args: {user: alice}}
+  event_payloads:
+  - type: turn_received
+    payload: {user_id: alice}

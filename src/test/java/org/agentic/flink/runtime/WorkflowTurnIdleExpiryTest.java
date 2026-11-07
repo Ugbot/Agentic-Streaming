@@ -149,7 +149,11 @@ class WorkflowTurnIdleExpiryTest {
       assertEquals(TurnStatus.SUSPENDED, last(h).status);
 
       clockAt(h, 50 * TTL);
-      h.processElement(new StreamRecord<>(Event.resume(cid, tid, Map.of("approved", true)), 1));
+      h.processElement(
+          new StreamRecord<>(
+              Event.resume(cid, tid, Map.of("approved", true))
+                  .withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")),
+              1));
       assertEquals(TurnStatus.COMPLETED, last(h).status, "the approval must not be lost");
     }
   }

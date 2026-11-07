@@ -312,7 +312,7 @@ def turn_of(spec: Mapping[str, Any]) -> Dict[str, Any]:
     fixture may deliver the empty `turn_id` a `Turn` refuses to be built with."""
     return {"conversation_id": spec["conversation_id"], "turn_id": spec["turn_id"], "text": spec.get("text", ""),
             "user_id": spec.get("user_id", "anonymous"), "signal": spec.get("signal"),
-            "metadata": turn_metadata(spec)}
+            "metadata": turn_metadata(spec), "principal": spec.get("principal")}
 
 
 def _deliver_to_crash(runtime: Runtime, workflow: Mapping[str, Any],

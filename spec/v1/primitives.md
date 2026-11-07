@@ -254,7 +254,7 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
 `context_window`, `replay`, `suspend_resume`, `timers`, `saga`, `a2a`, `cep`, `event_time`,
 `checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`,
-`tool_policy`.
+`tool_policy`, `principal`.
 
 ## 7. Versioning
 
@@ -574,14 +574,17 @@ log; `running` is any turn with events and no terminal status, which only a cras
 | terminal, class `transient` | run again (section 4) | run again (section 4) |
 | terminal | `duplicate` | `duplicate` |
 
+A signal is checked before any of this: section 11 says who may send one.
+
 **Refused** means status `failed`, class `validation`, with **nothing appended**, so the `turn_id`
 stays unspent. A signal that overtakes its turn must not burn it. The same applies to a turn
 delivered with an empty or missing `turn_id`, which section 4 forbids: it cannot be deduplicated, so
 it is refused rather than given an invented id.
 
 **Resume** appends `turn_resumed {turn_id, signal, signal_sender}` once, then replays the turn past
-its suspension. The turn runs as the user of `turn_received`. `signal_sender` is the user the signal
-arrived with, and has no effect on what runs. After a resume the turn continues as it would have:
+its suspension. The turn runs as the user and principal of `turn_received`. `signal_sender` is who
+the signal came from, recorded apart with its `signal_principal` (section 11), and has no effect on
+what runs. After a resume the turn continues as it would have:
 into the saga if the workflow declares one, otherwise into the brain.
 
 **Resolve** is a resume whose signal answers an unknown outcome:
@@ -625,4 +628,41 @@ not offered back to a model, which sees only the tools the policy grants its pat
 that asks for another gets no second try in that turn. In a saga a refused step is a failed step: what
 ran before it compensates. A refused undo is a failed undo: `compensation_failed`, and the turn ends
 `fatal`. `on_tool_error: continue` does not apply to a refusal.
+
+### The principal
+
+A `Principal` is who a turn or a signal is authenticated as: `subject`, and optionally `tenant`,
+`roles` and `issuer`. Whatever puts it on the event vouches for it: a gateway from a verified token,
+a topic only trusted producers can write to, or the program embedding the runtime. A runtime
+cannot tell a true one from a false one, so the boundary is whoever may deliver events.
+
+Beside a principal, `user_id` is the principal's `subject`, whatever the caller claimed, so a name in
+a request body never reaches the log, a tool's arguments or a brain. Without a principal, `user_id` is
+a label and nothing more.
+
+`turn_received`, `tool_intent` and `tool_refused` carry `principal` when there is one. A run of a turn
+that is already on the log takes its principal from `turn_received`, never from the delivery, so a
+resume keeps the identity of the turn.
+
+### Who may answer a suspended turn
+
+`policies.approvers` names `subjects` and `roles`. A signal is honoured only from a principal with one
+of them, and of the conversation's tenant. Deny by default: without the block nobody can resume a turn
+or settle an unknown outcome, and a signal with a `user_id` and no principal is nobody.
+
+A signal for a turn that is on the log is checked before the resume state machine, so the same rule
+covers a resume, a resolution and a redelivered signal. Refusal appends `signal_refused {turn_id,
+signal_sender, signal_principal, reason}` and nothing else. The result is status `failed`, class
+`policy`. The turn stays as it was and the journal is not touched, so the approver can still answer.
+A signal for a turn that is not on the log is refused as section 10 says, with nothing appended, so
+it cannot grow a log.
+
+A timer the runtime set for itself resumes the turn without an approver: it is not a signal from
+outside, and no event can claim to be one.
+
+### Tenancy on the log
+
+A conversation belongs to the tenant of its first `turn_received`. A turn with any other tenant, or
+with no principal, is refused with class `policy` and nothing appended. A conversation started with no
+tenant has no such check.
 

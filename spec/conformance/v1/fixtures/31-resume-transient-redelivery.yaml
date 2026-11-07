@@ -16,10 +16,12 @@ workflow:
     provider: stub
     script:
       - {text: "refund issued", x-fail-attempts: 1}
+  policies:
+    approvers: {roles: [approver]}
 turns:
   - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
-  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}}
-  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}}
+  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}, principal: {subject: ops, roles: [approver]}}
+  - {conversation_id: c1, turn_id: t1, signal: {kind: approval, approved: true}, principal: {subject: ops, roles: [approver]}}
 expect:
   - turn_id: t1
     status: suspended

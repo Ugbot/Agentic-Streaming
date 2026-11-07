@@ -23,11 +23,13 @@ workflow:
   policies:
     on_tool_error: fail
     retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, jitter: false}
+    approvers: {roles: [approver]}
 turns:
 - {conversation_id: c1, turn_id: t1, text: pay the invoice}
 - conversation_id: c1
   turn_id: t1
   signal: {resolution: failed}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - turn_id: t1
   status: suspended

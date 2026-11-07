@@ -21,6 +21,8 @@ workflow:
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - conversation_id: c1
   turn_id: t1
@@ -29,10 +31,12 @@ turns:
 - conversation_id: c1
   turn_id: t1
   signal: {kind: approval}
+  principal: {subject: ops, roles: [approver]}
 - {conversation_id: c1, turn_id: t1, text: pay the invoice}
 - conversation_id: c1
   turn_id: t1
   signal: {kind: approval}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: crashed}
 - turn_id: t1

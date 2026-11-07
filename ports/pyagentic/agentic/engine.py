@@ -44,7 +44,7 @@ from .journal import (
     intent_of,
     model_intent_of,
 )
-from .policy import ALLOW, DocumentToolPolicy, ToolPolicy, ToolRequest
+from .policy import ALLOW, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec, idempotency_key
@@ -106,6 +106,16 @@ def turn_state(events: Sequence[Event]) -> str:
         elif state == ABSENT:
             state = RUNNING
     return state
+
+
+def _tenant_of(log: Sequence[Event]) -> Optional[str]:
+    """The tenant a conversation belongs to: the one that started it (`primitives.md` section 11)."""
+    first = next((e for e in log if e.type == "turn_received"), None)
+    return (first.payload.get("principal") or {}).get("tenant") if first is not None else None
+
+
+def _principal_of(turn: Turn) -> Dict[str, Any]:
+    return {"principal": dict(turn.principal)} if turn.principal is not None else {}
 
 
 def _is_transient(event: Event) -> bool:
@@ -230,7 +240,8 @@ class _ToolEffect(EffectCall):
 
     def on_intent(self, entry: Entry) -> None:
         self.engine._append(self.ctx, "tool_intent", {"tool": self.spec.id, "index": self.index, "args": self.args,
-                                                      "effect": self.spec.effect, "idempotency_key": self.key})
+                                                      "effect": self.spec.effect, "idempotency_key": self.key,
+                                                      **_principal_of(self.ctx.turn)})
 
     def on_failed_attempt(self, attempt: Attempt) -> None:
         self.ctx.tool_calls.append({"tool": self.spec.id, "index": self.index, "args": self.args,
@@ -370,7 +381,7 @@ class Engine:
     def _turn_as_received(conversation_id: str, turn_id: str, received: Event) -> Turn:
         payload = received.payload
         return Turn(conversation_id, turn_id, str(payload.get("text", "")), str(payload.get("user_id", "anonymous")),
-                    None, dict(received.metadata))
+                    None, dict(received.metadata), payload.get("principal"))
 
     # -- the turn ------------------------------------------------------------
 
@@ -407,6 +418,14 @@ class Engine:
         state = turn_state(events)
         retryable = state == TRANSIENT and idempotent
 
+        tenant = _tenant_of(log)
+        if turn.signal is None and tenant is not None and (turn.principal or {}).get("tenant") != tenant:
+            return self.refused(turn.conversation_id, turn.turn_id,
+                                f"conversation {turn.conversation_id} belongs to another tenant", "policy")
+        if turn.signal is not None and state != ABSENT:
+            problem = approver_problem(self.doc, turn.principal, tenant)
+            if problem is not None:
+                return self._refuse_signal(ctx, problem)
         if turn.signal is not None:
             if state == SUSPENDED:
                 return self._resume(turn, ctx, log, events)
@@ -429,11 +448,21 @@ class Engine:
         self._adopt(ctx, log, events, fresh=not idempotent)
         return self._continue(ctx, resuming=False)
 
-    def refused(self, conversation_id: str, turn_id: str, message: str) -> Dict[str, Any]:
-        """Status `failed`, class `validation`, nothing appended: the `turn_id` stays unspent."""
+    def _refuse_signal(self, ctx: _TurnContext, problem: str) -> Dict[str, Any]:
+        """Status `failed`, class `policy`. The turn is untouched, and the attempt is on the log."""
+        turn = ctx.turn
+        payload = {"turn_id": turn.turn_id, "signal_sender": turn.user_id, "reason": problem}
+        if turn.principal is not None:
+            payload["signal_principal"] = dict(turn.principal)
+        self._append(ctx, "signal_refused", payload)
+        return self._finish(ctx, "failed", None, None, {"class": "policy", "message": problem})
+
+    def refused(self, conversation_id: str, turn_id: str, message: str,
+                error_class: str = "validation") -> Dict[str, Any]:
+        """Status `failed`, nothing appended: the `turn_id` stays unspent."""
         return {"conversation_id": conversation_id, "turn_id": turn_id, "status": "failed", "path": None,
                 "reply": None, "state": self._state_or_empty(conversation_id), "tool_calls": [], "events": [],
-                "error": {"class": "validation", "message": message},
+                "error": {"class": error_class, "message": message},
                 "runtime_detail": {"runtime": "local", "refused": True}}
 
     def _duplicate(self, turn: Turn, log: Sequence[Event], events: Sequence[Event]) -> Dict[str, Any]:
@@ -475,7 +504,10 @@ class Engine:
 
     @staticmethod
     def _resumed_payload(turn: Turn) -> Dict[str, Any]:
-        return {"turn_id": turn.turn_id, "signal": dict(turn.signal or {}), "signal_sender": turn.user_id}
+        payload = {"turn_id": turn.turn_id, "signal": dict(turn.signal or {}), "signal_sender": turn.user_id}
+        if turn.principal is not None:
+            payload["signal_principal"] = dict(turn.principal)
+        return payload
 
     def _resume(self, turn: Turn, ctx: _TurnContext, log: Sequence[Event], events: Sequence[Event]) -> Dict[str, Any]:
         suspended = next(e for e in reversed(events) if e.type == "turn_suspended").payload
@@ -622,6 +654,8 @@ class Engine:
 
     def _received_payload(self, turn: Turn) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id}
+        if turn.principal is not None:
+            payload["principal"] = dict(turn.principal)
         event_time = event_time_ms(turn.metadata)
         if event_time is not None:
             payload["event_time_ms"] = event_time
@@ -859,10 +893,10 @@ class Engine:
         A refusal is on the log before the turn ends, and the turn does end: nothing offers it back."""
         known = self.tools.ids().get(tool_id)
         effect = known.effect if known is not None else None
-        decision = self.policy.decide(ToolRequest(tool_id, origin, ctx.path, effect, args))
+        decision = self.policy.decide(ToolRequest(tool_id, origin, ctx.path, effect, args, ctx.turn.principal))
         if decision.verdict != ALLOW:
             self._append(ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path,
-                                               "reason": decision.reason})
+                                               "reason": decision.reason, **_principal_of(ctx.turn)})
             raise ToolRefused(decision.reason)
 
     def _invoke(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any],

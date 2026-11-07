@@ -68,7 +68,7 @@ class DurableTimerTest {
     assertEquals(TurnStatus.SUSPENDED, suspended.status);
 
     long delayMs = ThreadLocalRandom.current().nextLong(400, 900);
-    Event fire = Event.resume(cid, t1, Map.of("kind", "approval", "approved", true, "via", "timer"));
+    Event fire = Event.resume(cid, t1, Map.of("kind", "approval", "approved", true, "via", "timer")).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"));
     ConversationEntity.TimerAck ack = rt.scheduleTimer(cid, timerId, Duration.ofMillis(delayMs), fire);
     assertFalse(ack.alreadyScheduled());
     ConversationEntity.TimerAck again = rt.scheduleTimer(cid, timerId, Duration.ofMillis(delayMs), fire);
@@ -97,7 +97,7 @@ class DurableTimerTest {
       assertEquals(i, events.get(i).sequence());
     }
 
-    TurnResult dup = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)));
+    TurnResult dup = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
     assertEquals(TurnStatus.DUPLICATE, dup.status);
     assertEquals("[approval] refund approved", dup.reply);
 
@@ -115,7 +115,7 @@ class DurableTimerTest {
     String t1 = rnd("t");
     rt.submit(Event.turn(cid, t1, "ivy", "refund this"));
     rt.scheduleTimer(cid, rnd("timer"), Duration.ofMillis(150),
-        Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)));
+        Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
     rt.passivate(cid);
     Thread.sleep(400);
     // the entity was passivated before the timer could fire; recovery re-arms it with zero remaining delay

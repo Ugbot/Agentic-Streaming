@@ -7,12 +7,33 @@ workflow document says, and it is the floor: another policy can only narrow it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Protocol, Set
+from typing import Any, Dict, Mapping, Optional, Protocol, Sequence, Set
 
 ALLOW = "allow"
 DENY = "deny"
 
 UNATTENDED_ORIGINS = frozenset({"timer", "cep"})  # they run outside any path
+
+
+@dataclass(frozen=True)
+class Principal:
+    """Who a turn or a signal is authenticated as. Whatever builds one vouches for it: the gateway
+    from a verified token, or the program embedding the runtime."""
+
+    subject: str
+    tenant: Optional[str] = None
+    roles: Sequence[str] = ()
+    issuer: Optional[str] = None
+
+    def wire(self) -> Dict[str, Any]:
+        out: Dict[str, Any] = {"subject": self.subject}
+        if self.tenant is not None:
+            out["tenant"] = self.tenant
+        if self.roles:
+            out["roles"] = list(self.roles)
+        if self.issuer is not None:
+            out["issuer"] = self.issuer
+        return out
 
 
 @dataclass(frozen=True)
@@ -22,6 +43,7 @@ class ToolRequest:
     path: Optional[str]
     effect: Optional[str]  # None when no such tool is registered
     args: Mapping[str, Any]
+    principal: Optional[Mapping[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -58,3 +80,21 @@ class DocumentToolPolicy:
         if request.tool in self.tools_of(request.path):
             return Decision(ALLOW)
         return Decision(DENY, f"tool {request.tool} is not in the tools of path {request.path}")
+
+
+def approver_problem(doc: Mapping[str, Any], signal_principal: Optional[Mapping[str, Any]],
+                     tenant: Optional[str]) -> Optional[str]:
+    """Why this principal may not answer a suspended turn of `tenant`, or None when it may. Deny by
+    default: `policies.approvers` names who may, and a name with no principal is nobody."""
+    if signal_principal is None:
+        return "a signal needs an authenticated principal"
+    subject = signal_principal["subject"]
+    if tenant is not None and signal_principal.get("tenant") != tenant:
+        return f"{subject} is not of this conversation's tenant"
+    approvers = (doc.get("policies") or {}).get("approvers") or {}
+    if subject in (approvers.get("subjects") or []):
+        return None
+    if set(signal_principal.get("roles") or []) & set(approvers.get("roles") or []):
+        return None
+    return f"{subject} is not an approver"
+

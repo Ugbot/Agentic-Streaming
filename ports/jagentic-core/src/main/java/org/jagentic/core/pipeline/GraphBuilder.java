@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jagentic.core.Agent;
+import org.jagentic.core.Approvers;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.Brain;
 import org.jagentic.core.ContextWindow;
@@ -257,7 +258,8 @@ public final class GraphBuilder {
       graph = graph.withTimers(timers);
     }
     graph = graph.withAgentId(String.valueOf(agent.get("id")))
-        .withToolPolicy(ToolPolicy.of(pathGrants, unattendedTools((Map<String, Object>) spec.get("policies"))));
+        .withToolPolicy(ToolPolicy.of(pathGrants, unattendedTools((Map<String, Object>) spec.get("policies"))))
+        .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")));
     return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
   }
 

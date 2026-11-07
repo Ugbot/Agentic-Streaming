@@ -212,7 +212,15 @@ public final class KafkaPipelineJob {
       metadata.put(e.getKey(), e.getValue().asText());
     }
     String user = node.path("user_id").asText("anonymous");
-    return new Event(conversationId, turnId, user, text, metadata, signal);
+    return new Event(
+        conversationId,
+        turnId,
+        user,
+        text,
+        metadata,
+        signal,
+        org.jagentic.core.Principal.fromMap(
+            JSON.convertValue(node.get("principal"), Object.class)));
   }
 
   private static String required(JsonNode node, String field) throws MalformedRecord {

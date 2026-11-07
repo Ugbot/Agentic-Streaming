@@ -54,6 +54,10 @@ public final class AgentContext {
   public Map<String, String> metadata = Map.of();
   /** The model's label on {@code llm_called}, where the workflow names one. */
   public String model = null;
+  /** Who the turn runs as, when anyone vouched for it. A resume sets this back to {@code turn_received}'s. */
+  public Principal principal = null;
+  /** The runtime itself resumes this turn: its own timer, not a signal from outside. */
+  public boolean runtimeSignal = false;
   /** The one check every tool call passes; set by RoutedGraph. */
   public ToolPolicy policy = ToolPolicy.DENY_ALL;
   /** The path this turn was routed to, once it has been. */
@@ -308,7 +312,7 @@ public final class AgentContext {
   /** Refuses what the policy refuses: on the log first, then the turn ends. */
   private void authorise(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
     ToolPolicy.Decision decision = policy.decide(new ToolPolicy.Request(toolId, origin, path,
-        tool == null ? null : tool.effect(), args));
+        tool == null ? null : tool.effect(), args, principal));
     if (decision.allowed()) {
       return;
     }
@@ -317,6 +321,9 @@ public final class AgentContext {
     p.put("origin", origin.wire());
     p.put("path", path);
     p.put("reason", decision.reason());
+    if (principal != null) {
+      p.put("principal", principal.toMap());
+    }
     record(EventType.TOOL_REFUSED, p);
     throw new ToolRefused(toolId, decision.reason());
   }
@@ -361,6 +368,9 @@ public final class AgentContext {
             p.put("args", args);
             p.put("effect", tool.effect());
             p.put("idempotency_key", key);
+            if (principal != null) {
+              p.put("principal", principal.toMap());
+            }
             record(EventType.TOOL_INTENT, p);
           }
 

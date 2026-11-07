@@ -20,6 +20,8 @@ workflow:
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - conversation_id: c1
   turn_id: t1
@@ -31,6 +33,7 @@ turns:
 - conversation_id: c1
   turn_id: t1
   signal: {resolution: not_applied}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: crashed}
 - {turn_id: t1, status: suspended}

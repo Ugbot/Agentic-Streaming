@@ -99,7 +99,9 @@ public final class Workflows {
         Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("refund"))));
     agent.put("paths", Map.of("main", main));
     agent.put("verifier", Map.of("kind", "none"));
-    return base(agent);
+    Map<String, Object> wf = new LinkedHashMap<>(base(agent));
+    wf.put("policies", Map.of("approvers", Map.of("roles", List.of("approver"))));
+    return wf;
   }
 
   /** {@link #billing()} with every path on a model, as {@code llm} declares it. */
@@ -115,10 +117,14 @@ public final class Workflows {
   }
 
   /** Adds a {@code runtime.flink} block to a workflow. */
-  /** The same workflow with these tools on every path, for a saga that runs whichever path a turn takes. */
+  /**
+   * The same workflow with these tools on every path, for a saga that runs whichever path a turn
+   * takes.
+   */
   @SuppressWarnings("unchecked")
   public static Map<String, Object> onEveryPath(Map<String, Object> wf, String... tools) {
-    Map<String, Object> agent = new java.util.LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
+    Map<String, Object> agent =
+        new java.util.LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
     Map<String, Object> paths = new java.util.LinkedHashMap<>();
     ((Map<String, Object>) agent.get("paths"))
         .forEach(

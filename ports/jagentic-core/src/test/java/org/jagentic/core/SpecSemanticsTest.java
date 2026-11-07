@@ -286,7 +286,8 @@ class SpecSemanticsTest {
   void suspendedTurnResumesAfterRestartFromTheLogAlone() {
     Map<String, Object> path = new HashMap<>(Map.of("brain", "rule", "prompt", "p"));
     path.put("x-suspend-until", "approval");
-    GraphBuilder.Built built = GraphBuilder.build(spec(null, null, path, Map.of()), null);
+    GraphBuilder.Built built = GraphBuilder.build(
+        spec(Map.of("approvers", Map.of("roles", List.of("approver"))), null, path, Map.of()), null);
     ConversationLog log = new ConversationLog.InMemory();
     TurnResult s = runtime(built, log).submit(Event.turn("c", "t1", "u", "charge"));
     assertEquals(TurnStatus.SUSPENDED, s.status);
@@ -294,7 +295,7 @@ class SpecSemanticsTest {
     assertTrue(types(s.events).contains("turn_suspended"));
 
     LocalRuntime restarted = runtime(built, log);
-    TurnResult r = restarted.submit(Event.resume("c", "t1", Map.of("approval", true)));
+    TurnResult r = restarted.submit(Event.resume("c", "t1", Map.of("approval", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
     assertEquals(TurnStatus.COMPLETED, r.status);
     assertEquals("main", r.path());
     assertEquals(List.of("turn_resumed", "brain_started", "reply_drafted", "memory_written", "turn_completed"),
