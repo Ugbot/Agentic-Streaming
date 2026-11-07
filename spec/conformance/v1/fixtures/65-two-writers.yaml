@@ -1,6 +1,5 @@
 id: two-writers
-description: 'The same turn delivered twice at once is applied once: the second delivery waits behind the first
-  and is a duplicate, and the outside world sees one call.'
+description: 'The same turn delivered twice at once is applied once: the second delivery waits behind the first and is a duplicate, and the outside world sees one call.'
 requires: [ordering, parallelism, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent}

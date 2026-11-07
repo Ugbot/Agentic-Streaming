@@ -13,7 +13,7 @@ workflow:
     id: banking
     router: {kind: keyword, default: general, rules: {payments: [balance]}}
     paths:
-      payments: {brain: llm, prompt: You answer balance questions with the get_balance tool.}
+      payments: {brain: llm, prompt: You answer balance questions with the get_balance tool., tools: [get_balance]}
       general: {brain: rule, prompt: You answer general questions.}
     verifier: {kind: none}
   tools:

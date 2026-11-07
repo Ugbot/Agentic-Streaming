@@ -1,6 +1,5 @@
 id: unknown-outcome-bad-signal
-description: 'A signal that does not answer the question is refused: nothing is appended, the turn stays suspended,
-  and a good signal still resolves it.'
+description: 'A signal that does not answer the question is refused: nothing is appended, the turn stays suspended, and a good signal still resolves it.'
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -17,9 +16,12 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - conversation_id: c1
   turn_id: t1
@@ -29,9 +31,11 @@ turns:
 - conversation_id: c1
   turn_id: t1
   signal: {kind: approval, approved: true}
+  principal: {subject: ops, roles: [approver]}
 - conversation_id: c1
   turn_id: t1
   signal: {resolution: applied, result: ok}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: crashed}
 - {turn_id: t1, status: suspended}

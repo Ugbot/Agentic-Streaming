@@ -18,8 +18,10 @@ import org.jagentic.core.llm.StubChatClient;
 class LlmBrainTest {
 
   private AgentContext ctx(ToolRegistry tools) {
-    return new AgentContext("c1", "alice", new ConversationStore.InMemory(),
+    AgentContext ctx = new AgentContext("c1", "alice", new ConversationStore.InMemory(),
         new KeyedStateStore.InMemory(), tools, null);
+    ctx.policy = ToolPolicy.ALLOW_ALL;
+    return ctx;
   }
 
   @Test
@@ -33,23 +35,6 @@ class LlmBrainTest {
     TurnResult res = agent.turn(new Event("c1", "alice", "what is my balance?"), ctx(tools));
     assertTrue(res.toolCalls.contains("get_balance"));
     assertEquals("[payments] Your balance is 1234.56.", res.reply);
-  }
-
-  @Test
-  void refusesToolsNotDeclaredForTheAgent() {
-    String hidden = "transfer_" + java.util.UUID.randomUUID().toString().substring(0, 8);
-    java.util.concurrent.atomic.AtomicInteger executed = new java.util.concurrent.atomic.AtomicInteger();
-    ToolRegistry tools = new ToolRegistry()
-        .register("get_balance", "Look up balance", p -> 1234.56)
-        .register(hidden, "Move money", p -> executed.incrementAndGet());
-    StubChatClient stub = new StubChatClient(List.of(
-        ChatResult.toolCall(hidden, Map.of("amount", 500)),
-        ChatResult.text("Done.")));
-    LlmBrain brain = new LlmBrain(stub, "payments", "", List.of("get_balance"), 6);
-    TurnResult res = new Agent("payments", "p", brain).turn(new Event("c1", "alice", "move it"), ctx(tools));
-    assertEquals(0, executed.get());
-    assertTrue(res.toolCalls.isEmpty());
-    assertEquals("[payments] Done.", res.reply);
   }
 
   @Test
@@ -70,7 +55,8 @@ class LlmBrainTest {
     RoutedGraph graph = new RoutedGraph(
         (ev, c) -> ev.text().toLowerCase().contains("balance") ? "payments" : "general",
         Map.of("payments", pay, "general", general),
-        (reply, c) -> new RoutedGraph.Verifier.Result(reply.startsWith("["), reply));
+        (reply, c) -> new RoutedGraph.Verifier.Result(reply.startsWith("["), reply))
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL);
     TurnResult res = graph.handle(new Event("c1", "alice", "what is my balance?"), ctx(tools));
     assertEquals("payments", res.path);
     assertTrue(res.ok && res.toolCalls.contains("get_balance") && res.reply.contains("1234.56"));

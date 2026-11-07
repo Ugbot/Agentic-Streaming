@@ -8,6 +8,7 @@ import java.util.Map;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.EventType;
 import org.jagentic.core.LogEvent;
+import org.jagentic.core.ToolOrigin;
 
 /**
  * Evaluates a workflow's {@link SequencePattern}s inside a turn, after {@code routed} and before
@@ -47,7 +48,7 @@ public final class TurnPatterns {
     List<SequencePattern.Turn> turns = turnsOf(ctx.log.events(ctx.conversationId));
     for (SequencePattern pattern : patterns) {
       if (pattern.completesOn(turns)) {
-        ctx.callTool(pattern.tool(), matchArgs(pattern, ctx.conversationId));
+        ctx.callAs(ToolOrigin.CEP, pattern.tool(), matchArgs(pattern, ctx.conversationId));
       }
     }
   }

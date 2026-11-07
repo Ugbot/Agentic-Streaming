@@ -54,6 +54,18 @@ public final class AgentContext {
   public Map<String, String> metadata = Map.of();
   /** The model's label on {@code llm_called}, where the workflow names one. */
   public String model = null;
+  /** Who the turn runs as, when anyone vouched for it. A resume sets this back to {@code turn_received}'s. */
+  public Principal principal = null;
+  /** The runtime itself resumes this turn: its own timer, not a signal from outside. */
+  public boolean runtimeSignal = false;
+  /** The one check every tool call passes; set by RoutedGraph. */
+  public ToolPolicy policy = ToolPolicy.DENY_ALL;
+  /** What must not be recorded; set by RoutedGraph. */
+  public Redactor redactor = Redactor.DEFAULT;
+  /** This workflow's per-principal limits; set by RoutedGraph. */
+  public Limits limits = Limits.NONE;
+  /** The path this turn was routed to, once it has been. */
+  public String path = null;
 
   private int nextToolIndex = 0;
   private int nextLlmIndex = 0;
@@ -85,7 +97,8 @@ public final class AgentContext {
   }
 
   /** The {@code append} verb for this turn: records the event and remembers it as this turn's. */
-  public LogEvent record(EventType type, Map<String, Object> payload) {
+  public LogEvent record(EventType type, Map<String, Object> raw) {
+    Map<String, Object> payload = redactor.apply(raw);
     java.util.ArrayDeque<LogEvent> earlier = kept.get(replayKey(type.wire(), payload));
     if (earlier != null && !earlier.isEmpty()) {
       LogEvent e = earlier.poll();
@@ -208,13 +221,14 @@ public final class AgentContext {
   public org.jagentic.core.llm.ChatResult chat(String request, Supplier<org.jagentic.core.llm.ChatResult> call) {
     int index = nextLlmIndex++;
     EffectJournal.Key key = new EffectJournal.Key(conversationId, turnId, EffectJournal.LLM, index);
-    String intent = EffectJournal.modelIntentOf(journalScope, request);
+    String intent = EffectJournal.modelIntentOf(journalScope, redactor.apply(request));
     EffectJournal.Entry recorded = journal.get(key).orElse(null);
     if (recorded != null && !intent.equals(recorded.intent())) {
       throw new EffectJournal.Divergence(key, recorded.intent(), intent);
     }
     Map<String, Object> answer = recorded == null ? null : (Map<String, Object>) recorded.result();
     if (answer == null) {
+      enforce(limits.admitModel(who(), now()));
       org.jagentic.core.llm.ChatResult fresh = callModel(call);
       answer = new LinkedHashMap<>();
       if (fresh.isToolCall()) {
@@ -223,7 +237,8 @@ public final class AgentContext {
       } else {
         answer.put("text", fresh.text());
       }
-      journal.put(EffectJournal.Entry.pending(key, intent, ToolEffect.READ).succeeded(answer));
+      journal.put(EffectJournal.Entry.pending(key, intent, ToolEffect.READ).succeeded(redactor.apply(answer)));
+      limits.chargeModel(who(), now(), request.length() + String.valueOf(answer).length());
     }
     Map<String, Object> p = new LinkedHashMap<>();
     p.put("index", index);
@@ -270,6 +285,11 @@ public final class AgentContext {
     return invoke(toolId, params, null);
   }
 
+  /** As above for what is not a brain: a timer, a CEP pattern or a saga step. */
+  public Object callAs(ToolOrigin origin, String toolId, Map<String, Object> params) {
+    return invoke(origin, toolId, params, null, policies.onToolError() == Policies.OnToolError.CONTINUE);
+  }
+
   /**
    * Invokes a registered tool through the effect journal, under {@code policies.retry}. What is
    * already recorded for this {@code (turn_id, index)} is reused and nothing is called. Every attempt
@@ -281,7 +301,8 @@ public final class AgentContext {
    *     ({@code delegated} for peer tools, {@code tool_called} otherwise)
    */
   public Object invoke(String toolId, Map<String, Object> params, EventType successEvent) {
-    return invoke(toolId, params, successEvent, policies.onToolError() == Policies.OnToolError.CONTINUE);
+    return invoke(ToolOrigin.BRAIN, toolId, params, successEvent,
+        policies.onToolError() == Policies.OnToolError.CONTINUE);
   }
 
   /**
@@ -292,17 +313,106 @@ public final class AgentContext {
     Map<String, Object> forward = new LinkedHashMap<>();
     forward.put("forward_args", forwardArgs == null ? Map.of() : forwardArgs);
     forward.put("forward_result", forwardResult);
-    return invoke(toolId, forward, EventType.COMPENSATION_STEP, false);
+    return invoke(ToolOrigin.COMPENSATION, toolId, forward, EventType.COMPENSATION_STEP, false);
   }
 
-  private Object invoke(String toolId, Map<String, Object> params, EventType successEvent,
-                        boolean swallowFailure) {
+  /** The call about to get the next index was allowed when it began, on the log or in the journal. */
+  private boolean alreadyBegun() {
+    java.util.ArrayDeque<LogEvent> begun = kept.get(EventType.TOOL_INTENT.wire() + "/" + nextToolIndex + "/null");
+    return begun != null && !begun.isEmpty() || journal.get(nextToolKey()).isPresent();
+  }
+
+  /** Refuses what the policy refuses: on the log first, then the turn ends. */
+  private void authorise(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
+    boolean outside = policy.outsideThisProcess();
+    if (!outside || !alreadyBegun()) {
+      decide(origin, toolId, tool, args);
+    }
+    enforce(limits.admitTool(who(), now(), toolId, limits.hasQuota(toolId) && alreadyBegun()));
+  }
+
+  private void decide(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
+    ToolPolicy.Decision decision = policy.decide(new ToolPolicy.Request(toolId, origin, path,
+        tool == null ? null : tool.effect(), args, principal));
+    if (!decision.allowed()) {
+      refuse(origin, toolId, decision.reason());
+    }
+    if (decision.needsPerson()) {
+      gate(origin, toolId);
+    }
+  }
+
+  /** Who the limits count this turn against. */
+  String who() {
+    return Limits.who(principal, userId);
+  }
+
+  long now() {
+    return clock != null ? clock.nowMs() : System.currentTimeMillis();
+  }
+
+  /** A limit that was exceeded is on the log, and the turn ends. */
+  void enforce(Limits.Violation violation) {
+    if (violation == null) {
+      return;
+    }
+    Map<String, Object> p = new LinkedHashMap<>();
+    p.put("limit", violation.limit());
+    p.put("who", who());
+    p.putAll(violation.detail());
+    record(EventType.LIMIT_EXCEEDED, p);
+    throw new ToolRefused(violation.limit(), violation.limit() + " exceeded for " + who());
+  }
+
+  private void refuse(ToolOrigin origin, String toolId, String reason) {
+    Map<String, Object> p = new LinkedHashMap<>();
+    p.put("tool", toolId);
+    p.put("origin", origin.wire());
+    p.put("path", path);
+    p.put("reason", reason);
+    if (principal != null) {
+      p.put("principal", principal.toMap());
+    }
+    record(EventType.TOOL_REFUSED, p);
+    throw new ToolRefused(toolId, reason);
+  }
+
+  /** A tool that needs a person waits for one. A timer or a pattern has nobody to ask. */
+  private void gate(ToolOrigin origin, String toolId) {
+    if (origin.unattended()) {
+      refuse(origin, toolId, "tool " + toolId + " needs a person and " + origin.wire() + " has nobody to ask");
+    }
+    Boolean answer = approvalOf(toolId, nextToolIndex);
+    if (answer == null) {
+      throw new TurnSuspendedOnUnknown(toolId, nextToolIndex, ConversationState.TOOL_APPROVAL);
+    }
+    if (!answer) {
+      refuse(origin, toolId, "an approver refused tool " + toolId);
+    }
+  }
+
+  /** What the log says an approver answered about this call, the last answer standing. */
+  private Boolean approvalOf(String toolId, int index) {
+    Boolean answer = null;
+    for (LogEvent e : log.events(conversationId)) {
+      if (e.is(EventType.TURN_RESUMED) && turnId.equals(e.turnId())
+          && e.payload().get("approval") instanceof Map<?, ?> a
+          && toolId.equals(a.get("tool")) && a.get("index") instanceof Number n && n.intValue() == index) {
+        answer = Boolean.TRUE.equals(a.get("approved"));
+      }
+    }
+    return answer;
+  }
+
+  private Object invoke(ToolOrigin origin, String toolId, Map<String, Object> params,
+                        EventType successEvent, boolean swallowFailure) {
     ToolRegistry.Tool tool = tools.get(toolId);
+    Map<String, Object> args = params == null ? Map.of()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(params));
+    authorise(origin, toolId, tool, args);
     if (tool == null) {
       throw new ToolRegistry.UnknownTool(toolId);
     }
-    Map<String, Object> args = params == null ? Map.of()
-        : Collections.unmodifiableMap(new LinkedHashMap<>(params));
     if (tool.inputSchema() != null) {
       List<String> problems = org.jagentic.core.structured.Structured.validate(args, tool.inputSchema());
       if (!problems.isEmpty()) {
@@ -318,7 +428,8 @@ public final class AgentContext {
     ToolRegistry.CallIdentity identity = new ToolRegistry.CallIdentity(conversationId, turnId, index, key);
     Policies.RetryPolicy retry = policies.retry();
     EffectJournal.Key journalKey = new EffectJournal.Key(conversationId, turnId, EffectJournal.TOOL, index);
-    String intent = EffectJournal.intentOf(journalScope, toolId, args);
+    Map<String, Object> recorded = redactor.apply(args);
+    String intent = EffectJournal.intentOf(journalScope, toolId, recorded);
     java.util.ArrayDeque<LogEvent> begun = kept.get(EventType.TOOL_INTENT.wire() + "/" + index + "/null");
     if (begun != null && !begun.isEmpty()) {
       // The log says this call was begun, so a journal that lost it must not read as a first call.
@@ -334,12 +445,15 @@ public final class AgentContext {
             p.put("args", args);
             p.put("effect", tool.effect());
             p.put("idempotency_key", key);
+            if (principal != null) {
+              p.put("principal", principal.toMap());
+            }
             record(EventType.TOOL_INTENT, p);
           }
 
           @Override
           public void onFailedAttempt(EffectJournal.Attempt failed) {
-            calls.add(ToolCall.failed(toolId, index, args, failed.error(), failed.attempt()));
+            calls.add(ToolCall.failed(toolId, index, recorded, failed.error(), failed.attempt()));
             record(EventType.TOOL_FAILED, payload(toolId, index, failed.attempt(), args, null, failed.error()));
           }
 
@@ -356,13 +470,18 @@ public final class AgentContext {
             }
             probe.beforeCall(toolId);
             try {
-              return tool.execute(args, identity);
+              return redactor.apply(tool.execute(args, identity));
             } catch (RuntimeException e) {
               for (AgentListener l : listeners) {
                 l.onError("tool:" + toolId, e, AgentContext.this);
               }
               throw e;
             }
+          }
+
+          @Override
+          public String recorded(String error) {
+            return redactor.apply(error);
           }
 
           @Override
@@ -378,7 +497,7 @@ public final class AgentContext {
     switch (entry.state()) {
       case SUCCEEDED -> {
         int attempt = entry.attempts().size() + 1;
-        calls.add(ToolCall.succeeded(toolId, index, args, entry.result(), attempt));
+        calls.add(ToolCall.succeeded(toolId, index, recorded, entry.result(), attempt));
         EventType type = successEvent != null ? successEvent
             : tool.peer() ? EventType.DELEGATED : EventType.TOOL_CALLED;
         record(type, payload(toolId, index, attempt, args, entry.result(), null));

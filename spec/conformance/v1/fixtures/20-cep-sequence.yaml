@@ -21,6 +21,8 @@ workflow:
         - {stage: second, where: {text_contains: anomaly}, contiguity: followedBy}
         - {stage: third, where: {text_contains: anomaly}, contiguity: followedBy}
       on_match: {kind: tool, tool: open_ticket}
+  policies:
+    unattended_tools: [open_ticket]
 turns:
   - {conversation_id: host-a, turn_id: a1, text: "anomaly: cpu high", metadata: {event_time_ms: "0"}}
   - {conversation_id: host-a, turn_id: a2, text: "heartbeat ok", metadata: {event_time_ms: "60000"}}

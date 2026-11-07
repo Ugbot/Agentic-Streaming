@@ -1,6 +1,5 @@
 id: saga-resumes-forward
-description: 'A saga that crashed between steps carries on from the log: the finished step is reused and the next
-  runs, each once.'
+description: 'A saga that crashed between steps carries on from the log: the finished step is reused and the next runs, each once.'
 requires: [crash_recovery, effect_journal, tools, idempotency, saga]
 workflow:
   spec_version: agentic/v1
@@ -13,7 +12,7 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main: {brain: rule, prompt: You move money.}
+      main: {brain: rule, prompt: You move money., tools: [a, undo_a, b]}
     verifier: {kind: none}
   tools:
   - {id: a, kind: counting, x-count-by: keys, compensation: undo_a}

@@ -8,7 +8,7 @@ workflow:
     id: retrying
     router: {kind: keyword, default: main, rules: {main: [charge]}}
     paths:
-      main: {brain: rule, prompt: You answer charge questions., tool_triggers: {charge: flaky_tool}}
+      main: {brain: rule, prompt: You answer charge questions., tool_triggers: {charge: flaky_tool}, tools: [flaky_tool]}
     verifier: {kind: none}
   policies:
     retry: {kind: fixed, max_attempts: 3, initial_delay_ms: 0, jitter: false}

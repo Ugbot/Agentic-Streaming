@@ -1,6 +1,5 @@
 id: crash-call-read
-description: A read with no recorded result simply runs again; a recorded result is reused, so a re-run takes the
-  same decisions.
+description: A read with no recorded result simply runs again; a recorded result is reused, so a re-run takes the same decisions.
 requires: [crash_recovery, effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: read}

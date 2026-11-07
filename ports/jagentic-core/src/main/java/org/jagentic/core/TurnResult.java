@@ -103,7 +103,8 @@ public final class TurnResult implements Serializable {
     }
     LogEvent last = events.get(events.size() - 1);
     return last.is(EventType.TURN_SUSPENDED)
-        && ConversationState.UNKNOWN_OUTCOME.equals(last.payload().get("until"));
+        && (ConversationState.UNKNOWN_OUTCOME.equals(last.payload().get("until"))
+            || ConversationState.TOOL_APPROVAL.equals(last.payload().get("until")));
   }
 
   /** The same outcome re-reported for a redelivered {@code turn_id}: status {@code duplicate}, no events. */
@@ -138,5 +139,60 @@ public final class TurnResult implements Serializable {
   @Override
   public String toString() {
     return "TurnResult" + toMap();
+  }
+
+  /** A result back from its normalized document. */
+  public static TurnResult fromMap(Map<String, Object> m) {
+    String cid = (String) m.get("conversation_id");
+    String turnId = (String) m.get("turn_id");
+    TurnStatus status = TurnStatus.parse((String) m.get("status"));
+    String path = (String) m.get("path");
+    String reply = (String) m.get("reply");
+    Map<String, Object> state =
+        m.get("state") instanceof Map<?, ?> s
+            ? new LinkedHashMap<>((Map<String, Object>) s)
+            : Map.of();
+    List<ToolCall> calls = new ArrayList<>();
+    if (m.get("tool_calls") instanceof List<?> tc) {
+      for (Object o : tc) {
+        calls.add(toolCall((Map<String, Object>) o));
+      }
+    }
+    List<LogEvent> events = new ArrayList<>();
+    if (m.get("events") instanceof List<?> ev) {
+      for (Object o : ev) {
+        Map<String, Object> e = (Map<String, Object>) o;
+        Map<String, Object> payload =
+            e.get("payload") instanceof Map<?, ?> p ? (Map<String, Object>) p : Map.of();
+        events.add(
+            new LogEvent(
+                cid,
+                ((Number) e.get("sequence")).longValue(),
+                turnId,
+                (String) e.get("type"),
+                payload));
+      }
+    }
+    TurnError error = null;
+    if (m.get("error") instanceof Map<?, ?> em) {
+      Map<String, Object> e = (Map<String, Object>) em;
+      error =
+          new TurnError(
+              TurnError.ErrorClass.parse((String) e.get("class")), (String) e.get("message"));
+    }
+    return new TurnResult(cid, turnId, status, path, reply, error, calls, events, state);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ToolCall toolCall(Map<String, Object> c) {
+    Map<String, Object> args =
+        c.get("args") instanceof Map<?, ?> a ? (Map<String, Object>) a : Map.of();
+    int index = ((Number) c.get("index")).intValue();
+    int attempt = ((Number) c.get("attempt")).intValue();
+    String tool = (String) c.get("tool");
+    if (c.get("error") != null) {
+      return ToolCall.failed(tool, index, args, String.valueOf(c.get("error")), attempt);
+    }
+    return ToolCall.succeeded(tool, index, args, c.get("result"), attempt);
   }
 }

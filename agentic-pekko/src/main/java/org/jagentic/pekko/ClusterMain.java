@@ -14,7 +14,7 @@ import org.jagentic.core.Event;
 import org.jagentic.core.TurnResult;
 import org.jagentic.pekko.durability.DurabilityProfile;
 import org.jagentic.pekko.http.AgentCard;
-import org.jagentic.pekko.http.HttpFrontDoor;
+import org.jagentic.pekko.http.PekkoBackend;
 import org.jagentic.pekko.runtime.AgentDeps;
 import org.jagentic.pekko.runtime.PekkoRuntime;
 import org.jagentic.pekko.runtime.PekkoSystem;
@@ -123,11 +123,16 @@ public final class ClusterMain {
         return r;
       }).toList();
       if (opts.httpPort() >= 0) {
-        String host = opts.host() == null ? "0.0.0.0" : opts.host();
-        HttpFrontDoor.start(sys.system(), host, opts.httpPort(),
-            AgentCard.defaultCard("http://" + host + ":" + opts.httpPort()), Duration.ofSeconds(20));
-        out.printf("agentic-pekko HTTP front door on %s:%d (sharded); Ctrl-C to leave the cluster%n",
-            host, opts.httpPort());
+        java.util.Map<String, String> env = new java.util.HashMap<>(System.getenv());
+        env.put("AGENTIC_GATEWAY_PORT", String.valueOf(opts.httpPort()));
+        if (opts.host() != null) {
+          env.put("AGENTIC_GATEWAY_HOST", opts.host());
+        }
+        org.jagentic.gateway.GatewayOptions gateway = org.jagentic.gateway.GatewayOptions.fromEnvironment(env);
+        org.jagentic.gateway.Gateway.start(gateway, new PekkoBackend(sys.system(), Duration.ofSeconds(20)),
+            AgentCard.defaultCard("http://" + gateway.host() + ":" + gateway.port()).toJson());
+        out.printf("agentic-pekko gateway on %s:%d (sharded); Ctrl-C to leave the cluster%n",
+            gateway.host(), gateway.port());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdown::countDown));
         shutdown.await();
       }

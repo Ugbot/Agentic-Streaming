@@ -13,9 +13,11 @@ workflow:
         prompt: You handle refunds.
         x-suspend-until: approval
     verifier: {kind: none}
+  policies:
+    approvers: {roles: [approver]}
 turns:
   - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
-  - {conversation_id: c1, turn_id: t1, restart_runtime: true, signal: {kind: approval, approved: true}}
+  - {conversation_id: c1, turn_id: t1, restart_runtime: true, signal: {kind: approval, approved: true}, principal: {subject: ops, roles: [approver]}}
 expect:
   - turn_id: t1
     status: suspended

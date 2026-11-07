@@ -113,7 +113,7 @@ def test_builder_registers_declared_a2a_peers_as_tools(stub_agent, key):
             "router": {"kind": "keyword", "default": "triage", "rules": {"escalations": ["escalate"]}},
             "paths": {
                 "triage": {"brain": "rule"},
-                "escalations": {"brain": "rule", "tool_triggers": {"escalate": "specialist"}},
+                "escalations": {"brain": "rule", "tools": ["specialist"], "tool_triggers": {"escalate": "specialist"}},
             },
         },
         "a2a": [{key: "specialist", "transport": "http", "url": stub_agent, "retries": 1}],

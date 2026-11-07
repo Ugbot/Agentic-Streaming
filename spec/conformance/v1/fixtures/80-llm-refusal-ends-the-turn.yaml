@@ -1,0 +1,35 @@
+id: llm-refusal-ends-the-turn
+description: 'A refused tool is not offered back to the model: the turn ends at the first refusal, so the steps after
+  it are never asked for and the permitted tool that came before keeps its result.'
+requires: [tool_policy, llm_brain, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  llm:
+    provider: stub
+    script:
+    - {tool: safe, args: {}}
+    - {tool: wire, args: {to: mallory}}
+    - {tool: safe, args: {}}
+    - {text: never reached}
+  agent:
+    id: a
+    router: {kind: static, default: main}
+    paths:
+      main: {brain: llm, prompt: Help., tools: [safe]}
+    verifier: {kind: none}
+  tools:
+  - {id: safe, kind: constant, effect: read, value: ok}
+  - {id: wire, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: go}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: policy
+  tool_calls:
+  - {tool: safe, index: 0, attempt: 1, args: {}}
+  events: [turn_received, routed, brain_started, llm_called, tool_intent, tool_called, llm_called, tool_refused, turn_failed]
+  event_payloads:
+  - type: tool_refused
+    payload: {tool: wire, origin: brain}

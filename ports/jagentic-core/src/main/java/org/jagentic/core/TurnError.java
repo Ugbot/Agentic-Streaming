@@ -9,7 +9,7 @@ public record TurnError(ErrorClass errorClass, String message) implements Serial
 
   /** The v1 error classes (spec/v1/primitives.md §5). */
   public enum ErrorClass {
-    VALIDATION, GUARDRAIL, VERIFICATION, TOOL, TRANSIENT, FATAL;
+    VALIDATION, GUARDRAIL, VERIFICATION, TOOL, POLICY, TRANSIENT, FATAL;
 
     public String wire() {
       return name().toLowerCase();

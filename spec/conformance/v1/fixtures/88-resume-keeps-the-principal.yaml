@@ -1,0 +1,37 @@
+id: resume-keeps-the-principal
+description: 'A resumed turn runs as the principal that started it. The approver is verified and recorded apart, and changes nothing about what runs.'
+requires: [principal, suspend_resume, tools, rule_brain]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+        x-suspend-until: approval
+    verifier: {kind: none}
+  policies:
+    approvers: {roles: [approver]}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice, tenant: acme}}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+  principal: {subject: ops, tenant: acme, roles: [approver]}
+expect:
+- {turn_id: t1, status: suspended}
+- turn_id: t1
+  status: completed
+  tool_calls:
+  - {tool: pay, index: 0, args: {user: alice}}
+  event_payloads:
+  - type: turn_resumed
+    payload: {signal_sender: ops, signal_principal: {subject: ops, tenant: acme, roles: [approver]}}
+  - type: tool_intent
+    payload: {principal: {subject: alice, tenant: acme}}

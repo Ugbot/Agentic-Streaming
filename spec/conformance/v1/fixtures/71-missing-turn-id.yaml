@@ -1,6 +1,5 @@
 id: missing-turn-id
-description: A turn without a turn_id is refused and appends nothing. It cannot be deduplicated, so no id is invented
-  for it.
+description: A turn without a turn_id is refused and appends nothing. It cannot be deduplicated, so no id is invented for it.
 requires: [idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

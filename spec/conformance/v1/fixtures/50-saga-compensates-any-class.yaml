@@ -1,6 +1,5 @@
 id: saga-compensates-any-class
-description: A step that fails on bad arguments compensates like any other failure, and the turn keeps the step's
-  error class.
+description: A step that fails on bad arguments compensates like any other failure, and the turn keeps the step's error class.
 requires: [saga, structured_tool_args, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -13,7 +12,7 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main: {brain: rule, prompt: You move money.}
+      main: {brain: rule, prompt: You move money., tools: [reserve, release, post]}
     verifier: {kind: none}
   tools:
   - {id: reserve, kind: constant, value: r, compensation: release}

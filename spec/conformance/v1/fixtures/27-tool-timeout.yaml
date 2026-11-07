@@ -8,7 +8,7 @@ workflow:
     id: slow
     router: {kind: keyword, default: main}
     paths:
-      main: {brain: rule, prompt: You look things up., tool_triggers: {lookup: stuck_service}}
+      main: {brain: rule, prompt: You look things up., tool_triggers: {lookup: stuck_service}, tools: [stuck_service]}
     verifier: {kind: none}
   policies:
     on_tool_error: fail

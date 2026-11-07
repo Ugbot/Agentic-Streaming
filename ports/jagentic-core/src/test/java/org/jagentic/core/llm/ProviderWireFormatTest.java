@@ -174,10 +174,11 @@ class ProviderWireFormatTest {
     ToolRegistry tools = new ToolRegistry().registerKeyed("look", "looks", null, "read", (a, c) -> 42);
     AgentContext ctx = new AgentContext("c", "t", "u", new ConversationStore.InMemory(),
         new KeyedStateStore.InMemory(), tools, null, new ConversationLog.InMemory(), Policies.DEFAULTS);
+    ctx.policy = org.jagentic.core.ToolPolicy.ALLOW_ALL;
     String reply = new LlmBrain(strict, "p").turn("hello", ctx);
     assertTrue(reply.contains("done"), reply);
     Map<String, String> last = seen.get(1).get(seen.get(1).size() - 1);
     assertEquals("user", last.get("role"));
-    assertEquals("Result of look: 42", last.get("content"));
+    assertEquals("Result of look: <untrusted source=\"tool:look\">\n42\n</untrusted>", last.get("content"));
   }
 }

@@ -15,6 +15,7 @@ workflow:
       main:
         brain: rule
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: failing}

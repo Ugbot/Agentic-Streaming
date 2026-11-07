@@ -18,7 +18,7 @@ def _runtime(tool, fn):
             "id": "a",
             "router": {"kind": "static", "default": "p"},
             "verifier": {"kind": "none"},
-            "paths": {"p": {"brain": "rule", "tool_triggers": {"go": "call"}}},
+            "paths": {"p": {"brain": "rule", "tools": ["call"], "tool_triggers": {"go": "call"}}},
         },
         "tools": [tool],
     }

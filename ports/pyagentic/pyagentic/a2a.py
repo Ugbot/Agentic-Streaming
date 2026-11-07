@@ -11,12 +11,18 @@ import urllib.request
 from typing import Any, Callable, Dict, Optional
 
 
+from agentic import egress
+from agentic.secret_refs import resolve
+
+
 class A2AClient:
     """Minimal A2A client over a peer gateway's HTTP surface (``/agent`` +
     ``/.well-known/agent-card.json``), with bounded retries + backoff."""
 
-    def __init__(self, base_url: str, retries: int = 2, backoff: float = 0.2, timeout: float = 30.0) -> None:
+    def __init__(self, base_url: str, retries: int = 2, backoff: float = 0.2, timeout: float = 30.0,
+                 bearer: Optional[str] = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self.bearer = bearer  # a secret reference, resolved on each call
         self.retries = max(0, retries)
         self.backoff = backoff
         self.timeout = timeout
@@ -25,13 +31,20 @@ class A2AClient:
         with urllib.request.urlopen(self.base_url + path, timeout=self.timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
+    def _headers(self) -> Dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self.bearer is not None:
+            headers["Authorization"] = f"Bearer {resolve(self.bearer)}"
+        return headers
+
     def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        egress.check(self.base_url + path)
         last: Optional[Exception] = None
         for attempt in range(self.retries + 1):
             try:
                 req = urllib.request.Request(
                     self.base_url + path, data=json.dumps(body).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}, method="POST")
+                    headers=self._headers(), method="POST")
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                     return json.loads(resp.read().decode("utf-8"))
             except Exception as exc:  # transient network error

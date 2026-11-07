@@ -44,7 +44,7 @@ public final class ConformanceHarness {
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
       "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery",
-      "crash_recovery", "effect_journal");
+      "crash_recovery", "effect_journal", "tool_policy", "principal", "tool_approval", "limits", "redaction");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
   private static final ObjectMapper JSON = new ObjectMapper();
@@ -170,10 +170,11 @@ public final class ConformanceHarness {
     String turnId = String.valueOf(turn.get("turn_id"));
     String user = String.valueOf(turn.getOrDefault("user_id", "anonymous"));
     Map<String, Object> signal = (Map<String, Object>) turn.get("signal");
+    org.jagentic.core.Principal principal = org.jagentic.core.Principal.fromMap(turn.get("principal"));
     return signal != null
-        ? new Event(conversationId, turnId, user, "", Map.of(), signal)
+        ? new Event(conversationId, turnId, user, "", Map.of(), signal, principal)
         : new Event(conversationId, turnId, user, String.valueOf(turn.getOrDefault("text", "")),
-            metadata(turn), null);
+            metadata(turn), null, principal);
   }
 
   /** The result a harness records for a delivery its {@code crash_at} killed. */

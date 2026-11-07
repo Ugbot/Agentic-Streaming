@@ -1,6 +1,5 @@
 id: unknown-outcome-never-retries
-description: Redelivery does not retry an unknown outcome, before or after a restart. The later resolution shows
-  the tool was called once before it.
+description: Redelivery does not retry an unknown outcome, before or after a restart. The later resolution shows the tool was called once before it.
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume, durable_store]
 workflow:
   spec_version: agentic/v1
@@ -17,9 +16,12 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - conversation_id: c1
   turn_id: t1
@@ -31,6 +33,7 @@ turns:
 - conversation_id: c1
   turn_id: t1
   signal: {resolution: not_applied}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: crashed}
 - {turn_id: t1, status: suspended}

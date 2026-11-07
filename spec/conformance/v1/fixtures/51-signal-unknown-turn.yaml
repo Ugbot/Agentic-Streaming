@@ -1,6 +1,5 @@
 id: signal-unknown-turn
-description: 'A signal for a turn nobody has seen is refused and appends nothing, so the turn_id is not spent: the
-  turn itself still runs when it arrives.'
+description: 'A signal for a turn nobody has seen is refused and appends nothing, so the turn_id is not spent: the turn itself still runs when it arrives.'
 requires: [suspend_resume, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,13 +16,17 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - conversation_id: c1
   turn_id: t1
   signal: {kind: approval}
+  principal: {subject: ops, roles: [approver]}
 - {conversation_id: c1, turn_id: t1, text: pay the invoice}
 expect:
 - turn_id: t1

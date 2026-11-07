@@ -198,6 +198,7 @@ class SequencePatternTest {
         "paths", Map.of("monitor", Map.of("brain", "rule", "prompt", "You acknowledge signals."))));
     workflow.put("tools", List.of(Map.of("id", "open_ticket", "kind", "constant", "value", "TICKET-OPENED")));
     workflow.put("cep", List.of(rule("host_incident", Map.of("kind", "tool", "tool", "open_ticket"))));
+    workflow.put("policies", Map.of("unattended_tools", List.of("open_ticket")));
 
     GraphBuilder.Built built = GraphBuilder.build(workflow, null);
     assertEquals(1, built.graph().cep().size());

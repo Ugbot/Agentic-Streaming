@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jagentic.core.Agent;
+import org.jagentic.core.Approvers;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.Brain;
 import org.jagentic.core.ContextWindow;
@@ -39,6 +40,7 @@ import org.jagentic.core.RoutedGraph;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.SagaPlan;
 import org.jagentic.core.TimerSpec;
+import org.jagentic.core.ToolPolicy;
 import org.jagentic.core.ToolRegistry;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.VectorStore;
@@ -155,6 +157,7 @@ public final class GraphBuilder {
     Map<String, Agent> paths = new LinkedHashMap<>();
     Map<String, String> suspendUntil = new LinkedHashMap<>();
     Map<String, RoutedGraph.Verifier> pathVerifiers = new LinkedHashMap<>();
+    Map<String, java.util.Set<String>> pathGrants = new LinkedHashMap<>();
     for (Map.Entry<String, Object> e : pathSpecs.entrySet()) {
       String name = e.getKey();
       Map<String, Object> ps = (Map<String, Object>) e.getValue();
@@ -171,6 +174,14 @@ public final class GraphBuilder {
       if (!expanded.promptFragment().isBlank()) {
         prompt = prompt + "\n" + expanded.promptFragment();
       }
+      List<String> pathTools = new ArrayList<>();
+      if (ps.get("tools") instanceof List<?> declared) {
+        for (Object t : declared) pathTools.add(String.valueOf(t));
+      }
+      for (String t : expanded.tools()) {
+        if (!pathTools.contains(t)) pathTools.add(t);
+      }
+      pathGrants.put(name, java.util.Set.copyOf(pathTools));
       String brainKind = (String) ps.getOrDefault("brain", "rule");
       Brain brain;
       if ("llm".equals(brainKind)) {
@@ -182,14 +193,7 @@ public final class GraphBuilder {
         ChatClient client = scripted ? ScriptedChatClient.fromSpec(llmSpec)
             : Deadlines.bound("model call", Deadlines.timeoutOf(llmSpec, Deadlines.DEFAULT_MODEL_TIMEOUT_MS),
                 chatClientFactory.create(llmSpec));
-        List<String> pathTools = new ArrayList<>();
-        if (ps.get("tools") instanceof List<?> declared) {
-          for (Object t : declared) pathTools.add(String.valueOf(t));
-        }
-        for (String t : expanded.tools()) {
-          if (!pathTools.contains(t)) pathTools.add(t);
-        }
-        LlmBrain lb = new LlmBrain(client, name, prompt, pathTools.isEmpty() ? null : pathTools,
+        LlmBrain lb = new LlmBrain(client, name, prompt, pathTools,
             ((Number) ps.getOrDefault("max_iterations", 6)).intValue());
         if (ps.get("output_schema") instanceof Map<?, ?> os) {
           lb.withOutputSchema((Map<String, Object>) os);
@@ -198,7 +202,7 @@ public final class GraphBuilder {
           lb.withContextManager(contextManager);
         }
         if (scripted) {
-          lb.withVerbatimReply().withStrictTools();
+          lb.withVerbatimReply();
         }
         brain = lb;
       } else if ("rule".equals(brainKind)) {
@@ -253,8 +257,15 @@ public final class GraphBuilder {
     if (!timers.isEmpty()) {
       graph = graph.withTimers(timers);
     }
-    graph = graph.withAgentId(String.valueOf(agent.get("id")));
-    return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
+    graph = graph.withAgentId(String.valueOf(agent.get("id")))
+        .withToolPolicy(toolPolicy(pathGrants, (Map<String, Object>) spec.get("policies")))
+        .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")))
+        .withLimits(org.jagentic.core.Limits.fromPolicies((Map<String, Object>) spec.get("policies")))
+        .withRedactor(org.jagentic.core.Redactor.fromPolicies((Map<String, Object>) spec.get("policies")));
+    org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+    EffectJournal journal = EffectJournals.open(spec);
+    return new Built(graph, tools, retriever, availability.degradations(),
+        vault == null ? journal : new org.jagentic.core.privacy.SealedJournal(journal, vault));
   }
 
   /**
@@ -282,6 +293,34 @@ public final class GraphBuilder {
         throw new WorkflowValidator.WorkflowValidationException(where + ".kind",
             "verifier kind " + kind + " is not implemented by this runtime (prefix|regex|none)");
     }
+  }
+
+  /** What the document says, narrowed by the operator's OPA when there is one. */
+  @SuppressWarnings("unchecked")
+  private static ToolPolicy toolPolicy(Map<String, java.util.Set<String>> pathGrants, Map<String, Object> policies) {
+    Map<String, Object> gate = policies != null && policies.get("tool_approval") instanceof Map<?, ?> g
+        ? (Map<String, Object>) g : Map.of();
+    ToolPolicy document = ToolPolicy.of(pathGrants, unattendedTools(policies), names(gate.get("tools")),
+        names(gate.get("effects")));
+    org.jagentic.core.OpaToolPolicy opa = org.jagentic.core.OpaToolPolicy.fromEnvironment(GraphBuilder::setting);
+    return opa == null ? document : document.and(opa);
+  }
+
+  private static String setting(String name) {
+    String property = System.getProperty(name.toLowerCase().replace('_', '.'));
+    return property != null ? property : System.getenv(name);
+  }
+
+  private static java.util.Set<String> unattendedTools(Map<String, Object> policies) {
+    return policies == null ? java.util.Set.of() : names(policies.get("unattended_tools"));
+  }
+
+  private static java.util.Set<String> names(Object listed) {
+    java.util.Set<String> out = new java.util.LinkedHashSet<>();
+    if (listed instanceof List<?> l) {
+      l.forEach(t -> out.add(String.valueOf(t)));
+    }
+    return out;
   }
 
   private static Map<String, String> compensations(List<Map<String, Object>> specs) {
@@ -318,7 +357,7 @@ public final class GraphBuilder {
         }
         long timeout = Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS);
         reg.registerKeyed(id, desc, parameters, effect,
-            Deadlines.boundKeyed(id, timeout, httpTool(id, url, timeout)));
+            Deadlines.boundKeyed(id, timeout, httpTool(id, url, timeout, bearerOf(t))));
       } else if ("failing".equals(kind)) {
         Function<Map<String, Object>, Object> failing = failingTool(id, t);
         reg.registerKeyed(id, desc, parameters, effect, (params, call) -> failing.apply(params));
@@ -389,18 +428,26 @@ public final class GraphBuilder {
    * (spec section 10).
    */
   private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> httpTool(
-      String id, String url, long timeoutMs) {
+      String id, String url, long timeoutMs, String bearer) {
     Duration timeout = Duration.ofMillis(timeoutMs);
     HttpClient http = HttpClient.newBuilder().connectTimeout(timeout).build();
     return (params, call) -> {
       try {
+        org.jagentic.core.net.Egress.check(url);
+      } catch (org.jagentic.core.net.Egress.Blocked e) {
+        throw new IllegalStateException(id + " failed: blocked by egress policy", e);
+      }
+      try {
         String body = JSON.writeValueAsString(params == null ? Map.of() : params);
-        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))
             .timeout(timeout)
             .header("Content-Type", "application/json")
             .header("Idempotency-Key", call.idempotencyKey())
-            .POST(HttpRequest.BodyPublishers.ofString(body)).build();
-        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (bearer != null) {
+          req.header("Authorization", "Bearer " + org.jagentic.core.Secrets.resolve(bearer));
+        }
+        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() >= 500) {
           throw new OutcomeUnknown(id + " failed: HTTP " + resp.statusCode());
         }
@@ -415,6 +462,11 @@ public final class GraphBuilder {
         throw new IllegalStateException(id + " was interrupted", e);
       }
     };
+  }
+
+  /** The reference in a tool's or a peer's {@code auth}, or null. The value stays where it is until a call. */
+  private static String bearerOf(Map<String, Object> declared) {
+    return declared.get("auth") instanceof Map<?, ?> auth ? (String) auth.get("bearer") : null;
   }
 
   private static Object parseBody(String body) {
@@ -570,6 +622,7 @@ public final class GraphBuilder {
           command.add(resolveEnv(String.valueOf(a)));
         }
       }
+      McpCommands.check(command);
       try {
         McpStdioClient client = new McpStdioClient(command);
         client.register(tools, m.getOrDefault("name", "mcp") + "_",
@@ -610,7 +663,7 @@ public final class GraphBuilder {
           }
           tools.registerKeyedPeer(name, desc, (String) a.get("effect"), Deadlines.boundKeyed(name,
               Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
-              org.jagentic.core.A2AClient.peerTool(url, peerRetries(a))));
+              org.jagentic.core.A2AClient.peerTool(url, peerRetries(a), bearerOf(a))));
           break;
         case "inproc":
           Runtime peer = inprocPeers == null ? null : inprocPeers.get(name);

@@ -13,6 +13,8 @@ workflow:
       main: {brain: rule, prompt: You manage a cart.}
   tools:
     - {id: expire_cart, kind: constant, value: "expired"}
+  policies:
+    unattended_tools: [expire_cart]
 turns:
   - {conversation_id: c1, turn_id: t1, text: "add item"}
   - {conversation_id: c1, turn_id: t2, text: "add another", advance_time_ms: 600}

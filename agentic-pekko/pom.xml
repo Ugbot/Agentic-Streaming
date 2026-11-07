@@ -26,8 +26,6 @@
   -->
   <properties>
     <pekko.version>1.7.1</pekko.version>
-    <!-- pekko-http has its own version line (not in pekko-bom). -->
-    <pekko.http.version>1.4.2</pekko.http.version>
     <!-- pekko-connectors-kafka has its own version line (not in pekko-bom). -->
     <pekko.connectors.kafka.version>1.2.0</pekko.connectors.kafka.version>
     <scala.binary>2.13</scala.binary>
@@ -81,11 +79,18 @@
       <artifactId>pekko-serialization-jackson_${scala.binary}</artifactId>
     </dependency>
 
-    <!-- HTTP front door: Agent Card + POST /agent (A2A-interoperable). -->
+    <!-- The one HTTP front door. -->
     <dependency>
-      <groupId>org.apache.pekko</groupId>
-      <artifactId>pekko-http_${scala.binary}</artifactId>
-      <version>${pekko.http.version}</version>
+      <groupId>org.jagentic</groupId>
+      <artifactId>agentic-gateway</artifactId>
+      <version>${project.version}</version>
+      <exclusions>
+        <!-- Only its Kafka backend uses this, and this module stays on its connector's line. -->
+        <exclusion>
+          <groupId>org.apache.kafka</groupId>
+          <artifactId>kafka-clients</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Pekko Streams (in pekko-bom) + Connectors Kafka: backpressured source→ask→sink ingress. -->
@@ -143,12 +148,6 @@
     <dependency>
       <groupId>org.apache.pekko</groupId>
       <artifactId>pekko-persistence-testkit_${scala.binary}</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.pekko</groupId>
-      <artifactId>pekko-http-testkit_${scala.binary}</artifactId>
-      <version>${pekko.http.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

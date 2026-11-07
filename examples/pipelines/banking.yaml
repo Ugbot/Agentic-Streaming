@@ -20,6 +20,7 @@ agent:
     payments:
       brain: rule
       prompt: You answer payment questions.
+      tools: [get_balance]
       tool_triggers: {balance: get_balance}
     general:
       brain: rule

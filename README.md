@@ -1,8 +1,8 @@
 # Agentic Streaming
 
-> **Status: experimental and pre-release.** There are no published packages. Do not run it on real
-> payments yet: the canonical path has no authentication. What is guaranteed now, and what is not, is
-> under [Guarantees](#guarantees). **A crash during a call to a `non_idempotent` tool leaves the
+> **Status: experimental and pre-release.** There are no published packages, and nothing here has had
+> an outside security review, so do not run it on real payments yet. What is guaranteed now, and what
+> is not, is under [Guarantees](#guarantees) and [Control](#control). **A crash during a call to a `non_idempotent` tool leaves the
 > outcome unknown.** The runtime will not repeat that call, and it cannot tell you whether it landed:
 > a person has to.
 
@@ -47,7 +47,7 @@ is an explicit human decision. Each line below has a crash test
 | `effect: idempotent` tools | At-least-once under a stable `Idempotency-Key` | Exactly one effect, unless the tool honours the key |
 | `effect: non_idempotent` tools, the default | Never called twice by the runtime. A recorded result is reused | A crash during the call leaves the outcome **unknown**. The turn suspends and a person decides. Nothing can do better, because the runtime cannot see the far side of the call. A tool that declares nothing is treated like this, so one that is safe to repeat must say `read` or `idempotent` |
 | Sagas | Undoes get the forward args and result, run on any failure class, and carry on from the log after a crash | A failed undo is terminal: it is recorded and needs repair by hand |
-| Resume | One state machine: the original user keeps the turn, duplicates and unknown signals rewrite nothing, a crash after `turn_resumed` loses no approval | Who may send a signal: that is authorisation, which does not exist yet |
+| Resume | One state machine: the original principal keeps the turn, duplicates and unknown signals rewrite nothing, a crash after `turn_resumed` loses no approval, and only an approver's signal is honoured | Who the approver is comes from whoever delivered the event: the gateway's token, or anything that can write the input topic |
 
 These hold only with a journal that outlives the crash. `stores.effects` selects it: `postgres` or
 `kafka` on the JVM, `file` in Python. A Flink job refuses a `non_idempotent` tool, which includes any
@@ -59,6 +59,27 @@ real TaskManager killed on a Flink 2.2.1 session cluster and the Kafka journal
 (`EffectJournalStoresIT`), and with a journal that fails or stalls at each write
 (`EffectJournalAttackTest`, `test_agentic_journal_attack.py`). Postgres has not been run on a real
 session cluster, and Pekko's journal outage is tested only on one node.
+
+## Control
+
+What the conformance fixtures prove on all five runtimes (reference, Java core, Flink, Pekko, Python),
+with the rules in [section 11 of the spec](spec/v1/primitives.md) and the detail in
+[security](docs/security.md):
+
+| Control | What holds |
+|---|---|
+| Tool boundary | One deny-by-default check on every tool call, from a brain, a saga, a timer or a CEP pattern. A path gets what its `tools` lists; `tools: []` is none. A refusal is on the log and ends the turn |
+| Principal | An authenticated principal is the turn's user, recorded on its events; a `user_id` beside it means nothing |
+| Approvals | Only an approver named by `policies.approvers` can resume a turn or settle an unknown outcome; `policies.tool_approval` puts a person in front of a tool |
+| Prompt injection | A model that obeys a tool result still cannot reach a tool its path does not list. Tool results are marked untrusted in the prompt, which helps and is not the boundary |
+| Egress | HTTP tools, peers and model calls refuse private and metadata addresses unless the operator allows them |
+| Limits | Per-principal rates, budgets, tool quotas and a kill switch, on the log when they stop something. Counters are per process |
+| Redaction | Credentials, and what `policies.redact` names, are gone before the log or the journal is written |
+
+The gateway (`agentic-gateway`) is the one HTTP front door: OIDC tokens, tenancy, ownership on every
+read, in front of Flink, Pekko or the Java core. Crypto-shredding covers the Java core and Flink.
+Outside the fixtures, unit tests, the gateway tests and two live labs (`tools/keycloak-lab.sh`,
+`tools/opa-lab.sh`) prove the rest.
 
 ## Known failures
 
@@ -81,8 +102,8 @@ session cluster, and Pekko's journal outage is tested only on one node.
   remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing
   embeddings falls back to the older `pyagentic` engine, which has no event log, no `turn_id` and no
   journal, and the CLI says so on stderr.
-- **The tool allowlist is not a security control, and the canonical path has no authentication.** See
-  [security](docs/security.md).
+- **Nothing here has had an outside security review.** See [security](docs/security.md) for what is
+  proved and what is left out.
 
 ## Quick start
 
@@ -177,6 +198,7 @@ cover.
 | [`ports/agentic-pipeline`](ports/agentic-pipeline/README.md) | The `pipeline.yaml` CLI; `local` is its only backend |
 | Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) |
 | [`agentic-pekko`](agentic-pekko/README.md) | The Pekko runtime |
+| `agentic-gateway` | The HTTP front door: authentication, tenancy, and a backend for Flink over Kafka, Pekko or the Java core |
 | [`examples/pipelines`](examples/pipelines) | Example workflow documents |
 | `reactor/` | The Maven parent and aggregator for the JVM modules |
 

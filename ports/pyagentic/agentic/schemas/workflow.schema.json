@@ -146,7 +146,52 @@
           },
           "additionalProperties": false
         },
-        "on_tool_error": { "enum": ["fail", "continue"], "default": "fail" }
+        "on_tool_error": { "enum": ["fail", "continue"], "default": "fail" },
+        "approvers": {
+          "description": "Who may resume a suspended turn or settle an unknown outcome: an authenticated principal with one of these subjects or roles. Deny by default: without this block nobody can.",
+          "type": "object",
+          "properties": {
+            "subjects": { "type": "array", "items": { "type": "string" } },
+            "roles": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "tool_approval": {
+          "description": "Which allowed tools still need a person: the turn suspends before the call until an approver answers. A timer or a CEP pattern has nobody to ask, so such a tool is refused there.",
+          "type": "object",
+          "properties": {
+            "effects": { "type": "array", "items": { "enum": ["read", "idempotent", "non_idempotent"] } },
+            "tools": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "limits": {
+          "description": "Per-principal limits. A principal is its tenant and subject, or the user_id when there is none. Tokens are an estimate, and cost is that estimate at cost_per_1k_tokens.",
+          "type": "object",
+          "properties": {
+            "turns_per_minute": { "type": "integer", "minimum": 1 },
+            "tokens_per_day": { "type": "integer", "minimum": 1 },
+            "cost_per_day": { "type": "number", "exclusiveMinimum": 0 },
+            "cost_per_1k_tokens": { "type": "number", "minimum": 0 },
+            "tool_calls_per_day": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+            "kill_switch": { "type": "boolean", "default": false }
+          },
+          "additionalProperties": false
+        },
+        "redact": {
+          "description": "What must not be recorded, on top of credentials, which are always covered. Removed before the event or the journal entry is written.",
+          "type": "object",
+          "properties": {
+            "fields": { "type": "array", "items": { "type": "string" } },
+            "patterns": { "type": "array", "items": { "type": "string", "format": "regex" } }
+          },
+          "additionalProperties": false
+        },
+        "unattended_tools": {
+          "description": "What a timer or a CEP pattern may call. They run outside any path, so a path's tools do not cover them. Deny by default: a tool not listed here is refused.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
@@ -157,6 +202,13 @@
       "required": ["id"],
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
+        "auth": {
+          "description": "How the call authenticates, by reference: env:NAME or file:/path. Resolved at the moment of the call and never recorded.",
+          "type": "object",
+          "properties": { "bearer": { "type": "string", "pattern": "^(env:[A-Za-z_][A-Za-z0-9_]*|file:/.+)$" } },
+          "required": ["bearer"],
+          "additionalProperties": false
+        },
         "kind": { "enum": ["constant", "http", "agent", "mcp", "function", "failing", "hanging", "counting"], "default": "constant" },
         "description": { "type": "string" },
         "value": {},
@@ -327,6 +379,13 @@
       "properties": {
         "name": { "$ref": "#/$defs/identifier" },
         "id": { "$ref": "#/$defs/identifier" },
+        "auth": {
+          "description": "How the call authenticates, by reference: env:NAME or file:/path. Resolved at the moment of the call and never recorded.",
+          "type": "object",
+          "properties": { "bearer": { "type": "string", "pattern": "^(env:[A-Za-z_][A-Za-z0-9_]*|file:/.+)$" } },
+          "required": ["bearer"],
+          "additionalProperties": false
+        },
         "url": { "type": "string" },
         "transport": { "enum": ["inproc", "http", "grpc"], "default": "http" },
         "description": { "type": "string" },

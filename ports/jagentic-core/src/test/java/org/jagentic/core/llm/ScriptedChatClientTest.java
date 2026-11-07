@@ -86,7 +86,7 @@ class ScriptedChatClientTest {
         Map.of("tool", "get_balance", "args", args),
         Map.of("text", answer),
         Map.of("text", "never reached"));
-    Map<String, Object> spec = workflow(script, llmPath(null),
+    Map<String, Object> spec = workflow(script, llmPath(List.of("get_balance")),
         List.of(Map.of("id", "get_balance", "kind", "constant", "value", "1234.56")));
     LocalRuntime runtime = runtime(spec);
 
@@ -123,7 +123,7 @@ class ScriptedChatClientTest {
   }
 
   @Test
-  void toolNotDeclaredOnThePathFailsTheTurnAsValidation() {
+  void toolNotDeclaredOnThePathIsRefusedAndEndsTheTurn() {
     String hidden = "transfer_" + rnd();
     List<Map<String, Object>> script = List.of(
         Map.of("tool", hidden, "args", Map.of("amount", 500)),
@@ -133,7 +133,7 @@ class ScriptedChatClientTest {
         Map.of("id", hidden, "kind", "constant", "value", "moved")));
     TurnResult res = runtime(spec).submit(Event.turn("c-" + rnd(), "t1", "u", "balance"));
     assertEquals(TurnStatus.FAILED, res.status);
-    assertEquals("validation", res.error.errorClass().wire());
+    assertEquals("policy", res.error.errorClass().wire());
     assertTrue(res.error.message().contains(hidden), res.error.message());
     assertTrue(res.calls.isEmpty(), "the undeclared tool never ran");
     assertNull(res.reply);
@@ -141,7 +141,7 @@ class ScriptedChatClientTest {
 
   @Test
   void scriptWithoutAFinalTextIsAFatalTurnNotAnInventedAnswer() {
-    Map<String, Object> spec = workflow(List.of(Map.of("tool", "get_balance", "args", Map.of())), llmPath(null),
+    Map<String, Object> spec = workflow(List.of(Map.of("tool", "get_balance", "args", Map.of())), llmPath(List.of("get_balance")),
         List.of(Map.of("id", "get_balance", "kind", "constant", "value", "1")));
     TurnResult res = runtime(spec).submit(Event.turn("c-" + rnd(), "t1", "u", "balance"));
     assertEquals(TurnStatus.FAILED, res.status);

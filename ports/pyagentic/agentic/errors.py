@@ -24,6 +24,12 @@ class ValidationError(AgenticError, ValueError):
         super().__init__(f"{pointer or '/'}: {message}" if pointer is not None else message)
 
 
+class ToolRefused(ValidationError):
+    """The tool policy said no. Nothing ran, and no retry can change that."""
+
+    error_class = "policy"
+
+
 class CapabilityError(ValidationError):
     """A workflow requires capabilities the selected runtime declares unsupported."""
 

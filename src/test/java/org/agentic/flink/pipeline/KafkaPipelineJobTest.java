@@ -218,7 +218,9 @@ class KafkaPipelineJobTest {
 
   @Test
   void aFatalTurnReachesTheFailuresStreamToo() throws Exception {
-    Map<String, Object> wf = new java.util.LinkedHashMap<>(Workflows.billing());
+    Map<String, Object> wf =
+        new java.util.LinkedHashMap<>(
+            Workflows.onEveryPath(Workflows.billing(), "reserve", "post", "release"));
     wf.put(
         "tools",
         List.of(

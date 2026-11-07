@@ -66,7 +66,7 @@ def test_conversations_run_concurrently_while_each_stays_a_serial_isolated_write
 
     spec = (Agent(rid("parallel"))
             .route(rules={"main": ["charge"]}, default="main")
-            .path("main", tool_triggers={"rendezvous": MEET, "charge": PROBE})
+            .path("main", tools=[MEET, PROBE], tool_triggers={"rendezvous": MEET, "charge": PROBE})
             .use_tool(MEET, meet)
             .use_tool(PROBE, probe)
             .verifier("none")
@@ -122,7 +122,7 @@ def test_submit_async_keeps_arrival_order_within_a_conversation_when_callers_rac
         order.append(user)
         return user
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "slow"}).use_tool("slow", slow).verifier("none").build()
+    spec = Agent(rid("a")).path("main", tools=["slow"], tool_triggers={"go": "slow"}).use_tool("slow", slow).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid = rid("c")
@@ -150,7 +150,7 @@ def test_a_conversation_with_a_long_queue_does_not_starve_the_others():
             hold.wait(20)
         return user
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "block"}).use_tool("block", block).verifier("none").build()
+    spec = Agent(rid("a")).path("main", tools=["block"], tool_triggers={"go": "block"}).use_tool("block", block).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     queued = random.randint(40, 60)
@@ -192,7 +192,7 @@ def test_conformance_delivers_a_concurrent_group_together_and_reports_in_declare
         return f"met:{user}"
 
     spec = (Agent(rid("parallel"))
-            .path("main", tool_triggers={"rendezvous": MEET})
+            .path("main", tools=[MEET], tool_triggers={"rendezvous": MEET})
             .use_tool(MEET, meet)
             .verifier("none")
             .build())

@@ -1,6 +1,5 @@
 id: unknown-outcome-applied
-description: A person says the call landed and what it returned. The turn carries on with that result and the tool
-  is not called.
+description: A person says the call landed and what it returned. The turn carries on with that result and the tool is not called.
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -17,9 +16,12 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - conversation_id: c1
   turn_id: t1
@@ -30,6 +32,7 @@ turns:
   turn_id: t1
   signal: {resolution: applied, result: paid}
   user_id: ops
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: crashed}
 - turn_id: t1

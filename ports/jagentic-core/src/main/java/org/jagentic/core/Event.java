@@ -14,12 +14,27 @@ import java.util.UUID;
  * mint a fresh random {@code turnId}, so callers that never redeliver keep their behaviour. The
  * canonical constructor mints nothing: an event that arrives without a {@code turnId} cannot be
  * deduplicated, and {@link RoutedGraph} refuses it.</p>
+ *
+ * <p>{@code principal} is who the event is authenticated as; null means nobody has vouched for it.
+ * Beside a principal, {@code userId} is the principal's subject, whatever the caller claimed.</p>
  */
 public record Event(String conversationId, String turnId, String userId, String text,
-                    Map<String, String> metadata, Map<String, Object> signal) implements Serializable {
+                    Map<String, String> metadata, Map<String, Object> signal, Principal principal)
+    implements Serializable {
 
   public Event {
     metadata = metadata == null ? Map.of() : metadata;
+    userId = principal == null ? userId : principal.subject();
+  }
+
+  public Event(String conversationId, String turnId, String userId, String text,
+               Map<String, String> metadata, Map<String, Object> signal) {
+    this(conversationId, turnId, userId, text, metadata, signal, null);
+  }
+
+  /** The same event, authenticated as {@code who}. */
+  public Event withPrincipal(Principal who) {
+    return new Event(conversationId, turnId, userId, text, metadata, signal, who);
   }
 
   public Event(String conversationId, String userId, String text) {

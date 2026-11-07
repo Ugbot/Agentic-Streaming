@@ -12,18 +12,21 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main: {brain: rule, prompt: You move money., x-suspend-until: approval}
+      main: {brain: rule, prompt: You move money., x-suspend-until: approval, tools: [a]}
     verifier: {kind: none}
   tools:
   - {id: a, kind: constant, value: a}
   saga:
     steps:
     - {name: a, tool: a}
+  policies:
+    approvers: {roles: [approver]}
 turns:
 - {conversation_id: c1, turn_id: t1, text: pay the invoice}
 - conversation_id: c1
   turn_id: t1
   signal: {kind: approval}
+  principal: {subject: ops, roles: [approver]}
 expect:
 - {turn_id: t1, status: suspended}
 - turn_id: t1

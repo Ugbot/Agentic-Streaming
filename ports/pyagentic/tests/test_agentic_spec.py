@@ -83,7 +83,7 @@ def test_load_from_yaml_and_json_round_trip(tmp_path: Path):
 
 
 def test_load_binds_function_tools_and_peers_by_name(tmp_path: Path):
-    doc = (Agent(rid("a")).path("main", tool_triggers={"go": "py", "call": "peer"})
+    doc = (Agent(rid("a")).path("main", tools=["py", "peer"], tool_triggers={"go": "py", "call": "peer"})
            .tool("py", "function", description="python").peer("peer", "inproc").verifier("none").document())
     path = tmp_path / "w.yaml"
     AgentSpec(doc).save(str(path))
@@ -131,7 +131,7 @@ def test_repr_is_notebook_friendly():
 
 
 def test_a_function_tool_can_declare_its_effect_and_its_limit():
-    spec = (Agent("pay").path("main", tool_triggers={"pay": "pay"})
+    spec = (Agent("pay").path("main", tools=["pay"], tool_triggers={"pay": "pay"})
             .use_tool("pay", lambda user: "ok", effect="non_idempotent", timeout_ms=250).build())
     assert spec.document["tools"][0]["effect"] == "non_idempotent"
     assert spec.document["tools"][0]["timeout_ms"] == 250

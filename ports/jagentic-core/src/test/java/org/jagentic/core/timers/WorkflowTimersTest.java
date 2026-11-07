@@ -55,6 +55,7 @@ class WorkflowTimersTest {
     s.put("backend", "local");
     s.put("agent", agent);
     s.put("timers", timers);
+    s.put("policies", Map.of("unattended_tools", List.of(toolId)));
     s.put("tools", List.of(Map.of("id", toolId, "kind", "constant", "value", "done")));
     return s;
   }

@@ -61,7 +61,7 @@ class SpecPrimitivesTest {
         "tool_failed", "retrieved", "reply_drafted", "verification_failed", "memory_written", "turn_completed",
         "turn_failed", "turn_suspended", "turn_resumed", "timer_scheduled", "timer_fired",
         "compensation_started", "compensation_step", "compensation_completed", "delegated",
-        "llm_called", "tool_intent", "compensation_failed", "unknown_outcome");
+        "llm_called", "tool_intent", "compensation_failed", "unknown_outcome", "tool_refused", "signal_refused", "limit_exceeded");
     assertEquals(wire.size(), EventType.values().length);
     for (String w : wire) {
       assertEquals(w, EventType.parse(w).orElseThrow().wire());
@@ -69,7 +69,7 @@ class SpecPrimitivesTest {
     assertTrue(EventType.parse("not_an_event_" + rnd()).isEmpty());
     assertEquals(List.of("completed", "rejected", "unverified", "failed", "suspended", "duplicate"),
         java.util.Arrays.stream(TurnStatus.values()).map(TurnStatus::wire).toList());
-    assertEquals(List.of("validation", "guardrail", "verification", "tool", "transient", "fatal"),
+    assertEquals(List.of("validation", "guardrail", "verification", "tool", "policy", "transient", "fatal"),
         java.util.Arrays.stream(TurnError.ErrorClass.values()).map(TurnError.ErrorClass::wire).toList());
   }
 

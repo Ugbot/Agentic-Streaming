@@ -22,7 +22,12 @@ agent:
     escalate:
       brain: rule
       prompt: You open an incident ticket and summarize.
+      tools: [open_ticket]
       tool_triggers: {incident: open_ticket}
+
+# A CEP pattern runs outside any path, so what it may call is listed here.
+policies:
+  unattended_tools: [open_ticket]
 
 tools:
   - {id: open_ticket, kind: constant, effect: idempotent, description: Open an incident ticket, value: "TICKET-OPENED"}

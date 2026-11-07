@@ -14,16 +14,17 @@ maintenance branches to backport to.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a security problem. Use GitHub's private vulnerability
-reporting for this repository:
+Do not put technical detail of a security problem in a public issue.
 
-https://github.com/Ugbot/Agentic-Streaming/security/advisories/new
+GitHub's private vulnerability reporting is switched off for this repository today (the API answered
+`enabled: false` on 2026-11-07), so the advisory form does not work yet. Until it is switched on:
 
-That form creates a draft security advisory that only the maintainer and the reporter can see.
-It depends on the repository setting "Private vulnerability reporting" (Settings, Code
-security and analysis); if GitHub answers that the form is not available, open a regular
-issue that says only that you have a security report and how the maintainer can contact you,
-without any technical detail, and the maintainer will open the advisory from their side.
+1. Open a regular issue titled "Security report" that says only that you have one and which module it
+   is in. No detail, no reproduction.
+2. The maintainer will open a draft security advisory and invite you to it. The advisory and its
+   private fork are visible only to the two of you, and the detail goes there.
+
+Once the setting is on, use https://github.com/Ugbot/Agentic-Streaming/security/advisories/new directly.
 
 Include the affected module (the Flink framework, `ports/jagentic-core`, `agentic-pekko`, one of
 the Python packages, a compose stack), the commit you tested, and the steps or input that reproduce the problem. A minimal
@@ -41,9 +42,20 @@ In scope: any code in this repository that is reachable from an untrusted input.
 Out of scope: vulnerabilities in third-party dependencies that are not exploitable through
 this code (report those upstream; a dependency bump here is welcome as a pull request).
 
+## Trust model
+
+- **A workflow document is trusted input. Treat it as code.** It chooses the tools, the URLs, the
+  prompts and the policy. Validation rejects a malformed document; it does not make a hostile one
+  safe, so load only documents you wrote or reviewed.
+- **A document cannot widen what the operator set.** `mcp[].command` starts a process, so it runs only
+  if the operator listed it in `AGENTIC_MCP_ALLOWED_COMMANDS`, and with no list nothing starts. The
+  same goes for the egress settings. These are environment variables on the host, not document keys.
+- **Text is not trusted.** User text, tool results, retrieved passages and model output can say
+  anything. They cannot grant a tool: that is the tool policy, and it is not a filter.
+- **Whoever delivers an event vouches for its principal.** Anyone who can write to the input topic
+  can claim any identity, so keep that topic to trusted producers.
+
 ## Security posture
 
-`docs/security.md` states what the code does today. In short: the canonical path has no
-authentication, the Pekko HTTP front door has none either, the tool allowlist is only enforced in
-`LlmBrain`, and workflow documents are trusted input that can start processes. Do not expose any of
-this to untrusted callers.
+`docs/security.md` states what the code does today. The project is experimental and has had no
+outside security review, so do not expose it to untrusted callers.

@@ -177,7 +177,7 @@ class PayAfterRestoreTest {
         """
         {"spec_version": "agentic/v1",
          "agent": {"id": "a", "router": {"kind": "keyword", "default": "p", "rules": {}},
-                   "paths": {"p": {"brain": "rule", "tool_triggers": {"pay": "pay"}}}},
+                   "paths": {"p": {"brain": "rule", "tools": ["pay"], "tool_triggers": {"pay": "pay"}}}},
          "tools": [{"id": "pay", "kind": "http", "effect": "%s",
                     "url": "http://127.0.0.1:%d/pay"}],
          "stores": {"effects": %s}}

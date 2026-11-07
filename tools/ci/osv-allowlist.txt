@@ -1,0 +1,2 @@
+# OSV advisories that pass the scan, each with the reason. docs/security.md has the table.
+# ID  reason

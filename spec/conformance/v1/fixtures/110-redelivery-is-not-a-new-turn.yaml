@@ -1,0 +1,29 @@
+id: redelivery-is-not-a-new-turn
+description: 'A turn redelivered after a crash was already counted, so it does not use up the limit it passed.'
+requires: [limits, crash_recovery, timers, rule_brain, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: a
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    limits: {turns_per_minute: 1}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: hello
+  principal: {subject: alice}
+  crash_at: {event: routed, when: after}
+- {conversation_id: c1, turn_id: t1, text: hello, principal: {subject: alice}}
+expect:
+- {turn_id: t1, status: crashed}
+- {turn_id: t1, status: completed}

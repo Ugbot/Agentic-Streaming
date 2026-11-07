@@ -130,6 +130,7 @@ class ParallelConversationsMiniClusterTest {
     Map<String, Object> main = new LinkedHashMap<>();
     main.put("brain", "rule");
     main.put("prompt", "You answer charge questions.");
+    main.put("tools", List.of(MEET, PROBE));
     main.put("tool_triggers", Map.of("rendezvous", MEET, "charge", PROBE));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "parallel-" + UUID.randomUUID());

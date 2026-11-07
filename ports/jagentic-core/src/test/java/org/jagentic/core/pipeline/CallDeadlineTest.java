@@ -84,6 +84,7 @@ class CallDeadlineTest {
   private static Map<String, Object> workflow(Map<String, Object> tool) {
     Map<String, Object> path = new LinkedHashMap<>();
     path.put("brain", "rule");
+    path.put("tools", List.of("call"));
     path.put("tool_triggers", Map.of("go", "call"));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "a");

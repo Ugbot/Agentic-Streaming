@@ -1,0 +1,35 @@
+id: turn-rate-limit
+description: 'Too many turns from one principal in a minute are refused, on the log, and nobody else is touched. The next minute starts again.'
+requires: [limits, timers, rule_brain, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: a
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    limits: {turns_per_minute: 1}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: hello, principal: {subject: alice}}
+- {conversation_id: c1, turn_id: t2, text: hello, principal: {subject: alice}}
+- {conversation_id: c1, turn_id: t3, text: hello, principal: {subject: bob}}
+- {conversation_id: c1, turn_id: t4, text: hello, advance_time_ms: 60000, principal: {subject: alice}}
+expect:
+- {turn_id: t1, status: completed}
+- turn_id: t2
+  status: failed
+  error_class: policy
+  events: [turn_received, limit_exceeded, turn_failed]
+  event_payloads:
+  - type: limit_exceeded
+    payload: {limit: turns_per_minute, who: alice, max: 1}
+- {turn_id: t3, status: completed}
+- {turn_id: t4, status: completed}

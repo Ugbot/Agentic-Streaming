@@ -12,7 +12,7 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main: {brain: rule, prompt: You move money.}
+      main: {brain: rule, prompt: You move money., tools: [reserve, release, post]}
     verifier: {kind: none}
   tools:
   - {id: reserve, kind: constant, value: reservation-9, compensation: release}

@@ -54,6 +54,7 @@ class ManualProcessingClockTest {
     timer.put("tool", "lookup_charge");
     timer.put("payload", payload);
     wf.put("timers", List.of(timer));
+    wf.put("policies", Map.of("unattended_tools", List.of("lookup_charge")));
     return wf;
   }
 

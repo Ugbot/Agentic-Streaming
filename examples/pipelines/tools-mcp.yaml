@@ -46,7 +46,8 @@ agent:
     assistant:
       brain: llm
       prompt: "You are a helpful assistant. Use the available tools (math, string) to answer."
-      # the MCP tools arrive as tools_util_add, tools_util_toUpperCase, ...; leaving tools unset allows them all
+      # the MCP tools arrive as tools_util_add, tools_util_toUpperCase, ...; a path gets only what it lists
+      tools: [tools_util_add, tools_util_toUpperCase]
       # verifier: none because the scripted stub reply carries no [assistant] prefix for the prefix verifier
       verifier: {kind: none}
   verifier:

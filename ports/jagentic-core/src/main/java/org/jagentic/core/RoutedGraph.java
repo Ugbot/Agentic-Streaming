@@ -56,6 +56,10 @@ public final class RoutedGraph {
   private final List<TimerSpec> timers;
   private final Map<String, List<Guardrail>> pathGuardrails;
   private final String agentId;
+  private final ToolPolicy toolPolicy;
+  private final Approvers approvers;
+  private final Limits limits;
+  private final Redactor redactor;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -133,10 +137,16 @@ public final class RoutedGraph {
     this.timers = List.of();
     this.pathGuardrails = Map.of();
     this.agentId = "";
+    this.toolPolicy = ToolPolicy.DENY_ALL;
+    this.approvers = Approvers.NONE;
+    this.limits = Limits.NONE;
+    this.redactor = Redactor.DEFAULT;
   }
 
   private RoutedGraph(RoutedGraph base, List<TimerSpec> timers,
-                      Map<String, List<Guardrail>> pathGuardrails, String agentId) {
+                      Map<String, List<Guardrail>> pathGuardrails, String agentId,
+                      ToolPolicy toolPolicy, Approvers approvers, Limits limits,
+                      Redactor redactor) {
     this.router = base.router;
     this.paths = base.paths;
     this.verifier = base.verifier;
@@ -151,6 +161,10 @@ public final class RoutedGraph {
     this.timers = List.copyOf(timers == null ? List.of() : timers);
     this.pathGuardrails = Map.copyOf(pathGuardrails);
     this.agentId = agentId;
+    this.toolPolicy = toolPolicy;
+    this.approvers = approvers;
+    this.limits = limits;
+    this.redactor = redactor;
   }
 
   /**
@@ -160,17 +174,37 @@ public final class RoutedGraph {
    * for event time.
    */
   public RoutedGraph withTimers(List<TimerSpec> timers) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor);
+  }
+
+  /** The same graph under this policy. Without one every tool call is refused. */
+  public RoutedGraph withToolPolicy(ToolPolicy policy) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits, redactor);
+  }
+
+  /** The same graph under these approvers. Without them nobody can resume a turn. */
+  public RoutedGraph withApprovers(Approvers who) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits, redactor);
+  }
+
+  /** The same graph under these limits. */
+  public RoutedGraph withLimits(Limits l) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l, redactor);
+  }
+
+  /** The same graph under this redactor. Credentials are covered without one. */
+  public RoutedGraph withRedactor(Redactor r) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, r);
   }
 
   /** The same graph with rails that apply to one path alone, after routing. */
   public RoutedGraph withPathGuardrails(Map<String, List<Guardrail>> rails) {
-    return new RoutedGraph(this, timers, rails, agentId);
+    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits, redactor);
   }
 
   /** The same graph under the workflow's {@code agent.id}, which scopes its journal entries. */
   public RoutedGraph withAgentId(String id) {
-    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id);
+    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits, redactor);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -221,9 +255,13 @@ public final class RoutedGraph {
     ctx.listeners = listeners; // so callTool can fire tool-call hooks
     ctx.contextWindow = contextWindow;
     ctx.journalScope = agentId;
+    ctx.policy = toolPolicy;
+    ctx.limits = limits;
+    ctx.redactor = redactor;
+    ctx.principal = event.principal();
     if (event.turnId() == null || event.turnId().isBlank()) {
-      return refused(event, "a turn needs a non-empty turn_id; it is the idempotency key",
-          ctx.conversationState());
+      return refused(event, TurnError.ErrorClass.VALIDATION,
+          "a turn needs a non-empty turn_id; it is the idempotency key", ctx.conversationState());
     }
     try {
       return process(event, ctx);
@@ -292,6 +330,18 @@ public final class RoutedGraph {
     boolean running = prior != null && prior.running();
     boolean retryable = idempotent && applied && prior.retryable();
 
+    String tenant = tenantOf(ctx);
+    if (!event.isResume() && tenant != null
+        && (event.principal() == null || !tenant.equals(event.principal().tenant()))) {
+      return refused(event, TurnError.ErrorClass.POLICY,
+          "conversation " + event.conversationId() + " belongs to another tenant", before);
+    }
+    if (event.isResume() && prior != null && !ctx.runtimeSignal) {
+      String problem = approvers.problem(event.principal(), tenant);
+      if (problem != null) {
+        return refuseSignal(event, ctx, problem);
+      }
+    }
     if (event.isResume()) {
       if (parked != null) {
         return resume(event, ctx, parked, prior);
@@ -313,7 +363,7 @@ public final class RoutedGraph {
       if (applied) {
         return recorded(ctx, prior).asDuplicate(before.reduced());
       }
-      return refused(event, "no suspended turn " + turnId + " to resume", before);
+      return refused(event, TurnError.ErrorClass.VALIDATION, "no suspended turn " + turnId + " to resume", before);
     }
     if (running) {
       return replay(event, ctx, prior, prior.resumed());
@@ -323,7 +373,7 @@ public final class RoutedGraph {
     }
     if (retryable) {
       ctx.continueIndicesAfter(prior.events());
-      return run(event, ctx, before.timers(), before.nextSequence() == 0, false, true);
+      return run(original(event, prior, ctx), ctx, before.timers(), before.nextSequence() == 0, false, true);
     }
     if (applied && idempotent) {
       return recorded(ctx, prior).asDuplicate(before.reduced());
@@ -341,19 +391,54 @@ public final class RoutedGraph {
     return false;
   }
 
-  /** Status {@code failed}, class {@code validation}, nothing appended: the turn id stays unspent. */
-  private static TurnResult refused(Event event, String reason, ConversationState state) {
+  /** Status {@code failed}, nothing appended: the turn id stays unspent. */
+  private static TurnResult refused(Event event, TurnError.ErrorClass cls, String reason,
+                                    ConversationState state) {
     return new TurnResult(event.conversationId(), event.turnId() == null ? "" : event.turnId(),
-        TurnStatus.FAILED, null, null, new TurnError(TurnError.ErrorClass.VALIDATION, reason),
+        TurnStatus.FAILED, null, null, new TurnError(cls, reason),
         List.of(), List.of(), state == null ? Map.of() : state.reduced());
+  }
+
+  /** The tenant a conversation belongs to: the one that started it (spec section 11). */
+  private static String tenantOf(AgentContext ctx) {
+    for (LogEvent e : ctx.log.events(ctx.conversationId)) {
+      if (e.is(EventType.TURN_RECEIVED)) {
+        Principal first = Principal.fromMap(e.payload().get("principal"));
+        return first == null ? null : first.tenant();
+      }
+    }
+    return null;
+  }
+
+  /** Status {@code failed}, class {@code policy}. The turn is untouched, and the attempt is on the log. */
+  private static TurnResult refuseSignal(Event signal, AgentContext ctx, String problem) {
+    ctx.metadata = signal.metadata();
+    Map<String, Object> p = map("turn_id", signal.turnId(), "reason", problem);
+    p.put("signal_sender", signal.userId() == null ? "anonymous" : signal.userId());
+    if (signal.principal() != null) {
+      p.put("signal_principal", signal.principal().toMap());
+    }
+    ctx.record(EventType.SIGNAL_REFUSED, p);
+    return new TurnResult(ctx.conversationId, ctx.turnId, TurnStatus.FAILED, null, null,
+        new TurnError(TurnError.ErrorClass.POLICY, problem), List.of(), ctx.segment(), stateOrEmpty(ctx));
   }
 
   /** A turn as first received, rebuilt from the log: a re-run never trusts the delivery. */
   private static Event original(Event delivered, ConversationState.TurnRecord prior, AgentContext ctx) {
     String user = prior.userId() != null ? prior.userId() : delivered.userId();
     ctx.userId = user;
+    ctx.principal = receivedBy(prior);
     return new Event(delivered.conversationId(), delivered.turnId(), user, prior.text(),
-        firstMetadata(prior, delivered), null);
+        firstMetadata(prior, delivered), null, ctx.principal);
+  }
+
+  private static Principal receivedBy(ConversationState.TurnRecord prior) {
+    for (LogEvent e : prior.events()) {
+      if (e.is(EventType.TURN_RECEIVED)) {
+        return Principal.fromMap(e.payload().get("principal"));
+      }
+    }
+    return null;
   }
 
   private static Map<String, String> firstMetadata(ConversationState.TurnRecord prior, Event delivered) {
@@ -381,13 +466,23 @@ public final class RoutedGraph {
     if (parked.onUnknownOutcome()) {
       String problem = resolve(signal, ctx, parked);
       if (problem != null) {
-        return refused(signal, problem, ctx.conversationState());
+        return refused(signal, TurnError.ErrorClass.VALIDATION, problem, ctx.conversationState());
       }
+    }
+    Map<String, Object> resumed = resumedPayload(signal);
+    if (parked.onToolApproval()) {
+      if (!(signal.signal().get("approved") instanceof Boolean approved)) {
+        return refused(signal, TurnError.ErrorClass.VALIDATION,
+            "signal needs approved true or false, got " + signal.signal().get("approved"), ctx.conversationState());
+      }
+      Map<String, Object> approval = map("tool", parked.tool(), "index", parked.index());
+      approval.put("approved", approved);
+      resumed.put("approval", approval);
     }
     ctx.replayOverAndResume(prior.events());
     Event turn = original(signal, prior, ctx);
     ctx.metadata = turn.metadata();
-    ctx.record(EventType.TURN_RESUMED, resumedPayload(signal));
+    ctx.record(EventType.TURN_RESUMED, resumed);
     ctx.keepIndicesOfTimers(prior.events());
     return run(turn, ctx, TimerState.fold(List.of()), false, true, false);
   }
@@ -395,6 +490,9 @@ public final class RoutedGraph {
   private static Map<String, Object> resumedPayload(Event signal) {
     Map<String, Object> p = map("turn_id", signal.turnId(), "signal", signal.signal());
     p.put("signal_sender", signal.userId() == null ? "anonymous" : signal.userId());
+    if (signal.principal() != null) {
+      p.put("signal_principal", signal.principal().toMap());
+    }
     return p;
   }
 
@@ -462,11 +560,16 @@ public final class RoutedGraph {
         return fail(ctx, null, TurnError.ErrorClass.TOOL, e);
       } catch (ToolRegistry.UnknownTool e) {
         return fail(ctx, null, TurnError.ErrorClass.VALIDATION, e);
+      } catch (ToolRefused e) {
+        return fail(ctx, null, TurnError.ErrorClass.POLICY, e);
       }
     }
     Map<String, Object> received = org.jagentic.core.cep.EventTime.annotate(
         map("turn_id", event.turnId(), "text", event.text()), event);
     received.put("user_id", event.userId() == null ? "anonymous" : event.userId());
+    if (event.principal() != null) {
+      received.put("principal", event.principal().toMap());
+    }
     if (processingNow != null) {
       received.put(LogicalClock.PROCESSING_TIME_KEY, processingNow);
     }
@@ -475,6 +578,13 @@ public final class RoutedGraph {
     }
     if (firstTurn && processingNow != null) {
       WorkflowTimers.schedule(timers, ctx, processingNow, watermark);
+    }
+    try {
+      if (!rerun && !resuming || limits.stopped()) {
+        ctx.enforce(limits.admitTurn(ctx.who(), ctx.conversationId + "\u0000" + event.turnId(), ctx.now()));
+      }
+    } catch (ToolRefused e) {
+      return fail(ctx, null, TurnError.ErrorClass.POLICY, e);
     }
 
     TurnResult blocked = screenInput(guardrails, event, ctx, null);
@@ -491,6 +601,7 @@ public final class RoutedGraph {
     }
     ctx.store.putAttribute(ctx.conversationId, PATH_ATTR, path);
     ctx.store.putAttribute(ctx.conversationId, PHASE_ATTR, "path:" + path);
+    ctx.path = path;
     ctx.record(EventType.ROUTED, map("path", path));
     for (AgentListener l : listeners) {
       l.onRouted(path, ctx);
@@ -500,6 +611,8 @@ public final class RoutedGraph {
         org.jagentic.core.cep.TurnPatterns.evaluate(cep, ctx);
       } catch (ToolFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
+      } catch (ToolRefused e) {
+        return fail(ctx, path, TurnError.ErrorClass.POLICY, e);
       } catch (IllegalArgumentException e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
       }
@@ -541,6 +654,7 @@ public final class RoutedGraph {
 
   /** The saga if the workflow declares one, otherwise the brain. Both can stop on an unknown outcome. */
   private TurnResult afterRouting(Event event, AgentContext ctx, String path) {
+    ctx.path = path;
     try {
       return saga != null ? runSaga(event, ctx, path) : runBrain(event, ctx, path);
     } catch (TurnSuspendedOnUnknown e) {
@@ -548,7 +662,7 @@ public final class RoutedGraph {
       Map<String, Object> p = map("turn_id", event.turnId(), "path", path);
       p.put("text", event.text());
       p.put("user_id", event.userId() == null ? "anonymous" : event.userId());
-      p.put("until", ConversationState.UNKNOWN_OUTCOME);
+      p.put("until", e.until);
       p.put("tool", e.tool);
       p.put("index", e.index);
       ctx.record(EventType.TURN_SUSPENDED, p);
@@ -570,8 +684,10 @@ public final class RoutedGraph {
         reply = agent.brain.turn(event.text(), ctx);
       } catch (ToolFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
-      } catch (ToolRegistry.UnknownTool | ToolNotPermitted | ToolArgumentsRejected e) {
+      } catch (ToolRegistry.UnknownTool | ToolArgumentsRejected e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
+      } catch (ToolRefused e) {
+        return fail(ctx, path, TurnError.ErrorClass.POLICY, e);
       } catch (TransientFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TRANSIENT, e);
       } catch (LogUnavailable | TurnSuspendedOnUnknown e) {
@@ -623,8 +739,8 @@ public final class RoutedGraph {
     for (SagaPlan.Step step : saga.steps()) {
       Object result;
       try {
-        result = ctx.invoke(step.tool(), step.args(), null);
-      } catch (ToolFailure | ToolRegistry.UnknownTool | ToolArgumentsRejected e) {
+        result = ctx.callAs(ToolOrigin.SAGA, step.tool(), step.args());
+      } catch (ToolFailure | ToolRegistry.UnknownTool | ToolArgumentsRejected | ToolRefused e) {
         ctx.record(EventType.COMPENSATION_STARTED, map("failed_step", step.name()));
         List<String> failedUndos = compensate(done, ctx);
         if (!failedUndos.isEmpty()) {
@@ -633,7 +749,7 @@ public final class RoutedGraph {
         }
         ctx.record(EventType.COMPENSATION_COMPLETED, map("steps", done.size()));
         return fail(ctx, path, e instanceof ToolFailure ? TurnError.ErrorClass.TOOL
-            : TurnError.ErrorClass.VALIDATION, e);
+            : e instanceof ToolRefused ? TurnError.ErrorClass.POLICY : TurnError.ErrorClass.VALIDATION, e);
       }
       done.add(new CompletedStep(step, result));
     }

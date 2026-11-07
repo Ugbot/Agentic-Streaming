@@ -21,7 +21,7 @@ class RecoverIncompleteTest {
     Map<String, Object> workflow = Map.of(
         "spec_version", "agentic/v1",
         "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
-            "paths", Map.of("p", Map.of("brain", "rule")), "verifier", Map.of("kind", "none")),
+            "paths", Map.of("p", Map.of("brain", "rule", "tools", List.of("first", "second"))), "verifier", Map.of("kind", "none")),
         "tools", List.of(Map.of("id", "first", "kind", "counting", "effect", "idempotent", "x-world", "recover"),
             Map.of("id", "second", "kind", "counting", "effect", "idempotent", "x-world", "recover")),
         "saga", Map.of("steps", List.of(Map.of("tool", "first"), Map.of("tool", "second"))));

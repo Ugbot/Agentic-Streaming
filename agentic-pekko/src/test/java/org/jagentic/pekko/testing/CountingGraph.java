@@ -90,7 +90,9 @@ public final class CountingGraph {
       }
     };
     RoutedGraph graph = new RoutedGraph(router, paths, null, List.of(guard), List.of(), Policies.DEFAULTS, null,
-        Map.of("approval", "approval"));
+        Map.of("approval", "approval"))
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL)
+        .withApprovers(org.jagentic.core.Approvers.ofRoles("approver"));
     return new AgentDeps(graph, tools, new Retrieval.TwoTierRetriever(new Retrieval.InMemoryHotVectorIndex(), null, 4, 4));
   }
 }

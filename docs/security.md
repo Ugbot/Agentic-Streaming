@@ -1,49 +1,162 @@
 # Security model
 
 This page states what the code does today, including where it does nothing. The project is
-experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments:
-the effect journal below stops repeated calls, but nothing here authenticates who asked for one.**
+experimental and has had no outside security review. **Do not expose it to untrusted callers, and do
+not use it for real payments.**
 
-## The canonical path has no authentication
+## Who is calling
 
-The canonical path is the `agentic/v1` runtimes: `WorkflowTurnFunction` on Flink, `LocalRuntime` in
-the Java and Python cores, and the Pekko entity.
+An event can carry a `Principal` (`subject`, `tenant`, `roles`, `issuer`). Beside one, `user_id` means
+nothing: the turn runs as the principal, and it is recorded on `turn_received`, `tool_intent` and
+`tool_refused`. Whatever delivers the event vouches for it, so **anyone who can write to the input
+topic can claim any principal**. Keep that topic to trusted producers.
 
-- None of them authenticates a caller. There is no principal in `AgentContext`: `user_id` is a string
-  the event carries, and nothing checks it.
-- The Pekko HTTP front door has no authentication. `POST /agent` runs a turn, and
-  `GET /conversations/{id}` returns the whole event log, tool results included, to anyone who can
-  reach the port. `HttpMain` binds `0.0.0.0` unless `AGENTIC_PEKKO_HTTP_HOST` says otherwise. Set it
-  to `127.0.0.1` on any machine you do not fully control.
+Only an authenticated principal named by `policies.approvers` can resume a suspended turn or settle
+an unknown outcome. Nobody can if the block is absent. A refused signal is `signal_refused` on the log
+and changes nothing. A resumed turn keeps the principal that started it, and the approver is recorded
+apart. The fixtures `principal-on-the-log` to `wrong-tenant-turn` prove this on all five runtimes.
+
 - The Flink JobManager REST API in `docker-compose-session.yml` has no authentication and accepts jar
   uploads and job submission. It is published on `127.0.0.1` only and must never be exposed beyond
   the host.
 
-The bearer-token model that earlier versions of this page described belonged to the A2A gateway and
-the tool services, which have moved out of this repository.
+## The gateway
 
-## The tool allowlist is only enforced in `LlmBrain`
+`agentic-gateway` is the one HTTP front door. The Pekko routes are gone. It serves `POST /agent` (run a
+turn), `GET /conversations/{id}` (read the log) and `POST /conversations/{id}/turns/{turn}/resume`
+(answer a suspended turn), and it runs in front of Flink over Kafka (`GatewayMain`), Pekko (`HttpMain`)
+or a `LocalRuntime`. `GET /healthz` and the Agent Card are the only routes open without a token.
+Python has no HTTP front door.
 
-A path's `tools` list is checked in one place: the LLM brain (`LlmBrain` in `ports/jagentic-core`,
-the scripted LLM path of `ports/pyagentic/agentic/engine.py` in Python). It is not checked at the
-tool boundary, so it is not a security control:
+**It fails closed.** With no authentication configured it does not start. It binds `127.0.0.1` unless
+`AGENTIC_GATEWAY_HOST` says otherwise, and it speaks plain HTTP, so it refuses any other address
+unless you also set `AGENTIC_GATEWAY_BEHIND_TLS_PROXY=true`.
 
-- The rule brain ignores `tools` entirely. A `tool_triggers` entry can run a tool the path does not
-  list.
-- `tools: []` means allow all, in both cores.
-- Timer, CEP and saga calls bypass the check.
-- Outside scripted mode, a refused tool is fed back to the model, which may try again.
+**TLS.** Terminate it in front of the gateway, with a reverse proxy or a mesh sidecar on the same host
+or network segment, and bind the gateway to an address only that proxy can reach. The gateway does not
+read `X-Forwarded-*`, so nothing a proxy passes on changes who it thinks is calling.
+
+**Authentication.** A bearer token on every call:
+
+| Setting | Meaning |
+| --- | --- |
+| `AGENTIC_OIDC_ISSUER` | the exact `iss`. Setting it selects OIDC |
+| `AGENTIC_OIDC_AUDIENCE` | the `aud` a token must name. Required |
+| `AGENTIC_OIDC_JWKS_URL` | default `<issuer>/protocol/openid-connect/certs` |
+| `AGENTIC_OIDC_TENANT_CLAIM` | default `tenant` |
+| `AGENTIC_OIDC_ROLES_CLAIM` | default `realm_access.roles`, dotted for a nested claim |
+| `AGENTIC_GATEWAY_STATIC_TOKENS` | `token=subject\|tenant\|role,role;...`, local development only. Needs `AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true`, works on loopback only, and refuses a token under 16 characters |
+| `AGENTIC_GATEWAY_READER_ROLES` | roles that may read any conversation of their tenant |
+
+A token is checked against the issuer's JWKS, then for issuer, audience, expiry and not-before. Only
+RS256, PS256 and ES256 are accepted, so `alg: none` and an HMAC made with the public key both fail.
+`OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403.
+
+**A request body cannot say who is calling.** `user_id`, `principal` and `tenant` in a body are not
+read. The principal comes from the token.
+
+**Tenancy.** The runtime's conversation key is `<tenant>/<conversation_id>`, each part encoded, so
+another tenant cannot name a conversation at all. Within a tenant, only the subject that started a
+conversation can add a turn or read it, and a reader role can read it. Everyone else gets the 404 that
+a conversation with no turns gets, every read.
+
+**Approvals.** A resume comes with the approver's token, and the runtime checks it against
+`policies.approvers`. A refusal is a 403 and `signal_refused` on the log.
+
+**In front of Flink** the gateway writes turns to the input topic with the verified principal and
+reads answers from the results topic. A conversation is read from that topic, so it shows no further
+back than the topic's retention, and an answer the job does not give in time is a 504: redeliver the
+same `turn_id`. Anything else that can write the input topic can claim any principal.
+`GatewayOverFlinkTest` proves the path over a real Flink job, through a stop-with-savepoint, using the
+in-process session in place of topics. `KafkaBackend` itself is proved against Kafka's mock client.
+
+## The tool boundary
+
+Every tool call passes one deny-by-default check in `AgentContext.invoke` (the Java core, so Flink and
+Pekko too) and `Engine._invoke` (Python), whether a brain, a saga, a timer or a CEP pattern asked for
+it. `spec/v1/primitives.md`, section 11, is the rule. The conformance fixtures `rule-tool-outside-path`
+to `refusal-survives-a-crash` prove it on the reference, Java core, Flink, Pekko and Python runtimes.
+
+- A path gets what its `tools` lists and nothing else. `tools: []` means none, and so does leaving it
+  out. `tool_triggers`, saga steps and timers name a tool; they do not grant it.
+- Timers and CEP patterns run outside any path, so what they may call is `policies.unattended_tools`.
+- A refused call is recorded as `tool_refused` and ends the turn with class `policy`. It is not
+  offered back to the model.
+- Java code that builds a `RoutedGraph` itself has to give it a `ToolPolicy`. Without one every call
+  is refused. `ToolPolicy.ALLOW_ALL` exists for such code and a document cannot reach it.
+
+## Open Policy Agent
+
+Set `AGENTIC_OPA_URL` and every tool call the document allows is also put to OPA, in Java and Python
+alike. `ToolPolicy` is the SPI, so another engine is one class. OPA runs after the document and can
+only narrow it: a call the document refuses never leaves the process.
+
+The input is `{tool, origin, path, effect, principal, args}`, so tool arguments reach OPA. The answer
+at `AGENTIC_OPA_POLICY` (default `agentic/tools`) is a boolean, or an object with `allow` and
+optionally `reason`. Anything but a clear yes refuses the call: an OPA that is down, slow past
+`AGENTIC_OPA_TIMEOUT_MS` (default 2000), undefined or confused. So an OPA outage stops every tool.
+
+A call already begun is not asked about again, so a re-run of a turn takes the path the first run took
+even if the policy has changed since.
+
+`examples/compose/opa-lab.yml` is a lab with a sample policy, and `tools/opa-lab.sh` runs the Python
+core against it. `tools/keycloak-lab.sh` does the same for the gateway against a real Keycloak.
 
 ## Workflow documents are trusted input
 
-Treat a workflow document or `pipeline.yaml` as code. `mcp[].command` starts a process when the
-document is built, with environment expansion on its arguments. Load only documents you wrote or
-reviewed.
+Treat a workflow document or `pipeline.yaml` as code, and load only documents you wrote or reviewed.
+It chooses the tools, the URLs and the policy, and validation does not make a hostile one safe.
 
-## Input guardrails
+`mcp[].command` starts a process when the document is built. It starts only if the operator listed it
+in `AGENTIC_MCP_ALLOWED_COMMANDS` (system property `agentic.mcp.allowed_commands`), and with no list
+nothing starts. Entries are separated by `;`, and each is a command with the arguments it must start
+with, matched word for word after environment expansion: `python3 examples/pipelines/mcp_util_server.py`
+allows that script and not `python3 -c ...`. A bare `python3` allows whatever Python will run. On Flink
+the list is read on the TaskManager.
 
-Guardrails are regular expressions and classifiers you configure. The examples use one regex over
-user text. Tool results and retrieved text are not checked. This is not a prompt-injection defence.
+## Prompt injection
+
+**The defence is the tool policy, not a filter.** Guardrails are regular expressions and classifiers
+you configure. They see user text and the final reply, and they will not stop an injection: nothing
+here can stop a model being talked into asking for something. What holds is that asking is not
+enough.
+
+- A tool the path does not list is refused, whatever the model read. `injected-text-cannot-reach-a-denied-tool`
+  proves this on all five runtimes with a model that obeys the tool result, and `InjectionTest` and
+  `test_an_injected_call_to_a_denied_tool_is_refused...` prove it through the real loop.
+- `policies.tool_approval: {effects: [non_idempotent]}` puts a person in front of those tools. The
+  turn suspends before the call and an approver answers `approved` true or false, which is
+  `injected-text-reaches-the-human-gate`. A timer or a CEP pattern has nobody to ask, so such a tool is
+  refused there. Without this block an allowed tool runs when a model asks for it, injected or not.
+- Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
+  the system prompt says what that means. This helps a model. It is not a boundary.
+
+Left out: the LLM brain puts no retrieved text in a prompt, so nothing marks it there. A custom brain
+that does should use `Untrusted.mark`, or `agentic.untrusted.mark` in Python. A reply can still repeat
+what a tool said, and a path's own allowed tools can still be misused within what they allow, so give
+a path the fewest tools that will do.
+
+## Limits
+
+`policies.limits` sets per-principal `turns_per_minute`, `tokens_per_day`, `cost_per_day` with
+`cost_per_1k_tokens`, and `tool_calls_per_day` by tool. A limit that is hit is `limit_exceeded` on the
+log, the turn ends with class `policy`, and the gateway answers 429. `spec/v1/primitives.md`, section
+11, has the rules, and the fixtures `turn-rate-limit` to `redelivery-is-not-a-new-turn` prove them on
+all five runtimes.
+
+**The kill switch** stops every turn, tool call and model call. `kill_switch: true` in the document
+does it for one workflow. `AGENTIC_KILL_SWITCH=true`, or creating the file `AGENTIC_KILL_SWITCH_FILE`
+names, does it for a runtime, and the file takes effect on the next turn or call with no restart.
+On Flink the file must be visible to every TaskManager.
+
+Three things to know:
+
+- **The counters are in memory.** They are per process and a restart clears them. On Flink that means
+  per subtask, so with parallelism 4 one principal can get up to four times a limit, across
+  conversations on different subtasks. A limit here slows a principal down. It is not a hard ceiling.
+- **Tokens are an estimate,** four characters each. The clients read no provider usage, so a budget is
+  not what the provider will bill.
+- A turn stopped by a limit is spent, so retry with a new `turn_id`.
 
 ## Effects
 
@@ -58,11 +171,10 @@ The key is a SHA-256 of the conversation id, turn id and call index, so it leaks
   for a peer, whose client retries are switched off, and an MCP server.
 - **A crash during a call to a `non_idempotent` tool leaves the outcome unknown.** The journal cannot
   tell whether the effect landed. The call is not repeated: the turn suspends with `unknown_outcome`
-  and a person answers with a signal. Treat that person's answer as privileged, because
-  `not_applied` makes the call again. Nothing yet checks who sent it; the sender is recorded as
-  `signal_sender` and is not authenticated.
+  and a person answers with a signal. That answer is privileged, because `not_applied` makes the
+  call again, so only an approver can give it.
 - A timeout, a lost connection or an HTTP 5xx from a `non_idempotent` tool is unknown in the same way.
-- The journal holds tool arguments and results in plaintext, as the log does. Protect and expire it
+- Without a key vault the journal holds results in plaintext, as the log does. Protect and expire it
   as you would the log, and keep entries longer than the longest rollback or redelivery you allow.
   An entry dropped sooner re-opens that turn to repeat its calls.
 - A worker that lost its lease can still be running a call while its replacement starts. There is no
@@ -84,9 +196,12 @@ See [Guarantees](../README.md#guarantees) and the [Flink runtime page](runtimes/
 
 ## Egress policy
 
-`org.jagentic.core.net.OutboundUrlPolicy` is in the core and nothing calls it yet. The Flink web
-toolkit that used it is gone. It is there for the first tool that takes a URL from a model. `kind:
-http` tools and A2A peers do not use it: those URLs are operator supplied and are trusted.
+Every `kind: http` and `kind: agent` tool, every A2A peer over HTTP and every model call checks its
+URL before sending anything: `org.jagentic.core.net.Egress` over `OutboundUrlPolicy` in Java,
+`agentic.egress` in Python. The check runs on every call. A refused call is a definite failure,
+`<tool> failed: blocked by egress policy`, so a `non_idempotent` tool does not wait for a person. A
+refused model call fails the turn. The fixtures `egress-metadata-address`, `egress-not-http` and
+`egress-private-address` prove it on all five runtimes.
 
 The policy:
 
@@ -95,13 +210,74 @@ The policy:
 - resolves the host and checks every returned address, not just the first;
 - rejects loopback, link-local, RFC 1918 and other private ranges, the cloud metadata address
   `169.254.169.254`, unspecified and multicast addresses, IPv6 unique-local addresses, and
-  IPv4 addresses embedded in IPv6 (mapped, NAT64 and 6to4 forms);
-- optionally restricts hosts to an allowlist of exact names or `*.suffix` patterns, set with
-  `OutboundUrlPolicy.fromAllowlist(...)`.
+  IPv4 addresses embedded in IPv6 (mapped, NAT64 and 6to4 forms).
 
-A caller must not let its HTTP client follow redirects on its own: validate each location against
-the same policy, and stop after five hops by default. `OutboundUrlPolicy.allowingPrivateAddresses()`
-turns the private-address check off and is for development only.
+**This denies local services by default.** The settings are the operator's, and a document cannot
+change them:
+
+| Setting | Meaning |
+| --- | --- |
+| `AGENTIC_EGRESS_ALLOW_HOSTS` | exact names or `*.suffix`, comma separated. Empty means any public host |
+| `AGENTIC_EGRESS_ALLOW_PRIVATE=true` | turns the private-address check off, for an Ollama or a peer on this network. Pair it with an allowlist |
+
+On Flink these go in the TaskManager's environment. In Java the system properties
+`agentic.egress.allow_hosts` and `agentic.egress.allow_private` do the same.
+
+What it does not cover:
+
+- A check resolves the host and the client resolves it again to connect, so a name that changes
+  between the two gets through.
+- Redirects are not followed at all: a 3xx is a definite failure.
+- `LangChain4jChatClient`, embedders, vector stores and the journal connect to what the operator
+  configured. They do not go through this check.
+
+## Secrets and data
+
+**Per-tool secrets are references.** `tools[].auth: {bearer: env:NAME}` or `file:/path`, and the same on
+`a2a[]`. It is resolved at the moment of the call, so it reaches the wire and nothing else, and a
+document that writes the secret itself is rejected when loaded. A `kind: http` tool, a Java A2A peer and
+the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
+
+**Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are
+always covered: fields such as `password`, `token`, `api_key` and `authorization`, and text shaped like
+a bearer token, an OpenAI or AWS key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
+for personal data. It finds what the patterns describe and nothing else, so it narrows what is recorded
+and does not promise it is clean. The reply the caller receives is not redacted, and neither is a
+results topic's `reply` field.
+
+**Deletion on an immutable log is crypto-shredding.** Set `AGENTIC_KEY_VAULT_DIR` and every conversation
+gets its own AES-256-GCM data key: `text`, `reply`, `args`, `result`, `messages`, `signal`, `error` and
+`reason` are sealed before they reach the log or the journal. To honour a deletion request, run
+`org.jagentic.core.privacy.Erase tenant/subject`. It destroys the keys of every conversation that owner
+started, and those fields read as `[erased]` from then on, with the log still folding. Keys are
+per conversation, so a turn after an erasure gets a new key that cannot open the old data.
+`SealingTest` proves this on the Java core and `WorkflowTurnSealedTest` on Flink, through a restore.
+
+What this leaves out, plainly:
+
+- **Pekko's log and Python are not sealed.** On Pekko only the journal is. Crypto-shredding is the Java
+  core and Flink.
+- **The Flink results and failures topics are not sealed.** A result carries the turn's open events, so a
+  deletion request is not honoured there. Keep those topics on a short retention.
+- **What stays readable:** the owner's identifier, tenant, tool ids, paths, event types and times. That
+  is how ownership works, and it is personal data if a subject is. Use an opaque subject.
+- **A journal intent is a digest of the arguments,** so low-entropy arguments can be guessed from one
+  after an erasure.
+- `FileKeyVault` deletes files, which does not scrub a disk, a snapshot or a backup, and every process
+  needs the same directory. For anything real, implement `KeyVault` over a KMS.
+- Text a person pasted into a turn about someone else is sealed under the conversation's owner, so
+  erasing that other person does not reach it.
+- A Flink checkpoint taken earlier still holds the sealed bytes, which is the point: without the key
+  they do not open.
+
+**Retention.** The rules are per store, and there is no single setting:
+
+| Store | What expires it |
+| --- | --- |
+| Flink keyed state | `runtime.flink.state_ttl_ms`: a conversation idle that long is cleared whole, unless a turn is suspended |
+| Kafka topics, Kafka journal | the topic's `retention.ms`, which the operator sets |
+| Postgres journal, Pekko journal | nothing here: the operator must prune them |
+| Python file log | nothing here |
 
 ## Compose stacks
 
@@ -111,12 +287,17 @@ start until they are set in `.env`. `OPENAI_API_KEY` is only ever read from the 
 
 ## Dependencies
 
-The resolved test-scope trees of `ports/jagentic-core`, the Flink module and `agentic-pekko`, and both
-`uv.lock` files, have no open advisory in [OSV](https://osv.dev) at any severity. Transitive versions
-are pinned in `dependencyManagement`, so read `./mvnw dependency:tree` rather than the declared
-versions. The two `uv.lock` files cover Python 3.10 and later, because the dev tools have no patched
-release for 3.9. The packages still declare `>=3.9`: at runtime they need only PyYAML and jsonschema,
-neither of which has an advisory, but `pip install ".[test]"` on 3.9 gets a pytest with
+`tools/ci/osv_scan.py` checks every resolved dependency against [OSV](https://osv.dev): the Maven
+reactor at test scope, so what the tests run, and both `uv.lock` files. The `Supply chain` workflow
+runs it on every pull request and weekly, and fails on any advisory that is not in
+`tools/ci/osv-allowlist.txt` with a reason. On 2026-11-07 it found 263 packages and no advisory at any
+severity, so the allowlist is empty. The same workflow publishes CycloneDX SBOMs of the reactor and of
+both Python packages. Release signing waits for the first release.
+
+Transitive versions are pinned in `dependencyManagement`, so read `./mvnw dependency:tree` rather than
+the declared versions. The two `uv.lock` files cover Python 3.10 and later, because the dev tools have
+no patched release for 3.9. The packages still declare `>=3.9`: at runtime they need only PyYAML and
+jsonschema, neither of which has an advisory, but `pip install ".[test]"` on 3.9 gets a pytest with
 CVE-2025-71176.
 
 OSV matches coordinates, so it cannot see into a shaded jar. The table below is what that leaves.

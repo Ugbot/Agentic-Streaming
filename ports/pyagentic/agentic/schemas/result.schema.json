@@ -47,7 +47,7 @@
               "verification_failed", "memory_written", "turn_completed", "turn_failed",
               "turn_suspended", "turn_resumed", "timer_scheduled", "timer_fired",
               "compensation_started", "compensation_step", "compensation_completed",
-              "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome"
+              "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome", "tool_refused", "signal_refused", "limit_exceeded"
             ]
           },
           "sequence": { "type": "integer", "minimum": 0 },
@@ -61,7 +61,7 @@
     "error": {
       "type": ["object", "null"],
       "properties": {
-        "class": { "enum": ["validation", "guardrail", "verification", "tool", "transient", "fatal"] },
+        "class": { "enum": ["validation", "guardrail", "verification", "tool", "policy", "transient", "fatal"] },
         "message": { "type": "string" }
       },
       "required": ["class"],

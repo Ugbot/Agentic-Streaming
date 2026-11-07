@@ -195,13 +195,13 @@ class ConversationEntityTest {
     assertEquals(0, graph.brainCalls.get(), "suspending happens before the brain");
 
     rt.passivate(cid);
-    TurnResult resumed = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)));
+    TurnResult resumed = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
     assertEquals(TurnStatus.COMPLETED, resumed.status);
     assertEquals("[approval] refund approved", resumed.reply);
     assertTrue(resumed.events.stream().anyMatch(e -> e.is(EventType.TURN_RESUMED)));
     assertTrue(rt.state(cid).suspendedTurnIds().isEmpty());
 
-    TurnResult dup = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)));
+    TurnResult dup = rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
     assertEquals(TurnStatus.DUPLICATE, dup.status, "a second signal for a completed turn is a duplicate");
     assertEquals(1, graph.brainCalls.get());
   }

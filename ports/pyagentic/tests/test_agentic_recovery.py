@@ -21,6 +21,8 @@ from agentic.runtime import LocalRuntime
 from agentic.tools import Delegation, idempotency_key
 from agentic.workflow_timers import ManualClock
 
+OPS = {"subject": "ops", "roles": ["approver"]}
+
 
 def rid(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
@@ -36,7 +38,7 @@ def crash(rt: LocalRuntime, delivery: Any, **plan: Any) -> LocalRuntime:
 
 
 def pay_agent(fn: Any, effect: str = "non_idempotent", **path: Any) -> Any:
-    return (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}, **path).use_tool("pay", fn, effect=effect)
+    return (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"}, **path).use_tool("pay", fn, effect=effect)
             .verifier("none").build())
 
 
@@ -52,7 +54,7 @@ def test_a_function_tool_sees_its_key_and_every_attempt_carries_the_same_one():
             raise ToolError("try again")
         return "ok"
 
-    agent = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="idempotent")
+    agent = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="idempotent")
              .verifier("none"))
     spec = agent.policies(retry={"kind": "fixed", "max_attempts": 2, "initial_delay_ms": 0}).build()
     rt = LocalRuntime()
@@ -69,7 +71,7 @@ def test_a_peer_is_passed_the_key():
         seen.append(delegation)
         return "done"
 
-    spec = (Agent(rid("a")).path("main", tool_triggers={"ask": "expert"}).use_peer("expert", peer)
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["expert"], tool_triggers={"ask": "expert"}).use_peer("expert", peer)
             .verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -84,7 +86,7 @@ def test_non_idempotent_gets_one_attempt_whatever_the_retry_policy():
         calls.append(user)
         raise ValueError("declined")
 
-    agent = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="non_idempotent")
+    agent = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="non_idempotent")
              .verifier("none"))
     spec = agent.policies(retry={"kind": "fixed", "max_attempts": 5, "initial_delay_ms": 0}).build()
     rt = LocalRuntime()
@@ -95,7 +97,7 @@ def test_non_idempotent_gets_one_attempt_whatever_the_retry_policy():
 
 def test_a_function_that_times_out_is_unknown_and_one_that_raises_is_not():
     release = threading.Event()
-    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"})
+    agent = Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"})
     agent.use_tool("pay", lambda user: release.wait(5), effect="non_idempotent", timeout_ms=20)
     rt = LocalRuntime()
     rt.deploy(agent.verifier("none").build())
@@ -142,7 +144,7 @@ def test_building_a_turn_with_no_id_still_raises():
 # -- stores ----------------------------------------------------------------------------
 
 def declared(effects: Optional[Dict[str, Any]], **conversation: Any) -> Dict[str, Any]:
-    doc = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).tool("pay", "constant", value="ok", effect="read")
+    doc = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).tool("pay", "constant", value="ok", effect="read")
            .verifier("none").build().document)
     stores: Dict[str, Any] = dict(doc.get("stores") or {})
     if effects is not None:
@@ -269,7 +271,7 @@ def test_a_journal_that_lost_a_call_the_log_kept_is_not_a_first_call():
     fresh.deploy(_Deployable(spec, rt.bindings))
     result = fresh.submit(Turn("c1", "t1", "pay"))
     assert (result["status"], len(calls)) == ("suspended", 1)
-    resolved = fresh.submit(Turn("c1", "t1", signal={"resolution": "applied", "result": "landed"}))
+    resolved = fresh.submit(Turn("c1", "t1", principal=OPS, signal={"resolution": "applied", "result": "landed"}))
     assert resolved["status"] == "completed" and resolved["reply"] == "[main] pay returned landed"
 
 
@@ -281,7 +283,7 @@ def test_a_crash_during_an_approved_call_is_unknown_again_and_not_a_third_call()
     rt.deploy(pay_agent(lambda user: calls.append(user) or "ok"))
     rt = crash(rt, Turn("c1", "t1", "pay"), call="pay", when="during")
     assert rt.submit(Turn("c1", "t1", "pay"))["status"] == "suspended"
-    rt = crash(rt, Turn("c1", "t1", signal={"resolution": "not_applied"}), call="pay", when="during")
+    rt = crash(rt, Turn("c1", "t1", principal=OPS, signal={"resolution": "not_applied"}), call="pay", when="during")
     assert len(calls) == 2
     result = rt.submit(Turn("c1", "t1", "pay"))
     assert (result["status"], len(calls)) == ("suspended", 2)
@@ -300,13 +302,13 @@ def test_a_second_unknown_at_the_same_index_reaches_the_log():
     rt = LocalRuntime()
     rt.deploy(pay_agent(pay))
     assert rt.submit(Turn("c1", "t1", "pay"))["status"] == "suspended"
-    again = rt.submit(Turn("c1", "t1", signal={"resolution": "not_applied"}))
+    again = rt.submit(Turn("c1", "t1", principal=OPS, signal={"resolution": "not_applied"}))
     assert again["status"] == "suspended"
     assert [e["type"] for e in again["events"]] == ["turn_resumed", "unknown_outcome", "turn_suspended"]
     types = [e.type for e in rt.events("c1")]
     assert types.count("turn_suspended") == 2 and types.count("unknown_outcome") == 2
     assert rt.engine is not None and rt.engine.suspended_turns("c1") == ["t1"]
-    done = rt.submit(Turn("c1", "t1", signal={"resolution": "not_applied"}))
+    done = rt.submit(Turn("c1", "t1", principal=OPS, signal={"resolution": "not_applied"}))
     assert (done["status"], done["reply"], len(attempts)) == ("completed", "[main] pay returned landed", 3)
 
 
@@ -316,9 +318,9 @@ def test_a_redelivered_resolution_finds_the_first_answer_standing():
     rt.deploy(pay_agent(lambda user: calls.append(user) or "ok"))
     rt = crash(rt, Turn("c1", "t1", "pay"), call="pay", when="during")
     rt.submit(Turn("c1", "t1", "pay"))
-    rt = crash(rt, Turn("c1", "t1", signal={"resolution": "applied", "result": "first"}),
+    rt = crash(rt, Turn("c1", "t1", principal=OPS, signal={"resolution": "applied", "result": "first"}),
                event="turn_resumed", when="before")
-    result = rt.submit(Turn("c1", "t1", signal={"resolution": "not_applied"}))
+    result = rt.submit(Turn("c1", "t1", principal=OPS, signal={"resolution": "not_applied"}))
     assert (result["status"], result["reply"], len(calls)) == ("completed", "[main] pay returned first", 1)
 
 
@@ -328,7 +330,7 @@ def test_a_bad_resolution_is_refused_even_after_a_good_one_was_journaled():
     rt = crash(rt, Turn("c1", "t1", "pay"), call="pay", when="during")
     rt.submit(Turn("c1", "t1", "pay"))
     before = len(rt.events("c1"))
-    result = rt.submit(Turn("c1", "t1", signal={"resolution": "maybe"}))
+    result = rt.submit(Turn("c1", "t1", principal=OPS, signal={"resolution": "maybe"}))
     assert (result["status"], result["error"]["class"]) == ("failed", "validation")
     assert len(rt.events("c1")) == before
 
@@ -336,7 +338,7 @@ def test_a_bad_resolution_is_refused_even_after_a_good_one_was_journaled():
 # -- runs that end transient -----------------------------------------------------------
 
 def model_pay_agent(fn: Any, effect: str = "non_idempotent") -> Any:
-    agent = (Agent(rid("a")).path("main", brain="llm", tools=["pay"]).use_tool("pay", fn, effect=effect)
+    agent = (Agent(rid("a")).approvers(roles=["approver"]).path("main", brain="llm", tools=["pay"]).use_tool("pay", fn, effect=effect)
              .with_llm("stub", script=[{"tool": "pay", "args": {}}, {"text": "paid", "x-fail-attempts": 1}]))
     return agent.verifier("none").build()
 
@@ -379,7 +381,7 @@ def test_a_duplicate_after_a_rerun_answers_with_the_run_that_finished():
 def test_a_re_run_sees_the_timers_the_first_run_saw_however_late_it_is():
     clock = ManualClock()
     calls: List[str] = []
-    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", lambda user: calls.append(user) or "ok")
+    agent = Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).use_tool("pay", lambda user: calls.append(user) or "ok")
     agent.tool("nudge", "constant", value="sent")
     agent.extension("x-note", "a timer that comes due between the crash and the redelivery")
     doc = {**agent.verifier("none").build().document,
@@ -397,8 +399,8 @@ def test_a_re_run_sees_the_timers_the_first_run_saw_however_late_it_is():
 
 
 def test_a_turn_replayed_after_others_arrived_matches_cep_as_it_did():
-    agent = Agent(rid("a")).path("main", x_suspend_until="approval").tool("alert", "constant", value="sent")
-    doc = {**agent.verifier("none").build().document,
+    agent = Agent(rid("a")).approvers(roles=["approver"]).path("main", x_suspend_until="approval").tool("alert", "constant", value="sent")
+    doc = {**agent.verifier("none").build().document, "policies": {"unattended_tools": ["alert"], "approvers": {"roles": ["approver"]}},
            "cep": [{"name": "two", "pattern": [{"where": {"text_contains": "one"}}, {"where": {"text_contains": "two"}}],
                     "on_match": {"kind": "tool", "tool": "alert"}}]}
     rt = LocalRuntime()
@@ -407,7 +409,7 @@ def test_a_turn_replayed_after_others_arrived_matches_cep_as_it_did():
     held = rt.submit(Turn("c1", "t2", "two"))
     assert [c["tool"] for c in held["tool_calls"]] == ["alert"]
     assert rt.submit(Turn("c1", "t3", "anything"))["status"] == "suspended"
-    done = rt.submit(Turn("c1", "t2", signal={"kind": "approval"}))
+    done = rt.submit(Turn("c1", "t2", principal=OPS, signal={"kind": "approval"}))
     assert [(c["tool"], c["index"]) for c in done["tool_calls"]] == [("alert", 0)]
 
 
@@ -415,8 +417,8 @@ def test_a_turn_replayed_after_others_arrived_matches_cep_as_it_did():
 
 def test_recover_incomplete_finishes_partial_turns_and_leaves_the_rest_alone():
     calls: List[str] = []
-    agent = Agent(rid("a")).route(rules={"hold": ["hold"]}, default="main")
-    agent.path("main", tool_triggers={"pay": "pay"}).path("hold", suspend_until="approval")
+    agent = Agent(rid("a")).approvers(roles=["approver"]).route(rules={"hold": ["hold"]}, default="main")
+    agent.path("main", tools=["pay"], tool_triggers={"pay": "pay"}).path("hold", suspend_until="approval")
     agent.use_tool("pay", lambda user: calls.append(user) or "ok")
     rt = LocalRuntime()
     rt.deploy(agent.verifier("none").build())
@@ -425,7 +427,7 @@ def test_recover_incomplete_finishes_partial_turns_and_leaves_the_rest_alone():
     assert (done["status"], held["status"]) == ("completed", "suspended")
     rt = crash(rt, Turn("c-partial", "t1", "pay", "bob", metadata={"source": "web"}), call="pay", when="after")
     rt = crash(rt, Turn("c-resumed", "t1", "hold"), event="turn_suspended", when="after")
-    rt = crash(rt, Turn("c-resumed", "t1", signal={"kind": "approval"}), event="turn_resumed", when="after")
+    rt = crash(rt, Turn("c-resumed", "t1", principal=OPS, signal={"kind": "approval"}), event="turn_resumed", when="after")
     results = {r["conversation_id"]: r for r in rt.recover_incomplete()}
     assert set(results) == {"c-partial", "c-resumed"}
     assert results["c-partial"]["status"] == "completed"

@@ -1,6 +1,5 @@
 id: argument-schema
-description: Arguments that fail the tool's parameters schema fail the turn with class validation, and nothing reaches
-  the tool.
+description: Arguments that fail the tool's parameters schema fail the turn with class validation, and nothing reaches the tool.
 requires: [structured_tool_args, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - id: pay

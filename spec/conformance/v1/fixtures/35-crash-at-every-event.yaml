@@ -1,7 +1,5 @@
 id: crash-at-every-event
-description: 'A crash before or after any event of a tool turn, then redelivery. The turn ends as if nothing had
-  happened: one effect under the key, one turn counted, and the whole event sequence. After the terminal event a
-  log that rolled back runs the turn again and one that did not answers duplicate; the reply is the same.'
+description: 'A crash before or after any event of a tool turn, then redelivery. The turn ends as if nothing had happened: one effect under the key, one turn counted, and the whole event sequence. After the terminal event a log that rolled back runs the turn again and one that did not answers duplicate; the reply is the same.'
 requires: [crash_recovery, effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -18,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

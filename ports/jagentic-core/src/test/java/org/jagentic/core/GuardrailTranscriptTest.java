@@ -44,7 +44,8 @@ class GuardrailTranscriptTest {
     RoutedGraph graph = new RoutedGraph((e, c) -> "general",
         Map.of("general", new Agent("general", "g", brain)),
         (reply, ctx) -> new RoutedGraph.Verifier.Result(true, reply),
-        List.of(new RegexGuardrail(List.of("\\d{4}"), reason, true)), List.of());
+        List.of(new RegexGuardrail(List.of("\\d{4}"), reason, true)), List.of())
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL);
     ConversationStore store = new ConversationStore.InMemory();
     LocalRuntime rt = new LocalRuntime(graph, store, new KeyedStateStore.InMemory(),
         Banking.defaultTools(), Banking.retriever());

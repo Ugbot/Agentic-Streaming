@@ -168,7 +168,9 @@ class LocalWorkflowSessionTest {
       s.restart();
 
       TurnResult done =
-          s.submit(Event.resume(cid, tid, Map.of("kind", "approval", "approved", true)));
+          s.submit(
+              Event.resume(cid, tid, Map.of("kind", "approval", "approved", true))
+                  .withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver")));
       assertEquals(TurnStatus.COMPLETED, done.status);
       List<String> after = types(done);
       assertTrue(after.contains(EventType.TURN_RESUMED.wire()), after.toString());

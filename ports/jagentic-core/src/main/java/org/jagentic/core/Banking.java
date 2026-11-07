@@ -3,6 +3,7 @@ package org.jagentic.core;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The banking {@code router -> path -> verifier} worked example, engine-agnostic and
@@ -73,7 +74,8 @@ public final class Banking {
     RoutedGraph.Verifier verifier =
         (reply, ctx) -> new RoutedGraph.Verifier.Result(
             reply != null && reply.startsWith("["), reply);
-    return new RoutedGraph(Banking::router, paths, verifier);
+    return new RoutedGraph(Banking::router, paths, verifier).withToolPolicy(
+        ToolPolicy.of(Map.of("payments", Set.of("get_balance")), Set.of()));
   }
 
   public static ToolRegistry defaultTools() {

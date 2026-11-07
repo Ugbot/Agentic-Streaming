@@ -78,7 +78,7 @@ public final class WorkflowTimers {
       ctx.record(EventType.TIMER_FIRED, payload);
       TimerSpec spec = find(timers, p.timerId());
       if (spec != null && spec.tool() != null) {
-        ctx.callTool(spec.tool(), new LinkedHashMap<>(spec.payload()));
+        ctx.callAs(ToolOrigin.TIMER, spec.tool(), new LinkedHashMap<>(spec.payload()));
       }
     }
   }

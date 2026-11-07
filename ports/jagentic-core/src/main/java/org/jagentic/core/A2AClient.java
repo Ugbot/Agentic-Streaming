@@ -19,11 +19,18 @@ public final class A2AClient {
 
   private final String base;
   private final int retries;
+  private final String bearer; // a reference; resolved on each call
   private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
   public A2AClient(String baseUrl, int retries) {
+    this(baseUrl, retries, null);
+  }
+
+  /** @param bearer a secret reference for the peer's gateway ({@link Secrets}), or null */
+  public A2AClient(String baseUrl, int retries, String bearer) {
     this.base = baseUrl.replaceAll("/+$", "");
     this.retries = Math.max(0, retries);
+    this.bearer = bearer;
   }
 
   @SuppressWarnings("unchecked")
@@ -45,15 +52,20 @@ public final class A2AClient {
   /** As above under {@code idempotencyKey}, the same on every retry so the peer can deduplicate. */
   @SuppressWarnings("unchecked")
   public Map<String, Object> send(String conversationId, String text, String userId, String idempotencyKey) {
+    org.jagentic.core.net.Egress.check(base);
     Exception last = null;
     for (int attempt = 0; attempt <= retries; attempt++) {
       try {
         String body = MAPPER.writeValueAsString(
             Map.of("conversation_id", conversationId, "text", text, "user_id", userId));
-        HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(base + "/agent"))
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(base + "/agent"))
             .header("Content-Type", "application/json").header("Idempotency-Key", idempotencyKey)
             .timeout(Duration.ofSeconds(30))
-            .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+            .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (bearer != null) {
+          request.header("Authorization", "Bearer " + Secrets.resolve(bearer));
+        }
+        HttpResponse<String> r = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
         if (r.statusCode() >= 500) {
           throw new java.io.IOException("HTTP " + r.statusCode());
         }
@@ -77,7 +89,13 @@ public final class A2AClient {
   /** A ToolRegistry tool that delegates a turn to a peer agent. */
   public static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> peerTool(
       String baseUrl, int retries) {
-    A2AClient client = new A2AClient(baseUrl, retries);
+    return peerTool(baseUrl, retries, null);
+  }
+
+  /** As above, authenticating with the secret {@code bearer} refers to. */
+  public static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> peerTool(
+      String baseUrl, int retries, String bearer) {
+    A2AClient client = new A2AClient(baseUrl, retries, bearer);
     return (params, call) -> client.send(
         String.valueOf(params.getOrDefault("conversation_id", call.conversationId())),
         String.valueOf(params.getOrDefault("text", "")),

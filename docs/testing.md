@@ -16,6 +16,7 @@ order. The default surefire run executes the `*Test.java` classes of each module
 ./mvnw test                                     # the Flink framework (root module) alone
 ./mvnw -f ports/jagentic-core/pom.xml test      # shared JVM core
 ./mvnw -f agentic-pekko/pom.xml test            # Pekko runtime
+./mvnw -f agentic-gateway/pom.xml test          # the HTTP front door
 ```
 
 `-Dtest` replaces surefire's include patterns rather than narrowing them, so a pattern made

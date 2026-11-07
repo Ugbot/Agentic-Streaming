@@ -92,6 +92,7 @@ class EffectJournalAttackTest {
         new KeyedStateStore.InMemory(), tools, null, new ConversationLog.InMemory(), Policies.DEFAULTS);
     ctx.journal = journal;
     ctx.journalScope = scope;
+    ctx.policy = ToolPolicy.ALLOW_ALL;
     return ctx;
   }
 
@@ -210,7 +211,7 @@ class EffectJournalAttackTest {
     return Map.of(
         "spec_version", "agentic/v1",
         "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
-            "paths", Map.of("p", Map.of("brain", "rule", "tool_triggers", Map.of(trigger, "pay"))),
+            "paths", Map.of("p", Map.of("brain", "rule", "tools", List.of("pay"), "tool_triggers", Map.of(trigger, "pay"))),
             "verifier", Map.of("kind", "none")),
         "tools", List.of(Map.of("id", "pay", "kind", "counting", "effect", "non_idempotent", "x-world", world)));
   }
@@ -275,7 +276,8 @@ class EffectJournalAttackTest {
     Map<String, Object> workflow = Map.of(
         "spec_version", "agentic/v1",
         "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
-            "paths", Map.of("p", Map.of("brain", "rule")), "verifier", Map.of("kind", "none")),
+            "paths", Map.of("p", Map.of("brain", "rule", "tools", List.of("reserve", "post", "release"))),
+            "verifier", Map.of("kind", "none")),
         "tools", List.of(
             Map.of("id", "reserve", "kind", "counting", "effect", "idempotent", "compensation", "release",
                 "x-world", "saga-outage"),
@@ -463,7 +465,7 @@ class EffectJournalAttackTest {
     GraphBuilder.Built built = GraphBuilder.build(workflow("pay", "resolve-" + System.nanoTime()), null);
     ConversationLog log = new ConversationLog.InMemory();
     Flaky journal = new Flaky();
-    LocalRuntime dying = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+    LocalRuntime dying = new LocalRuntime(built.graph().withApprovers(Approvers.ofRoles("approver")), new ConversationStore.InMemory(),
         new KeyedStateStore.InMemory(), built.tools(), null, log).withJournal(journal)
         .withProbe(new TurnProbe() {
           private static final long serialVersionUID = 1L;
@@ -474,13 +476,14 @@ class EffectJournalAttackTest {
           }
         });
     assertThrows(Died.class, () -> dying.submit(Event.turn("c", "t", "u", "pay now")));
-    LocalRuntime rt = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+    LocalRuntime rt = new LocalRuntime(built.graph().withApprovers(Approvers.ofRoles("approver")),
+        new ConversationStore.InMemory(),
         new KeyedStateStore.InMemory(), built.tools(), null, log).withJournal(journal);
     assertEquals(TurnStatus.SUSPENDED, rt.submit(Event.turn("c", "t", "u", "pay now")).status);
     long before = log.events("c").size();
     journal.refuseRead.set(true);
     assertThrows(EffectJournal.Unavailable.class,
-        () -> rt.submit(Event.resume("c", "t", Map.of("resolution", "not_applied"))));
+        () -> rt.submit(Event.resume("c", "t", Map.of("resolution", "not_applied")).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"))));
     assertEquals(before, log.events("c").size());
   }
 
@@ -522,7 +525,7 @@ class EffectJournalAttackTest {
       Map<String, Object> workflow = Map.of(
           "spec_version", "agentic/v1",
           "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
-              "paths", Map.of("p", Map.of("brain", "rule", "tool_triggers", Map.of("ask", "peer"))),
+              "paths", Map.of("p", Map.of("brain", "rule", "tools", List.of("peer"), "tool_triggers", Map.of("ask", "peer"))),
               "verifier", Map.of("kind", "none")),
           "a2a", List.of(Map.of("name", "peer", "transport", "http",
               "url", "http://127.0.0.1:" + peer.getAddress().getPort())));
@@ -548,8 +551,9 @@ class EffectJournalAttackTest {
     Map<String, Object> workflow = Map.of(
         "spec_version", "agentic/v1",
         "timers", List.of(Map.of("id", "nudge", "after_ms", 1000, "tool", "note")),
+        "policies", Map.of("unattended_tools", List.of("note")),
         "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
-            "paths", Map.of("p", Map.of("brain", "rule", "tool_triggers", Map.of("pay", "pay"))),
+            "paths", Map.of("p", Map.of("brain", "rule", "tools", List.of("pay"), "tool_triggers", Map.of("pay", "pay"))),
             "verifier", Map.of("kind", "none")),
         "tools", List.of(
             Map.of("id", "pay", "kind", "counting", "effect", "non_idempotent", "x-world", world),

@@ -164,7 +164,7 @@ class RedisJournalIT {
     String cid = rnd("c");
     String t1 = rnd("t");
     String timerId = rnd("timer");
-    Event fire = Event.resume(cid, t1, Map.of("kind", "approval", "approved", true, "via", "timer"));
+    Event fire = Event.resume(cid, t1, Map.of("kind", "approval", "approved", true, "via", "timer")).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"));
     CountingGraph first = new CountingGraph();
     try (PekkoSystem sys = boot(first, prefix)) {
       PekkoRuntime rt = new PekkoRuntime(sys.system(), Duration.ofSeconds(20));
@@ -188,7 +188,7 @@ class RedisJournalIT {
       assertTrue(events.stream().anyMatch(e -> e.is(EventType.TURN_COMPLETED)));
       assertEquals(1, second.brainCalls.get(), "only the resumed turn runs a brain, not recovery");
 
-      assertEquals(TurnStatus.DUPLICATE, rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true))).status);
+      assertEquals(TurnStatus.DUPLICATE, rt.submit(Event.resume(cid, t1, Map.of("kind", "approval", "approved", true)).withPrincipal(org.jagentic.core.Principal.of("ops", null, "approver"))).status);
       assertTrue(rt.scheduleTimer(cid, timerId, Duration.ZERO, fire).alreadyScheduled());
     }
 

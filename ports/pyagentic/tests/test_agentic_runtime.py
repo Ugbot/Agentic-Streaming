@@ -27,6 +27,8 @@ from agentic.events import EVENT_TYPES, FileEventLog, InMemoryEventLog, reduce_s
 from agentic.ir import validate_result
 from agentic.runtime import CAPABILITIES, CAPABILITY_VALUES, LocalRuntime, required_capabilities, unregister_runtime
 
+OPS = {"subject": "ops", "roles": ["approver"]}
+
 
 def rid(prefix: str = "id") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
@@ -161,7 +163,7 @@ def test_event_types_are_closed_and_sequences_dense():
     with pytest.raises(ValidationError, match="closed set"):
         log.append(cid, "t1", "made_up_event", {}, 0)
     assert [e.sequence for e in log.read(cid)] == [0, 1, 2, 3, 4]
-    assert len(EVENT_TYPES) == 24
+    assert len(EVENT_TYPES) == 27
 
 
 def test_state_is_a_fold_over_the_log():
@@ -205,7 +207,7 @@ def test_turns_on_one_conversation_are_serialized_in_arrival_order():
         calls.append(user)
         return user
 
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "slow"}).use_tool("slow", slow).verifier("none").build())
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["slow"], tool_triggers={"go": "slow"}).use_tool("slow", slow).verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
     cid = rid("c")
@@ -241,7 +243,7 @@ def test_different_conversations_do_not_block_each_other():
             release.wait(2)
         return user
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "b"}).use_tool("b", blocker).verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["b"], tool_triggers={"go": "b"}).use_tool("b", blocker).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     done = threading.Event()
@@ -260,7 +262,7 @@ def test_duplicate_turn_returns_recorded_result_and_runs_nothing():
         executions.append(user)
         return "done"
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["c"], tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid, tid = rid("c"), rid("t")
@@ -275,7 +277,7 @@ def test_duplicate_turn_returns_recorded_result_and_runs_nothing():
 
 
 def test_idempotency_none_reprocesses():
-    spec = Agent(rid("a")).path("main").policies(idempotency="none").verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main").policies(idempotency="none").verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid = rid("c")
@@ -293,7 +295,7 @@ def test_restart_rebuilds_from_the_log_without_re_executing():
         executions.append(user)
         return "x"
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["c"], tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid = rid("c")
@@ -342,7 +344,7 @@ def test_unavailable_store_fails_unless_degrade_is_configured():
 
 def test_retry_attempts_and_delays_follow_the_policy():
     slept: List[float] = []
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "flaky"})
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["flaky"], tool_triggers={"go": "flaky"})
             .tool("flaky", "failing", value="ok", effect="idempotent", **{"x-fail-attempts": 2})
             .policies(retry={"kind": "exponential", "max_attempts": 4, "initial_delay_ms": 100, "multiplier": 2.0,
                              "max_delay_ms": 150})
@@ -369,7 +371,7 @@ def test_retry_delay_math():
 
 
 def test_retry_exhaustion_fails_with_tool_error_class():
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing", effect="idempotent")
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["broken"], tool_triggers={"go": "broken"}).tool("broken", "failing", effect="idempotent")
             .policies(retry="fixed", max_attempts=2).verifier("none").build())
     rt = LocalRuntime(sleep=lambda _: None)
     rt.deploy(spec)
@@ -379,7 +381,7 @@ def test_retry_exhaustion_fails_with_tool_error_class():
 
 
 def test_on_tool_error_continue_keeps_going():
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing")
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["broken"], tool_triggers={"go": "broken"}).tool("broken", "failing")
             .policies(on_tool_error="continue").verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -388,7 +390,7 @@ def test_on_tool_error_continue_keeps_going():
 
 
 def test_verification_is_bounded_and_on_exhausted_fail_is_honoured():
-    spec = (Agent(rid("a")).path("main").verifier("regex", pattern="^NEVER")
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main").verifier("regex", pattern="^NEVER")
             .policies(verification={"max_attempts": 3, "on_exhausted": "fail"}).build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -482,7 +484,7 @@ def test_structured_tool_args_are_typed_never_parsed():
     def brain(ctx) -> str:
         return f"[main] {ctx.invoke('add', {'a': '2', 'b': 3})}"
 
-    spec = (Agent(rid("a")).path("main", brain=brain, tools=["add"])
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", brain=brain, tools=["add"])
             .use_tool("add", lambda a, b: a + b, parameters={"type": "object",
                                                             "properties": {"a": {"type": "integer"},
                                                                            "b": {"type": "integer"}}})
@@ -495,7 +497,7 @@ def test_structured_tool_args_are_typed_never_parsed():
 
 
 def test_output_guardrail_rejects_the_draft():
-    spec = (Agent(rid("a")).path("main", guardrails=["no-secrets"])
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", guardrails=["no-secrets"])
             .guardrail("no-secrets", stage="output", deny=["You said"], reason="leak").verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -523,7 +525,7 @@ def test_saga_compensates_completed_steps_in_reverse_order():
             return name
         return fn
 
-    spec = (Agent(rid("a")).path("main")
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["s1", "u1", "s2", "u2", "s3"])
             .use_tool("s1", step("s1"), compensation="u1").use_tool("u1", undo("u1"))
             .use_tool("s2", step("s2")).use_tool("u2", undo("u2"))
             .tool("s3", "failing")
@@ -551,7 +553,7 @@ def test_a2a_peer_receives_the_idempotency_key():
         seen.append(delegation)
         return f"handled {args['user']}"
 
-    spec = (Agent(rid("a")).path("main", tool_triggers={"escalate": "specialist"})
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", tools=["specialist"], tool_triggers={"escalate": "specialist"})
             .use_peer("specialist", peer).verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -564,7 +566,7 @@ def test_a2a_peer_receives_the_idempotency_key():
 
 
 def test_suspend_resume_across_restart():
-    spec = Agent(rid("a")).path("main", suspend_until="approval").verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main", suspend_until="approval").verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid, tid = rid("c"), rid("t")
@@ -572,20 +574,20 @@ def test_suspend_resume_across_restart():
     assert paused["status"] == "suspended" and paused["reply"] is None
     rt = rt.restart()
     assert rt.engine is not None and rt.engine.suspended_turns(cid) == [tid]
-    resumed = rt.submit(Turn(cid, tid, signal={"kind": "approval", "approved": True}))
+    resumed = rt.submit(Turn(cid, tid, principal=OPS, signal={"kind": "approval", "approved": True}))
     assert resumed["status"] == "completed"
     assert [e["type"] for e in resumed["events"]][:1] == ["turn_resumed"]
     assert "refund me" in resumed["reply"]
     assert resumed["state"]["turn_count"] == 1
     assert rt.submit(Turn(cid, tid, "refund me"))["status"] == "duplicate"
-    stray = rt.submit(Turn(cid, rid("other"), signal={"kind": "approval"}))
+    stray = rt.submit(Turn(cid, rid("other"), principal=OPS, signal={"kind": "approval"}))
     assert stray["status"] == "failed" and stray["error"]["class"] == "validation"
 
 
 def test_retrieval_is_deterministic_and_recorded():
     kb = [{"id": "hours", "text": "We are open nine to five on weekdays"},
           {"id": "returns", "text": "Returns are accepted within thirty days"}]
-    spec = Agent(rid("a")).path("main").with_retrieval(kb, dim=64, top_k=2).verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main").with_retrieval(kb, dim=64, top_k=2).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     a = rt.submit(Turn(rid("c"), "t", "when are you open on weekdays"))
@@ -596,7 +598,7 @@ def test_retrieval_is_deterministic_and_recorded():
 
 
 def test_llm_stub_script_runs_tools_then_answers():
-    spec = (Agent(rid("a")).path("main", brain="llm", tools=["lookup"]).tool("lookup", "constant", value=7)
+    spec = (Agent(rid("a")).approvers(roles=["approver"]).path("main", brain="llm", tools=["lookup"]).tool("lookup", "constant", value=7)
             .with_llm("stub", script=[{"tool": "lookup", "args": {"id": 1}}, {"text": "[main] seven"}])
             .build())
     assert "llm_brain" in spec.requirements
@@ -609,7 +611,7 @@ def test_llm_stub_script_runs_tools_then_answers():
 
 def test_real_llm_provider_with_no_key_is_refused_not_faked(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    spec = Agent(rid("a")).path("main", brain="llm").with_llm("openai", model="gpt").verifier("none").build()
+    spec = Agent(rid("a")).approvers(roles=["approver"]).path("main", brain="llm").with_llm("openai", model="gpt").verifier("none").build()
     with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
         LocalRuntime().deploy(spec)
 

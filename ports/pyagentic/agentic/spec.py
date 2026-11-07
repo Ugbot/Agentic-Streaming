@@ -337,6 +337,11 @@ class Agent:
         self._doc["saga"] = {"steps": [dict(s) for s in steps]}
         return self
 
+    def approvers(self, subjects: Sequence[str] = (), roles: Sequence[str] = ()) -> "Agent":
+        """Who may resume a suspended turn or settle an unknown outcome. Without this, nobody."""
+        self._doc.setdefault("policies", {})["approvers"] = {"subjects": list(subjects), "roles": list(roles)}
+        return self
+
     def policies(self, ordering: str = "per-conversation", idempotency: str = "turn-id",
                  retry: Union[str, Mapping[str, Any], None] = None, max_attempts: Optional[int] = None,
                  verification: Optional[Mapping[str, Any]] = None, on_tool_error: str = "fail",
@@ -349,6 +354,9 @@ class Agent:
         if verification is not None:
             block["verification"] = dict(verification)
         block.update(fields)
+        approvers = (self._doc.get("policies") or {}).get("approvers")
+        if approvers is not None:
+            block.setdefault("approvers", approvers)
         self._doc["policies"] = block
         return self
 
