@@ -15,8 +15,8 @@ import java.lang.annotation.Target;
  * {@code @deprecated} tag that names the replacement; the deprecated member stays for at least one
  * minor release after that. See {@code docs/api-stability.md}.
  *
- * <p>Every public top-level type under {@code src/main} carries exactly one of {@link Public},
- * {@link Experimental} or {@link Internal}; {@code ApiStabilityMarkerTest} enforces this.
+ * <p>Every public top-level type under {@code src/main} carries exactly one of {@link Public} or
+ * {@link Internal}; {@code ApiStabilityMarkerTest} enforces this.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

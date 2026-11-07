@@ -7,11 +7,12 @@ import java.util.List;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
+import org.jagentic.core.store.PgVectorStore;
 import org.jagentic.core.store.PostgresLongTermStore;
 import org.jagentic.core.store.QdrantVectorStore;
 import org.jagentic.core.store.RedisConversationStore;
 
-/** Phase C stores — in-memory offline; Qdrant/Postgres/Redis live (opt-in, skip). */
+/** Phase C stores — in-memory offline; Qdrant/pgvector/Postgres/Redis live (opt-in, skip). */
 class StoreTest {
 
   private static String env(String k, String def) {
@@ -59,6 +60,24 @@ class StoreTest {
     }
     List<Retrieval.Scored> hits = vs.search(Retrieval.embed("how do I dispute a charge", Banking.DIM), 2);
     assertEquals("kb_payments_dispute", hits.get(0).id());
+  }
+
+  @Test
+  void pgvectorColdTierIfAvailable() {
+    PgVectorStore vs;
+    try {
+      vs = new PgVectorStore(env("AGENTIC_TEST_PG_JDBC", "jdbc:postgresql://localhost:5434/agentic"),
+          "agentic", "agentic", "agentic_java_test", Banking.DIM);
+      for (var e : Banking.KB.entrySet()) {
+        vs.upsert(e.getKey(), Retrieval.embed(e.getValue(), Banking.DIM), e.getValue());
+      }
+    } catch (Throwable t) {
+      Assumptions.abort("Postgres with pgvector not reachable: " + t.getMessage());
+      return;
+    }
+    List<Retrieval.Scored> hits = vs.search(Retrieval.embed("how do I dispute a charge", Banking.DIM), 2);
+    assertEquals("kb_payments_dispute", hits.get(0).id());
+    assertEquals(Banking.KB.get("kb_payments_dispute"), hits.get(0).text());
   }
 
   @Test

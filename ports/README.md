@@ -20,7 +20,7 @@ retrieval, guardrails, hot-swappable stores) and run it on the local backend, on
 [`agentic-pekko/`](../agentic-pekko/) or on Flink, see
 [`docs/portability/pipelines.md`](../docs/portability/pipelines.md) and
 [choosing a backend](../docs/portability/choosing-a-backend.md). External services
-(Redis/Valkey, Kafka/Fluss, Postgres) sit behind interfaces and come up via
+(Redis/Valkey, Kafka, Postgres) sit behind interfaces and come up via
 [`examples/compose/externals.yml`](../examples/compose/externals.yml).
 
 The cores implement the engine-agnostic abstractions once, `ConversationStore`,

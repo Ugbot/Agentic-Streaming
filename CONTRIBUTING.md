@@ -78,14 +78,12 @@ user socket once and point Testcontainers at it:
 systemctl --user start podman.socket
 export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
 export TESTCONTAINERS_RYUK_DISABLED=true
-./mvnw test -P integration-tests
+./mvnw -f agentic-pekko/pom.xml verify -P integration-tests
 ```
 
 A service-backed test that skips because its service is missing is a failure in CI
 (`tools/ci/skip_audit.py` against `tools/ci/skip-allowlist.txt`); do not add skips to make a
-suite green. `ZeroMqChannelTest` can hang on some hosts; CI excludes it by name with
-`-Dtest='!ZeroMqChannelTest'`, and you may do the same locally as long as you say so in the pull
-request.
+suite green.
 
 ## Python packages
 
@@ -169,8 +167,6 @@ bash tools/smoke-examples.sh
 - Do not add publishing configuration (Sonatype, GPG, PyPI) or tags. Nothing is published.
 - Deprecate before you remove, following `docs/versioning.md`, and add the entry to
   `CHANGELOG.md` under `Unreleased`.
-- The legacy Flink `AgentBuilder` DSL is deprecated and outside the conformance path. It stays
-  until a change that removes it deliberately.
 - Before opening the pull request run, for every module you touched, its full test suite, plus
   `python spec/tools/validate_spec.py` and `python -m pytest docs/tools/test_docs.py -q`, and
   `bash tools/smoke-examples.sh` if you touched examples or scripts. Put the exact commands

@@ -149,6 +149,20 @@ class WorkflowValidatorTest {
   }
 
   @Test
+  void rule7AnUnreachablePgvectorFailsUnlessDegradeIsExplicit() {
+    Map<String, Object> pg = new HashMap<>(Map.of("kind", "pgvector",
+        "url", "jdbc:postgresql://127.0.0.1:1/" + rnd(), "user", "u", "password", "p"));
+    Map<String, Object> s = valid();
+    s.put("retrieval", Map.of("dim", 32, "vector_store", pg));
+    assertThrows(StoreAvailability.StoreUnavailableException.class, () -> GraphBuilder.build(s, null));
+
+    pg.put("on_unavailable", "degrade");
+    GraphBuilder.Built built = GraphBuilder.build(s, null);
+    assertEquals(1, built.degradations().size());
+    assertTrue(built.degradations().get(0).startsWith("retrieval.vector_store degraded"));
+  }
+
+  @Test
   void rule7UnreachableStoreFailsUnlessDegradeIsExplicit() {
     Map<String, Object> pg = new HashMap<>(Map.of("kind", "postgres",
         "url", "jdbc:postgresql://127.0.0.1:1/" + rnd(), "user", "u", "password", "p"));

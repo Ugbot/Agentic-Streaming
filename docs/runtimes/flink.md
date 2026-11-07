@@ -1,15 +1,9 @@
 # Flink runtime
 
 Apache Flink 2.2.1 is the primary runtime. The main module (root `pom.xml`, artifact
-`org.jagentic:agentic-flink`) carries two things that must not be confused:
-
-| Surface | Package | Contract | Conformance binding |
-|---|---|---|---|
-| `agentic/v1` event-sourced runtime | `org.agentic.flink.runtime` | `spec/v1`, one workflow document, normalized results | `flink` |
-| Legacy Flink DSL | `org.agentic.flink.dsl`, `execution`, `job`, `statemachine` | `Agent.builder()`, `ToolExecutor`, Flink-state memory | none |
-
-The first is described here. The second is deprecated legacy code, kept for now, and has its
-[own section](#legacy-flink-dsl-pure-flink-flavor) at the end.
+`org.jagentic:agentic-flink`) is the `agentic/v1` event-sourced runtime: `org.agentic.flink.runtime`
+and `org.agentic.flink.pipeline`, with one workflow document, normalized results and the `flink`
+conformance binding.
 
 ## What this runtime does not do yet
 
@@ -99,6 +93,33 @@ job carries on. A turn ending `fatal` or `transient` reaches it as `{"kind": "tu
 or Podman: it submits `banking.yaml`, sends a poison record and a redelivery, kills the TaskManager
 after a checkpoint and checks that the conversation carries on from the restored log.
 
+From your own job, `KafkaPipelineJob.assemble` puts the same graph on your environment:
+
+```java complete
+import java.nio.file.Path;
+import java.util.Map;
+import org.agentic.flink.pipeline.FlinkPipelineRunner;
+import org.agentic.flink.pipeline.KafkaPipelineJob;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
+public final class BankingJob {
+  public static void main(String[] args) throws Exception {
+    Map<String, Object> spec = FlinkPipelineRunner.loadYaml(Path.of(args[0]));
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    KafkaPipelineJob.assemble(
+        env,
+        spec,
+        new KafkaPipelineJob.Options(
+            "localhost:9092",
+            "agentic.turns",
+            "agentic.turns.results",
+            "agentic.turns.results.failures",
+            "agentic-banking"));
+    env.execute("banking");
+  }
+}
+```
+
 To run a document once on a local cluster, in its own JVM:
 
 ```bash
@@ -180,16 +201,3 @@ timer fires exactly once across a restart. The `flink` binding runs the three ti
 ./mvnw package -DskipTests
 ./mvnw test -Dtest=FlinkConformanceTest                     # the flink conformance binding
 ```
-
-## Legacy Flink DSL (pure-Flink flavor)
-
-The `AgentBuilder` DSL (`Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`
-under `org.agentic.flink.dsl`, with `execution`, `job` and `statemachine`) is deprecated legacy
-code, kept for now, for writing agents as Flink jobs directly: LangChain4J chat models, `ToolExecutor`
-tools, Flink-state short-term memory, the conversation store SPI, CEP, sagas and outbound A2A.
-[docs/getting-started.md](../getting-started.md), [docs/memory.md](../memory.md) and the Flink-runtime
-showcases under `docs/examples/` describe it.
-
-It is a different contract from `agentic/v1`: no workflow document, no `spec/v1` event set, no
-normalized result, and no conformance binding. Nothing on this page above this section applies to
-it, and no fixture measures it.

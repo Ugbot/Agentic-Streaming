@@ -31,35 +31,36 @@ import org.junitpioneer.jupiter.SetSystemProperty;
  */
 class AgenticFlinkConfigTest {
 
-  private static final String ENV_REDIS_HOST = "AGENTIC_FLINK_REDIS_HOST";
-  private static final String ENV_REDIS_PORT = "AGENTIC_FLINK_REDIS_PORT";
+  private static final String ENV_RETENTION = "AGENTIC_FLINK_CHECKPOINT_RETENTION";
+  private static final String ENV_INTERVAL = "AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS";
   private static final String ENV_CUSTOM = "AGENTIC_FLINK_MY_CUSTOM_KEY";
-  private static final String SYSPROP_REDIS_HOST = "agentic.flink.redis.host";
-  private static final String SYSPROP_REDIS_PORT = "agentic.flink.redis.port";
+  private static final String SYSPROP_RETENTION = "agentic.flink.checkpoint.retention";
+  private static final String SYSPROP_INTERVAL = "agentic.flink.checkpoint.interval.ms";
 
   // ==================== environment / system property resolution ====================
 
   @Test
-  @SetEnvironmentVariable(key = ENV_REDIS_HOST, value = "redis-from-env.example")
+  @SetEnvironmentVariable(key = ENV_RETENTION, value = "from-env")
   @SetEnvironmentVariable(key = ENV_CUSTOM, value = "custom-from-env")
   @DisplayName("fromEnvironment() should map AGENTIC_FLINK_<KEY> variables onto dotted keys")
   void testFromEnvironmentReadsEnvironmentVariables() {
     AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
 
-    assertEquals("redis-from-env.example", config.get(ConfigKeys.REDIS_HOST));
+    assertEquals("from-env", config.get(ConfigKeys.CHECKPOINT_RETENTION));
     assertEquals("custom-from-env", config.get("my.custom.key"));
-    assertEquals("redis-from-env.example", config.toMap().get(ConfigKeys.REDIS_HOST));
-    assertEquals(ConfigKeys.DEFAULT_REDIS_PORT, config.get(ConfigKeys.REDIS_PORT));
+    assertEquals("from-env", config.toMap().get(ConfigKeys.CHECKPOINT_RETENTION));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_INTERVAL_MS, config.get(ConfigKeys.CHECKPOINT_INTERVAL_MS));
   }
 
   @Test
-  @SetEnvironmentVariable(key = ENV_REDIS_PORT, value = "16390")
+  @SetEnvironmentVariable(key = ENV_INTERVAL, value = "16390")
   @SetEnvironmentVariable(key = ENV_CUSTOM, value = "not-a-number")
   @DisplayName("fromEnvironment() should parse integer environment variables with getInt()")
   void testFromEnvironmentParsesIntegerVariables() {
     AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
 
-    assertEquals(16390, config.getInt(ConfigKeys.REDIS_PORT, -1));
+    assertEquals(16390, config.getInt(ConfigKeys.CHECKPOINT_INTERVAL_MS, -1));
     assertEquals(
         -1,
         config.getInt("my.custom.key", -1),
@@ -67,48 +68,51 @@ class AgenticFlinkConfigTest {
   }
 
   @Test
-  @SetEnvironmentVariable(key = ENV_REDIS_HOST, value = "redis-from-env.example")
-  @SetSystemProperty(key = SYSPROP_REDIS_HOST, value = "redis-from-sysprop.example")
+  @SetEnvironmentVariable(key = ENV_RETENTION, value = "from-env")
+  @SetSystemProperty(key = SYSPROP_RETENTION, value = "from-sysprop")
   @DisplayName("explicit properties beat environment variables, which beat system properties")
   void testResolutionPrecedence() {
-    String explicit = "redis-explicit-" + UUID.randomUUID();
+    String explicit = "explicit-" + UUID.randomUUID();
 
     assertEquals(
-        "redis-from-env.example",
-        AgenticFlinkConfig.fromEnvironment().get(ConfigKeys.REDIS_HOST),
+        "from-env",
+        AgenticFlinkConfig.fromEnvironment().get(ConfigKeys.CHECKPOINT_RETENTION),
         "env var beats sysprop");
     assertEquals(
         explicit,
-        AgenticFlinkConfig.fromMap(Map.of(ConfigKeys.REDIS_HOST, explicit))
-            .get(ConfigKeys.REDIS_HOST),
+        AgenticFlinkConfig.fromMap(Map.of(ConfigKeys.CHECKPOINT_RETENTION, explicit))
+            .get(ConfigKeys.CHECKPOINT_RETENTION),
         "explicit property beats env var");
   }
 
   @Test
-  @ClearEnvironmentVariable(key = ENV_REDIS_HOST)
-  @ClearEnvironmentVariable(key = ENV_REDIS_PORT)
-  @ClearSystemProperty(key = SYSPROP_REDIS_PORT)
-  @SetSystemProperty(key = SYSPROP_REDIS_HOST, value = "redis-from-sysprop.example")
+  @ClearEnvironmentVariable(key = ENV_RETENTION)
+  @ClearEnvironmentVariable(key = ENV_INTERVAL)
+  @ClearSystemProperty(key = SYSPROP_INTERVAL)
+  @SetSystemProperty(key = SYSPROP_RETENTION, value = "from-sysprop")
   @DisplayName("system properties are consulted when no env var is set, and beat defaults")
   void testSystemPropertyBeatsDefault() {
     int port = ThreadLocalRandom.current().nextInt(1024, 65535);
-    System.setProperty(SYSPROP_REDIS_PORT, Integer.toString(port));
+    System.setProperty(SYSPROP_INTERVAL, Integer.toString(port));
 
     AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
 
-    assertEquals("redis-from-sysprop.example", config.get(ConfigKeys.REDIS_HOST));
-    assertEquals(port, config.getInt(ConfigKeys.REDIS_PORT, -1));
+    assertEquals("from-sysprop", config.get(ConfigKeys.CHECKPOINT_RETENTION));
+    assertEquals(port, config.getInt(ConfigKeys.CHECKPOINT_INTERVAL_MS, -1));
   }
 
   @Test
-  @SetEnvironmentVariable(key = ENV_REDIS_HOST, value = "redis-from-env.example")
-  @SetSystemProperty(key = SYSPROP_REDIS_HOST, value = "redis-from-sysprop.example")
+  @SetEnvironmentVariable(key = ENV_RETENTION, value = "from-env")
+  @SetSystemProperty(key = SYSPROP_RETENTION, value = "from-sysprop")
   @DisplayName("forTesting() ignores environment variables and system properties")
   void testForTestingIgnoresEnvironment() {
     AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
 
-    assertEquals(ConfigKeys.DEFAULT_REDIS_HOST, config.get(ConfigKeys.REDIS_HOST));
-    assertEquals(ConfigKeys.DEFAULT_REDIS_HOST, config.toMap().get(ConfigKeys.REDIS_HOST));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_RETENTION, config.get(ConfigKeys.CHECKPOINT_RETENTION));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_RETENTION,
+        config.toMap().get(ConfigKeys.CHECKPOINT_RETENTION));
   }
 
   // ==================== forTesting() Factory ====================
@@ -117,17 +121,10 @@ class AgenticFlinkConfigTest {
   @DisplayName("forTesting() should return config with known defaults")
   void testForTestingReturnsDefaults() {
     AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
-
-    assertEquals(ConfigKeys.DEFAULT_OLLAMA_BASE_URL, config.get(ConfigKeys.OLLAMA_BASE_URL));
-    assertEquals(ConfigKeys.DEFAULT_OLLAMA_MODEL, config.get(ConfigKeys.OLLAMA_MODEL));
-    assertEquals(ConfigKeys.DEFAULT_REDIS_HOST, config.get(ConfigKeys.REDIS_HOST));
-    assertEquals(ConfigKeys.DEFAULT_REDIS_PORT, config.get(ConfigKeys.REDIS_PORT));
-    assertEquals(ConfigKeys.DEFAULT_POSTGRES_URL, config.get(ConfigKeys.POSTGRES_URL));
-    assertEquals(ConfigKeys.DEFAULT_POSTGRES_USER, config.get(ConfigKeys.POSTGRES_USER));
-    assertEquals(ConfigKeys.DEFAULT_POSTGRES_PASSWORD, config.get(ConfigKeys.POSTGRES_PASSWORD));
-    assertEquals(ConfigKeys.DEFAULT_QDRANT_HOST, config.get(ConfigKeys.QDRANT_HOST));
-    assertEquals(ConfigKeys.DEFAULT_QDRANT_PORT, config.get(ConfigKeys.QDRANT_PORT));
-    assertEquals(ConfigKeys.DEFAULT_OPENAI_MODEL, config.get(ConfigKeys.OPENAI_MODEL));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_RETENTION, config.get(ConfigKeys.CHECKPOINT_RETENTION));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_INTERVAL_MS, config.get(ConfigKeys.CHECKPOINT_INTERVAL_MS));
   }
 
   @Test
@@ -144,15 +141,13 @@ class AgenticFlinkConfigTest {
   @DisplayName("fromMap() should override defaults with explicit properties")
   void testFromMapOverridesDefaults() {
     Map<String, String> props = new HashMap<>();
-    props.put(ConfigKeys.OLLAMA_BASE_URL, "http://custom-ollama:11434");
-    props.put(ConfigKeys.REDIS_HOST, "redis.example.com");
+    props.put(ConfigKeys.CHECKPOINT_RETENTION, "overridden");
 
     AgenticFlinkConfig config = AgenticFlinkConfig.fromMap(props);
-
-    assertEquals("http://custom-ollama:11434", config.get(ConfigKeys.OLLAMA_BASE_URL));
-    assertEquals("redis.example.com", config.get(ConfigKeys.REDIS_HOST));
+    assertEquals("overridden", config.get(ConfigKeys.CHECKPOINT_RETENTION));
     // Non-overridden keys still resolve to defaults
-    assertEquals(ConfigKeys.DEFAULT_OLLAMA_MODEL, config.get(ConfigKeys.OLLAMA_MODEL));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_TIMEOUT_MS, config.get(ConfigKeys.CHECKPOINT_TIMEOUT_MS));
   }
 
   @Test
@@ -173,8 +168,8 @@ class AgenticFlinkConfigTest {
   void testGetWithDefaultReturnsResolvedValue() {
     AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
 
-    String value = config.get(ConfigKeys.REDIS_HOST, "fallback-host");
-    assertEquals(ConfigKeys.DEFAULT_REDIS_HOST, value);
+    String value = config.get(ConfigKeys.CHECKPOINT_RETENTION, "fallback");
+    assertEquals(ConfigKeys.DEFAULT_CHECKPOINT_RETENTION, value);
   }
 
   @Test
@@ -219,12 +214,12 @@ class AgenticFlinkConfigTest {
   }
 
   @Test
-  @DisplayName("getInt() should parse default port values from DEFAULTS")
-  void testGetIntParsesDefaultPort() {
+  @DisplayName("getInt() should parse numeric values from DEFAULTS")
+  void testGetIntParsesDefaultValue() {
     AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
 
-    int port = config.getInt(ConfigKeys.REDIS_PORT, -1);
-    assertEquals(Integer.parseInt(ConfigKeys.DEFAULT_REDIS_PORT), port);
+    int interval = config.getInt(ConfigKeys.CHECKPOINT_INTERVAL_MS, -1);
+    assertEquals(Integer.parseInt(ConfigKeys.DEFAULT_CHECKPOINT_INTERVAL_MS), interval);
   }
 
   // ==================== toMap() ====================
@@ -234,33 +229,25 @@ class AgenticFlinkConfigTest {
   void testToMapContainsAllDefaults() {
     AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
     Map<String, String> map = config.toMap();
-
-    assertTrue(map.containsKey(ConfigKeys.OLLAMA_BASE_URL));
-    assertTrue(map.containsKey(ConfigKeys.OLLAMA_MODEL));
-    assertTrue(map.containsKey(ConfigKeys.REDIS_HOST));
-    assertTrue(map.containsKey(ConfigKeys.REDIS_PORT));
-    assertTrue(map.containsKey(ConfigKeys.POSTGRES_URL));
-    assertTrue(map.containsKey(ConfigKeys.POSTGRES_USER));
-    assertTrue(map.containsKey(ConfigKeys.POSTGRES_PASSWORD));
-    assertTrue(map.containsKey(ConfigKeys.QDRANT_HOST));
-    assertTrue(map.containsKey(ConfigKeys.QDRANT_PORT));
-    assertTrue(map.containsKey(ConfigKeys.OPENAI_MODEL));
+    assertTrue(map.containsKey(ConfigKeys.CHECKPOINT_RETENTION));
+    assertTrue(map.containsKey(ConfigKeys.CHECKPOINT_INTERVAL_MS));
   }
 
   @Test
   @DisplayName("toMap() should include explicit overrides")
   void testToMapIncludesOverrides() {
     Map<String, String> props = new HashMap<>();
-    props.put(ConfigKeys.REDIS_HOST, "overridden-host");
+    props.put(ConfigKeys.CHECKPOINT_RETENTION, "overridden");
     props.put("extra.key", "extra-value");
 
     AgenticFlinkConfig config = AgenticFlinkConfig.fromMap(props);
     Map<String, String> map = config.toMap();
 
-    assertEquals("overridden-host", map.get(ConfigKeys.REDIS_HOST));
+    assertEquals("overridden", map.get(ConfigKeys.CHECKPOINT_RETENTION));
     assertEquals("extra-value", map.get("extra.key"));
     // Defaults still present for non-overridden keys
-    assertEquals(ConfigKeys.DEFAULT_OLLAMA_MODEL, map.get(ConfigKeys.OLLAMA_MODEL));
+    assertEquals(
+        ConfigKeys.DEFAULT_CHECKPOINT_TIMEOUT_MS, map.get(ConfigKeys.CHECKPOINT_TIMEOUT_MS));
   }
 
   @Test

@@ -1,6 +1,5 @@
 # Agentic Streaming on Apache Pekko
 
-> Per the keystone [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md).
 > Apache Pekko is the open-source fork of Akka, a JVM actor/streams/cluster toolkit.
 >
 > **Pekko is a supported runtime: [`agentic-pekko/`](../../agentic-pekko/)**, an event-sourced,
@@ -73,7 +72,7 @@ actor-model peer of Temporal's event-sourced workflows.
 
 - **ConversationStore.** For a single sharded entity the actor's fields *are* the store
   (one writer). For durability use `EventSourcedBehavior` (the transcript/attributes are
-  the persisted state) or write through to a Redis/Fluss `ConversationStore`, the same
+  the persisted state) or write through to a Redis `ConversationStore`, the same
   SPI as every other port.
 - **Single-writer per conversation (C2).** Cluster Sharding's contract: at most one live
   entity per id. No locks, no partitions to reason about, the toolkit guarantees it.

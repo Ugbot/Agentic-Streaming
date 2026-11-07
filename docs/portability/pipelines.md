@@ -72,10 +72,11 @@ tools:
 retrieval:
   dim: 256
   vector_store:            # OPTIONAL cold tier - default is the in-memory hot tier only
-    kind: hnsw             # memory | hnsw (in-process ANN) | duckdb (Python) | qdrant
+    kind: hnsw             # memory | hnsw (in-process ANN) | duckdb (Python) | qdrant | pgvector (JVM)
     m: 16                  # hnsw graph degree
     ef_search: 64
     # url: http://localhost:6333   # qdrant connection link
+    # pgvector: url (a jdbc:postgresql link), user, password and table; use ${ENV} for the password
   kb:
     - {id: kb_cards, text: "We offer classic, gold, and platinum cards."}
 
@@ -132,8 +133,8 @@ triggers + retrieval) and needs no `llm:` section, the default everywhere.
 Every external service sits **behind an interface**, selected by a **connection link**:
 
 - **Durable store**: `stores.conversation.{kind,url}` swaps the `ConversationStore`
-  implementation (`memory` → `redis`/Valkey) with no agent-code change. Postgres/Fluss
-  slot in the same way (a class implementing the SPI + a registry entry).
+  implementation (`memory` → `redis`/Valkey) with no agent-code change. A Flink job ignores `stores:`: its log is
+  keyed state.
 - Bring the services up with Compose and point the links at them:
 
   ```bash

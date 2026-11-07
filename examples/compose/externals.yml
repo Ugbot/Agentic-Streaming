@@ -1,7 +1,7 @@
 # External services for Agentic Streaming pipelines — bring up only what your
 # pipeline.yaml references, then point the `stores:` connection links at them.
 # Everything is behind an SPI, so these are hot-swappable
-# (Redis<->Valkey, Kafka<->Fluss, etc.) without touching agent code.
+# (Redis<->Valkey and the like) without touching agent code.
 #
 #   docker compose -f examples/compose/externals.yml up -d valkey
 #
@@ -24,8 +24,7 @@ services:
       POSTGRES_DB: agentic
     ports: ["5432:5432"]
 
-  # Redpanda — Kafka-API broker (swap for real Kafka or Fluss behind the same Channel
-  # SPI). bootstrap: localhost:9092
+  # Redpanda — Kafka-API broker (swap for real Kafka). bootstrap: localhost:9092
   redpanda:
     image: docker.io/redpandadata/redpanda:latest
     command:

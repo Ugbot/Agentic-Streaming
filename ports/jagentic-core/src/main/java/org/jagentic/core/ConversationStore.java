@@ -10,8 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-conversation memory — the portable analogue of the Flink-based
- * {@code org.agentic.flink.memory.conversation.ConversationStore}: durable, per-key
+ * Per-conversation memory: durable, per-key
  * transcript + scalar attributes, keyed by conversationId, indexable by userId.
  * The single most important abstraction in the port. Swap {@link InMemory} for a
  * Redis/Fluss-backed implementation behind this interface; agent logic is unchanged.

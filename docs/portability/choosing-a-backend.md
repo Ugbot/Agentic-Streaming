@@ -44,5 +44,5 @@ and **[pipelines](pipelines.md)** for the YAML.
 
 Flink is the primary runtime, but the agent, prompts, tools, calls to other agents,
 retrieval, memory, guardrails, is engine-agnostic. Prototype on **Local**, take the same file to
-Pekko or Flink, and keep external services (Redis/Valkey, Kafka/Fluss, Postgres)
+Pekko or Flink, and keep external services (Redis/Valkey, Kafka, Postgres)
 behind their interfaces so they swap without touching agent code.

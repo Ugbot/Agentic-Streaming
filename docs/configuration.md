@@ -1,14 +1,14 @@
 # Configuration Reference
 
-All configuration in Agentic Flink is managed through `AgenticFlinkConfig`, which resolves values from a priority chain: explicit properties, environment variables, system properties, and built-in defaults.
+An agent is configured by its workflow document ([`pipeline.yaml`](portability/pipelines.md)). What the Flink job itself reads is its checkpoint settings, through `AgenticFlinkConfig`, which resolves values from a priority chain: explicit properties, environment variables, system properties, and built-in defaults.
 
 ## Resolution Order
 
-When you request a configuration key (e.g., `ollama.base.url`), the value is resolved in this order (highest priority first):
+When you request a configuration key (e.g., `checkpoint.interval.ms`), the value is resolved in this order (highest priority first):
 
 1. **Explicit properties** -- values passed via `AgenticFlinkConfig.fromMap(props)` or the constructor.
-2. **Environment variables** -- the key is transformed to the form `AGENTIC_FLINK_OLLAMA_BASE_URL` (uppercased, dots replaced with underscores, prefixed with `AGENTIC_FLINK_`).
-3. **System properties** -- the key is prefixed with `agentic.flink.` (e.g., `agentic.flink.ollama.base.url`).
+2. **Environment variables** -- the key is transformed to the form `AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS` (uppercased, dots replaced with underscores, prefixed with `AGENTIC_FLINK_`).
+3. **System properties** -- the key is prefixed with `agentic.flink.` (e.g., `agentic.flink.checkpoint.interval.ms`).
 4. **Default values** -- hard-coded in `ConfigKeys`.
 
 The `forTesting()` factory skips steps 2 and 3, returning only defaults and explicit properties. This isolates tests from host environment variables.
@@ -24,44 +24,6 @@ Configuration keys use dot-separated lowercase notation. The corresponding envir
 <!-- env-vars: ConfigKeys -->
 | Config Key | Environment Variable |
 |---|---|
-| `ollama.base.url` | `AGENTIC_FLINK_OLLAMA_BASE_URL` |
-| `ollama.model` | `AGENTIC_FLINK_OLLAMA_MODEL` |
-| `anthropic.api.key` | `AGENTIC_FLINK_ANTHROPIC_API_KEY` |
-| `anthropic.model` | `AGENTIC_FLINK_ANTHROPIC_MODEL` |
-| `redis.host` | `AGENTIC_FLINK_REDIS_HOST` |
-| `redis.port` | `AGENTIC_FLINK_REDIS_PORT` |
-| `redis.password` | `AGENTIC_FLINK_REDIS_PASSWORD` |
-| `conversation.store` | `AGENTIC_FLINK_CONVERSATION_STORE` |
-| `conversation.store.ttl.seconds` | `AGENTIC_FLINK_CONVERSATION_STORE_TTL_SECONDS` |
-| `conversation.store.max.messages` | `AGENTIC_FLINK_CONVERSATION_STORE_MAX_MESSAGES` |
-| `fluss.bootstrap.servers` | `AGENTIC_FLINK_FLUSS_BOOTSTRAP_SERVERS` |
-| `conversation.store.fluss.table` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_TABLE` |
-| `conversation.store.fluss.buckets` | `AGENTIC_FLINK_CONVERSATION_STORE_FLUSS_BUCKETS` |
-| `postgres.url` | `AGENTIC_FLINK_POSTGRES_URL` |
-| `postgres.user` | `AGENTIC_FLINK_POSTGRES_USER` |
-| `postgres.password` | `AGENTIC_FLINK_POSTGRES_PASSWORD` |
-| `qdrant.host` | `AGENTIC_FLINK_QDRANT_HOST` |
-| `qdrant.port` | `AGENTIC_FLINK_QDRANT_PORT` |
-| `memory.shortterm.ttl.seconds` | `AGENTIC_FLINK_MEMORY_SHORTTERM_TTL_SECONDS` |
-| `memory.shortterm.max.items` | `AGENTIC_FLINK_MEMORY_SHORTTERM_MAX_ITEMS` |
-| `memory.vector.dimension` | `AGENTIC_FLINK_MEMORY_VECTOR_DIMENSION` |
-| `memory.vector.max.items` | `AGENTIC_FLINK_MEMORY_VECTOR_MAX_ITEMS` |
-| `memory.vector.m` | `AGENTIC_FLINK_MEMORY_VECTOR_M` |
-| `memory.vector.beam.width` | `AGENTIC_FLINK_MEMORY_VECTOR_BEAM_WIDTH` |
-| `openai.api.key` | `AGENTIC_FLINK_OPENAI_API_KEY` |
-| `openai.model` | `AGENTIC_FLINK_OPENAI_MODEL` |
-| `a2a.protocol.version` | `AGENTIC_FLINK_A2A_PROTOCOL_VERSION` |
-| `a2a.client.default.transport` | `AGENTIC_FLINK_A2A_CLIENT_DEFAULT_TRANSPORT` |
-| `a2a.gateway.enabled` | `AGENTIC_FLINK_A2A_GATEWAY_ENABLED` |
-| `a2a.gateway.host` | `AGENTIC_FLINK_A2A_GATEWAY_HOST` |
-| `a2a.gateway.jsonrpc.port` | `AGENTIC_FLINK_A2A_GATEWAY_JSONRPC_PORT` |
-| `a2a.gateway.grpc.port` | `AGENTIC_FLINK_A2A_GATEWAY_GRPC_PORT` |
-| `a2a.gateway.rest.port` | `AGENTIC_FLINK_A2A_GATEWAY_REST_PORT` |
-| `a2a.gateway.public.url` | `AGENTIC_FLINK_A2A_GATEWAY_PUBLIC_URL` |
-| `a2a.bridge.transport` | `AGENTIC_FLINK_A2A_BRIDGE_TRANSPORT` |
-| `a2a.bridge.request.endpoint` | `AGENTIC_FLINK_A2A_BRIDGE_REQUEST_ENDPOINT` |
-| `a2a.bridge.response.endpoint` | `AGENTIC_FLINK_A2A_BRIDGE_RESPONSE_ENDPOINT` |
-| `a2a.task.store` | `AGENTIC_FLINK_A2A_TASK_STORE` |
 | `checkpoint.enabled` | `AGENTIC_FLINK_CHECKPOINT_ENABLED` |
 | `checkpoint.interval.ms` | `AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS` |
 | `checkpoint.min.pause.ms` | `AGENTIC_FLINK_CHECKPOINT_MIN_PAUSE_MS` |
@@ -71,56 +33,15 @@ Configuration keys use dot-separated lowercase notation. The corresponding envir
 | `checkpoint.state.backend` | `AGENTIC_FLINK_CHECKPOINT_STATE_BACKEND` |
 <!-- /env-vars -->
 
-System properties use the prefix `agentic.flink.` followed by the key verbatim (e.g., `-Dagentic.flink.ollama.base.url=http://my-ollama:11434`).
+System properties use the prefix `agentic.flink.` followed by the key verbatim (e.g., `-Dagentic.flink.checkpoint.interval.ms=30000`).
 
 ## Configuration Keys
 
-### Ollama (Local LLM)
-
-| Key | Default | Description |
-|---|---|---|
-| `ollama.base.url` | `http://localhost:11434` | Base URL of the Ollama API server |
-| `ollama.model` | `qwen2.5:3b` | Model name for Ollama inference |
-
-### Redis
-
-| Key | Default | Description |
-|---|---|---|
-| `redis.host` | `localhost` | Redis server hostname |
-| `redis.port` | `6379` | Redis server port |
-| `redis.password` | _(none)_ | Redis authentication password. No default; omit for unauthenticated connections |
-
-### PostgreSQL
-
-| Key | Default | Description |
-|---|---|---|
-| `postgres.url` | `jdbc:postgresql://localhost:5432/agentic_flink` | JDBC connection URL |
-| `postgres.user` | `flink_user` | Database username |
-| `postgres.password` | `flink_password` | Database password |
-
-### Qdrant (Vector Database)
-
-| Key | Default | Description |
-|---|---|---|
-| `qdrant.host` | `localhost` | Qdrant server hostname |
-| `qdrant.port` | `6333` | Qdrant REST port, as resolved by `AgenticFlinkConfig`. `QdrantVectorStore` connects over gRPC and reads `qdrant.port` from the map passed to `initialize`, defaulting to `6334` when the key is absent; pass the gRPC port when you forward this value to the store. See [Storage Architecture](reference/storage-architecture.md). |
-
-### OpenAI (Optional)
-
-| Key | Default | Description |
-|---|---|---|
-| `openai.api.key` | _(none)_ | OpenAI API key. No default; required only if using OpenAI models |
-| `openai.model` | `gpt-6-luna` | OpenAI model name (see the [OpenAI model list](https://developers.openai.com/api/docs/models)) |
-
 ### Checkpointing and State Backend (Fault Tolerance)
 
-Every job entry point in the framework applies `org.agentic.flink.job.FlinkJobDefaults` to its
-`StreamExecutionEnvironment`: `AgentJobGenerator` (legacy `AgentJob` builder DSL),
-`ResearchPipelineJob`, and `LocalWorkflowSession` and the `FlinkPipelineRunner` main (agentic/v1).
-The defaults configure exactly-once checkpointing
-with the values below. `AgentJob.builder().withJobDefaults(...)` overrides them per job; otherwise
-they are read from the job's `AgenticFlinkConfig` or, when none is set, from the process
-environment.
+`LocalWorkflowSession` and the `FlinkPipelineRunner` main apply
+`org.agentic.flink.job.FlinkJobDefaults` to their `StreamExecutionEnvironment`. The defaults
+configure exactly-once checkpointing with the values below, read from the process environment.
 
 | Key | Default | Description |
 |---|---|---|
@@ -166,9 +87,8 @@ the JVM heap and needs no extra dependency.
 
 ```java
 AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
-String ollamaUrl = config.get(ConfigKeys.OLLAMA_BASE_URL, ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
-String model = config.get(ConfigKeys.OLLAMA_MODEL);
-int redisPort = config.getInt(ConfigKeys.REDIS_PORT, 6379);
+long interval = config.getLong(ConfigKeys.CHECKPOINT_INTERVAL_MS, 10_000L);
+String backend = config.get(ConfigKeys.CHECKPOINT_STATE_BACKEND);
 ```
 
 `fromEnvironment()` resolves all four levels of the priority chain.
@@ -177,9 +97,8 @@ int redisPort = config.getInt(ConfigKeys.REDIS_PORT, 6379);
 
 ```java
 Map<String, String> props = new HashMap<>();
-props.put(ConfigKeys.OLLAMA_BASE_URL, "http://my-ollama:11434");
-props.put(ConfigKeys.OLLAMA_MODEL, "qwen2.5:7b");
-props.put(ConfigKeys.REDIS_HOST, "redis.internal");
+props.put(ConfigKeys.CHECKPOINT_INTERVAL_MS, "30000");
+props.put(ConfigKeys.CHECKPOINT_STATE_BACKEND, "rocksdb");
 
 AgenticFlinkConfig config = AgenticFlinkConfig.fromMap(props);
 ```
@@ -194,36 +113,13 @@ AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
 
 `forTesting()` does not read environment variables or system properties. Only built-in defaults are returned, ensuring tests are deterministic regardless of the host environment.
 
-You can also combine testing mode with explicit overrides:
-
-```java
-// forTesting() does not accept a map, but you can use fromMap() with
-// resolveEnv=false by constructing directly if needed.
-// The simplest pattern is to rely on forTesting() defaults or set env vars
-// in the test harness.
-AgenticFlinkConfig config = AgenticFlinkConfig.forTesting();
-// Defaults will be used for all keys
-assertEquals("http://localhost:11434", config.get(ConfigKeys.OLLAMA_BASE_URL));
-assertEquals("qwen2.5:3b", config.get(ConfigKeys.OLLAMA_MODEL));
-assertEquals("localhost", config.get(ConfigKeys.REDIS_HOST));
-```
-
 ### Exporting as a Map
 
-Some subsystems (e.g., `StorageFactory`) accept `Map<String, String>`. Use `toMap()` to export all resolved values:
+`toMap()` exports all resolved values:
 
 ```java
-AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
-Map<String, String> allValues = config.toMap();
-
-LongTermMemoryStore store = StorageFactory.createLongTermStore("postgres", allValues);
+Map<String, String> allValues = AgenticFlinkConfig.fromEnvironment().toMap();
 ```
-
-`createShortTermStore` accepts only `"memory"`; short-term memory lives in Flink state
-(`FlinkStateShortTermMemory`), so `createShortTermStore("redis", ...)` throws
-`IllegalArgumentException`. `createLongTermStore` accepts `"memory"`, `"postgres"`, and
-`"postgresql"`; the Redis keys above configure the optional Redis stores (`RedisConversationStore`,
-`RedisA2ATaskStore`, the Redis A2A bridge), not a factory backend.
 
 The returned map contains every key that has a resolved non-null value, combining explicit properties, environment overrides, and defaults.
 
@@ -243,28 +139,6 @@ The returned map contains every key that has a resolved non-null value, combinin
 For local development, set environment variables in a `.env` file (loaded by your shell or process runner):
 
 ```bash
-# Ollama (local LLM)
-AGENTIC_FLINK_OLLAMA_BASE_URL=http://localhost:11434
-AGENTIC_FLINK_OLLAMA_MODEL=qwen2.5:3b
-
-# Redis
-AGENTIC_FLINK_REDIS_HOST=localhost
-AGENTIC_FLINK_REDIS_PORT=6379
-# AGENTIC_FLINK_REDIS_PASSWORD=
-
-# PostgreSQL
-AGENTIC_FLINK_POSTGRES_URL=jdbc:postgresql://localhost:5432/agentic_flink
-AGENTIC_FLINK_POSTGRES_USER=flink_user
-AGENTIC_FLINK_POSTGRES_PASSWORD=flink_password
-
-# Qdrant
-AGENTIC_FLINK_QDRANT_HOST=localhost
-AGENTIC_FLINK_QDRANT_PORT=6333
-
-# OpenAI (optional -- only if using OpenAI models)
-# AGENTIC_FLINK_OPENAI_API_KEY=sk-...
-# AGENTIC_FLINK_OPENAI_MODEL=gpt-6-luna
-
 # Checkpointing (exactly-once, enabled by default)
 AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS=10000
 AGENTIC_FLINK_CHECKPOINT_STORAGE_DIR=file:///var/lib/agentic-flink/checkpoints

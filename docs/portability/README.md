@@ -27,11 +27,6 @@ management, an in-process **HNSW** vector index, vector/long-term/conversation s
   [common primitives](../runtimes/common-primitives.md), [Flink](../runtimes/flink.md),
   [Pekko](../runtimes/pekko.md) and [pure Python](../runtimes/python.md).
 
-**Design (the why):**
-- [`00-essence-and-core-abstractions.md`](00-essence-and-core-abstractions.md),
-  the essence, the capability inventory, the engine-agnostic core + Engine SPI, the
-  capability matrix, and the ranked fit. Every engine doc is written against it.
-
 **Per-engine notes.** [`pekko.md`](pekko.md) covers Apache Pekko
 ([`agentic-pekko/`](../../agentic-pekko/)): an event-sourced, cluster-sharded entity per conversation.
 The notes for other engines moved out with their adapters; the code as it stood is at
