@@ -47,6 +47,7 @@ agent:
 a2a:
   - id: ask_specialist
     transport: http
+    effect: idempotent   # the peer is sent the key; without this it would be called once only
     url: "${AGENTIC_PEER_AGENT_URL}"
     retries: 1
     description: Delegate the turn to the specialist agent.

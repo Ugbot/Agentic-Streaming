@@ -343,7 +343,7 @@ def test_unavailable_store_fails_unless_degrade_is_configured():
 def test_retry_attempts_and_delays_follow_the_policy():
     slept: List[float] = []
     spec = (Agent(rid("a")).path("main", tool_triggers={"go": "flaky"})
-            .tool("flaky", "failing", value="ok", **{"x-fail-attempts": 2})
+            .tool("flaky", "failing", value="ok", effect="idempotent", **{"x-fail-attempts": 2})
             .policies(retry={"kind": "exponential", "max_attempts": 4, "initial_delay_ms": 100, "multiplier": 2.0,
                              "max_delay_ms": 150})
             .verifier("none").build())
@@ -369,7 +369,7 @@ def test_retry_delay_math():
 
 
 def test_retry_exhaustion_fails_with_tool_error_class():
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing")
+    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing", effect="idempotent")
             .policies(retry="fixed", max_attempts=2).verifier("none").build())
     rt = LocalRuntime(sleep=lambda _: None)
     rt.deploy(spec)

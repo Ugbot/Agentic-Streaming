@@ -65,8 +65,8 @@ skills:                    # OPTIONAL - reusable bundles a path can pull in by n
     facts: [account_tier]
 
 tools:
-  - {id: get_balance, kind: constant, value: 1234.56}          # a fixed value
-  - {id: web, kind: http, url: "http://localhost:8000/fetch"}  # POST params as JSON
+  - {id: get_balance, kind: constant, effect: read, value: 1234.56}  # a fixed value
+  - {id: web, kind: http, effect: read, url: "http://localhost:8000/fetch"}  # POST params as JSON
   - {id: ask_cs, kind: agent, url: "http://cs-agent:8080/agent"}  # CALL ANOTHER AGENT (A2A-as-tool)
 
 retrieval:

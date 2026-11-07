@@ -43,6 +43,8 @@ public final class Workflows {
                 "lookup_charge",
                 "kind",
                 "constant",
+                "effect",
+                "read",
                 "description",
                 "Last charge",
                 "value",
@@ -69,7 +71,16 @@ public final class Workflows {
         Map.of("on_tool_error", "fail", "retry", Map.of("kind", "none", "max_attempts", 1)));
     wf.put(
         "tools",
-        List.of(Map.of("id", "broken_tool", "kind", "failing", "description", "Always raises")));
+        List.of(
+            Map.of(
+                "id",
+                "broken_tool",
+                "kind",
+                "failing",
+                "effect",
+                "idempotent",
+                "description",
+                "Always raises")));
     return wf;
   }
 

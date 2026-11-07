@@ -53,8 +53,9 @@ as a header on HTTP and agent tools, in `_meta` on MCP tools, and with the call'
 The key is a SHA-256 of the conversation id, turn id and call index, so it leaks neither.
 
 - A tool declares `effect: read`, `idempotent` or `non_idempotent`. **A tool that declares nothing is
-  `idempotent`**, so it may be called again under its key. Anything that moves money or sends
-  something must declare `non_idempotent`.
+  `non_idempotent`**, so it is never called twice, gets one attempt, and a call with no recorded
+  result waits for a person. Only a tool that is safe to repeat should say otherwise. The same goes
+  for a peer, whose client retries are switched off, and an MCP server.
 - **A crash during a call to a `non_idempotent` tool leaves the outcome unknown.** The journal cannot
   tell whether the effect landed. The call is not repeated: the turn suspends with `unknown_outcome`
   and a person answers with a signal. Treat that person's answer as privileged, because

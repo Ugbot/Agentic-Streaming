@@ -168,7 +168,7 @@
           "type": "object"
         },
         "compensation": { "type": "string", "description": "tool id that undoes this tool, used by saga compensation" },
-        "effect": { "enum": ["read", "idempotent", "non_idempotent"], "default": "idempotent", "description": "what a repeated call does (primitives.md, section 10). A non_idempotent tool is never called twice by the runtime." }
+        "effect": { "enum": ["read", "idempotent", "non_idempotent"], "default": "non_idempotent", "description": "what a repeated call does (primitives.md, section 10). A non_idempotent tool is never called twice by the runtime, and a tool that declares nothing is one." }
       },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false
@@ -330,7 +330,8 @@
         "url": { "type": "string" },
         "transport": { "enum": ["inproc", "http", "grpc"], "default": "http" },
         "description": { "type": "string" },
-        "retries": { "type": "integer", "minimum": 0 },
+        "retries": { "type": "integer", "minimum": 0, "description": "the client's own retries; a non_idempotent peer gets none" },
+        "effect": { "enum": ["read", "idempotent", "non_idempotent"], "default": "non_idempotent", "description": "as for a tool (primitives.md, section 10)" },
         "timeout_ms": { "type": "integer", "minimum": 1 }
       },
       "additionalProperties": false

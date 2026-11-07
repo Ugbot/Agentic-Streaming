@@ -17,8 +17,8 @@ workflow:
     verifier: {kind: none}
   tools:
   - {id: a, kind: counting, x-count-by: keys, compensation: undo_a}
-  - {id: b, kind: failing}
-  - {id: undo_a, kind: counting, x-count-by: keys}
+  - {id: b, kind: failing, effect: idempotent}
+  - {id: undo_a, kind: counting, effect: idempotent, x-count-by: keys}
   saga:
     steps:
     - {name: a, tool: a}

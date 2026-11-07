@@ -30,7 +30,7 @@ _SPEC = yaml.safe_load(
         general: {brain: rule, prompt: gen}
       verifier: {kind: prefix}
     tools:
-      - {id: get_balance, kind: constant, value: 1234.56}
+      - {id: get_balance, kind: constant, effect: read, value: 1234.56}
     """
 )
 

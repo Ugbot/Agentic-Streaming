@@ -169,8 +169,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
       throw new IllegalArgumentException(
           "tool "
               + unsafe
-              + " is non_idempotent, and Flink state rolls back behind the outside world, so a"
-              + " re-run would repeat it: declare a durable stores.effects (postgres or kafka)");
+              + " is non_idempotent, or declares no effect, which is the same thing, and Flink state"
+              + " rolls back behind the outside world, so a re-run would repeat it: declare a durable"
+              + " stores.effects (postgres or kafka), or an effect of read or idempotent");
     }
     if (ChatClientFactories.isFailFast(chatClientFactory)
         && !GraphBuilder.usesScriptedLlm(this.spec)) {

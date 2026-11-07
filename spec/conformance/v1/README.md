@@ -50,6 +50,8 @@ Python owners.
 | `unknown-outcome-bad-signal` | a signal that does not answer the question is refused and changes nothing |
 | `unknown-outcome-twice` | a resolution is spent before its call, so a crash during that call is unknown again |
 | `transient-after-non-idempotent` | a transient failure after a `non_idempotent` call does not repeat it |
+| `undeclared-tool-unknown` | a tool that declares no effect is `non_idempotent`: unknown after a crash, never repeated |
+| `undeclared-tool-no-retry` | a tool that declares no effect gets one attempt, whatever the retry policy says |
 | `llm-reused-after-crash` | a recorded model answer is reused by index, so a re-run takes the same path |
 | `redelivery-mid-turn` | a partial turn is finished once, and everything after is a duplicate |
 | `compensation-failed-event` | a failed undo is on the log, the others run, the turn ends fatal |

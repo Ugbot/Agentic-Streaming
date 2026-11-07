@@ -180,7 +180,7 @@ class ReferenceRuntime:
         self.tools: Dict[str, Dict[str, Any]] = {t["id"]: t for t in workflow.get("tools", [])}
         self.peers = {p.get("name") or p["id"]: p for p in workflow.get("a2a", [])}
         for name, peer in self.peers.items():
-            self.tools[name] = {"id": name, "kind": "agent", "peer": peer}
+            self.tools[name] = {"id": name, "kind": "agent", "peer": peer, "effect": peer.get("effect", "non_idempotent")}
         self.guardrails = workflow.get("guardrails", [])
         self.llm: Dict[str, Any] = workflow.get("llm") or {}
         self._scope = str((workflow.get("agent") or {}).get("id", ""))
@@ -758,7 +758,7 @@ class ReferenceRuntime:
         turn = ctx.turn
         index = ctx.next_tool_index()
         key = (turn.conversation_id, turn.turn_id, "tool", index)
-        effect = spec.get("effect", "idempotent")
+        effect = spec.get("effect", "non_idempotent")
         ikey = idempotency_key(turn.conversation_id, turn.turn_id, index)
         kind = event or ("delegated" if spec.get("kind") == "agent" else "tool_called")
         intent = intent_of(tool_id, args, self._scope)

@@ -74,7 +74,7 @@ class WorkflowTimerEntityTest {
     wf.put("spec_version", "agentic/v1");
     wf.put("backend", "local");
     wf.put("agent", agent);
-    wf.put("tools", List.of(Map.of("id", "notify", "kind", "constant", "description", "Notify", "value", "sent")));
+    wf.put("tools", List.of(Map.of("id", "notify", "kind", "constant", "effect", "read", "description", "Notify", "value", "sent")));
     wf.put("timers", List.of(timer));
     GraphBuilder.Built built = GraphBuilder.build(wf, llm -> {
       throw new IllegalStateException("no llm");

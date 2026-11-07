@@ -442,8 +442,12 @@ transactional.
 ### Tool effect classes
 
 A tool declares `effect: read`, `idempotent` or `non_idempotent`. A tool that declares nothing is
-`idempotent`: it is sent a key and may be called again under it. That keeps every earlier
-workflow's behaviour, and it means a tool that moves money must say `non_idempotent`.
+`non_idempotent`: it is never called twice, it gets one attempt, and a call with no recorded result
+is `unknown_outcome`, suspended for a person. The safe guess about a tool nobody has described is
+that a second call would do harm, so a tool that is safe to repeat says `read` or `idempotent`, and
+a runtime whose log rolls back refuses an undeclared tool without a journal that outlives the
+rollback. The same goes for an `a2a` peer, whose client retries are switched off under
+`non_idempotent`, and for an `mcp` server, whose `effect` covers all its tools.
 
 `policies.retry` applies to `read` and `idempotent` tools. A `non_idempotent` tool gets one attempt
 per call, whatever the policy says.

@@ -102,12 +102,17 @@ public final class McpStdioClient implements AutoCloseable {
    * that call and every later one fail, rather than a stuck reader holding the client's lock.
    */
   public List<String> register(ToolRegistry reg, String prefix, long timeoutMs) {
+    return register(reg, prefix, timeoutMs, null);
+  }
+
+  /** As above with the server's declared {@code effect}, which all its tools take; null is the default. */
+  public List<String> register(ToolRegistry reg, String prefix, long timeoutMs, String effect) {
     List<String> ids = new ArrayList<>();
     String p = prefix == null ? "" : prefix;
     for (Map<String, String> spec : specs) {
       String name = spec.get("name");
       String id = p + name;
-      reg.registerKeyed(id, spec.getOrDefault("description", ""), null, null,
+      reg.registerKeyed(id, spec.getOrDefault("description", ""), null, effect,
           Deadlines.boundKeyed(id, timeoutMs,
               (params, call) -> callTool(name, params, call.idempotencyKey()), process::destroyForcibly));
       ids.add(id);

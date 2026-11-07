@@ -101,6 +101,7 @@ class CallDeadlineTest {
     Map<String, Object> t = new LinkedHashMap<>();
     t.put("id", "call");
     t.put("kind", "http");
+    t.put("effect", "idempotent");
     t.put("url", url);
     t.put("timeout_ms", timeoutMs);
     return t;

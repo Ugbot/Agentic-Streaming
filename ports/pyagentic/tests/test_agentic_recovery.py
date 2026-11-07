@@ -52,7 +52,8 @@ def test_a_function_tool_sees_its_key_and_every_attempt_carries_the_same_one():
             raise ToolError("try again")
         return "ok"
 
-    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay).verifier("none")
+    agent = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="idempotent")
+             .verifier("none"))
     spec = agent.policies(retry={"kind": "fixed", "max_attempts": 2, "initial_delay_ms": 0}).build()
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -141,7 +142,7 @@ def test_building_a_turn_with_no_id_still_raises():
 # -- stores ----------------------------------------------------------------------------
 
 def declared(effects: Optional[Dict[str, Any]], **conversation: Any) -> Dict[str, Any]:
-    doc = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).tool("pay", "constant", value="ok")
+    doc = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).tool("pay", "constant", value="ok", effect="read")
            .verifier("none").build().document)
     stores: Dict[str, Any] = dict(doc.get("stores") or {})
     if effects is not None:

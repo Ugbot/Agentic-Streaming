@@ -44,14 +44,14 @@ is an explicit human decision. Each line below has a crash test
 | Conversation log and state | Exactly-once. A recovered turn leaves the log an uninterrupted run would | Flink's log is keyed state, so it rolls back to the last checkpoint; the journal covers that window |
 | Model calls | A recorded answer is reused by index, so a re-run takes the same path | A crash during a call asks the model again, and you pay twice |
 | `effect: read` tools | A recorded result is reused | With no recorded result the read runs again and may answer differently |
-| `effect: idempotent` tools, the default | At-least-once under a stable `Idempotency-Key` | Exactly one effect, unless the tool honours the key. A tool that declares nothing is treated like this, so anything that moves money must say `non_idempotent` |
-| `effect: non_idempotent` tools | Never called twice by the runtime. A recorded result is reused | A crash during the call leaves the outcome **unknown**. The turn suspends and a person decides. Nothing can do better, because the runtime cannot see the far side of the call |
+| `effect: idempotent` tools | At-least-once under a stable `Idempotency-Key` | Exactly one effect, unless the tool honours the key |
+| `effect: non_idempotent` tools, the default | Never called twice by the runtime. A recorded result is reused | A crash during the call leaves the outcome **unknown**. The turn suspends and a person decides. Nothing can do better, because the runtime cannot see the far side of the call. A tool that declares nothing is treated like this, so one that is safe to repeat must say `read` or `idempotent` |
 | Sagas | Undoes get the forward args and result, run on any failure class, and carry on from the log after a crash | A failed undo is terminal: it is recorded and needs repair by hand |
 | Resume | One state machine: the original user keeps the turn, duplicates and unknown signals rewrite nothing, a crash after `turn_resumed` loses no approval | Who may send a signal: that is authorisation, which does not exist yet |
 
 These hold only with a journal that outlives the crash. `stores.effects` selects it: `postgres` or
-`kafka` on the JVM, `file` in Python. A Flink job refuses a `non_idempotent` tool without one. Without
-a declared journal the JVM keeps one in the process, which covers a task restart at most, so a
+`kafka` on the JVM, `file` in Python. A Flink job refuses a `non_idempotent` tool, which includes any
+tool, peer or MCP server that declares no effect, without one. Without a declared journal the JVM keeps one in the process, which covers a task restart at most, so a
 re-run after losing the process calls tools again, under the same keys. The journal must retain
 entries for longer than the longest rollback or redelivery you allow.
 

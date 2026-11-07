@@ -36,7 +36,7 @@ def test_a_function_tool_that_hangs_fails_the_attempt():
         release.wait(30)
         return "late"
 
-    runtime = _runtime({"id": "call", "kind": "function", "timeout_ms": 50}, hangs)
+    runtime = _runtime({"id": "call", "kind": "function", "timeout_ms": 50, "effect": "idempotent"}, hangs)
     started = time.monotonic()
     result = runtime.submit(Turn(f"c-{uuid.uuid4()}", f"t-{uuid.uuid4()}", "go"))
     release.set()

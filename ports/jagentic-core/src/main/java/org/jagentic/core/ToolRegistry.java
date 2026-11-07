@@ -44,7 +44,7 @@ public final class ToolRegistry {
     public Tool(String id, String description, Map<String, Object> inputSchema,
                 Function<Map<String, Object>, Object> fn, boolean peer) {
       this(id, description, inputSchema, (params, call) -> fn.apply(params), peer,
-          ToolEffect.IDEMPOTENT);
+          ToolEffect.DEFAULT);
     }
 
     public Tool(String id, String description, Map<String, Object> inputSchema,
@@ -90,14 +90,20 @@ public final class ToolRegistry {
                                     String effect,
                                     BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
     tools.put(id, new Tool(id, description, inputSchema, fn, false,
-        effect == null ? ToolEffect.IDEMPOTENT : effect));
+        effect == null ? ToolEffect.DEFAULT : effect));
     return this;
   }
 
   /** Register an A2A peer as a tool, told who is calling. */
   public ToolRegistry registerKeyedPeer(String id, String description,
                                         BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
-    tools.put(id, new Tool(id, description, null, fn, true, ToolEffect.IDEMPOTENT));
+    return registerKeyedPeer(id, description, null, fn);
+  }
+
+  /** As above, with the peer's declared {@code effect}; null means the default. */
+  public ToolRegistry registerKeyedPeer(String id, String description, String effect,
+                                        BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
+    tools.put(id, new Tool(id, description, null, fn, true, effect == null ? ToolEffect.DEFAULT : effect));
     return this;
   }
 

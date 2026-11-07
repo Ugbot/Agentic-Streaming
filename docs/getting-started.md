@@ -34,7 +34,7 @@ agent:
   verifier:
     kind: prefix
 tools:
-  - {id: get_balance, kind: constant, value: 1234.56}
+  - {id: get_balance, kind: constant, effect: read, value: 1234.56}
 ```
 
 `examples/pipelines/banking-llm.yaml` gives the `payments` path an `llm` brain and makes it

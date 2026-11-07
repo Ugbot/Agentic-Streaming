@@ -187,11 +187,13 @@ public final class WebFetcher {
 
   /** Register {@code web_fetch} (title+text) and {@code web_links} (link list). Opt-in. */
   public List<String> register(ToolRegistry reg) {
-    reg.register("web_fetch", "Fetch a web page (robots-aware) and return its title + text.", params -> {
+    reg.registerKeyed("web_fetch", "Fetch a web page (robots-aware) and return its title + text.", null,
+        org.jagentic.core.ToolEffect.READ, (params, call) -> {
       FetchResult r = fetch(String.valueOf(params.getOrDefault("url", ""))); // NOSONAR
       return r.title().isEmpty() ? r.text() : r.title() + "\n\n" + r.text();
     });
-    reg.register("web_links", "Fetch a web page and return its outbound links, one per line.", params -> {
+    reg.registerKeyed("web_links", "Fetch a web page and return its outbound links, one per line.", null,
+        org.jagentic.core.ToolEffect.READ, (params, call) -> {
       FetchResult r = fetch(String.valueOf(params.getOrDefault("url", "")));
       return String.join("\n", r.links());
     });

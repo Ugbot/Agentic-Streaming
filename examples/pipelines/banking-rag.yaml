@@ -47,7 +47,7 @@ skills:
     facts: [account_tier]
 
 tools:
-  - {id: get_balance, kind: constant, description: Look up the user's balance, value: 1234.56}
+  - {id: get_balance, kind: constant, effect: read, description: Look up the user's balance, value: 1234.56}
 
 retrieval:
   dim: 256

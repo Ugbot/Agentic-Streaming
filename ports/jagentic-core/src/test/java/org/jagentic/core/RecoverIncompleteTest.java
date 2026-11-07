@@ -22,8 +22,8 @@ class RecoverIncompleteTest {
         "spec_version", "agentic/v1",
         "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
             "paths", Map.of("p", Map.of("brain", "rule")), "verifier", Map.of("kind", "none")),
-        "tools", List.of(Map.of("id", "first", "kind", "counting", "x-world", "recover"),
-            Map.of("id", "second", "kind", "counting", "x-world", "recover")),
+        "tools", List.of(Map.of("id", "first", "kind", "counting", "effect", "idempotent", "x-world", "recover"),
+            Map.of("id", "second", "kind", "counting", "effect", "idempotent", "x-world", "recover")),
         "saga", Map.of("steps", List.of(Map.of("tool", "first"), Map.of("tool", "second"))));
     GraphBuilder.Built built = GraphBuilder.build(workflow, null);
     ConversationLog log = new ConversationLog.InMemory();

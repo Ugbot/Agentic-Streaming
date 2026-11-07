@@ -18,7 +18,7 @@ workflow:
         tool_triggers: {pay: pay}
     verifier: {kind: none}
   tools:
-  - {id: pay, kind: http, url: '{{http}}/hang', timeout_ms: 200}
+  - {id: pay, kind: http, effect: idempotent, url: '{{http}}/hang', timeout_ms: 200}
 turns:
 - {conversation_id: c1, turn_id: t1, text: pay the invoice}
 expect:

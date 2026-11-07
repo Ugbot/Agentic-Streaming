@@ -45,7 +45,7 @@ public final class A2AClient {
   /** As above under {@code idempotencyKey}, the same on every retry so the peer can deduplicate. */
   @SuppressWarnings("unchecked")
   public Map<String, Object> send(String conversationId, String text, String userId, String idempotencyKey) {
-    RuntimeException last = null;
+    Exception last = null;
     for (int attempt = 0; attempt <= retries; attempt++) {
       try {
         String body = MAPPER.writeValueAsString(
@@ -54,9 +54,15 @@ public final class A2AClient {
             .header("Content-Type", "application/json").header("Idempotency-Key", idempotencyKey)
             .timeout(Duration.ofSeconds(30))
             .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+        if (r.statusCode() >= 500) {
+          throw new java.io.IOException("HTTP " + r.statusCode());
+        }
         return MAPPER.readValue(r.body(), Map.class);
       } catch (Exception e) {
-        last = new RuntimeException(e);
+        last = e;
+        if (attempt == retries) {
+          break;
+        }
         try {
           Thread.sleep(200L * (1L << attempt));
         } catch (InterruptedException ie) {
@@ -64,7 +70,8 @@ public final class A2AClient {
         }
       }
     }
-    throw new RuntimeException("A2A send to " + base + "/agent failed", last);
+    // The request may have landed: no answer is not a failure, for a peer as for an http tool.
+    throw new OutcomeUnknown("A2A send to " + base + "/agent failed: " + last, last);
   }
 
   /** A ToolRegistry tool that delegates a turn to a peer agent. */

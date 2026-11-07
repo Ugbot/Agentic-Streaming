@@ -91,6 +91,9 @@ class ToolWorld:
     guard: threading.Lock = field(default_factory=threading.Lock)
 
 
+DEFAULT_EFFECT = "non_idempotent"  # the safe guess about a tool nobody has described
+
+
 @dataclass
 class ToolSpec:
     id: str
@@ -101,7 +104,7 @@ class ToolSpec:
     timeout_ms: Optional[int] = None
     parameters: Optional[Mapping[str, Any]] = None
     compensation: Optional[str] = None
-    effect: str = "idempotent"
+    effect: str = DEFAULT_EFFECT
     description: str = ""
     fail_attempts: Optional[int] = None
     peer: Optional[Mapping[str, Any]] = None
@@ -118,7 +121,7 @@ class ToolSpec:
             timeout_ms=entry.get("timeout_ms"),
             parameters=entry.get("parameters"),
             compensation=entry.get("compensation"),
-            effect=entry.get("effect", "idempotent"),
+            effect=entry.get("effect", DEFAULT_EFFECT),
             description=entry.get("description", ""),
             fail_attempts=entry.get("x-fail-attempts"),
             extensions={k: v for k, v in entry.items() if k.startswith("x-")},
@@ -127,6 +130,7 @@ class ToolSpec:
     @classmethod
     def from_peer(cls, peer: Mapping[str, Any]) -> "ToolSpec":
         return cls(id=peer.get("name") or peer["id"], kind="agent", peer=dict(peer),
+                   effect=peer.get("effect", DEFAULT_EFFECT),
                    timeout_ms=peer.get("timeout_ms"), description=peer.get("description", ""))
 
 

@@ -77,7 +77,8 @@ public final class Banking {
   }
 
   public static ToolRegistry defaultTools() {
-    return new ToolRegistry().register("get_balance", "Look up the user's balance", p -> 1234.56);
+    return new ToolRegistry().registerKeyed("get_balance", "Look up the user's balance", null, ToolEffect.READ,
+        (p, call) -> 1234.56);
   }
 
   /** A ready-to-use retriever seeded with the KB (hot tier only; cold = null). */

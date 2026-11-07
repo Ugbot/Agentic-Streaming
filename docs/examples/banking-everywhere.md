@@ -21,7 +21,7 @@ agent:
     general:  { brain: rule }
   verifier: { kind: prefix }
 tools:
-  - { id: get_balance, kind: constant, value: 1234.56 }
+  - { id: get_balance, kind: constant, effect: read, value: 1234.56 }
 retrieval: { dim: 256, kb: [ ... ] }
 guardrails:
   - { kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection" }

@@ -45,8 +45,8 @@ extra (`pip install 'pyagentic[flink]'`); nothing falls back silently.
 
 ## Effects and recovery
 
-A tool says what a repeated call does, and one that moves money must say so, since a tool that
-declares nothing may be called again under its key:
+A tool says what a repeated call does. A tool that declares nothing is `non_idempotent`, so one
+that is safe to repeat must say `read` or `idempotent`:
 
 ```python
 from agentic import Agent, current_call
@@ -57,7 +57,7 @@ def pay(user):
 agent = Agent("pay").path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="non_idempotent")
 ```
 
-`effect` is `read`, `idempotent` (the default) or `non_idempotent`. A `non_idempotent` tool is never
+`effect` is `read`, `idempotent` or `non_idempotent` (the default). A `non_idempotent` tool is never
 called twice by the runtime: a crash during the call, a timeout or an HTTP 5xx suspends the turn, and
 a signal with `resolution: applied`, `not_applied` or `failed` says what happened. `http` tools send
 the key as an `Idempotency-Key` header, and peers read it from `delegation.idempotency_key`.

@@ -16,7 +16,7 @@ workflow:
       - {tool: lookup_order, args: {order: "77"}}
       - {text: "your order shipped", x-fail-attempts: 1}
   tools:
-    - {id: lookup_order, kind: constant, value: "shipped"}
+    - {id: lookup_order, kind: constant, effect: read, value: "shipped"}
 turns:
   - {conversation_id: c1, turn_id: t1, text: "where is my order?"}
   - {conversation_id: c1, turn_id: t1, text: "where is my order?"}

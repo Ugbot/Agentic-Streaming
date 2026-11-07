@@ -29,7 +29,7 @@ agent:
     kind: prefix
 
 tools:
-  - {id: get_balance, kind: constant, value: 1234.56}
+  - {id: get_balance, kind: constant, effect: read, value: 1234.56}
 
 retrieval:
   embedder: hashing

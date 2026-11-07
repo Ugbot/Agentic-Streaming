@@ -11,6 +11,33 @@ exists.
 
 ## [Unreleased]
 
+### Changed
+
+- **Behaviour change: a tool that declares no `effect` is now `non_idempotent`, not `idempotent`.**
+  It is never called twice: `policies.retry` gives it one attempt, and a call with no recorded result
+  becomes `unknown_outcome` and suspends for a person, where before it was made again under its key.
+  The same goes for `a2a` peers, whose client retries are switched off under `non_idempotent`, and
+  `mcp` servers; both now accept `effect`. A Flink job refuses an undeclared tool without a durable
+  `stores.effects`. To keep the old behaviour, say `effect: idempotent` on the tool; a tool that only
+  reads says `effect: read`. Every example declares its tools.
+- A journal entry's `intent` is now a SHA-256 of the agent id and canonical JSON, and a model entry
+  has one too. An entry a run of an earlier build left behind no longer matches and ends that turn
+  `fatal`, so let turns in flight finish before upgrading.
+- `on_unavailable: degrade` on `stores.effects` no longer applies to a workflow with a
+  `non_idempotent` tool: the journal failing to open stops the workflow.
+
+### Fixed
+
+- A journal could answer one call with another's result: the JVM's intent was a 32-bit hash, a model
+  entry had no intent, and two workflows on one store shared entries. See `spec/v1/primitives.md`,
+  section 10.
+- A durable log over a journal that lost its entry made a second call on the JVM, and a re-run that
+  stopped short of a recorded call completed quietly. Both are now refused.
+- A new workflow version declaring a recorded `non_idempotent` call as `idempotent` repeated it.
+- The Kafka journal served reads from what it held when opened, so a conversation that moved to an
+  already open process missed what was written elsewhere. A Postgres that stopped answering hung the
+  turn for good. A journal outage on Pekko spent the `turn_id`.
+
 ### Added
 
 - The effect journal (`spec/v1/primitives.md`, section 10): every tool and model call is recorded

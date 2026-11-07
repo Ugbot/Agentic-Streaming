@@ -33,6 +33,7 @@ llm:
 mcp:
   - name: tools
     transport: stdio
+    effect: read         # covers every tool this server offers
     command: [python3, examples/pipelines/mcp_util_server.py]
 
 agent:

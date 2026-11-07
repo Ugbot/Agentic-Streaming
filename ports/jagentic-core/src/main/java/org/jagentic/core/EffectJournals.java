@@ -77,15 +77,17 @@ public final class EffectJournals {
     return outlives ? null : firstNonIdempotent(spec);
   }
 
+  /** A tool, peer or MCP server that declares no {@code effect} is {@link ToolEffect#DEFAULT}. */
   @SuppressWarnings("unchecked")
   private static String firstNonIdempotent(Map<String, Object> spec) {
-    if (!(spec.get("tools") instanceof List<?> tools)) {
-      return null;
-    }
-    for (Object t : tools) {
-      Map<String, Object> tool = (Map<String, Object>) t;
-      if (ToolEffect.NON_IDEMPOTENT.equals(tool.get("effect"))) {
-        return String.valueOf(tool.get("id"));
+    for (String section : List.of("tools", "a2a", "mcp")) {
+      if (spec.get(section) instanceof List<?> declared) {
+        for (Object d : declared) {
+          Map<String, Object> tool = (Map<String, Object>) d;
+          if (ToolEffect.NON_IDEMPOTENT.equals(tool.getOrDefault("effect", ToolEffect.DEFAULT))) {
+            return String.valueOf(tool.get(tool.containsKey("id") ? "id" : "name"));
+          }
+        }
       }
     }
     return null;

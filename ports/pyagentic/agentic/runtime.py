@@ -22,7 +22,7 @@ from .engine import Clock, Engine, Sleep, wall_clock_ms
 from .errors import CapabilityError, LogUnavailable, RuntimeNotAvailableError, ValidationError
 from .events import EventLog, FileEventLog, InMemoryEventLog, Turn
 from .journal import EffectJournal, FileEffectJournal, InMemoryEffectJournal
-from .tools import ToolRegistry, ToolSpec, ToolWorld
+from .tools import DEFAULT_EFFECT, ToolRegistry, ToolSpec, ToolWorld
 from .workflow_timers import ManualClock
 
 ENTRY_POINT_GROUP = "agentic.runtimes"
@@ -345,7 +345,8 @@ class LocalRuntime(Runtime):
         # Degrading is for tools that can stand to run again. A call that must happen once does not
         # run with nothing durable behind it, whatever the block says.
         degrade = effects.get("on_unavailable", "fail") == "degrade" and not any(
-            t.get("effect") == "non_idempotent" for t in doc.get("tools") or [])
+            t.get("effect", DEFAULT_EFFECT) == "non_idempotent"
+            for t in [*(doc.get("tools") or []), *(doc.get("a2a") or []), *(doc.get("mcp") or [])])
         if kind == "memory":
             return InMemoryEffectJournal()
         if kind == "file":

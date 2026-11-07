@@ -19,7 +19,7 @@ workflow:
         tool_triggers: {pay: pay}
     verifier: {kind: none}
   tools:
-  - {id: pay, kind: http, url: '{{http}}/status/500'}
+  - {id: pay, kind: http, effect: idempotent, url: '{{http}}/status/500'}
   policies:
     on_tool_error: fail
     retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, jitter: false}

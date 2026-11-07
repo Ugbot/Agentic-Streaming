@@ -57,8 +57,8 @@ class ParallelConversationsTest {
     s.put("spec_version", "agentic/v1");
     s.put("backend", "pekko");
     s.put("agent", agent);
-    s.put("tools", List.of(Map.of("id", MEET, "kind", "constant", "value", "m"),
-        Map.of("id", PROBE, "kind", "constant", "value", "p")));
+    s.put("tools", List.of(Map.of("id", MEET, "kind", "constant", "effect", "read", "value", "m"),
+        Map.of("id", PROBE, "kind", "constant", "effect", "read", "value", "p")));
     return s;
   }
 

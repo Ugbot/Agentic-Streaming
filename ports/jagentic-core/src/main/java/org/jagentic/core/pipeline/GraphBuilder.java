@@ -573,11 +573,18 @@ public final class GraphBuilder {
       try {
         McpStdioClient client = new McpStdioClient(command);
         client.register(tools, m.getOrDefault("name", "mcp") + "_",
-            Deadlines.timeoutOf(m, Deadlines.DEFAULT_TOOL_TIMEOUT_MS));
+            Deadlines.timeoutOf(m, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), (String) m.get("effect"));
       } catch (java.io.IOException e) {
         throw new java.io.UncheckedIOException(e);
       }
     }
+  }
+
+  /** The client's own retries, which a peer that must not be called twice does not get. */
+  private static int peerRetries(Map<String, Object> peer) {
+    boolean once = org.jagentic.core.ToolEffect.NON_IDEMPOTENT.equals(
+        peer.getOrDefault("effect", org.jagentic.core.ToolEffect.DEFAULT));
+    return once ? 0 : ((Number) peer.getOrDefault("retries", 2)).intValue();
   }
 
   /**
@@ -601,13 +608,13 @@ public final class GraphBuilder {
             throw new WorkflowValidator.WorkflowValidationException("a2a[" + name + "].url",
                 "http peers need a url");
           }
-          tools.registerKeyedPeer(name, desc, Deadlines.boundKeyed(name,
+          tools.registerKeyedPeer(name, desc, (String) a.get("effect"), Deadlines.boundKeyed(name,
               Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
-              org.jagentic.core.A2AClient.peerTool(url, ((Number) a.getOrDefault("retries", 2)).intValue())));
+              org.jagentic.core.A2AClient.peerTool(url, peerRetries(a))));
           break;
         case "inproc":
           Runtime peer = inprocPeers == null ? null : inprocPeers.get(name);
-          tools.registerKeyedPeer(name, desc, peer == null ? (params, call) -> "[" + name + "] delegated"
+          tools.registerKeyedPeer(name, desc, (String) a.get("effect"), peer == null ? (params, call) -> "[" + name + "] delegated"
               : Deadlines.boundKeyed(name, Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
                   inprocPeer(name, peer)));
           break;

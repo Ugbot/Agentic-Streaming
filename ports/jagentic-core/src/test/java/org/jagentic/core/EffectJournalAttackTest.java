@@ -483,4 +483,57 @@ class EffectJournalAttackTest {
         () -> rt.submit(Event.resume("c", "t", Map.of("resolution", "not_applied"))));
     assertEquals(before, log.events("c").size());
   }
+
+  // -- a tool nobody described ------------------------------------------------------------
+
+  @Test
+  void aToolThatDeclaresNothingIsNonIdempotent() {
+    ToolRegistry tools = new ToolRegistry().register("x", "x", p -> "ok");
+    assertEquals(ToolEffect.NON_IDEMPOTENT, tools.get("x").effect());
+    assertEquals(ToolEffect.NON_IDEMPOTENT,
+        new ToolRegistry().registerKeyed("x", "x", null, null, (p, c) -> "ok").get("x").effect());
+    assertEquals(ToolEffect.NON_IDEMPOTENT,
+        new ToolRegistry().registerKeyedPeer("x", "x", (p, c) -> "ok").get("x").effect());
+  }
+
+  @Test
+  void aWorkflowThatRollsBackRefusesAnUndeclaredToolPeerOrServer() {
+    assertEquals("t", EffectJournals.unsafeForRollback(Map.of("tools", List.of(Map.of("id", "t")))));
+    assertEquals("p", EffectJournals.unsafeForRollback(Map.of("a2a", List.of(Map.of("name", "p")))));
+    assertEquals("m", EffectJournals.unsafeForRollback(Map.of("mcp", List.of(Map.of("name", "m")))));
+    assertEquals(null, EffectJournals.unsafeForRollback(Map.of(
+        "tools", List.of(Map.of("id", "t", "effect", "read")),
+        "a2a", List.of(Map.of("name", "p", "effect", "idempotent")),
+        "mcp", List.of(Map.of("name", "m", "effect", "read")))));
+  }
+
+  /** The client's own retries are a second call too. */
+  @Test
+  void anUndeclaredPeerIsAskedOnceAndNoAnswerIsUnknown() throws Exception {
+    com.sun.net.httpserver.HttpServer peer =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    peer.createContext("/agent", exchange -> {
+      calls.incrementAndGet();
+      exchange.sendResponseHeaders(503, -1);
+      exchange.close();
+    });
+    peer.start();
+    try {
+      Map<String, Object> workflow = Map.of(
+          "spec_version", "agentic/v1",
+          "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
+              "paths", Map.of("p", Map.of("brain", "rule", "tool_triggers", Map.of("ask", "peer"))),
+              "verifier", Map.of("kind", "none")),
+          "a2a", List.of(Map.of("name", "peer", "transport", "http",
+              "url", "http://127.0.0.1:" + peer.getAddress().getPort())));
+      GraphBuilder.Built built = GraphBuilder.build(workflow, null);
+      TurnResult r = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+          new KeyedStateStore.InMemory(), built.tools(), null, new ConversationLog.InMemory())
+          .submit(Event.turn("c", "t", "u", "ask them"));
+      assertEquals(1, calls.get(), "no retry inside the client");
+      assertEquals(TurnStatus.SUSPENDED, r.status, "a 503 may have landed: " + r);
+    } finally {
+      peer.stop(0);
+    }
+  }
 }

@@ -247,8 +247,9 @@ class Agent:
                  compensation: Optional[str] = None, parameters: Optional[Mapping[str, Any]] = None,
                  effect: Optional[str] = None, timeout_ms: Optional[int] = None) -> "Agent":
         """Register a Python function as a tool. Arguments arrive as keyword arguments, and
-        `agentic.current_call()` gives its idempotency key. A tool that declares no `effect` may be
-        called again under that key, so one that moves money must say `non_idempotent`."""
+        `agentic.current_call()` gives its idempotency key. A tool that declares no `effect` is
+        `non_idempotent`: it is never called twice, so one that is safe to repeat says `read` or
+        `idempotent`."""
         if not callable(fn):
             raise ValidationError(f"use_tool({tool_id!r}) needs a callable")
         doc_lines = (fn.__doc__ or "").strip().splitlines()
