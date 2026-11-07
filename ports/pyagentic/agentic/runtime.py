@@ -7,6 +7,7 @@ resolves to nothing raises `RuntimeNotAvailableError`.
 
 from __future__ import annotations
 
+import os
 import random
 import threading
 import time
@@ -18,9 +19,9 @@ from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Seque
 from . import ir
 from .bindings import Bindings
 from .engine import Clock, Engine, Sleep, wall_clock_ms
-from .errors import CapabilityError, RuntimeNotAvailableError, ValidationError
+from .errors import CapabilityError, LogUnavailable, RuntimeNotAvailableError, ValidationError
 from .events import EventLog, FileEventLog, InMemoryEventLog, Turn
-from .journal import EffectJournal, InMemoryEffectJournal
+from .journal import EffectJournal, FileEffectJournal, InMemoryEffectJournal
 from .tools import ToolRegistry, ToolSpec, ToolWorld
 from .workflow_timers import ManualClock
 
@@ -125,6 +126,8 @@ def required_capabilities(doc: Mapping[str, Any]) -> List[str]:
         needs.append("cep")
     if doc.get("stores"):
         needs.append("durable_store")
+    if (doc.get("stores") or {}).get("effects"):
+        needs.append("effect_journal")
     return needs
 
 
@@ -219,6 +222,11 @@ class LocalRuntime(Runtime):
     log to a second `LocalRuntime` (or call `restart()`) to replay into a new instance.
     A `stores.conversation` block of kind `file` (or `store_dir=`) uses a `FileEventLog`.
 
+    `journal` is the effect journal, chosen the same way: `journal=`, else a `stores.effects` block of
+    kind `memory` or `file`, else a `FileEffectJournal` beside a file log, else an
+    `InMemoryEffectJournal`, which `restart()` shares like the in-memory log. A file log with a memory
+    journal is allowed but gives up what the journal is for across a real process death.
+
     `clock` is the processing clock workflow timers read and events are stamped with. It
     defaults to wall time; a `ManualClock` moves only when advanced, and `restart()` rebuilds
     a manual clock from the processing time the log recorded rather than carrying it over.
@@ -243,6 +251,7 @@ class LocalRuntime(Runtime):
         self,
         log: Optional[EventLog] = None,
         store_dir: Optional[str] = None,
+        journal: Optional[EffectJournal] = None,
         clock: Clock = wall_clock_ms,
         sleep: Sleep = time.sleep,
         seed: Optional[int] = None,
@@ -250,10 +259,11 @@ class LocalRuntime(Runtime):
     ) -> None:
         if unknown:
             raise ValidationError(f"LocalRuntime does not take options {sorted(unknown)}; "
-                                  f"it accepts log, store_dir, clock, sleep, seed")
+                                  f"it accepts log, store_dir, journal, clock, sleep, seed")
         if log is not None and store_dir is not None:
             raise ValidationError("pass either log= or store_dir=, not both")
         self._explicit_log = log
+        self._explicit_journal = journal
         self._store_dir = store_dir
         self.clock = clock
         self.sleep = sleep
@@ -261,7 +271,7 @@ class LocalRuntime(Runtime):
         self.log: Optional[EventLog] = None
         self.engine: Optional[Engine] = None
         self.world = ToolWorld()
-        self.journal: EffectJournal = InMemoryEffectJournal()
+        self.journal: Optional[EffectJournal] = None
         self.tools = ToolRegistry(self.world)
         self.doc: Optional[Dict[str, Any]] = None
         self.bindings = Bindings()
@@ -285,8 +295,9 @@ class LocalRuntime(Runtime):
         if missing:
             raise ValidationError("the workflow references Python bindings the spec did not carry:\n"
                                   + "\n".join(f"  - {m}" for m in missing))
-        self._release_log()
+        self._release_stores()
         self.log = self._open_log(doc)
+        self.journal = self._open_journal(doc)
         self.tools = ToolRegistry(self.world)
         for entry in doc.get("tools") or []:
             self.tools.declare(ToolSpec.from_document(entry))
@@ -321,11 +332,54 @@ class LocalRuntime(Runtime):
                               f"(memory, file); set on_unavailable: degrade to fall back",
                               "/stores/conversation/kind")
 
+    def _open_journal(self, doc: Mapping[str, Any]) -> EffectJournal:
+        if self._explicit_journal is not None:
+            return self._explicit_journal
+        effects = (doc.get("stores") or {}).get("effects")
+        beside = (os.path.join(self.log.directory, "effects") if isinstance(self.log, FileEventLog) else None)
+        if effects is None:
+            return FileEffectJournal(beside) if beside else InMemoryEffectJournal()
+        kind = effects.get("kind", "file" if beside else "memory")
+        degrade = effects.get("on_unavailable", "fail") == "degrade"
+        if kind == "memory":
+            return InMemoryEffectJournal()
+        if kind == "file":
+            directory = effects.get("url") or beside
+            if not directory:
+                raise ValidationError("a file effects store needs url: <directory>", "/stores/effects/url")
+            try:
+                return FileEffectJournal(directory)
+            except LogUnavailable as exc:
+                if not degrade:
+                    raise
+                self.degradations.append(f"stores.effects at {directory} unavailable ({exc}); using memory")
+                return InMemoryEffectJournal()
+        if degrade:
+            self.degradations.append(f"stores.effects kind {kind!r} unavailable locally; using memory")
+            return InMemoryEffectJournal()
+        raise ValidationError(f"effects store kind {kind!r} is not available in the local runtime "
+                              f"(memory, file); set on_unavailable: degrade to fall back",
+                              "/stores/effects/kind")
+
+    def _refusal(self, event: Union[Turn, Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Section 10: a turn with no `turn_id` cannot be deduplicated, so it is refused rather than
+        given an invented id. Only a mapping can arrive like that; a `Turn` will not build."""
+        if isinstance(event, Turn) or event.get("turn_id") or not event.get("conversation_id"):
+            return None
+        assert self.engine is not None
+        result = self.engine.refused(str(event["conversation_id"]), "",
+                                     "a turn needs a non-empty turn_id; it is the idempotency key")
+        ir.validate_result(result)
+        return result
+
     def submit(self, event: Union[Turn, Mapping[str, Any]]) -> Dict[str, Any]:
         if self._closed:
             raise ValidationError("this runtime is closed")
         if self.engine is None:
             raise ValidationError("deploy() a spec before submit()")
+        refused = self._refusal(event)
+        if refused is not None:
+            return refused
         turn = event if isinstance(event, Turn) else Turn(**dict(event))
         gate = self._gate(turn.conversation_id)
         return self._run_ticketed(self.engine, turn, gate, gate.take())
@@ -341,8 +395,12 @@ class LocalRuntime(Runtime):
         if self.engine is None:
             raise ValidationError("deploy() a spec before submit_async()")
         engine = self.engine
-        turn = event if isinstance(event, Turn) else Turn(**dict(event))
         outcome: "Future[Dict[str, Any]]" = Future()
+        refused = self._refusal(event)
+        if refused is not None:
+            outcome.set_result(refused)
+            return outcome
+        turn = event if isinstance(event, Turn) else Turn(**dict(event))
         with self._gates_guard:
             gate = self._gates.get(turn.conversation_id)
             if gate is None:
@@ -404,14 +462,26 @@ class LocalRuntime(Runtime):
         """Close this instance and return a fresh one over the same log, replayed."""
         if self.doc is None or self.log is None:
             raise ValidationError("nothing deployed; restart() needs a deployed workflow")
-        self.close()
+        reopen_log = self.log is not self._explicit_log and isinstance(self.log, FileEventLog)
+        reopen_journal = self.journal is not self._explicit_journal and isinstance(self.journal, FileEffectJournal)
         clock = ManualClock.recovered_from(self.log) if isinstance(self.clock, ManualClock) else self.clock
-        fresh = LocalRuntime(log=self.log, clock=clock, sleep=self.sleep)
+        self.close()
+        fresh = LocalRuntime(log=None if reopen_log else self.log, store_dir=self._store_dir if reopen_log else None,
+                             journal=None if reopen_journal else self.journal, clock=clock, sleep=self.sleep)
         fresh.rng = self.rng
         fresh.world = self.world
-        fresh.journal = self.journal
+        fresh.degradations = list(self.degradations)
         fresh.deploy(_Deployable(self.doc, self.bindings))
         return fresh
+
+    def recover_incomplete(self) -> List[Dict[str, Any]]:
+        """Re-drive every partial turn found on the log and return their results: a turn with events
+        and no terminal status that is not suspended, which only a crash can leave. A process that
+        restarts after a crash calls this, unless its source redelivers. It is safe either way, since
+        a redelivery of a turn that finished is a duplicate."""
+        if self.engine is None:
+            raise ValidationError("deploy() a spec before recover_incomplete()")
+        return [self.submit(turn) for turn in list(self.engine.partial_turns())]
 
     def state(self, conversation_id: str) -> Dict[str, Any]:
         if self.engine is None:
@@ -430,12 +500,14 @@ class LocalRuntime(Runtime):
         if workers is not None:
             workers.shutdown(wait=True)
         self.engine = None
-        self._release_log()
+        self._release_stores()
 
-    def _release_log(self) -> None:
-        """Close a log this runtime opened. One passed in as `log=` belongs to the caller."""
+    def _release_stores(self) -> None:
+        """Close what this runtime opened. What was passed in as `log=` or `journal=` is the caller's."""
         if self.log is not None and self.log is not self._explicit_log:
             self.log.close()
+        if self.journal is not None and self.journal is not self._explicit_journal:
+            self.journal.close()
 
 
 class _Deployable:

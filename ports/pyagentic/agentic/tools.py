@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextvars
 import hashlib
+import http.client
 import inspect
 import json
 import queue
@@ -20,7 +21,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Tuple
 
 from jsonschema import Draft202012Validator
 
-from .errors import ToolError, ValidationError
+from .errors import OutcomeUnknown, ToolError, ValidationError
 
 ToolFn = Callable[..., Any]
 
@@ -48,6 +49,10 @@ class Delegation:
     call_index: int
     text: str
 
+    @property
+    def idempotency_key(self) -> str:
+        return idempotency_key(self.conversation_id, self.turn_id, self.call_index)
+
 
 @dataclass(frozen=True)
 class ToolCall:
@@ -61,6 +66,14 @@ class ToolCall:
     @property
     def idempotency_key(self) -> str:
         return idempotency_key(self.conversation_id, self.turn_id, self.index)
+
+
+_CURRENT_CALL: "contextvars.ContextVar[Optional[ToolCall]]" = contextvars.ContextVar("agentic_tool_call", default=None)
+
+
+def current_call() -> Optional[ToolCall]:
+    """The call a function tool is running as, with its `idempotency_key`. None outside a tool."""
+    return _CURRENT_CALL.get()
 
 
 @dataclass
@@ -173,6 +186,13 @@ class ToolRegistry:
         bad arguments or an unrunnable tool kind."""
         spec = self.spec(tool_id)
         self.validate_args(tool_id, args)
+        token = _CURRENT_CALL.set(call)
+        try:
+            return self._run(spec, args, call)
+        finally:
+            _CURRENT_CALL.reset(token)
+
+    def _run(self, spec: ToolSpec, args: Mapping[str, Any], call: ToolCall) -> Any:
         kind = spec.kind
         if kind == "constant":
             return spec.value
@@ -187,8 +207,8 @@ class ToolRegistry:
         if kind == "agent":
             return self._execute_peer(spec, args, call)
         if kind == "http":
-            return self._execute_http(spec, args)
-        raise ValidationError(f"tool {tool_id!r} has kind {kind!r}, which this runtime cannot execute")
+            return self._execute_http(spec, args, call)
+        raise ValidationError(f"tool {spec.id!r} has kind {kind!r}, which this runtime cannot execute")
 
     def _execute_failing(self, spec: ToolSpec) -> Any:
         with self.world.guard:
@@ -238,23 +258,31 @@ class ToolRegistry:
         raise ValidationError(f"peer {spec.id!r} uses transport {transport!r} and no in-process handler is "
                               f"bound; this runtime delegates in-process only (Agent.use_peer)")
 
-    def _execute_http(self, spec: ToolSpec, args: Mapping[str, Any]) -> Any:
+    def _execute_http(self, spec: ToolSpec, args: Mapping[str, Any], call: ToolCall) -> Any:
+        """A 2xx is the result. A 4xx is a definite failure. A 5xx, a timeout or a lost connection
+        may have landed, so it is `OutcomeUnknown`."""
         if not spec.url:
             raise ValidationError(f"http tool {spec.id!r} has no url")
         timeout = (spec.timeout_ms or DEFAULT_TOOL_TIMEOUT_MS) / 1000.0
+        headers = {"Idempotency-Key": call.idempotency_key}
         if spec.method == "GET":
             query = urllib.parse.urlencode({k: json.dumps(v) if not isinstance(v, str) else v
                                             for k, v in args.items()})
             url = f"{spec.url}?{query}" if query else spec.url
-            request = urllib.request.Request(url, method="GET")
+            request = urllib.request.Request(url, method="GET", headers=headers)
         else:
             body = json.dumps(dict(args)).encode("utf-8")
             request = urllib.request.Request(spec.url, data=body, method="POST",
-                                             headers={"Content-Type": "application/json"})
+                                             headers={**headers, "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 raw = response.read().decode("utf-8")
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        except urllib.error.HTTPError as exc:
+            failure = OutcomeUnknown if exc.code >= 500 else ToolError
+            raise failure(f"{spec.id} failed: HTTP {exc.code}") from exc
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
+            raise OutcomeUnknown(f"{spec.id} failed: {exc}") from exc
+        except ValueError as exc:  # a url that could not be sent, so nothing can have landed
             raise ToolError(f"{spec.id} failed: {exc}") from exc
         try:
             return json.loads(raw)
@@ -281,7 +309,7 @@ def _bounded(spec: ToolSpec, default_ms: int, call: Callable[[], Any]) -> Any:
     try:
         ok, value = outcome.get(timeout=limit_ms / 1000.0)
     except queue.Empty:
-        raise ToolError(f"{spec.id} timed out after {limit_ms} ms") from None
+        raise OutcomeUnknown(f"{spec.id} timed out after {limit_ms} ms") from None
     if ok:
         return value
     raise value

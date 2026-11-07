@@ -138,9 +138,11 @@ class _Prior:
     occurrence for events with no index. Appending takes from here first, which is what makes it
     at-most-once."""
 
-    def __init__(self, events: Sequence[Event]) -> None:
+    def __init__(self, events: Sequence[Event], resuming_now: bool = False) -> None:
         self.resumes = [e for e in events if e.type == "turn_resumed"]
         last_resume = self.resumes[-1].sequence if self.resumes else -1
+        if resuming_now:  # the resume about to be appended answers everything on the log so far
+            last_resume = events[-1].sequence + 1 if events else 0
         self._kept: Dict[Tuple[str, Any, Any], Deque[Event]] = {}
         for event in events:
             if event.type == "turn_resumed":
@@ -400,7 +402,7 @@ class Engine:
             if state == RESUMING:
                 return self._replay(ctx, log, events, resuming=True)
             if retryable:
-                self._adopt(ctx, log, events)
+                self._adopt(ctx, log, events, resuming_now=True)
                 self._append(ctx, "turn_resumed", self._resumed_payload(turn))
                 return self._continue(ctx, resuming=True)
             return self._duplicate(turn, log, events)
@@ -430,7 +432,8 @@ class Engine:
         duplicate["runtime_detail"] = {"duplicate_of": recorded["runtime_detail"], "re_executed": False}
         return duplicate
 
-    def _adopt(self, ctx: _TurnContext, log: Sequence[Event], events: Sequence[Event], fresh: bool = False) -> None:
+    def _adopt(self, ctx: _TurnContext, log: Sequence[Event], events: Sequence[Event], fresh: bool = False,
+               resuming_now: bool = False) -> None:
         """Make `ctx` the turn as first received, with what its earlier runs left on the log. The
         user, text and metadata are those of `turn_received`, whoever delivered it this time."""
         received = next((e for e in events if e.type == "turn_received"), None)
@@ -444,7 +447,7 @@ class Engine:
         spent, run = _split_runs(events)
         ctx.next_index, ctx.next_llm_index = _next_indices(spent)
         ctx.rerun = bool(spent)
-        ctx.prior = _Prior(run)
+        ctx.prior = _Prior(run, resuming_now)
         ctx.path = next((str(e.payload["path"]) for e in reversed(events) if e.type == "routed"), None)
         replayed = {e.sequence for e in run}
         ctx.history = [e for e in log if e.sequence not in replayed]
@@ -466,7 +469,7 @@ class Engine:
             problem = self._resolve(turn, suspended, events)
             if problem is not None:
                 return self.refused(turn.conversation_id, turn.turn_id, problem)
-        self._adopt(ctx, log, events)
+        self._adopt(ctx, log, events, resuming_now=True)
         self._append(ctx, "turn_resumed", self._resumed_payload(turn))
         return self._continue(ctx, resuming=True)
 
