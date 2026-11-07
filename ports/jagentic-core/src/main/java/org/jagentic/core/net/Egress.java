@@ -10,8 +10,9 @@ import java.util.function.UnaryOperator;
  * separated; empty means any public host) and {@code AGENTIC_EGRESS_ALLOW_PRIVATE}, or the system
  * properties {@code agentic.egress.allow_hosts} and {@code agentic.egress.allow_private}.
  *
- * <p>A check resolves the host and the client resolves it again to connect, so a name that changes
- * between the two gets through. Redirects are not followed.
+ * <p>{@link #check} resolves the host to say no early. A call itself goes through {@link PinnedHttp},
+ * which resolves once, checks every address and connects to one of them, so a name that changes after
+ * the check (DNS rebinding) cannot move it. Redirects are not followed.
  */
 public final class Egress {
 

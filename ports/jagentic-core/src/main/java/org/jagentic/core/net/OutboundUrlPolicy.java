@@ -147,6 +147,45 @@ public final class OutboundUrlPolicy implements Serializable {
   }
 
   public URI validate(URI uri) throws BlockedUrlException {
+    if (allowPrivateAddresses) {
+      checkedHost(uri);
+    } else {
+      addresses(uri);
+    }
+    return uri;
+  }
+
+  /**
+   * Validates {@code uri} and returns the addresses its host resolved to, every one of them checked.
+   * A caller connects to one of these and resolves nothing again, so a name whose answer changes
+   * after the check (DNS rebinding) cannot move the call. With private addresses allowed nothing is
+   * refused for its address, but the host is still resolved here, once.
+   */
+  public InetAddress[] addresses(URI uri) throws BlockedUrlException {
+    String asciiHost = checkedHost(uri);
+    InetAddress[] addresses;
+    try {
+      addresses = resolver.resolve(asciiHost);
+    } catch (UnknownHostException e) {
+      throw new BlockedUrlException("host does not resolve: " + asciiHost);
+    }
+    if (addresses == null || addresses.length == 0) {
+      throw new BlockedUrlException("host does not resolve: " + asciiHost);
+    }
+    if (allowPrivateAddresses) {
+      return addresses;
+    }
+    for (InetAddress a : addresses) {
+      if (isForbiddenAddress(a)) {
+        throw new BlockedUrlException(
+            "host " + asciiHost + " resolves to a non-public address " + a.getHostAddress());
+      }
+    }
+    return addresses;
+  }
+
+  /** Everything but the addresses: scheme, userinfo, host and the allowlist. The host in ASCII. */
+  private String checkedHost(URI uri) throws BlockedUrlException {
     String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
     if (!scheme.equals("http") && !scheme.equals("https")) {
       throw new BlockedUrlException(
@@ -163,25 +202,7 @@ public final class OutboundUrlPolicy implements Serializable {
     if (!allowedHosts.isEmpty() && !hostAllowed(asciiHost)) {
       throw new BlockedUrlException("host not on allowlist: " + asciiHost);
     }
-    if (allowPrivateAddresses) {
-      return uri;
-    }
-    InetAddress[] addresses;
-    try {
-      addresses = resolver.resolve(asciiHost);
-    } catch (UnknownHostException e) {
-      throw new BlockedUrlException("host does not resolve: " + asciiHost);
-    }
-    if (addresses == null || addresses.length == 0) {
-      throw new BlockedUrlException("host does not resolve: " + asciiHost);
-    }
-    for (InetAddress a : addresses) {
-      if (isForbiddenAddress(a)) {
-        throw new BlockedUrlException(
-            "host " + asciiHost + " resolves to a non-public address " + a.getHostAddress());
-      }
-    }
-    return uri;
+    return asciiHost;
   }
 
   /** True if the policy would accept {@code url}; never throws. */

@@ -243,10 +243,18 @@ change them:
 On Flink these go in the TaskManager's environment. In Java the system properties
 `agentic.egress.allow_hosts` and `agentic.egress.allow_private` do the same.
 
+**DNS rebinding.** A call resolves its host once, checks every address, and connects to one it
+checked, keeping the host name for `Host`, SNI and the certificate check, so a name whose answer
+changes after the check cannot move the call. Java does it with `PinnedHttp`, an HTTP/1.1 client
+(the JDK's `HttpClient` cannot be told an address) used by HTTP tools, A2A peers, models and the
+gateway's JWKS fetch, whose plain-http loopback exception is now checked at every fetch rather than
+once at start. Python does it in `agentic.egress`, for HTTP tools, models and the older engine's
+peers, and those calls do not use an environment proxy, which would resolve the name again.
+`AGENTIC_HTTP_CONNECT_TIMEOUT_MS` (default 10000) caps a Java connect. `DnsRebindingAttackTest`,
+`JwksRebindingAttackTest` and `test_dns_rebinding_attack.py` prove it.
+
 What it does not cover:
 
-- A check resolves the host and the client resolves it again to connect, so a name that changes
-  between the two gets through.
 - Redirects are not followed at all: a 3xx is a definite failure.
 - `LangChain4jChatClient`, embedders, vector stores and the journal connect to what the operator
   configured. They do not go through this check.

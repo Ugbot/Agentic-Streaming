@@ -1,9 +1,11 @@
 package org.jagentic.gateway.auth;
 
+import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.text.ParseException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -22,9 +24,12 @@ import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.DefaultJWTClaimsVerifier;
+import com.nimbusds.jose.util.Resource;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 
 import org.jagentic.core.Principal;
+import org.jagentic.core.net.Egress;
+import org.jagentic.core.net.PinnedHttp;
 
 /**
  * Validates an OIDC access token: its signature against the issuer's JWKS, then issuer, audience,
@@ -67,9 +72,46 @@ public final class OidcAuthenticator implements Authenticator {
   private static JWKSource<SecurityContext> keysAt(String url) {
     try {
       URL jwks = URI.create(url).toURL();
-      return JWKSourceBuilder.<SecurityContext>create(jwks).retrying(true).build();
+      return JWKSourceBuilder.<SecurityContext>create(jwks, OidcAuthenticator::fetch).retrying(true).build();
     } catch (MalformedURLException e) {
       throw new IllegalArgumentException("AGENTIC_OIDC_JWKS_URL is not a url: " + url, e);
+    }
+  }
+
+  /**
+   * The keys, from an address resolved once for this fetch and checked, which is where the socket
+   * goes. Whoever can change the keys can sign any token: over plain http every address must be
+   * loopback, on every fetch, and not only when the gateway started, or a name that said loopback
+   * then could point somewhere else now. Over https the certificate names the host.
+   */
+  static Resource fetch(URL url) throws java.io.IOException {
+    URI uri;
+    try {
+      uri = url.toURI();
+    } catch (java.net.URISyntaxException e) {
+      throw new java.io.IOException("not a url: " + url, e);
+    }
+    PinnedHttp.Addresses checked = target -> {
+      InetAddress[] all = PinnedHttp.anyAddress().of(target);
+      if ("http".equalsIgnoreCase(target.getScheme())) {
+        for (InetAddress a : all) {
+          if (!a.isLoopbackAddress()) {
+            throw new Egress.Blocked("the issuer's keys come over plain http from loopback only, and "
+                + target.getHost() + " is at " + a.getHostAddress(), null);
+          }
+        }
+      }
+      return all;
+    };
+    try {
+      PinnedHttp.Response r = PinnedHttp.send("GET", uri, Map.of("Accept", "application/json"), null,
+          Duration.ofSeconds(10), checked);
+      if (r.status() != 200) {
+        throw new java.io.IOException("the issuer's keys answered HTTP " + r.status());
+      }
+      return new Resource(r.text(), r.header("content-type"));
+    } catch (Egress.Blocked e) {
+      throw new java.io.IOException(e.getMessage(), e);
     }
   }
 

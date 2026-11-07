@@ -3,9 +3,6 @@ package org.jagentic.core.pipeline;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -431,36 +428,36 @@ public final class GraphBuilder {
   private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> httpTool(
       String id, String url, long timeoutMs, String bearer) {
     Duration timeout = Duration.ofMillis(timeoutMs);
-    HttpClient http = HttpClient.newBuilder().connectTimeout(timeout).build();
     return (params, call) -> {
+      URI target;
       try {
-        org.jagentic.core.net.Egress.check(url);
-      } catch (org.jagentic.core.net.Egress.Blocked e) {
+        target = URI.create(url);
+      } catch (IllegalArgumentException e) {
         throw new IllegalStateException(id + " failed: blocked by egress policy", e);
       }
       try {
         String body = JSON.writeValueAsString(params == null ? Map.of() : params);
-        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))
-            .timeout(timeout)
-            .header("Content-Type", "application/json")
-            .header("Idempotency-Key", call.idempotencyKey())
-            .POST(HttpRequest.BodyPublishers.ofString(body));
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Idempotency-Key", call.idempotencyKey());
         if (bearer != null) {
-          req.header("Authorization", "Bearer " + org.jagentic.core.Secrets.resolve(bearer));
+          headers.put("Authorization", "Bearer " + org.jagentic.core.Secrets.resolve(bearer));
         }
-        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() >= 500) {
-          throw new OutcomeUnknown(id + " failed: HTTP " + resp.statusCode());
+        // Resolved once, checked, and connected to as checked: a rebinding name cannot move it.
+        org.jagentic.core.net.PinnedHttp.Response resp = org.jagentic.core.net.PinnedHttp.send("POST", target,
+            headers, body.getBytes(java.nio.charset.StandardCharsets.UTF_8), timeout,
+            org.jagentic.core.net.PinnedHttp.egress());
+        if (resp.status() >= 500) {
+          throw new OutcomeUnknown(id + " failed: HTTP " + resp.status());
         }
-        if (resp.statusCode() / 100 != 2) {
-          throw new IllegalStateException(id + " failed: HTTP " + resp.statusCode());
+        if (resp.status() / 100 != 2) {
+          throw new IllegalStateException(id + " failed: HTTP " + resp.status());
         }
-        return parseBody(resp.body());
+        return parseBody(resp.text());
+      } catch (org.jagentic.core.net.Egress.Blocked e) {
+        throw new IllegalStateException(id + " failed: blocked by egress policy", e);
       } catch (IOException e) {
         throw new OutcomeUnknown(id + " failed: " + e.getMessage(), e);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new IllegalStateException(id + " was interrupted", e);
       }
     };
   }

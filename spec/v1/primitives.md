@@ -681,7 +681,8 @@ before anything is sent: `http` and `https` only, no credentials in the URL, and
 link-local or metadata address unless the operator allows it. The settings belong to the runtime's
 deployment, not to the document. A refused attempt is a definite failure with the error `<tool>
 failed: blocked by egress policy`, so a `non_idempotent` tool is not left unknown. Redirects are not
-followed. A binding allows its own local stub and nothing else, so a fixture can prove the refusals.
+followed. The check resolves the host once and the call connects to an address it checked, so a name
+whose answer changes in between (DNS rebinding) cannot move the call. A binding allows its own local stub and nothing else, so a fixture can prove the refusals.
 
 ### Tools that need a person
 
