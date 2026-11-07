@@ -201,10 +201,10 @@ MiniCluster with the test classpath.
 ./mvnw -q test -Dtest=FlinkConformanceTest
 ```
 
-Result on 2026-11-06 (the class runs the 74 fixtures plus two checks of its own):
+Result on 2026-11-06 (the class runs the 76 fixtures plus two checks of its own):
 
 ```
-Tests run: 76, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 78, Failures: 0, Errors: 0, Skipped: 0
 ```
 
 A skip, when there is one, is never a pass.
@@ -266,7 +266,8 @@ ollama pull nomic-embed-text
 ```
 
 To point `examples/pipelines/banking-llm.yaml` at a model instead of the script, change the `llm`
-block to `provider: ollama` and `model: qwen2.5:3b`; `provider: openai` reads `OPENAI_API_KEY`.
+block to `provider: ollama` and `model: qwen2.5:3b`; `provider: openai` reads `OPENAI_API_KEY`,
+`anthropic` reads `ANTHROPIC_API_KEY` and `gemini` reads `GEMINI_API_KEY`.
 [using a real model](portability/using-a-real-model.md) has the keys.
 
 ### Qdrant, Postgres, Valkey

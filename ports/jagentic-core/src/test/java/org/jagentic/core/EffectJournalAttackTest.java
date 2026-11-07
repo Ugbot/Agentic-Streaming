@@ -536,4 +536,43 @@ class EffectJournalAttackTest {
       peer.stop(0);
     }
   }
+
+  /**
+   * A rollback loses the log and the clock moves on, so a timer due on the re-run was not due on the
+   * first run and takes the first index. The payment is not repeated: the turn stops, fatal, and a
+   * person has to look. It does not finish, which is the limit of index-keyed replay.
+   */
+  @Test
+  void aTimerThatShiftsTheIndicesStopsTheTurnAndRepeatsNothing() {
+    String world = "timer-shift-" + System.nanoTime();
+    Map<String, Object> workflow = Map.of(
+        "spec_version", "agentic/v1",
+        "timers", List.of(Map.of("id", "nudge", "after_ms", 1000, "tool", "note")),
+        "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
+            "paths", Map.of("p", Map.of("brain", "rule", "tool_triggers", Map.of("pay", "pay"))),
+            "verifier", Map.of("kind", "none")),
+        "tools", List.of(
+            Map.of("id", "pay", "kind", "counting", "effect", "non_idempotent", "x-world", world),
+            Map.of("id", "note", "kind", "constant", "effect", "read", "value", "noted")));
+    GraphBuilder.Built built = GraphBuilder.build(workflow, null);
+    EffectJournal journal = new EffectJournal.InMemory();
+    LogicalClock.Manual clock = new LogicalClock.Manual();
+    ConversationLog beforeTheCrash = new ConversationLog.InMemory();
+    LocalRuntime first = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+        new KeyedStateStore.InMemory(), built.tools(), null, beforeTheCrash, clock).withJournal(journal);
+    first.submit(Event.turn("c", "t0", "u", "hello"));
+    ConversationLog checkpoint = new ConversationLog.InMemory();
+    beforeTheCrash.events("c").forEach(e -> checkpoint.append("c", e.turnId(),
+        EventType.valueOf(e.type().toUpperCase()), e.payload(), e.timestamp(), e.metadata()));
+    assertEquals(TurnStatus.COMPLETED, first.submit(Event.turn("c", "t1", "u", "pay now")).status);
+
+    clock.advance(5000);
+    TurnResult rerun = new LocalRuntime(built.graph(), new ConversationStore.InMemory(),
+        new KeyedStateStore.InMemory(), built.tools(), null, checkpoint, clock).withJournal(journal)
+        .submit(Event.turn("c", "t1", "u", "pay now"));
+
+    assertEquals(TurnStatus.FAILED, rerun.status, rerun.toString());
+    assertEquals(TurnError.ErrorClass.FATAL, rerun.error.errorClass());
+    assertEquals(1, FixtureWorld.count(world, "pay/c", "", false) - 1, "one call, then this look");
+  }
 }

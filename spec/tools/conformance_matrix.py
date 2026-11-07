@@ -405,6 +405,9 @@ def run_maven_suite(suite: MavenSuite, fixtures: Dict[str, Dict[str, Any]], root
     try:
         if suite.needs_core_install:
             ensure_core_installed(root, logs)
+        # A result left by an earlier run must not stand in for a fixture that died before writing.
+        for stale in (root / Path(suite.pom).parent / "target" / "conformance-results").glob("*.json"):
+            stale.unlink()
         proc = _run(cmd, root, logs / f"{suite.name}.log")
         reports_dir = root / Path(suite.pom).parent / "target" / "surefire-reports"
         report.fixtures = compare_written_results(

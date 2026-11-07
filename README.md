@@ -24,7 +24,7 @@ against the [reference spec](spec/v1/primitives.md).
 | Apache Pekko | `ports/jagentic-core`, in `agentic-pekko` | One event-sourced, cluster-sharded actor per conversation | [Pekko](docs/runtimes/pekko.md) |
 
 The contract is the `agentic/v1` spec under [`spec/v1`](spec/v1/primitives.md), its reference runtime
-and the 74 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
+and the 76 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
 mostly rule brains and scripted stubs. They crash turns at every event and around every call, but
 they do not cover a real model, so a pass is a narrow claim; see
 [conformance results](docs/runtimes/README.md#conformance-results).
@@ -53,7 +53,12 @@ These hold only with a journal that outlives the crash. `stores.effects` selects
 `kafka` on the JVM, `file` in Python. A Flink job refuses a `non_idempotent` tool, which includes any
 tool, peer or MCP server that declares no effect, without one. Without a declared journal the JVM keeps one in the process, which covers a task restart at most, so a
 re-run after losing the process calls tools again, under the same keys. The journal must retain
-entries for longer than the longest rollback or redelivery you allow.
+entries for longer than the longest rollback or redelivery you allow. Effects were tested with a
+real TaskManager killed on a Flink 2.2.1 session cluster and the Kafka journal
+(`tools/kafka-journal-tm-loss.sh`), with a rescale restore on Postgres and Kafka
+(`EffectJournalStoresIT`), and with a journal that fails or stalls at each write
+(`EffectJournalAttackTest`, `test_agentic_journal_attack.py`). Postgres has not been run on a real
+session cluster, and Pekko's journal outage is tested only on one node.
 
 ## Known failures
 
@@ -62,7 +67,15 @@ entries for longer than the longest rollback or redelivery you allow.
   the journal. A run that reached a `non_idempotent` tool is replayed instead, so that tool is not
   repeated.
 - **A real model has only been exercised against a local stand-in server.** A document can declare
-  `provider: ollama` or `openai` on Flink and in the `agentic` Python package.
+  `provider: ollama`, `openai`, `anthropic` or `gemini` on Flink and Pekko, and `ollama` or `openai`
+  in the `agentic` Python package. No live provider has been called; the stubs check each provider's
+  documented wire format, so a change on the provider's side would not show.
+- **A rollback followed by a timer coming due stops the turn.** Calls are matched by index, so a
+  timer that was not due on the first run and is on the re-run shifts them. Nothing is repeated, but
+  the turn ends `fatal` and needs a person, even though the payment landed.
+- **Two live writers on one Kafka journal key are not excluded.** A topic has no compare-and-set, and
+  a process that has been replaced but is still running can race its replacement. Postgres excludes
+  them on the intent through the primary key, but later writes are plain upserts on both.
 - **The `pipeline.yaml` CLI is only partly on the conformance semantics.** `ports/agentic-pipeline`
   runs a document on the `agentic` core when the core can run all of it. A document that needs MCP,
   remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing

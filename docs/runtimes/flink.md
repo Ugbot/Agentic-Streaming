@@ -18,8 +18,10 @@ conformance binding.
   refuses a `non_idempotent` tool without one, and without any journal a re-run calls every tool
   again, under the same keys. A crash during a call to a `non_idempotent` tool leaves the outcome
   unknown: the turn suspends and a person answers (`PayAfterRestoreTest` shows each crash point
-  against a real HTTP server, `EffectJournalStoresIT` the two stores). Each journal write blocks the
-  task thread, like the call it guards. The Kafka journal holds the whole topic in every subtask.
+  against a real HTTP server, `EffectJournalStoresIT` the two stores,
+  `tools/kafka-journal-tm-loss.sh` a killed TaskManager on a session cluster). Each journal write
+  blocks the task thread, like the call it guards, and a read of the Kafka journal asks the broker
+  for its end offsets first. The Kafka journal holds the whole topic in every subtask.
 - **A real model on Flink has been tested against a local stand-in server, not a live provider.**
   See [Real models](#real-models).
 
@@ -144,8 +146,11 @@ is a state backend failure, still fails the job (`WorkflowTurnBoundaryTest`).
 ## Real models
 
 `ChatClientFactories.fromWorkflow()` builds the client the document's `llm` block declares, with the
-same code the cores use (`PipelineLoader.chatClient`): `provider: ollama` or `openai`, with `model`,
-`base_url`, `temperature`, `max_tokens` and `timeout_ms`. `FlinkPipelineRunner` uses it. Code calling
+same code the cores use (`PipelineLoader.chatClient`): `provider: ollama`, `openai`, `anthropic` or
+`gemini`, with `model`, `base_url`, `temperature`, `max_tokens` and `timeout_ms`. `anthropic` defaults
+to `claude-sonnet-5-5`, reads `ANTHROPIC_API_KEY` and, for `base_url`, `ANTHROPIC_BASE_URL`; send a
+`temperature` only to a model that takes one, since current Claude models refuse a non-default value.
+`gemini` must name its `model`, and reads `GEMINI_API_KEY` and `GEMINI_BASE_URL`. `FlinkPipelineRunner` uses it. Code calling
 `assembleResults` or `new WorkflowTurnFunction` passes it explicitly; their default refuses an `llm`
 brain when the job is built.
 

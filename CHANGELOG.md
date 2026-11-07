@@ -28,6 +28,8 @@ exists.
 
 ### Fixed
 
+- `LlmBrain` sent the `tool` role, which OpenAI refuses with a 400 without a `tool_call_id`. An
+  observation now goes back as a user message, as in Python.
 - A journal could answer one call with another's result: the JVM's intent was a 32-bit hash, a model
   entry had no intent, and two workflows on one store shared entries. See `spec/v1/primitives.md`,
   section 10.
@@ -40,13 +42,16 @@ exists.
 
 ### Added
 
+- `provider: anthropic` and `provider: gemini` on the JVM, so on Flink and Pekko, declared in the
+  document, keys from `ANTHROPIC_API_KEY` and `GEMINI_API_KEY`. Tested against local stubs only.
+- `tools/kafka-journal-tm-loss.sh`: the Kafka journal across a killed TaskManager.
 - The effect journal (`spec/v1/primitives.md`, section 10): every tool and model call is recorded
   outside the runtime's state and reused by index on a re-run, so a Flink restore no longer repeats a
   payment. Stores: in memory, file (Python), Postgres and a compacted Kafka topic (JVM). Tools declare
   `effect: read`, `idempotent` or `non_idempotent` and receive a deterministic `Idempotency-Key`. A
   `non_idempotent` call with no recorded result becomes `unknown_outcome` and waits for a person.
 - Events `llm_called`, `tool_intent`, `compensation_failed` and `unknown_outcome`, and fixtures 32 to
-  74 with a `crash_at` harness verb. Every runtime now goes through one comparator, on the whole event
+  76 with a `crash_at` harness verb. Every runtime now goes through one comparator, on the whole event
   sequence.
 - One resume state machine in the spec. Undoes receive the forward args and result, compensate on any
   failure class, and carry on from the log after a crash.

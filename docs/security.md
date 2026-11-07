@@ -66,7 +66,19 @@ The key is a SHA-256 of the conversation id, turn id and call index, so it leaks
   as you would the log, and keep entries longer than the longest rollback or redelivery you allow.
   An entry dropped sooner re-opens that turn to repeat its calls.
 - A worker that lost its lease can still be running a call while its replacement starts. There is no
-  fencing token at the tool, so a tool must not rely on the journal alone to exclude that.
+  fencing token at the tool, so a tool must not rely on the journal alone to exclude that. A Kafka
+  journal has no compare-and-set at all, so its two writers can both see no entry and both call;
+  Postgres stops the second at the intent, by its primary key.
+- A journal that cannot be reached stops the call: the intent is written first, and a failed write
+  ends the delivery, on Flink by failing the task. `on_unavailable: degrade` falls back to memory only
+  when no tool is `non_idempotent`. Journal reads and writes are bounded, at 15 seconds on a Postgres
+  socket and 30 on Kafka, so a stalled store fails the task rather than hanging it.
+- A journal entry cannot answer a different call: its intent is a SHA-256 of the agent id, the tool
+  and the arguments, and a mismatch ends the turn `fatal` with nothing called. Two agents with the
+  same `agent.id` on one store are not told apart.
+- Model keys come from the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and
+  travel in headers. A document that carries one is refused. A provider's error body reaches logs and
+  the turn's error cut to 200 characters with the key removed, but what else it says is the provider's.
 
 See [Guarantees](../README.md#guarantees) and the [Flink runtime page](runtimes/flink.md).
 
