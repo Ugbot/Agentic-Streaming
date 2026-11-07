@@ -33,13 +33,35 @@ ReAct path). Sections: `backend`, optional `llm` (`provider` plus a required `mo
 `tool_triggers`), `agent.verifier`, `tools` (`constant`/`http`), `retrieval` (hashing
 embedder + KB), `guardrails` (regex deny-lists).
 
+## Which engine runs a pipeline
+
+A pipeline runs on the `agentic` core, the one the conformance fixtures hold to account. A turn is on
+the event log, deduplicated by `turn_id`, and its effects are journaled:
+
+```bash
+python -m agentic_pipeline run examples/pipelines/banking.yaml --store-dir state --turn t1 --text "what is my balance?"
+python -m agentic_pipeline run examples/pipelines/banking.yaml --store-dir state --turn t1 --text "what is my balance?"
+# the second run prints status=duplicate and the recorded reply
+```
+
+Without `--turn` every run is a new turn. `--store-dir` keeps the log and the journal on disk.
+
+The core does not have everything. A document that declares any of these runs on the legacy
+`pyagentic` engine instead, which has no event log, no `turn_id` and no effect journal, and the CLI
+says so on standard error: `mcp`, an `a2a` peer that is not `inproc`, a conversation store other than
+`memory` or `file`, `stores.long_term`, `stores.keyed_state`, `stores.vector`, a guardrail other than
+`regex`, `skills`, `retrieval.vector_store`, embeddings other than `hashing`, and context compaction
+other than `none` or `window`. `agentic_pipeline.legacy_features(spec)` lists what a document needs.
+Of the examples, `banking`, `banking-llm` and `incident` run on the core; `banking-rag`, `banking-mcp`,
+`tools-mcp` and `multiagent` do not.
+
 ## Pieces
 
 | Module | Role |
 |--------|------|
-| `pyagentic.builder` | `build(spec, chat_client_factory) -> (graph, tools, retriever)`, the core GraphBuilder (engine-agnostic) |
-| `agentic_pipeline.backends` | `make_backend(name, graph, tools, retriever)`, the shim: `local` (uniform `submit(Event)`) |
-| `agentic_pipeline.loader` | `load(path)` / `build_system(spec)` → a `PipelineSystem` with `submit(Event)` on the chosen backend |
+| `agentic_pipeline.backends` | `CoreBackend`, the `agentic` local runtime, and `make_backend(name, graph, tools, retriever)` for the legacy engine |
+| `agentic_pipeline.loader` | `load(path)` / `build_system(spec)` → a `PipelineSystem` with `submit(Event)`; `legacy_features(spec)` |
+| `pyagentic.builder` | `build(spec, chat_client_factory) -> (graph, tools, retriever)`, the legacy GraphBuilder |
 | `agentic_pipeline.__main__` | the `run` CLI |
 
 ## Backends
