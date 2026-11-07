@@ -16,6 +16,7 @@ import java.util.UUID;
 import org.agentic.flink.runtime.FlinkRuntimeOptions;
 import org.agentic.flink.runtime.testkit.Workflows;
 import org.agentic.flink.testkit.RepoRoot;
+import org.agentic.flink.testkit.StubOllama;
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -170,6 +171,19 @@ class KafkaPipelineJobTest {
       ("result".equals(t.f0) ? results : failures).add(JSON.readTree(t.f1.f1));
     }
     return new Run(results, failures);
+  }
+
+  @Test
+  void aDocumentDeclaringARealModelRunsAsTheKafkaJob() throws Exception {
+    try (StubOllama model = new StubOllama("it is 42")) {
+      String cid = "c-" + UUID.randomUUID();
+      Run run =
+          run(Workflows.billingOnAModel(model.llm()), List.of(turn(cid, "t1", "the answer?")));
+      assertEquals(1, run.results().size(), run.results().toString());
+      assertEquals("completed", run.results().get(0).path("status").asText());
+      assertTrue(run.results().get(0).path("reply").asText().contains("it is 42"));
+      assertEquals(1, model.requests().size());
+    }
   }
 
   @Test
