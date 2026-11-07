@@ -623,7 +623,7 @@
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>org.agentic.flink.example.SimpleAgentExample</mainClass>
+                                    <mainClass>org.agentic.flink.pipeline.FlinkPipelineRunner</mainClass>
                                 </transformer>
                                 <!-- Merge META-INF/services so every ServiceLoader provider survives
                                      the uber-jar: DJL's model-zoo (ai.djl.repository.zoo.ZooProvider,
@@ -757,7 +757,6 @@
         a JVM (exec:exec) with the test-scope classpath (which includes provided) and the same
         reflective opens as the surefire argLine. `compile` must be in the same invocation:
 
-            ./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.example.StorageIntegratedFlinkJob
             ./mvnw -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
                 -Dexec.args="examples/pipelines/incident.yaml"
 
