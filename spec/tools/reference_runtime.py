@@ -329,6 +329,7 @@ class ReferenceRuntime:
                 path = payload["path"]
             elif kind == "turn_completed":
                 reply = payload["reply"]
+                error = None
             elif kind == "turn_failed":
                 error = {"class": payload.get("error_class", "fatal"), "message": payload.get("reason", "")}
             elif kind in ("tool_called", "delegated", "compensation_step"):
@@ -365,6 +366,7 @@ class ReferenceRuntime:
                 return self._refused(conv, turn, problem)
         conv.suspended.pop(turn.turn_id)
         ctx = self._context(conv, turn, rerun=False)
+        ctx.prior.answered()
         self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
                                                  "signal_sender": turn.user_id})
         return self._continue(conv, turn, ctx, resuming=True)
@@ -945,6 +947,11 @@ class _Prior:
 
     def __bool__(self) -> bool:
         return bool(self.events)
+
+    def answered(self) -> None:
+        """A new `turn_resumed` opens this run: every earlier wait is over and may not be reused."""
+        for key in [k for k in self._kept if k[0] in ("turn_suspended", "unknown_outcome")]:
+            del self._kept[key]
 
     def take(self, kind: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         kept = self._kept.get(self._key(kind, payload))

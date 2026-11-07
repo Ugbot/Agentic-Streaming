@@ -104,10 +104,19 @@ public final class AgentContext {
    * the turn gets every event again. Each {@code turn_resumed} is its own, so none is matched.
    */
   public void replayOver(List<LogEvent> earlier) {
-    long lastResume = -1;
+    replayOver(earlier, -1);
+  }
+
+  /** As above for a run a new {@code turn_resumed} opens: every earlier wait has been answered. */
+  void replayOverAndResume(List<LogEvent> earlier) {
+    replayOver(earlier, Long.MAX_VALUE);
+  }
+
+  private void replayOver(List<LogEvent> earlier, long resumedAt) {
+    long lastResume = resumedAt;
     for (LogEvent e : earlier) {
       if (e.is(EventType.TURN_RESUMED)) {
-        lastResume = e.sequence();
+        lastResume = Math.max(lastResume, e.sequence());
       }
     }
     for (LogEvent e : earlier) {

@@ -334,35 +334,32 @@ def test_a_bad_resolution_is_refused_even_after_a_good_one_was_journaled():
 
 # -- runs that end transient -----------------------------------------------------------
 
-def model_pay_agent(fn: Any) -> Any:
-    agent = (Agent(rid("a")).path("main", brain="llm", tools=["pay"]).use_tool("pay", fn, effect="non_idempotent")
+def model_pay_agent(fn: Any, effect: str = "non_idempotent") -> Any:
+    agent = (Agent(rid("a")).path("main", brain="llm", tools=["pay"]).use_tool("pay", fn, effect=effect)
              .with_llm("stub", script=[{"tool": "pay", "args": {}}, {"text": "paid", "x-fail-attempts": 1}]))
     return agent.verifier("none").build()
 
 
-def test_a_crash_in_the_run_after_a_transient_failure_does_not_call_again():
+def test_a_transient_failure_after_a_non_idempotent_call_does_not_call_it_again():
     calls: List[int] = []
     rt = LocalRuntime()
     rt.deploy(model_pay_agent(lambda: calls.append(1) or "ok"))
     first = rt.submit(Turn("c1", "t1", "pay"))
     assert (first["status"], first["error"]["class"]) == ("failed", "transient")
-    rt = crash(rt, Turn("c1", "t1", "pay"), call="pay", when="during")
-    assert len(calls) == 2
-    result = rt.submit(Turn("c1", "t1", "pay"))
-    assert (result["status"], len(calls)) == ("suspended", 2)
-    assert next(e for e in result["events"] if e["type"] == "turn_suspended")["payload"]["index"] == 1
+    done = rt.submit(Turn("c1", "t1", "pay"))
+    assert (done["status"], len(calls)) == ("completed", 1)
+    assert [c["index"] for c in done["tool_calls"]] == [0]
 
 
-def test_a_resume_replays_only_the_run_that_suspended():
+def test_a_crash_in_a_re_run_stays_on_that_runs_index():
     calls: List[int] = []
     rt = LocalRuntime()
-    rt.deploy(model_pay_agent(lambda: calls.append(1) or "ok"))
+    rt.deploy(model_pay_agent(lambda: calls.append(1) or "ok", effect="idempotent"))
     rt.submit(Turn("c1", "t1", "pay"))
     rt = crash(rt, Turn("c1", "t1", "pay"), call="pay", when="during")
-    rt.submit(Turn("c1", "t1", "pay"))
-    done = rt.submit(Turn("c1", "t1", signal={"resolution": "applied", "result": "landed"}))
-    assert (done["status"], done["reply"], len(calls)) == ("completed", "paid", 2)
-    assert [(c["index"], c.get("result")) for c in done["tool_calls"]] == [(1, "landed")]
+    done = rt.submit(Turn("c1", "t1", "pay"))
+    assert done["status"] == "completed"
+    assert [c["index"] for c in done["tool_calls"]] == [1]
 
 
 def test_a_duplicate_after_a_rerun_answers_with_the_run_that_finished():

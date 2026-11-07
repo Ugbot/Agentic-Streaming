@@ -962,6 +962,7 @@ class Engine:
             if event.type in ("reply_drafted", "turn_completed"):
                 reply = str(p["reply"])
                 if event.type == "turn_completed":
+                    error = None  # a later run of the turn finished it
                     status = "completed"
             elif event.type == "turn_failed":
                 status = str(p.get("status", "failed"))

@@ -291,7 +291,7 @@ public final class RoutedGraph {
         return replay(event, ctx, prior, true);
       }
       if (retryable && reachedNonIdempotent(prior)) {
-        ctx.replayOver(prior.events());
+        ctx.replayOverAndResume(prior.events());
         Event turn = original(event, prior, ctx);
         ctx.metadata = turn.metadata();
         ctx.record(EventType.TURN_RESUMED, resumedPayload(event));
@@ -375,7 +375,7 @@ public final class RoutedGraph {
         return refused(signal, problem, ctx.conversationState());
       }
     }
-    ctx.replayOver(prior.events());
+    ctx.replayOverAndResume(prior.events());
     Event turn = original(signal, prior, ctx);
     ctx.metadata = turn.metadata();
     ctx.record(EventType.TURN_RESUMED, resumedPayload(signal));
