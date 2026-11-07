@@ -291,6 +291,9 @@ def _with_http_stub(workflow: Any, stack: ExitStack) -> Any:
     """A tool url of `{{http}}/...` points at a stub the binding starts, the one the spec keeps in
     `spec/tools/http_stub.py`. A workflow with no such tool needs no stub, and an `AgentSpec` is
     handed to `deploy` as it is, since only a fixture document carries the placeholder."""
+    # The fixtures talk to a local stub. Nothing else is allowed, so they can prove the refusals.
+    os.environ.setdefault("AGENTIC_EGRESS_ALLOW_HOSTS", "127.0.0.1,localhost")
+    os.environ.setdefault("AGENTIC_EGRESS_ALLOW_PRIVATE", "true")
     if not isinstance(workflow, Mapping) or not any("{{http}}" in str(tool.get("url", "")) for tool in workflow.get("tools") or []):
         return workflow
     source = fixtures_dir().parents[2] / "tools" / "http_stub.py"
@@ -375,9 +378,6 @@ def run_all(make_runtime: RuntimeFactory = fixture_runtime, only: Sequence[str] 
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    # The fixtures talk to a local stub. Nothing else is allowed, so they can prove the refusals.
-    os.environ.setdefault("AGENTIC_EGRESS_ALLOW_HOSTS", "127.0.0.1,localhost")
-    os.environ.setdefault("AGENTIC_EGRESS_ALLOW_PRIVATE", "true")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("ids", nargs="*", help="fixture ids to run (default: all)")
     parser.add_argument("--runtime", default="local")
