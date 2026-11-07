@@ -221,6 +221,7 @@ jobs:
       - name: docs
         run: |
           ./mvnw -B -ntp -q -f ports/jagentic-core/pom.xml install -DskipTests
+          ./mvnw -B -ntp -q -f agentic-gateway/pom.xml install -DskipTests
           python -m pytest docs/tools/test_docs.py -q -ra --junitxml build/junit/docs.xml
 
       - name: Skip audit (a skip in CI must be allowlisted)

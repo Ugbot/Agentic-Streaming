@@ -240,6 +240,12 @@
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>${maven.plugin.surefire.version}</version>
                     <configuration>
+                        <!-- The integration tests talk to local stubs too, such as the bank of
+                             EffectJournalStoresIT, so they need the same egress settings. -->
+                        <systemPropertyVariables>
+                            <agentic.egress.allow_private>true</agentic.egress.allow_private>
+                            <agentic.egress.allow_hosts>127.0.0.1,localhost</agentic.egress.allow_hosts>
+                        </systemPropertyVariables>
                         <includes>
                             <include>**/*IT.java</include>
                         </includes>

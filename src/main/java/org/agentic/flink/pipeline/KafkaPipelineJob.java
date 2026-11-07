@@ -212,15 +212,16 @@ public final class KafkaPipelineJob {
       metadata.put(e.getKey(), e.getValue().asText());
     }
     String user = node.path("user_id").asText("anonymous");
-    return new Event(
-        conversationId,
-        turnId,
-        user,
-        text,
-        metadata,
-        signal,
-        org.jagentic.core.Principal.fromMap(
-            JSON.convertValue(node.get("principal"), Object.class)));
+    org.jagentic.core.Principal principal;
+    try {
+      principal =
+          org.jagentic.core.Principal.fromMap(
+              JSON.convertValue(node.get("principal"), Object.class));
+    } catch (IllegalArgumentException e) {
+      // Thrown out of the decoder it would fail the task on every restart: a poison pill.
+      throw new MalformedRecord("principal: " + e.getMessage());
+    }
+    return new Event(conversationId, turnId, user, text, metadata, signal, principal);
   }
 
   private static String required(JsonNode node, String field) throws MalformedRecord {

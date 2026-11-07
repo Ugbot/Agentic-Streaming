@@ -76,9 +76,14 @@ public final class OidcAuthenticator implements Authenticator {
     } catch (ParseException | BadJOSEException | JOSEException e) {
       throw new Unauthenticated("token rejected: " + e.getMessage(), e);
     }
+    // A tenant is a string. A list or an object is no tenant, not its toString, so the gateway's 403.
     Object tenant = claims.getClaim(settings.tenantClaim());
-    return new Principal(claims.getSubject(), tenant == null ? null : String.valueOf(tenant), roles(claims),
-        claims.getIssuer());
+    try {
+      return new Principal(claims.getSubject(), tenant instanceof String t ? t : null, roles(claims),
+          claims.getIssuer());
+    } catch (IllegalArgumentException blankSubject) {
+      throw new Unauthenticated("token rejected: " + blankSubject.getMessage(), blankSubject);
+    }
   }
 
   private List<String> roles(JWTClaimsSet claims) {

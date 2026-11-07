@@ -110,6 +110,13 @@ public final class McpStdioClient implements AutoCloseable {
     List<String> ids = new ArrayList<>();
     String p = prefix == null ? "" : prefix;
     for (Map<String, String> spec : specs) {
+      String id = p + spec.get("name");
+      if (reg.contains(id)) {
+        // The server names its tools, so it must not be able to take the place of one already there.
+        throw new IllegalArgumentException("mcp tool " + id + " would replace a tool already registered");
+      }
+    }
+    for (Map<String, String> spec : specs) {
       String name = spec.get("name");
       String id = p + name;
       reg.registerKeyed(id, spec.getOrDefault("description", ""), null, effect,

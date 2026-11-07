@@ -39,9 +39,9 @@ public final class ConversationState implements Serializable {
 
   /** A turn parked by {@code turn_suspended} and not yet resumed. */
   public record Suspended(String turnId, String path, String text, String until, String userId,
-                          String tool, int index) implements Serializable {
+                          String tool, int index, String intent) implements Serializable {
     public Suspended(String turnId, String path, String text, String until) {
-      this(turnId, path, text, until, null, null, -1);
+      this(turnId, path, text, until, null, null, -1, null);
     }
 
     /** The turn waits for a person to say what happened to a call. */
@@ -208,7 +208,7 @@ public final class ConversationState implements Serializable {
           String tid = str(p.get("turn_id"));
           suspended.put(tid, new Suspended(tid, str(p.get("path")), str(p.get("text")),
               str(p.get("until")), str(p.get("user_id")), str(p.get("tool")),
-              p.containsKey("index") ? intOf(p.get("index")) : -1));
+              p.containsKey("index") ? intOf(p.get("index")) : -1, str(p.get("intent"))));
           if (b != null) {
             b.status = TurnStatus.SUSPENDED;
             b.resumed = false;

@@ -18,13 +18,23 @@ public final class Redactor {
 
   public static final String MARK = "[redacted]";
 
-  private static final Set<String> SECRET_FIELDS = Set.of("password", "passwd", "secret", "token", "api_key",
-      "apikey", "authorization", "credential", "credentials", "private_key");
+  /**
+   * A field is a credential when one of these is a whole word of its name, so {@code access_token},
+   * {@code client_secret}, {@code x-api-key} and {@code refreshToken} are, and {@code max_tokens} is not.
+   */
+  private static final Set<String> SECRET_FIELDS = Set.of("password", "passwd", "passphrase", "secret", "token",
+      "api_key", "apikey", "authorization", "credential", "credentials", "private_key", "cookie");
+  private static final Pattern CAMEL = Pattern.compile("([a-z0-9])([A-Z])");
+  private static final Pattern SEPARATORS = Pattern.compile("[^a-z0-9]+");
   private static final List<Pattern> SECRET_SHAPES = List.of(
       Pattern.compile("(?i)\\bbearer\\s+[a-z0-9._~+/=-]{8,}"),
       Pattern.compile("\\bsk-[A-Za-z0-9_-]{16,}"),
       Pattern.compile("\\bAKIA[0-9A-Z]{16}\\b"),
-      Pattern.compile("\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}"));
+      Pattern.compile("\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}"),
+      Pattern.compile("\\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})"),
+      Pattern.compile("\\bxox[abprs]-[A-Za-z0-9-]{10,}"),
+      Pattern.compile("\\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}"),
+      Pattern.compile("\\bAIza[0-9A-Za-z_-]{35}"));
 
   public static final Redactor DEFAULT = new Redactor(Set.of(), List.of());
 
@@ -76,8 +86,18 @@ public final class Redactor {
   }
 
   private boolean named(String field) {
-    String name = field.toLowerCase(Locale.ROOT);
-    return SECRET_FIELDS.contains(name) || fields.contains(name);
+    return isSecretField(field) || fields.contains(field.toLowerCase(Locale.ROOT));
+  }
+
+  static boolean isSecretField(String field) {
+    String split = CAMEL.matcher(field).replaceAll("$1_$2").toLowerCase(Locale.ROOT);
+    String name = "_" + SEPARATORS.matcher(split).replaceAll("_").replaceAll("^_+|_+$", "") + "_";
+    for (String f : SECRET_FIELDS) {
+      if (name.contains("_" + f + "_")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private String text(String s) {

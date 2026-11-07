@@ -38,14 +38,18 @@ public record GatewayOptions(String host, int port, Authenticator authenticator,
     }
     Authenticator authenticator;
     if (env.get("AGENTIC_OIDC_ISSUER") != null) {
-      String issuer = env.get("AGENTIC_OIDC_ISSUER");
+      String issuer = env.get("AGENTIC_OIDC_ISSUER").strip();
+      if (issuer.isEmpty()) {
+        throw new IllegalArgumentException("AGENTIC_OIDC_ISSUER is blank");
+      }
       String audience = env.get("AGENTIC_OIDC_AUDIENCE");
       if (audience == null || audience.isBlank()) {
         throw new IllegalArgumentException("AGENTIC_OIDC_AUDIENCE is required: a token for anything"
             + " else at this issuer must not work here");
       }
-      authenticator = new OidcAuthenticator(new OidcAuthenticator.Settings(issuer, audience,
-          env.getOrDefault("AGENTIC_OIDC_JWKS_URL", issuer + "/protocol/openid-connect/certs"),
+      String jwks = env.getOrDefault("AGENTIC_OIDC_JWKS_URL", issuer + "/protocol/openid-connect/certs");
+      requireHttpsUnlessLoopback(jwks);
+      authenticator = new OidcAuthenticator(new OidcAuthenticator.Settings(issuer, audience, jwks,
           env.getOrDefault("AGENTIC_OIDC_TENANT_CLAIM", "tenant"),
           env.getOrDefault("AGENTIC_OIDC_ROLES_CLAIM", "realm_access.roles")));
     } else if (env.get("AGENTIC_GATEWAY_STATIC_TOKENS") != null) {
@@ -65,6 +69,24 @@ public record GatewayOptions(String host, int port, Authenticator authenticator,
     return new GatewayOptions(host, Integer.parseInt(env.getOrDefault("AGENTIC_GATEWAY_PORT", "8080")),
         authenticator, readers.isBlank() ? Set.of() : Set.of(readers.split("\\s*,\\s*")),
         Duration.ofSeconds(Long.parseLong(env.getOrDefault("AGENTIC_GATEWAY_TIMEOUT_SECONDS", "30"))));
+  }
+
+  /**
+   * Whoever can change the keys can sign any token, so they come over TLS. Plain HTTP is for an
+   * issuer on this machine, such as the Keycloak lab.
+   */
+  private static void requireHttpsUnlessLoopback(String url) {
+    java.net.URI uri;
+    try {
+      uri = java.net.URI.create(url);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("AGENTIC_OIDC_JWKS_URL is not a url: " + url, e);
+    }
+    String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+    boolean local = uri.getHost() != null && isLoopback(uri.getHost());
+    if (!scheme.equals("https") && !(scheme.equals("http") && local)) {
+      throw new IllegalArgumentException("the issuer's keys must come over https, not " + url);
+    }
   }
 
   private static boolean isLoopback(String host) {
