@@ -72,10 +72,11 @@ tools:
 retrieval:
   dim: 256
   vector_store:            # OPTIONAL cold tier - default is the in-memory hot tier only
-    kind: hnsw             # memory | hnsw (in-process ANN) | duckdb (Python) | qdrant
+    kind: hnsw             # memory | hnsw (in-process ANN) | duckdb (Python) | qdrant | pgvector (JVM)
     m: 16                  # hnsw graph degree
     ef_search: 64
     # url: http://localhost:6333   # qdrant connection link
+    # pgvector: url (a jdbc:postgresql link), user, password and table; use ${ENV} for the password
   kb:
     - {id: kb_cards, text: "We offer classic, gold, and platinum cards."}
 

@@ -398,8 +398,8 @@ public final class GraphBuilder {
     return new Retrieval.TwoTierRetriever(hot, cold, k, k);
   }
 
-  /** Build a cold-tier {@link VectorStore} by kind: memory | hnsw | qdrant. An unreachable qdrant
-   * fails the build unless the section sets {@code on_unavailable: degrade}, which drops the cold
+  /** Build a cold-tier {@link VectorStore} by kind: memory | hnsw | qdrant | pgvector. An unreachable
+   * qdrant or pgvector fails the build unless the section sets {@code on_unavailable: degrade}, which drops the cold
    * tier (spec rule 7: no silent substitution). */
   private static VectorStore buildVectorStore(Map<String, Object> spec, int dim,
                                              StoreAvailability availability) {
@@ -421,8 +421,17 @@ public final class GraphBuilder {
         String collection = String.valueOf(spec.getOrDefault("collection", "agentic"));
         return availability.connect("retrieval.vector_store", spec,
             () -> new org.jagentic.core.store.QdrantVectorStore(url, collection, dim), () -> null);
+      case "pgvector":
+        return availability.connect("retrieval.vector_store", spec,
+            () -> new org.jagentic.core.store.PgVectorStore(
+                resolveEnv(String.valueOf(spec.getOrDefault("url", spec.get("jdbc_url")))),
+                resolveEnv(String.valueOf(spec.getOrDefault("user", "postgres"))),
+                resolveEnv(String.valueOf(spec.getOrDefault("password", ""))),
+                (String) spec.get("table"), dim),
+            () -> null);
       default:
-        throw new IllegalArgumentException("unknown vector_store kind " + kind + "; choose memory|hnsw|qdrant");
+        throw new IllegalArgumentException(
+            "unknown vector_store kind " + kind + "; choose memory|hnsw|qdrant|pgvector");
     }
   }
 

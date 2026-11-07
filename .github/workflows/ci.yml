@@ -73,7 +73,7 @@ jobs:
       # socket; the containers below serve the tests that connect to a fixed localhost
       # port instead.
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: agentic
           POSTGRES_PASSWORD: agentic
@@ -176,7 +176,7 @@ jobs:
       CI: "true"
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: agentic
           POSTGRES_PASSWORD: agentic
