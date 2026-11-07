@@ -161,7 +161,7 @@ def test_event_types_are_closed_and_sequences_dense():
     with pytest.raises(ValidationError, match="closed set"):
         log.append(cid, "t1", "made_up_event", {}, 0)
     assert [e.sequence for e in log.read(cid)] == [0, 1, 2, 3, 4]
-    assert len(EVENT_TYPES) == 20
+    assert len(EVENT_TYPES) == 24
 
 
 def test_state_is_a_fold_over_the_log():

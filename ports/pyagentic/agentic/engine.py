@@ -30,6 +30,7 @@ LOG = logging.getLogger(__name__)
 
 Clock = Callable[[], int]
 Sleep = Callable[[float], None]
+Probe = Callable[[str, str, str], None]  # (axis, name, when): a seam for `crash_at`, see Engine.probe
 
 _RECORDED_CALL_EVENTS = frozenset({"tool_called", "delegated", "compensation_step"})
 
@@ -124,7 +125,10 @@ class Engine:
         self._suspended: Dict[Tuple[str, str], _Pending] = {}
         self._guard = threading.Lock()
         self._schema_validators: Dict[int, Draft202012Validator] = {}
-        self._model_failures: Dict[int, int] = {}
+        # A test seam: called as (`event`, type, before|after) around every append and as
+        # (`call`, tool, before|during|after) around every tool attempt. It must not alter anything;
+        # only a test has a reason to raise from it, and it raises what nothing here can catch.
+        self.probe: Optional[Probe] = None
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -377,8 +381,17 @@ class Engine:
                                           f"/llm/script/{i}/tool")
                 self._invoke(ctx, step["tool"], step.get("args") or {})
             else:
-                return str(step["text"])
+                return self._scripted_text(i, step)
         raise ValidationError("the llm script ended without a final text", "/llm/script")
+
+    def _scripted_text(self, index: int, step: Mapping[str, Any]) -> str:
+        """A step's text; `x-count-calls` adds how many real model calls the step has seen."""
+        if not step.get("x-count-calls"):
+            return str(step["text"])
+        world = self.tools.world
+        with world.guard:
+            world.model_calls[index] = seen = world.model_calls.get(index, 0) + 1
+        return f"{step['text']} #{seen}"
 
     def _call_model(self, index: int, step: Mapping[str, Any]) -> None:
         """One scripted model call under `policies.retry`. Only the call is retried, so a tool
@@ -386,9 +399,9 @@ class Engine:
         retry = self.policies.get("retry") or {}
         max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
         for attempt in range(1, max_attempts + 1):
-            with self._guard:
-                seen = self._model_failures.get(index, 0) + 1
-                self._model_failures[index] = seen
+            world = self.tools.world
+            with world.guard:
+                world.model_attempts[index] = seen = world.model_attempts.get(index, 0) + 1
             if seen > step.get("x-fail-attempts", 0):
                 return
             if attempt < max_attempts:
@@ -515,6 +528,7 @@ class Engine:
         max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
         args = dict(args)
         for attempt in range(1, max_attempts + 1):
+            self._hit("call", tool_id, "before")
             try:
                 result = self.tools.execute(tool_id, args, call)
             except ToolError as exc:
@@ -530,6 +544,8 @@ class Engine:
                 if delay:
                     self.sleep(delay / 1000.0)
                 continue
+            self._hit("call", tool_id, "during")
+            self._hit("call", tool_id, "after")
             ctx.tool_calls.append({"tool": tool_id, "index": index, "args": args,
                                    "result": result, "attempt": attempt})
             kind = event or ("delegated" if spec.kind == "agent" else "tool_called")
@@ -540,10 +556,16 @@ class Engine:
 
     # -- bookkeeping ---------------------------------------------------------
 
+    def _hit(self, axis: str, name: str, when: str) -> None:
+        if self.probe is not None:
+            self.probe(axis, name, when)
+
     def _append(self, ctx: _TurnContext, kind: str, payload: Mapping[str, Any]) -> Event:
+        self._hit("event", kind, "before")
         event = self.log.append(ctx.turn.conversation_id, ctx.turn.turn_id, kind, payload,
                                 self.clock(), ctx.turn.metadata)
         ctx.events.append(event)
+        self._hit("event", kind, "after")
         return event
 
     def _routed_path(self, ctx: _TurnContext) -> Optional[str]:

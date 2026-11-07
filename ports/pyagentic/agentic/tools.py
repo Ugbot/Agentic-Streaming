@@ -7,6 +7,7 @@ one is declared; nothing is ever parsed out of reply text.
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import inspect
 import json
 import queue
@@ -15,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Mapping, Optional, Protocol
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Tuple
 
 from jsonschema import Draft202012Validator
 
@@ -25,6 +26,12 @@ ToolFn = Callable[..., Any]
 
 DEFAULT_TOOL_TIMEOUT_MS = 10_000
 DEFAULT_PEER_TIMEOUT_MS = 30_000
+
+
+def idempotency_key(conversation_id: str, turn_id: str, index: int) -> str:
+    """`primitives.md` section 10: derived from recorded input alone, so a re-run regenerates it."""
+    material = b"\x00".join((conversation_id.encode("utf-8"), turn_id.encode("utf-8"), str(index).encode("ascii")))
+    return hashlib.sha256(material).hexdigest()
 
 
 class PeerFn(Protocol):
@@ -51,6 +58,25 @@ class ToolCall:
     index: int
     text: str = ""
 
+    @property
+    def idempotency_key(self) -> str:
+        return idempotency_key(self.conversation_id, self.turn_id, self.index)
+
+
+@dataclass
+class ToolWorld:
+    """What the outside world has seen: it is not the runtime's memory, so it outlives a restart.
+
+    The fixtures' `failing`, `counting` and stubbed model steps count here. A deployed runtime hands
+    its world to the runtime `restart()` builds, which is how a crash leaves the world as it was.
+    """
+
+    failing_attempts: Dict[str, int] = field(default_factory=dict)
+    counted: Dict[Tuple[str, str], List[str]] = field(default_factory=dict)
+    model_attempts: Dict[int, int] = field(default_factory=dict)
+    model_calls: Dict[int, int] = field(default_factory=dict)
+    guard: threading.Lock = field(default_factory=threading.Lock)
+
 
 @dataclass
 class ToolSpec:
@@ -62,6 +88,7 @@ class ToolSpec:
     timeout_ms: Optional[int] = None
     parameters: Optional[Mapping[str, Any]] = None
     compensation: Optional[str] = None
+    effect: str = "idempotent"
     fail_attempts: Optional[int] = None
     peer: Optional[Mapping[str, Any]] = None
     extensions: Dict[str, Any] = field(default_factory=dict)
@@ -77,6 +104,7 @@ class ToolSpec:
             timeout_ms=entry.get("timeout_ms"),
             parameters=entry.get("parameters"),
             compensation=entry.get("compensation"),
+            effect=entry.get("effect", "idempotent"),
             fail_attempts=entry.get("x-fail-attempts"),
             extensions={k: v for k, v in entry.items() if k.startswith("x-")},
         )
@@ -90,17 +118,16 @@ class ToolSpec:
 class ToolRegistry:
     """Tool specs plus the Python bindings (`function` tools, `inproc` peers) behind them.
 
-    A registry represents the outside world, so it is shared across runtime restarts: a
+    The `world` behind a registry is the outside world, so it is shared across runtime restarts: a
     `failing` tool's attempt budget keeps counting when the runtime is rebuilt from its log.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, world: Optional[ToolWorld] = None) -> None:
+        self.world = world or ToolWorld()
         self._specs: Dict[str, ToolSpec] = {}
         self._functions: Dict[str, ToolFn] = {}
         self._peers: Dict[str, PeerFn] = {}
         self._validators: Dict[str, Draft202012Validator] = {}
-        self._failing_attempts: Dict[str, int] = {}
-        self._guard = threading.Lock()
 
     def declare(self, spec: ToolSpec) -> None:
         if spec.id in self._specs:
@@ -151,6 +178,8 @@ class ToolRegistry:
             return spec.value
         if kind == "failing":
             return self._execute_failing(spec)
+        if kind == "counting":
+            return self._execute_counting(spec, call)
         if kind == "hanging":
             return _bounded(spec, DEFAULT_TOOL_TIMEOUT_MS, threading.Event().wait)
         if kind == "function":
@@ -162,12 +191,23 @@ class ToolRegistry:
         raise ValidationError(f"tool {tool_id!r} has kind {kind!r}, which this runtime cannot execute")
 
     def _execute_failing(self, spec: ToolSpec) -> Any:
-        with self._guard:
-            seen = self._failing_attempts.get(spec.id, 0) + 1
-            self._failing_attempts[spec.id] = seen
+        with self.world.guard:
+            seen = self.world.failing_attempts.get(spec.id, 0) + 1
+            self.world.failing_attempts[spec.id] = seen
         if spec.fail_attempts is None or seen <= spec.fail_attempts:
             raise ToolError(f"{spec.id} failed")
         return spec.value
+
+    def _execute_counting(self, spec: ToolSpec, call: ToolCall) -> int:
+        """The outside world in miniature: how many calls landed for this conversation, or how many
+        distinct keys under `x-count-by: keys`. It answers with that number, so a repeated effect
+        shows in the reply."""
+        key = call.idempotency_key
+        with self.world.guard:
+            seen = self.world.counted.setdefault((spec.id, call.conversation_id), [])
+            if spec.extensions.get("x-count-by") != "keys" or key not in seen:
+                seen.append(key)
+            return len(seen)
 
     def _execute_function(self, spec: ToolSpec, args: Mapping[str, Any]) -> Any:
         fn = self._functions.get(spec.id)

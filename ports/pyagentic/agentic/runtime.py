@@ -20,7 +20,7 @@ from .bindings import Bindings
 from .engine import Clock, Engine, Sleep, wall_clock_ms
 from .errors import CapabilityError, RuntimeNotAvailableError, ValidationError
 from .events import EventLog, FileEventLog, InMemoryEventLog, Turn
-from .tools import ToolRegistry, ToolSpec
+from .tools import ToolRegistry, ToolSpec, ToolWorld
 from .workflow_timers import ManualClock
 
 ENTRY_POINT_GROUP = "agentic.runtimes"
@@ -29,7 +29,7 @@ CAPABILITIES: Tuple[str, ...] = (
     "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails",
     "verifier", "ordering", "idempotency", "retry", "memory", "retrieval", "context_window",
     "replay", "suspend_resume", "timers", "saga", "a2a", "cep", "event_time",
-    "checkpoint_recovery", "parallelism", "durable_store",
+    "checkpoint_recovery", "parallelism", "durable_store", "crash_recovery", "effect_journal",
 )
 CAPABILITY_VALUES = frozenset({"supported", "partial", "unsupported", "not_tested"})
 
@@ -235,6 +235,7 @@ class LocalRuntime(Runtime):
         "timers": "supported", "saga": "supported", "a2a": "supported", "cep": "supported",
         "event_time": "supported", "checkpoint_recovery": "supported",
         "parallelism": "supported", "durable_store": "supported",
+        "crash_recovery": "supported", "effect_journal": "supported",
     }
 
     def __init__(
@@ -258,7 +259,8 @@ class LocalRuntime(Runtime):
         self.rng = random.Random(seed) if seed is not None else None
         self.log: Optional[EventLog] = None
         self.engine: Optional[Engine] = None
-        self.tools = ToolRegistry()
+        self.world = ToolWorld()
+        self.tools = ToolRegistry(self.world)
         self.doc: Optional[Dict[str, Any]] = None
         self.bindings = Bindings()
         self.degradations: List[str] = []
@@ -283,7 +285,7 @@ class LocalRuntime(Runtime):
                                   + "\n".join(f"  - {m}" for m in missing))
         self._release_log()
         self.log = self._open_log(doc)
-        self.tools = ToolRegistry()
+        self.tools = ToolRegistry(self.world)
         for entry in doc.get("tools") or []:
             self.tools.declare(ToolSpec.from_document(entry))
         for peer in doc.get("a2a") or []:
@@ -404,6 +406,7 @@ class LocalRuntime(Runtime):
         clock = ManualClock.recovered_from(self.log) if isinstance(self.clock, ManualClock) else self.clock
         fresh = LocalRuntime(log=self.log, clock=clock, sleep=self.sleep)
         fresh.rng = self.rng
+        fresh.world = self.world
         fresh.deploy(_Deployable(self.doc, self.bindings))
         return fresh
 
