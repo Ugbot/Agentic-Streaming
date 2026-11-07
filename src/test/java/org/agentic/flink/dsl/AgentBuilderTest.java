@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -155,6 +156,8 @@ class AgentBuilderTest {
     Agent implicit = minimal().withOutputSchema(schema).build();
     assertSame(schema, implicit.getChatSetup().getOutputSchema());
     assertEquals(0.7, implicit.getTemperature(), 1e-9);
+    assertNull(
+        implicit.getDeclaredTemperature(), "a default for readers is not a value for the wire");
   }
 
   @Test

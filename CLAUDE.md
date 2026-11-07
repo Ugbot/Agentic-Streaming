@@ -110,7 +110,7 @@ See `docs/configuration.md` for the full reference.
 ## Conventions
 
 - No TODOs, no placeholders -- implement working code or a working subset
-- Uses Podman, not Docker
+- Docker or Podman: scripts pick the running engine through `tools/container-engine.sh`
 - All storage providers must be Serializable (Flink distributes across cluster)
 - Mark non-serializable fields as transient and reinitialize in initialize()
 - Tests use JUnit 5 with randomized data, not hardcoded values

@@ -6,8 +6,10 @@ one is declared; nothing is ever parsed out of reply text.
 
 from __future__ import annotations
 
+import contextvars
 import inspect
 import json
+import queue
 import threading
 import urllib.error
 import urllib.parse
@@ -20,6 +22,9 @@ from jsonschema import Draft202012Validator
 from .errors import ToolError, ValidationError
 
 ToolFn = Callable[..., Any]
+
+DEFAULT_TOOL_TIMEOUT_MS = 10_000
+DEFAULT_PEER_TIMEOUT_MS = 30_000
 
 
 class PeerFn(Protocol):
@@ -146,6 +151,8 @@ class ToolRegistry:
             return spec.value
         if kind == "failing":
             return self._execute_failing(spec)
+        if kind == "hanging":
+            return _bounded(spec, DEFAULT_TOOL_TIMEOUT_MS, threading.Event().wait)
         if kind == "function":
             return self._execute_function(spec, args)
         if kind == "agent":
@@ -168,8 +175,8 @@ class ToolRegistry:
             raise ValidationError(f"tool {spec.id!r} has kind function but no Python function is bound; "
                                   f"call Agent.use_tool({spec.id!r}, fn)")
         try:
-            return _call_with_args(fn, args)
-        except ToolError:
+            return _bounded(spec, DEFAULT_TOOL_TIMEOUT_MS, lambda: _call_with_args(fn, args))
+        except (ToolError, ValidationError):
             raise
         except Exception as exc:  # a tool raising anything is a tool failure, by definition
             raise ToolError(f"{spec.id} failed: {exc}") from exc
@@ -181,7 +188,7 @@ class ToolRegistry:
         if handler is not None:
             delegation = Delegation(spec.id, call.conversation_id, call.turn_id, call.index, call.text)
             try:
-                return handler(args, delegation)
+                return _bounded(spec, DEFAULT_PEER_TIMEOUT_MS, lambda: handler(args, delegation))
             except ToolError:
                 raise
             except Exception as exc:
@@ -194,7 +201,7 @@ class ToolRegistry:
     def _execute_http(self, spec: ToolSpec, args: Mapping[str, Any]) -> Any:
         if not spec.url:
             raise ValidationError(f"http tool {spec.id!r} has no url")
-        timeout = (spec.timeout_ms or 10_000) / 1000.0
+        timeout = (spec.timeout_ms or DEFAULT_TOOL_TIMEOUT_MS) / 1000.0
         if spec.method == "GET":
             query = urllib.parse.urlencode({k: json.dumps(v) if not isinstance(v, str) else v
                                             for k, v in args.items()})
@@ -213,6 +220,31 @@ class ToolRegistry:
             return json.loads(raw)
         except json.JSONDecodeError:
             return raw
+
+
+def _bounded(spec: ToolSpec, default_ms: int, call: Callable[[], Any]) -> Any:
+    """Run `call` for at most `spec.timeout_ms`. It runs on its own daemon thread, because a limit
+    must hold whatever the call is doing. Python cannot stop a thread, so a late call runs on to
+    its end and its answer is dropped: a timeout says the answer did not arrive, not that nothing
+    happened."""
+    limit_ms = spec.timeout_ms or default_ms
+    outcome: "queue.Queue[tuple]" = queue.Queue(maxsize=1)
+    context = contextvars.copy_context()
+
+    def run() -> None:
+        try:
+            outcome.put((True, context.run(call)))
+        except BaseException as exc:  # handed to the caller, who decides what it means
+            outcome.put((False, exc))
+
+    threading.Thread(target=run, name=f"tool-{spec.id}", daemon=True).start()
+    try:
+        ok, value = outcome.get(timeout=limit_ms / 1000.0)
+    except queue.Empty:
+        raise ToolError(f"{spec.id} timed out after {limit_ms} ms") from None
+    if ok:
+        return value
+    raise value
 
 
 def _call_with_args(fn: ToolFn, args: Mapping[str, Any]) -> Any:

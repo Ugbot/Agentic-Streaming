@@ -11,11 +11,11 @@
 # Heavier than the scenario-specific umbrellas — pulls ~5GB of images on first run.
 #
 # Bring up:
-#   podman network create agentic-flink-network    # once
-#   podman compose -f docker-compose-all.yml up -d
+#   docker network create agentic-flink-network    # once
+#   docker compose -f docker-compose-all.yml up -d
 #
 # Tear down:
-#   podman compose -f docker-compose-all.yml down
+#   docker compose -f docker-compose-all.yml down
 
 include:
   - docker-compose.yml

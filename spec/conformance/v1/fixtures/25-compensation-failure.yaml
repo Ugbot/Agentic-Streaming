@@ -1,0 +1,50 @@
+id: compensation-failure
+description: "A compensation that fails does not escape the turn. The remaining compensations still run in reverse order, compensation_completed is not written, and the turn ends failed with error class fatal, because the saga is left partly applied and needs a human. A redelivery is a duplicate of that failure, so nothing is run again."
+requires: [saga, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: sagas
+    router: {kind: keyword, default: main, rules: {main: [refund]}}
+    paths:
+      main: {brain: rule, prompt: You handle refunds.}
+    verifier: {kind: none}
+  policies:
+    on_tool_error: fail
+    retry: {kind: none, max_attempts: 1}
+  tools:
+    - {id: reserve_a, kind: constant, value: "reserved a", compensation: release_a}
+    - {id: reserve_b, kind: constant, value: "reserved b", compensation: release_b}
+    - {id: release_a, kind: constant, value: "released a"}
+    - {id: release_b, kind: failing, description: Always raises}
+    - {id: post_ledger, kind: failing, description: Always raises}
+  saga:
+    steps:
+      - {name: first, tool: reserve_a, compensate_with: release_a}
+      - {name: second, tool: reserve_b, compensate_with: release_b}
+      - {name: post, tool: post_ledger}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+  - {conversation_id: c1, turn_id: t1, text: "refund my last charge"}
+expect:
+  - turn_id: t1
+    status: failed
+    error_class: fatal
+    tool_calls:
+      - {tool: reserve_a, index: 0}
+      - {tool: reserve_b, index: 1}
+      - {tool: post_ledger, index: 2, failed: true}
+      - {tool: release_b, index: 3, failed: true}
+      - {tool: release_a, index: 4}
+    events_include: [compensation_started, tool_failed, compensation_step, turn_failed]
+    events_exclude: [compensation_completed, turn_completed]
+  - turn_id: t1
+    status: duplicate
+    error_class: fatal
+    tool_calls:
+      - {tool: reserve_a, index: 0}
+      - {tool: reserve_b, index: 1}
+      - {tool: post_ledger, index: 2, failed: true}
+      - {tool: release_b, index: 3, failed: true}
+      - {tool: release_a, index: 4}

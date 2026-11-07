@@ -1,28 +1,48 @@
 # Flink 2.2.1 (Java 21) session cluster for local development, matching the Flink version the
-# root module builds against. Sits on the same podman network as `docker-compose-fluss.yml` so
+# root module builds against. Sits on the same network as `docker-compose-fluss.yml` so
 # submitted jobs can reach `fluss-coordinator:9120` by service
 # name (use `FLUSS_BOOTSTRAP=fluss-coordinator:9120` for inter-container jobs, or
 # `localhost:9123` for clients running on the host).
 #
-#   podman network create agentic-flink-network        # once, shared with fluss compose
-#   podman compose -f docker-compose-fluss.yml -f docker-compose-session.yml up -d
+# Docker or Podman; with Podman read `podman` for `docker` below.
+#
+#   docker network create agentic-flink-network        # once, shared with fluss compose
+#   docker compose -f docker-compose-fluss.yml -f docker-compose-session.yml up -d
 #
 # JM REST API at http://localhost:8081 ; submit jars + run jobs via /jars/upload + /jars/{id}/run.
 # Inter-container ZeroMQ endpoints should bind on 0.0.0.0 and use container-local ports.
+#
+# KAFKA_BOOTSTRAP defaults to the broker's in-network listener from docker-compose-kafka.yml. A job's
+# main() runs in the JobManager, where localhost is not Kafka; host clients use localhost:9092.
+# Checkpoints go to a volume shared by JM and TM, which a restore across containers needs.
 
 services:
+  # A fresh named volume is root's, and Flink runs as uid 9999.
+  flink-checkpoint-volume:
+    image: docker.io/library/flink:2.2.1-scala_2.12-java21
+    container_name: agentic-flink-checkpoint-volume
+    user: root
+    entrypoint: ["chown", "-R", "9999:9999", "/flink-checkpoints"]
+    volumes:
+      - flink_checkpoints:/flink-checkpoints
+
   flink-jobmanager:
     image: docker.io/library/flink:2.2.1-scala_2.12-java21
     container_name: agentic-flink-jm
     command: jobmanager
+    depends_on:
+      flink-checkpoint-volume:
+        condition: service_completed_successfully
     # Dev only: the Flink REST API has no authentication and accepts jar uploads and job
     # submission. It is published on loopback only; never expose it beyond this host.
     ports:
       - "127.0.0.1:8081:8081"
     environment:
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:29092}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         parallelism.default: 1
+        execution.checkpointing.dir: file:///flink-checkpoints
         rest.address: 0.0.0.0
         rest.bind-address: 0.0.0.0
         rest.bind-port: 8081
@@ -36,6 +56,9 @@ services:
       # Make the project's built jars reachable from inside the cluster (read-only is fine —
       # uploads happen via REST).
       - ./target:/host-target:ro
+      # A job's main() reads its pipeline.yaml here, in the JobManager.
+      - ./examples:/opt/agentic/examples:ro
+      - flink_checkpoints:/flink-checkpoints
     networks:
       - agentic-flink-network
 
@@ -58,15 +81,21 @@ services:
       - "127.0.0.1:5558:5558" # debug PUB out of L5
       - "127.0.0.1:5557:5557" # alerts PUB out of L5 (live tail)
     environment:
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:29092}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
+        execution.checkpointing.dir: file:///flink-checkpoints
         taskmanager.numberOfTaskSlots: 16
         parallelism.default: 1
       JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED"
     volumes:
       - ./target:/host-target:ro
+      - flink_checkpoints:/flink-checkpoints
     networks:
       - agentic-flink-network
+
+volumes:
+  flink_checkpoints:
 
 networks:
   agentic-flink-network:

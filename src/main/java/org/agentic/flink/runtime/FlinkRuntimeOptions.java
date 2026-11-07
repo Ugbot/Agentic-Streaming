@@ -20,13 +20,14 @@ import org.apache.flink.streaming.api.TimeDomain;
  *     timer_domain: processing_time | event_time
  * </pre>
  *
- * <p>Neither setting changes the observable turn semantics of the spec: TTL only bounds how long a
- * conversation's event log is retained, and the resume timer only decides <em>when</em> a suspended
- * turn is resumed (the spec's {@code turn_suspended → timer_scheduled → timer_fired → turn_resumed}
- * sequence). When {@code resume_after_ms} is absent, suspended turns wait for an explicit resume
- * signal and no timer is registered.
+ * <p>Neither setting changes the observable turn semantics of the spec while a conversation is in
+ * use: {@code state_ttl_ms} forgets a conversation only after that long with no turn and no
+ * suspended turn, and the resume timer only decides <em>when</em> a suspended turn is resumed (the
+ * spec's {@code turn_suspended → timer_scheduled → timer_fired → turn_resumed} sequence). When
+ * {@code resume_after_ms} is absent, suspended turns wait for an explicit resume signal and no
+ * timer is registered.
  *
- * @param stateTtl retention for keyed conversation state, or {@code null} for unbounded retention
+ * @param stateTtl how long an idle conversation is kept, or {@code null} to keep it forever
  * @param resumeAfter delay before a suspended turn is resumed by timer, or {@code null} for none
  * @param timerDomain the Flink time domain the resume timer is registered in
  * @param processingClock where workflow {@code timers} read processing time; the operator's own

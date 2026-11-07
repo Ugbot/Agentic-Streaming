@@ -60,14 +60,14 @@ public final class BankingModel implements Serializable {
         {
           ChatConnection c = LangChain4jChatConnection.gemini(require("GOOGLE_API_KEY"));
           return new BankingModel(
-              c, setup(model == null ? "gemini-3.5-flash" : model, temperature, maxTokens));
+              c, setup(model == null ? "gemini-3.6-flash" : model, temperature, maxTokens));
         }
       case "anthropic":
       case "claude":
         {
           ChatConnection c = LangChain4jChatConnection.anthropic(require("ANTHROPIC_API_KEY"));
           return new BankingModel(
-              c, setup(model == null ? "claude-sonnet-4-6" : model, temperature, maxTokens));
+              c, setup(model == null ? "claude-sonnet-5-5" : model, temperature, maxTokens));
         }
       case "ollama":
         {
@@ -82,7 +82,7 @@ public final class BankingModel implements Serializable {
           ChatConnection c = LangChain4jChatConnection.openai(require("OPENAI_API_KEY"));
           // Local testing default: GPT-5.4 nano (cheap + fast). Never default to gpt-4.1.
           return new BankingModel(
-              c, setup(model == null ? "gpt-5.4-nano" : model, temperature, maxTokens));
+              c, setup(model == null ? "gpt-6-luna" : model, temperature, maxTokens));
         }
     }
   }

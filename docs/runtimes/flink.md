@@ -20,10 +20,8 @@ The first is described here. The second is deprecated legacy code, kept for now,
   one checkpoint interval while the outside world does not. A turn that ran after the last completed
   checkpoint runs again on restore, tools included, and the tool receives no idempotency key. Do not
   use this for payments or other non-idempotent actions.
-- **A workflow document cannot declare a real model on Flink.** Only the scripted stub runs on the
-  canonical path.
-- **There is no supported way to run a `pipeline.yaml` from Kafka on a cluster.** `FlinkPipelineRunner`
-  has no Kafka source.
+- **A real model on Flink has been tested against a local stand-in server, not a live provider.**
+  See [Real models](#real-models).
 
 ## How a turn runs
 
@@ -63,17 +61,92 @@ conversation rebuilds it from `KeyedConversationLog` without re-running brains o
 binding's `replay-after-restart` and `suspend-resume` passes are savepoint restores. Savepoints are
 taken between turns, so these do not exercise a failure in the window after the last checkpoint.
 
-## State TTL
+## Running on a cluster
 
-`runtime.flink.state_ttl_ms` in the workflow document (read by `FlinkRuntimeOptions`) applies a
-Flink `StateTtlConfig` to the log, the sequence counter and the timer registry, with
-`OnCreateAndWrite` updates and `NeverReturnExpired` visibility. Without the option, retention is unbounded.
+`FlinkPipelineRunner` with `--input-topic` runs a `pipeline.yaml` as a long-running job between
+Kafka topics (`KafkaPipelineJob`). Submit the uber jar to a session cluster over REST, or with
+`flink run`, where `/opt/agentic/examples` is the mount in `docker-compose-session.yml`:
 
-**Do not set this on a conversation that can stay active past the TTL.** Flink tracks TTL per list
-element and old elements are not refreshed, so the oldest events expire while the sequence counter
-lives on, the log stops being dense, and the fold throws. That failure repeats after a restore. Idle
-expiry also forgets a suspended turn and clears the `turn_id` dedupe window
+```bash
+flink run -c org.agentic.flink.pipeline.FlinkPipelineRunner \
+  target/agentic-flink-1.0.0-SNAPSHOT-uber.jar \
+  /opt/agentic/examples/pipelines/banking.yaml --input-topic agentic.turns
+```
+
+| Flag | Default |
+|---|---|
+| `--input-topic` | none; this is what selects the Kafka job. The topics must exist |
+| `--kafka-bootstrap` | `KAFKA_BOOTSTRAP` in the environment of the process running `main` |
+| `--output-topic` | `<input>.results` |
+| `--failures-topic` | `<output>.failures` |
+| `--group-id` | `agentic-<agent id>` |
+
+A turn is a JSON record. Key it by `conversation_id`, so that a conversation stays on one partition
+and its turns stay in order:
+
+```json
+{"conversation_id": "c1", "turn_id": "t1", "user_id": "alice", "text": "what is my balance?"}
+{"conversation_id": "c1", "turn_id": "t1", "signal": {"approved": true}}
+```
+
+`turn_id` is required, not minted: it is what makes a redelivery a `duplicate`. Results are the
+`result.schema.json` document, keyed by conversation and written at-least-once. A record that cannot
+be a turn reaches the failures topic as `{"kind": "malformed_record", "reason", "record"}` and the
+job carries on. A turn ending `fatal` or `transient` reaches it as `{"kind": "turn_failure",
+"result"}` as well as the results topic.
+
+`tools/kafka-flink-e2e.sh` proves this on a real Flink 2.2.1 cluster and a real broker, with Docker
+or Podman: it submits `banking.yaml`, sends a poison record and a redelivery, kills the TaskManager
+after a checkpoint and checks that the conversation carries on from the restored log.
+
+To run a document once on a local cluster, in its own JVM:
+
+```bash
+bash tools/run-pipeline.sh examples/pipelines/banking.yaml --text "what is my balance?"
+```
+
+## Failed turns
+
+Nothing a turn does fails the job. Whatever escapes a turn ends it `failed` with class `fatal`, as
+`turn_failed` on the log and a result on the main output, and a redelivery is a `duplicate` of that
+failure. Turns ending `fatal` or `transient` also go to the side output
+`WorkflowTurnFunction.TURN_FAILURES`. A failing compensation ends the turn `fatal`, after the
+remaining compensations have run, and needs repair by hand. Only a log that cannot be reached, which
+is a state backend failure, still fails the job (`WorkflowTurnBoundaryTest`).
+
+## Real models
+
+`ChatClientFactories.fromWorkflow()` builds the client the document's `llm` block declares, with the
+same code the cores use (`PipelineLoader.chatClient`): `provider: ollama` or `openai`, with `model`,
+`base_url`, `temperature`, `max_tokens` and `timeout_ms`. `FlinkPipelineRunner` uses it. Code calling
+`assembleResults` or `new WorkflowTurnFunction` passes it explicitly; their default refuses an `llm`
+brain when the job is built.
+
+Credentials are not part of the document. The document ships with the job and lands in logs and
+savepoints, so `OPENAI_API_KEY` is read from the TaskManager's environment when the operator opens,
+and a document with a key that looks like a credential is refused when the job is built, naming the
+field and not its value (`WorkflowTurnRealModelTest`).
+
+## Idle expiry
+
+`runtime.flink.state_ttl_ms` in the workflow document (read by `FlinkRuntimeOptions`) is how long an
+idle conversation is kept. It is one processing-time timer per conversation, moved forward by every
+turn. When it fires, the log, the sequence counter and the timer registry are cleared together.
+Without the option, retention is unbounded.
+
+An active conversation can outlive the value for as long as it likes
+(`WorkflowTurnIdleExpiryTest.anActiveConversationOutlivesTheTtl`). A conversation with a suspended
+turn is kept and looked at again one interval later, so an approval is not lost, which also means a
+turn nobody ever answers is retained
+(`aSuspendedTurnIsNeverExpired`). Expiry does end the `turn_id` dedupe window: a turn redelivered
+after its conversation expired runs again
 (`WorkflowTurnFunctionMiniClusterTest.stateTtlExpiresTheConversationLog`).
+
+This is deliberately not Flink state TTL, which tracks list elements one by one: the oldest events
+expired under a live conversation and the log stopped folding. A savepoint taken while that was in
+place restores (`aSavepointTakenWithFlinkTtlRestoresIntoTheIdleTimer`, on the hashmap and RocksDB
+backends), but a restored conversation has no idle timer until its next turn, so one that never
+speaks again is not expired.
 
 ```yaml
 runtime:

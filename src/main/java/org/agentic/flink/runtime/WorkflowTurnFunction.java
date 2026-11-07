@@ -1,6 +1,5 @@
 package org.agentic.flink.runtime;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -15,7 +14,6 @@ import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.state.StateTtlConfig;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -26,6 +24,7 @@ import org.apache.flink.streaming.api.TimeDomain;
 import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 import org.jagentic.core.AgentContext;
 import org.jagentic.core.ChatMessage;
 import org.jagentic.core.ConversationLog;
@@ -35,10 +34,13 @@ import org.jagentic.core.Event;
 import org.jagentic.core.EventType;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LogEvent;
+import org.jagentic.core.LogUnavailable;
+import org.jagentic.core.TurnError;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
 import org.jagentic.core.cep.SequencePattern;
 import org.jagentic.core.pipeline.GraphBuilder;
+import org.jagentic.core.pipeline.PipelineLoader;
 import org.jagentic.core.pipeline.WorkflowValidator;
 
 /**
@@ -73,8 +75,10 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *       makes both clocks observable only through turns, so no Flink timer is registered for them;
  *       the log in keyed state is the timer registry, and a savepoint or checkpoint carries pending
  *       timers across a restore without re-scheduling or double-firing.
- *   <li><b>TTL.</b> {@link FlinkRuntimeOptions#stateTtl()} applies Flink state TTL to the log,
- *       counter and timer registry.
+ *   <li><b>Idle expiry.</b> {@link FlinkRuntimeOptions#stateTtl()} is a per-conversation inactivity
+ *       timer, moved forward by every turn. When it fires it clears the log, counter and timer
+ *       registry together, unless a turn is suspended. It is deliberately not Flink state TTL,
+ *       which expires list elements one at a time and would leave a log with a gap.
  *   <li><b>Serialization.</b> Log entries use {@link JsonTypeInfo}; results use {@link
  *       TurnResultTypeInfo}; nothing falls back to Kryo.
  *   <li><b>Metrics.</b> Per-status turn counters and a fired-timer counter on the operator's metric
@@ -96,6 +100,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   static final String LOG_STATE = "conversation-log";
   static final String SEQUENCE_STATE = "conversation-log-next-sequence";
   static final String TIMER_STATE = "suspended-turn-timers";
+  static final String IDLE_TIMER_STATE = "conversation-idle-timer";
 
   public static final String TIMER_SIGNAL_KIND = "timer";
 
@@ -103,12 +108,22 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   private final FlinkRuntimeOptions options;
   private final ChatClientFactories.SerializableChatClientFactory chatClientFactory;
 
+  /**
+   * The dead-letter side output: turns that ended {@code failed} with error class {@code fatal} or
+   * {@code transient}. They also appear on the main output; this stream is the one an operator
+   * alerts on, repairs from or redelivers from.
+   */
+  public static final OutputTag<TurnResult> TURN_FAILURES =
+      new OutputTag<>("turn-failures", TurnResultTypeInfo.INSTANCE);
+
   private transient GraphBuilder.Built built;
   private transient ListState<LogEvent> log;
   private transient ValueState<Long> nextSequence;
   private transient MapState<Long, String> timers;
+  private transient ValueState<Long> idleTimer;
   private transient Map<TurnStatus, Counter> turnCounters;
   private transient Counter timersFired;
+  private transient Counter conversationsExpired;
 
   /** Runtime options are taken from the document's {@code runtime.flink} block. */
   public WorkflowTurnFunction(Map<String, Object> spec) {
@@ -155,6 +170,15 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
                 + " configured; pass one to WorkflowTurnFunction(spec, options, factory)");
       }
     }
+    if (ChatClientFactories.isFromWorkflow(chatClientFactory)
+        && !llmBrainPaths(this.spec).isEmpty()) {
+      PipelineLoader.checkLlm(llmBlock(this.spec));
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> llmBlock(Map<String, Object> spec) {
+    return (Map<String, Object>) spec.get("llm");
   }
 
   @SuppressWarnings("unchecked")
@@ -198,28 +222,18 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     ValueStateDescriptor<Long> seqDesc = new ValueStateDescriptor<>(SEQUENCE_STATE, Types.LONG);
     MapStateDescriptor<Long, String> timerDesc =
         new MapStateDescriptor<>(TIMER_STATE, Types.LONG, Types.STRING);
-    if (options.stateTtl() != null) {
-      StateTtlConfig ttl = ttlConfig(options.stateTtl());
-      logDesc.enableTimeToLive(ttl);
-      seqDesc.enableTimeToLive(ttl);
-      timerDesc.enableTimeToLive(ttl);
-    }
     log = getRuntimeContext().getListState(logDesc);
     nextSequence = getRuntimeContext().getState(seqDesc);
     timers = getRuntimeContext().getMapState(timerDesc);
+    idleTimer =
+        getRuntimeContext().getState(new ValueStateDescriptor<>(IDLE_TIMER_STATE, Types.LONG));
 
     turnCounters = new LinkedHashMap<>();
     for (TurnStatus s : TurnStatus.values()) {
       turnCounters.put(s, getRuntimeContext().getMetricGroup().counter("turns_" + s.wire()));
     }
     timersFired = getRuntimeContext().getMetricGroup().counter("timers_fired");
-  }
-
-  static StateTtlConfig ttlConfig(Duration ttl) {
-    return StateTtlConfig.newBuilder(ttl)
-        .setUpdateType(StateTtlConfig.UpdateType.OnCreateAndWrite)
-        .setStateVisibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
-        .build();
+    conversationsExpired = getRuntimeContext().getMetricGroup().counter("conversations_expired");
   }
 
   @Override
@@ -233,25 +247,37 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
               + event.conversationId());
     }
     ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
-    TurnResult result = handle(event, keyedLog, ctx.timerService());
-
-    if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
-      LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
-      result = withEvents(result, append(result.events, scheduled));
+    TurnResult result = null;
+    try {
+      result = handle(event, keyedLog, ctx.timerService());
+      if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
+        LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
+        result = withEvents(result, append(result.events, scheduled));
+      }
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException e) {
+      result = failAtBoundary(cid, event.turnId(), keyedLog, result, e);
     }
-    emit(result, out);
+    armIdleTimer(ctx.timerService());
+    emit(result, ctx, out);
   }
 
   @Override
   public void onTimer(long timestamp, OnTimerContext ctx, Collector<TurnResult> out)
       throws Exception {
+    String cid = ctx.getCurrentKey();
+    ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
+    if (ctx.timeDomain() == TimeDomain.PROCESSING_TIME
+        && Long.valueOf(timestamp).equals(idleTimer.value())) {
+      idleTimer.clear();
+      expireIfIdle(cid, keyedLog, ctx.timerService());
+    }
     String turnId = timers.get(timestamp);
     if (turnId == null) {
       return;
     }
     timers.remove(timestamp);
-    String cid = ctx.getCurrentKey();
-    ConversationLog keyedLog = new KeyedConversationLog(cid, log, nextSequence);
     String timerId = timerId(turnId, timestamp);
     LogEvent fired =
         keyedLog.append(
@@ -261,13 +287,97 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
             payload("timer_id", timerId, "turn_id", turnId, "fired_at", timestamp));
     timersFired.inc();
 
-    ConversationState state = keyedLog.state(cid);
-    if (!state.suspended().containsKey(turnId)) {
-      return; // resumed by an explicit signal before the timer fired; the firing is recorded only
-    }
     Map<String, Object> signal = payload("kind", TIMER_SIGNAL_KIND, "timer_id", timerId);
-    TurnResult result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
-    emit(withEvents(result, prepend(fired, result.events)), out);
+    TurnResult result;
+    try {
+      if (!keyedLog.state(cid).suspended().containsKey(turnId)) {
+        return; // resumed by an explicit signal before the timer fired; the firing is recorded only
+      }
+      result = handle(Event.resume(cid, turnId, signal), keyedLog, ctx.timerService());
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException e) {
+      result = failAtBoundary(cid, turnId, keyedLog, null, e);
+    }
+    armIdleTimer(ctx.timerService());
+    emit(withEvents(result, prepend(fired, result.events)), ctx, out);
+  }
+
+  /** One idle timer per conversation, moved forward by every turn; no-op without a TTL. */
+  private void armIdleTimer(TimerService timerService) throws Exception {
+    if (options.stateTtl() == null) {
+      return;
+    }
+    Long armed = idleTimer.value();
+    if (armed != null) {
+      timerService.deleteProcessingTimeTimer(armed);
+    }
+    long deadline = timerService.currentProcessingTime() + options.stateTtl().toMillis();
+    timerService.registerProcessingTimeTimer(deadline);
+    idleTimer.update(deadline);
+  }
+
+  /**
+   * Forgets a conversation that has been idle for the TTL, all of it at once: log, sequence counter
+   * and timers, so what is left can never fail to fold. A suspended turn is someone's unanswered
+   * approval, so the conversation is kept and looked at again a TTL later.
+   */
+  private void expireIfIdle(String cid, ConversationLog keyedLog, TimerService timerService)
+      throws Exception {
+    if (holdsASuspendedTurn(cid, keyedLog)) {
+      armIdleTimer(timerService);
+      return;
+    }
+    log.clear();
+    nextSequence.clear();
+    timers.clear();
+    conversationsExpired.inc();
+  }
+
+  private static boolean holdsASuspendedTurn(String cid, ConversationLog keyedLog) {
+    try {
+      return !keyedLog.state(cid).suspended().isEmpty();
+    } catch (LogUnavailable e) {
+      throw e;
+    } catch (RuntimeException corrupt) {
+      return false; // a log that no longer folds holds nothing that could be resumed
+    }
+  }
+
+  /**
+   * The operator's half of the turn boundary, for what happens outside the core graph: a log that
+   * no longer folds, or a suspended turn whose resume timer cannot be registered. The turn ends
+   * {@code failed} with class {@code fatal} and the job keeps serving every other key.
+   *
+   * @param partial the result so far, when the core had already produced one
+   */
+  private static TurnResult failAtBoundary(
+      String cid, String turnId, ConversationLog keyedLog, TurnResult partial, RuntimeException e) {
+    String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+    TurnError error = new TurnError(TurnError.ErrorClass.FATAL, message);
+    LogEvent failed =
+        keyedLog.append(
+            cid,
+            turnId,
+            EventType.TURN_FAILED,
+            payload(
+                "status",
+                TurnStatus.FAILED.wire(),
+                "reason",
+                message,
+                "error_class",
+                error.errorClass().wire()));
+    List<LogEvent> events = partial == null ? List.of() : partial.events;
+    return new TurnResult(
+        cid,
+        turnId,
+        TurnStatus.FAILED,
+        partial == null ? null : partial.path,
+        null,
+        error,
+        partial == null ? List.of() : partial.calls,
+        append(events, failed),
+        partial == null ? Map.of() : partial.state);
   }
 
   private TurnResult handle(Event event, ConversationLog keyedLog, TimerService timerService) {
@@ -333,9 +443,20 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     return ts;
   }
 
-  private void emit(TurnResult result, Collector<TurnResult> out) {
+  private void emit(TurnResult result, Context ctx, Collector<TurnResult> out) {
     turnCounters.get(result.status).inc();
     out.collect(result);
+    if (needsAttention(result)) {
+      ctx.output(TURN_FAILURES, result);
+    }
+  }
+
+  private static boolean needsAttention(TurnResult result) {
+    if (result.status != TurnStatus.FAILED || result.error == null) {
+      return false;
+    }
+    TurnError.ErrorClass cls = result.error.errorClass();
+    return cls == TurnError.ErrorClass.FATAL || cls == TurnError.ErrorClass.TRANSIENT;
   }
 
   private static String timerId(String turnId, long fireAt) {

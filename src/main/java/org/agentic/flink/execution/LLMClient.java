@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li>Ollama (local): qwen2.5:3b, qwen2.5:7b, llama3:8b, etc.
- *   <li>OpenAI: gpt-5.5, gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano
+ *   <li>OpenAI: gpt-6-astra, gpt-6.1-sol, gpt-6.1-terra, gpt-6-luna
  * </ul>
  *
  * <p><b>Tool calls.</b> Tool calls come from the provider's structured tool execution requests
@@ -74,7 +74,7 @@ public class LLMClient implements Serializable {
       Pattern.compile("TOOL_CALL:\\s*([a-zA-Z0-9_-]+)\\s*\\(([^)]*)\\)");
 
   private final String modelName;
-  private final double temperature;
+  private final Double temperature;
   private final int maxTokens;
   private final String baseUrl;
   private final Duration timeout;
@@ -101,7 +101,7 @@ public class LLMClient implements Serializable {
 
   private LLMClient(
       String modelName,
-      double temperature,
+      Double temperature,
       int maxTokens,
       String baseUrl,
       Duration timeout,
@@ -374,8 +374,8 @@ public class LLMClient implements Serializable {
     return chatMessages;
   }
 
-  /** Creates a default LLM client with Ollama. */
-  public static LLMClient createDefault(String modelName, double temperature) {
+  /** Creates a default LLM client with Ollama; a null temperature is left to the provider. */
+  public static LLMClient createDefault(String modelName, Double temperature) {
     return new LLMClientBuilder().withModel(modelName).withTemperature(temperature).build();
   }
 
@@ -389,6 +389,11 @@ public class LLMClient implements Serializable {
   }
 
   public double getTemperature() {
+    return temperature == null ? ChatSetup.DEFAULT_TEMPERATURE : temperature;
+  }
+
+  /** What goes on the wire: null unless a caller set one. */
+  public Double getDeclaredTemperature() {
     return temperature;
   }
 
@@ -400,7 +405,7 @@ public class LLMClient implements Serializable {
 
   public static class LLMClientBuilder {
     private String modelName = ConfigKeys.DEFAULT_OLLAMA_MODEL;
-    private double temperature = 0.7;
+    private Double temperature;
     private int maxTokens = 4000;
     private String baseUrl = ConfigKeys.DEFAULT_OLLAMA_BASE_URL;
     private Duration timeout = Duration.ofSeconds(60);
@@ -410,7 +415,7 @@ public class LLMClient implements Serializable {
       return this;
     }
 
-    public LLMClientBuilder withTemperature(double temperature) {
+    public LLMClientBuilder withTemperature(Double temperature) {
       this.temperature = temperature;
       return this;
     }

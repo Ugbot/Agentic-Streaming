@@ -25,7 +25,7 @@ embeddings: {provider: ollama, model: nomic-embed-text, base_url: http://localho
 Switch to a hosted provider by changing two fields and exporting the key:
 
 ```yaml
-llm:        {provider: openai, model: gpt-5.4-mini}
+llm:        {provider: openai, model: gpt-6-luna}
 embeddings: {provider: openai, model: text-embedding-3-small}
 ```
 ```bash
@@ -41,7 +41,7 @@ from pyagentic.llm import LiteLLMChatClient, OllamaChatClient, LlmBrain
 from pyagentic.embeddings import LiteLLMEmbedder, make_embedder
 
 chat = LiteLLMChatClient(model="ollama/qwen2.5:3b")          # one API across providers
-# chat = LiteLLMChatClient(model="gpt-5.4-mini")             # OpenAI (OPENAI_API_KEY)
+# chat = LiteLLMChatClient(model="gpt-6-luna")             # OpenAI (OPENAI_API_KEY)
 # chat = LiteLLMChatClient(model="anthropic/claude-...")     # Anthropic (ANTHROPIC_API_KEY)
 embed = make_embedder({"provider": "ollama", "model": "nomic-embed-text"})
 brain = LlmBrain(chat, name="assistant", system_prompt="You are helpful.")

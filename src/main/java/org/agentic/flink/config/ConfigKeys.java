@@ -29,7 +29,7 @@ public final class ConfigKeys {
   // Anthropic (Claude)
   public static final String ANTHROPIC_API_KEY = "anthropic.api.key";
   public static final String ANTHROPIC_MODEL = "anthropic.model";
-  public static final String DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
+  public static final String DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5";
 
   // Redis
   public static final String REDIS_HOST = "redis.host";
@@ -91,7 +91,7 @@ public final class ConfigKeys {
   // OpenAI (optional)
   public static final String OPENAI_API_KEY = "openai.api.key";
   public static final String OPENAI_MODEL = "openai.model";
-  public static final String DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
+  public static final String DEFAULT_OPENAI_MODEL = "gpt-6-luna";
 
   // A2A (Agent2Agent) — outbound client + inbound Quarkus gateway. See docs/a2a.md.
   public static final String A2A_PROTOCOL_VERSION = "a2a.protocol.version";

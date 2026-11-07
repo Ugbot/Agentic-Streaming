@@ -1,5 +1,6 @@
 package org.jagentic.core.llm;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -10,6 +11,8 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.jagentic.core.TransientFailure;
 
 /**
  * Shared JSON-mode HTTP chat client. The model must reply with a single JSON object —
@@ -48,14 +51,26 @@ abstract class AbstractHttpChatClient implements ChatClient {
       headers.forEach(b::header);
       HttpResponse<String> resp = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
       if (resp.statusCode() / 100 != 2) {
-        throw new RuntimeException("chat HTTP " + resp.statusCode() + ": " + resp.body());
+        String message = "chat HTTP " + resp.statusCode() + ": " + resp.body();
+        throw transientStatus(resp.statusCode()) ? new TransientFailure(message)
+            : new RuntimeException(message);
       }
       return parseChatJson(extractContent(MAPPER.readTree(resp.body())));
     } catch (RuntimeException e) {
       throw e;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("chat call interrupted", e);
+    } catch (IOException e) {
+      throw new TransientFailure("chat call failed: " + e.getMessage(), e);
     } catch (Exception e) {
       throw new RuntimeException("chat call failed: " + e.getMessage(), e);
     }
+  }
+
+  /** Worth asking again: timeouts, rate limits and server-side errors, not a refused request. */
+  static boolean transientStatus(int status) {
+    return status == 408 || status == 425 || status == 429 || status >= 500;
   }
 
   /** Parse a model reply that should be one JSON object; tolerate fences/prose. */

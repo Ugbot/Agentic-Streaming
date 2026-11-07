@@ -3,13 +3,18 @@ package org.agentic.flink.pipeline;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.agentic.flink.runtime.WorkflowTurnFunction;
+import org.agentic.flink.runtime.testkit.Workflows;
 import org.agentic.flink.testkit.RepoRoot;
+import org.agentic.flink.testkit.StubOllama;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.util.CloseableIterator;
@@ -17,6 +22,7 @@ import org.jagentic.core.Event;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * YAML→Flink-job runner: the shared pipeline.yaml assembled + run as a real (local MiniCluster)
@@ -49,6 +55,19 @@ class FlinkPipelineRunnerTest {
       it.forEachRemaining(results::add);
     }
     return results;
+  }
+
+  @Test
+  void theCommandLineRunsADocumentDeclaringARealModel(@TempDir Path dir) throws Exception {
+    try (StubOllama model = new StubOllama("it is 42")) {
+      Path document = dir.resolve("pipeline.yaml");
+      Files.writeString(
+          document,
+          new ObjectMapper(new YAMLFactory())
+              .writeValueAsString(Workflows.billingOnAModel(model.llm())));
+      FlinkPipelineRunner.main(new String[] {document.toString(), "--text", "the answer?"});
+      assertEquals(1, model.requests().size(), "the model the document declares was called");
+    }
   }
 
   @Test

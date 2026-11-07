@@ -1,12 +1,15 @@
 package org.jagentic.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+import org.jagentic.core.llm.ChatClient;
 import org.jagentic.core.llm.ChatResult;
 import org.jagentic.core.llm.LlmBrain;
 import org.jagentic.core.llm.StubChatClient;
@@ -71,5 +74,32 @@ class LlmBrainTest {
     TurnResult res = graph.handle(new Event("c1", "alice", "what is my balance?"), ctx(tools));
     assertEquals("payments", res.path);
     assertTrue(res.ok && res.toolCalls.contains("get_balance") && res.reply.contains("1234.56"));
+  }
+
+  /** The model's view is a view of the log. A store is a cache of it at best (review H13). */
+  @Test
+  void theModelReadsTheTranscriptFromTheFoldNotTheStore() {
+    ConversationLog log = new ConversationLog.InMemory();
+    log.append("c", "t0", EventType.MEMORY_WRITTEN, Map.of("messages",
+        List.of(Map.of("role", "user", "text", "from the log"),
+            Map.of("role", "assistant", "text", "logged answer"))));
+    ConversationStore store = new ConversationStore.InMemory();
+    store.append("c", ChatMessage.user("only in a stale store"));
+    List<Map<String, String>> seen = new ArrayList<>();
+    ChatClient client = (messages, tools) -> {
+      seen.addAll(messages);
+      return ChatResult.text("ok");
+    };
+    AgentContext ctx = new AgentContext("c", "t1", "u", store,
+        new KeyedStateStore.InMemory(), new ToolRegistry(), null,
+        log, Policies.DEFAULTS);
+
+    new LlmBrain(client, "p").turn("now", ctx);
+
+    List<String> contents = seen.stream().map(m -> m.get("content")).toList();
+    assertTrue(contents.contains("from the log"), contents.toString());
+    assertTrue(contents.contains("logged answer"), contents.toString());
+    assertFalse(contents.contains("only in a stale store"), contents.toString());
+    assertEquals("now", contents.get(contents.size() - 1));
   }
 }

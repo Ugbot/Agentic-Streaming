@@ -30,6 +30,10 @@ class ToolError(RuntimeError):
     """A tool raised. Carries no runtime detail so results stay comparable."""
 
 
+class TransientError(RuntimeError):
+    """The model failed in a way that may pass. Error class `transient`."""
+
+
 class SpecError(ValueError):
     """The workflow document is not executable by this runtime."""
 
@@ -78,6 +82,8 @@ class Conversation:
     suspended: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     timers: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # pending, by timer id
     watermark_ms: Optional[int] = None
+    tool_indices: Dict[str, int] = field(default_factory=dict)  # next call index, by turn id
+    resumed: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # parked state of resumed turns
 
 
 def reduce_state(log: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -181,25 +187,35 @@ class ReferenceRuntime:
 
         if turn.signal is not None and turn.turn_id in conv.suspended:
             return self._resume(conv, turn)
-        if idempotent and turn.turn_id in conv.results:
-            prior = dict(conv.results[turn.turn_id])
+        recorded = conv.results.get(turn.turn_id)
+        rerun = idempotent and recorded is not None and (recorded.get("error") or {}).get("class") == "transient"
+        if rerun and turn.signal is not None and turn.turn_id in conv.resumed:
+            conv.suspended[turn.turn_id] = conv.resumed[turn.turn_id]
+            return self._resume(conv, turn)
+        if idempotent and recorded is not None and not rerun:
+            prior = dict(recorded)
             prior["status"] = "duplicate"
             prior["events"] = []
             return prior
 
-        ctx = _TurnContext(turn)
+        ctx = _TurnContext(turn, _tool_index=conv.tool_indices.get(turn.turn_id, 0))
         event_time = turn.event_time_ms()
         if event_time is not None:
             conv.watermark_ms = max(conv.watermark_ms if conv.watermark_ms is not None else event_time, event_time)
         first_turn = not conv.log
         if not first_turn:
-            self._fire_due_timers(conv, ctx)
+            try:
+                self._fire_due_timers(conv, ctx)
+            except ToolError as exc:
+                return self._finish(conv, ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
+                                    event=("turn_failed", {"reason": str(exc)}))
         received: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text}
         if event_time is not None:
             received["event_time_ms"] = event_time
         if turn.metadata:
             received["metadata"] = dict(turn.metadata)
-        self._append(conv, ctx, "turn_received", received)
+        if not rerun:
+            self._append(conv, ctx, "turn_received", received)
         if first_turn:
             self._schedule_timers(conv, ctx)
 
@@ -225,7 +241,9 @@ class ReferenceRuntime:
 
     def _resume(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
         pending = conv.suspended.pop(turn.turn_id)
-        ctx = _TurnContext(Turn(turn.conversation_id, turn.turn_id, pending["text"]))
+        conv.resumed[turn.turn_id] = pending
+        ctx = _TurnContext(Turn(turn.conversation_id, turn.turn_id, pending["text"]),
+                           _tool_index=conv.tool_indices.get(turn.turn_id, 0))
         self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal})
         return self._run_brain(conv, ctx, pending["path"])
 
@@ -238,6 +256,9 @@ class ReferenceRuntime:
                 reply = self._draft(conv, ctx, path)
             except ToolError as exc:
                 return self._finish(conv, ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
+                                    event=("turn_failed", {"reason": str(exc)}))
+            except TransientError as exc:
+                return self._finish(conv, ctx, "failed", path, None, {"class": "transient", "message": str(exc)},
                                     event=("turn_failed", {"reason": str(exc)}))
             self._append(conv, ctx, "reply_drafted", {"reply": reply})
             if self._verify(path, reply):
@@ -278,12 +299,25 @@ class ReferenceRuntime:
         script = self.llm.get("script")
         if not script:
             raise SpecError("an llm brain needs llm.script under the stub provider")
-        for step in script:
+        for index, step in enumerate(script):
+            self._call_model(index, step)
             if "tool" in step:
                 self._invoke(conv, ctx, step["tool"], dict(step.get("args", {})))
             else:
                 return step["text"]
         raise SpecError("llm.script ended without a final text")
+
+    def _call_model(self, index: int, step: Dict[str, Any]) -> None:
+        """One scripted model call under `policies.retry`. Only the call is retried, so a tool
+        the model already called is not called again."""
+        retry = self.policies.get("retry", {})
+        max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
+        for attempt in range(1, max_attempts + 1):
+            seen = self._tool_attempts.get(f"llm.script[{index}]", 0) + 1
+            self._tool_attempts[f"llm.script[{index}]"] = seen
+            if seen > step.get("x-fail-attempts", 0):
+                return
+        raise TransientError("stub model unavailable")
 
     # -- time and patterns -------------------------------------------------
 
@@ -370,10 +404,18 @@ class ReferenceRuntime:
                 self._invoke(conv, ctx, step["tool"], step.get("args", {}))
             except ToolError as exc:
                 self._append(conv, ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
+                failed_undos: List[str] = []
                 for completed in reversed(done):
                     undo = completed.get("compensate_with") or self.tools[completed["tool"]].get("compensation")
                     if undo:
-                        self._invoke(conv, ctx, undo, {}, event="compensation_step")
+                        try:
+                            self._invoke(conv, ctx, undo, {}, event="compensation_step", strict=True)
+                        except ToolError:
+                            failed_undos.append(undo)
+                if failed_undos:
+                    message = f"compensation failed for {failed_undos} after: {exc}"
+                    return self._finish(conv, ctx, "failed", path, None, {"class": "fatal", "message": message},
+                                        event=("turn_failed", {"reason": message}))
                 self._append(conv, ctx, "compensation_completed", {"steps": len(done)})
                 return self._finish(conv, ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
                                     event=("turn_failed", {"reason": str(exc)}))
@@ -420,7 +462,9 @@ class ReferenceRuntime:
         raise SpecError(f"the reference runtime does not implement the {kind} verifier")
 
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,
-                args: Dict[str, Any], event: str = None) -> Any:
+                args: Dict[str, Any], event: str = None, strict: bool = False) -> Any:
+        """`strict` raises when the budget is spent whatever `on_tool_error` says: a saga undo
+        that failed must never read as compensated."""
         spec = self.tools.get(tool_id)
         if spec is None:
             raise SpecError(f"unknown tool {tool_id}")
@@ -436,7 +480,7 @@ class ReferenceRuntime:
                 self._append(conv, ctx, "tool_failed",
                              {"tool": tool_id, "index": index, "attempt": attempt, "error": str(exc)})
                 if attempt == max_attempts:
-                    if self.policies.get("on_tool_error", "fail") == "continue":
+                    if self.policies.get("on_tool_error", "fail") == "continue" and not strict:
                         return None
                     raise
                 continue
@@ -461,6 +505,9 @@ class ReferenceRuntime:
             if budget is None or seen <= budget:
                 raise ToolError(f"{tool_id} failed")
             return spec.get("value")
+        if kind == "hanging":
+            # never answers; the reference has no wall clock, so the limit is reached at once
+            raise ToolError(f"{tool_id} timed out after {spec.get('timeout_ms', 10000)} ms")
         raise SpecError(f"the reference runtime does not implement tool kind {kind}")
 
     # -- bookkeeping -------------------------------------------------------
@@ -495,6 +542,7 @@ class ReferenceRuntime:
             "error": error,
         }
         conv.results[ctx.turn.turn_id] = result
+        conv.tool_indices[ctx.turn.turn_id] = ctx._tool_index
         return result
 
 

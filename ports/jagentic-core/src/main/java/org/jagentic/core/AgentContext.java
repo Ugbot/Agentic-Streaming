@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 import java.util.random.RandomGenerator;
 
 /**
@@ -86,6 +87,38 @@ public final class AgentContext {
     return nextToolIndex++;
   }
 
+  /** A re-run turn keeps counting: {@code (turn_id, index)} identifies one call across runs. */
+  public void continueToolIndexAfter(List<ToolCall> earlier) {
+    for (ToolCall c : earlier) {
+      nextToolIndex = Math.max(nextToolIndex, c.index() + 1);
+    }
+  }
+
+  /**
+   * One model call under {@code policies.retry}: a {@link TransientFailure} is retried, anything
+   * else propagates. Only the call is retried, so tools the model has already called this turn are
+   * not called again.
+   */
+  public <T> T callModel(Supplier<T> call) {
+    Policies.RetryPolicy retry = policies.retry();
+    for (int attempt = 1; ; attempt++) {
+      try {
+        return call.get();
+      } catch (TransientFailure e) {
+        for (AgentListener l : listeners) {
+          l.onError("model", e, this);
+        }
+        if (attempt >= retry.attempts()) {
+          throw e;
+        }
+        long delay = retry.delayBefore(attempt + 1, random);
+        if (delay > 0) {
+          sleeper.accept(delay);
+        }
+      }
+    }
+  }
+
   /** {@code invoke} with {@code tool_called}/{@code delegated} recorded on success. */
   public Object callTool(String toolId, Map<String, Object> params) {
     return invoke(toolId, params, null);
@@ -101,6 +134,19 @@ public final class AgentContext {
    *     ({@code delegated} for peer tools, {@code tool_called} otherwise)
    */
   public Object invoke(String toolId, Map<String, Object> params, EventType successEvent) {
+    return invoke(toolId, params, successEvent, policies.onToolError() == Policies.OnToolError.CONTINUE);
+  }
+
+  /**
+   * One saga undo. It always throws when its budget is spent, whatever {@code on_tool_error} says:
+   * a failed compensation must never read as a compensated step.
+   */
+  public Object compensate(String toolId) {
+    return invoke(toolId, Map.of(), EventType.COMPENSATION_STEP, false);
+  }
+
+  private Object invoke(String toolId, Map<String, Object> params, EventType successEvent,
+                        boolean swallowFailure) {
     ToolRegistry.Tool tool = tools.get(toolId);
     if (tool == null) {
       throw new ToolRegistry.UnknownTool(toolId);
@@ -126,7 +172,7 @@ public final class AgentContext {
           l.onError("tool:" + toolId, e, this);
         }
         if (attempt == budget) {
-          if (policies.onToolError() == Policies.OnToolError.CONTINUE) {
+          if (swallowFailure) {
             return null;
           }
           throw new ToolFailure(toolId, index, attempt, message, e);

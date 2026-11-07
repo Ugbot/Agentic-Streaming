@@ -281,6 +281,7 @@ class LocalRuntime(Runtime):
         if missing:
             raise ValidationError("the workflow references Python bindings the spec did not carry:\n"
                                   + "\n".join(f"  - {m}" for m in missing))
+        self._release_log()
         self.log = self._open_log(doc)
         self.tools = ToolRegistry()
         for entry in doc.get("tools") or []:
@@ -423,6 +424,12 @@ class LocalRuntime(Runtime):
         if workers is not None:
             workers.shutdown(wait=True)
         self.engine = None
+        self._release_log()
+
+    def _release_log(self) -> None:
+        """Close a log this runtime opened. One passed in as `log=` belongs to the caller."""
+        if self.log is not None and self.log is not self._explicit_log:
+            self.log.close()
 
 
 class _Deployable:

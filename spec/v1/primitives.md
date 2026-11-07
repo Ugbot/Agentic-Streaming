@@ -112,6 +112,13 @@ A turn ends in exactly one terminal status:
 - `turn_id` is the idempotency key and is mandatory on every inbound turn. A runtime that
   receives a `turn_id` it has already applied must return the recorded result with status
   `duplicate`, and must not re-run the brain, tools, or guardrails.
+- A resume signal redelivered after its turn reached a terminal status is a `duplicate` of that
+  turn: nothing is appended and the recorded result stands.
+- A turn that ended `failed` with class `transient` has not been applied, so its `turn_id` is
+  not spent. A redelivery runs the turn again rather than answering `duplicate`, and does not
+  append a second `turn_received`, so it is not counted twice. A redelivered resume signal runs
+  the brain of that turn again. Tools the first run called are called again, under the next
+  free indices, so `(turn_id, index)` still names one call. Every other failed turn is applied.
 - Tool calls are idempotent per `(turn_id, call_index)`. A retried turn must not double-apply
   a tool whose result is already recorded.
 - Effects that leave the system (`publish`, `delegate`) carry `(conversation_id, turn_id,
@@ -129,7 +136,7 @@ Error classes:
 | `guardrail` | input or output blocked | terminal status `rejected`, no retry |
 | `verification` | verifier rejected the reply | retry the brain up to `policies.verification.max_attempts`, then `unverified` |
 | `tool` | tool raised or timed out | retry per `policies.retry`, then `turn_failed` unless the path declares a fallback |
-| `transient` | store or network failure | retry per `policies.retry` |
+| `transient` | model unreachable, timed out, rate limited or a server error; store or network failure | retry per `policies.retry`, then `turn_failed`; a redelivery runs the turn again (section 4) |
 | `fatal` | serialization failure, corrupt state | fail the turn and surface; never silently degrade |
 
 Retry policy:
@@ -144,6 +151,41 @@ policies:
     max_delay_ms: 5000
     jitter: false          # deterministic by default so fixtures are reproducible
 ```
+
+The turn boundary. Handling a turn never raises to the runtime for anything the turn did. A
+failure no other rule covers ends the turn `failed`, with `turn_failed` of class `fatal` as
+its last event, and a redelivery is a `duplicate` of that failure like any other applied turn.
+A runtime must not fail, restart, or stop for a per-conversation error: other conversations
+keep running. It surfaces turns ending `fatal` somewhere an operator can act on them (on Flink
+the `turn-failures` side output). The one exception is a log that cannot be read or written,
+which is an infrastructure failure: the turn cannot record its end there, so the runtime fails
+as a whole and recovers.
+
+Failed compensation. A compensation that fails, after `policies.retry`, is recorded as
+`tool_failed` and does not stop the others: every remaining compensation still runs, in reverse
+order. `on_tool_error: continue` does not apply to compensations. `compensation_completed` is
+written only when every compensation succeeded. When any failed it is absent, and the turn ends
+`failed` with class `fatal` whatever the failed step's class was, because the saga is partly
+applied and needs repair by hand.
+
+Time limits. Every tool attempt and every model call has a limit. A tool's `timeout_ms` bounds
+one attempt, default 10000; a peer's bounds one delegation, default 30000; `llm.timeout_ms`
+bounds one model call and `embeddings.timeout_ms` one embedding call, default 60000 for both. A
+tool that reaches its limit fails that attempt like any
+other tool failure, so it is recorded and retried under `policies.retry` and then has class
+`tool`. A timeout means the answer did not arrive, not that nothing happened: the effect may
+have landed. Tool kind `hanging` never answers and exists so that a fixture can prove the limit
+is enforced.
+
+A timer's tool that fails ends the turn that observed the deadline as `failed` with class
+`tool`, before `turn_received`. `timer_fired` stays on the log, so the timer does not fire
+again.
+
+A model call is retried on its own under `policies.retry`, so a transient failure does not
+repeat the tools the model already called this turn. A failure the provider will repeat, such
+as a refused request or a rejected key, is `fatal` and is not retried. A stub script step with
+`x-fail-attempts: n` fails its first `n` model calls transiently, counted across turns, so a
+fixture can exercise this.
 
 Retries never re-append `turn_received`. Each attempt appends its own `tool_called` or
 `tool_failed` events with an incrementing `attempt` in the payload.

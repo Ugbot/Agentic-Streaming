@@ -22,9 +22,9 @@ against the [reference spec](spec/v1/primitives.md).
 | Apache Pekko | `ports/jagentic-core`, in `agentic-pekko` | One event-sourced, cluster-sharded actor per conversation | [Pekko](docs/runtimes/pekko.md) |
 
 The contract is the `agentic/v1` spec under [`spec/v1`](spec/v1/primitives.md), its reference runtime
-and the 24 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
-mostly rule brains and scripted stubs. They do not cover a real model, a crash inside a turn, or a
-failed compensation, so a pass is a narrow claim; see
+and the 31 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
+mostly rule brains and scripted stubs. They do not cover a real model or a crash inside a turn, so
+a pass is a narrow claim; see
 [conformance results](docs/runtimes/README.md#conformance-results).
 
 Everything else was moved out of this repository. The code as it stood is at
@@ -33,24 +33,17 @@ Everything else was moved out of this repository. The code as it stood is at
 
 ## Known failures
 
-- **Tool calls re-run after a Flink restore.** Flink state rolls back to the last checkpoint and the
-  outside world does not. A turn that ran after that checkpoint runs again on redelivery, tools and
-  model calls included. Tools receive no idempotency key, so the second call looks like a new one.
-  The same happens to a turn that crashes before finishing on the other runtimes.
-- **A failing compensation escapes the turn.** No terminal event is written, and on Flink the job
-  goes into a restart loop that repeats the forward effects.
-- **`state_ttl_ms` can crash a Flink job permanently** for a conversation that stays active past the
-  TTL.
-- **An uncaught exception in a turn fails the whole Flink job.** There is no dead-letter path.
-- **No real model on the canonical paths.** On Flink and in the `agentic` Python package only a
-  scripted stub runs. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) still sits on the older
-  `pyagentic` package, which has real model clients but no event log.
+- **Tool calls re-run after a Flink restore, so a payment can fire twice.** Flink state rolls back to
+  the last checkpoint and the outside world does not. A turn that ran after that checkpoint runs
+  again on redelivery, tools and model calls included. Tools receive no idempotency key, so the
+  second call looks like a new one. The same happens to a turn that crashes before finishing on the
+  other runtimes, and to a turn run again after a transient model failure.
+- **A real model has only been exercised against a local stand-in server on Flink.** A document can
+  declare `provider: ollama` or `openai` there. In the `agentic` Python package only a scripted stub
+  runs. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) still sits on the older `pyagentic`
+  package, which has real model clients but no event log.
 - **The tool allowlist is not a security control, and the canonical path has no authentication.** See
   [security](docs/security.md).
-- **The full Java test run is flaky.** `AgentJobGeneratorGraphTest` asserts an operator order that
-  depends on process state, so it can fail in a full run and passes alone. It has failed on macOS and
-  passed on Linux CI at the same commit. `AgentExecutorTest` has also failed once on timing.
-- **There is no supported way to run a `pipeline.yaml` from Kafka on a Flink cluster.**
 
 ## Quick start
 
@@ -87,10 +80,8 @@ python3 -m venv .venv
 ./mvnw test -Dtest='FlinkConformanceTest,FlinkPipelineRunnerTest'
 ```
 
-**Not listed as working:** `./mvnw clean test` and `./mvnw -f reactor/pom.xml verify` cannot be relied
-on to pass, because of the flaky tests under [Known failures](#known-failures). When the Flink module
-fails, the reactor skips Pekko. `./mvnw -f reactor/pom.xml -DskipTests verify` passes, which shows the
-build and nothing about the tests.
+`./mvnw -f reactor/pom.xml verify` runs every JVM test. To run an agent from Kafka on a Flink cluster,
+see [running on a cluster](docs/runtimes/flink.md#running-on-a-cluster).
 
 The walkthrough is in [the banking agent on every runtime](docs/examples/banking-everywhere.md) and
 [getting started](docs/getting-started.md).

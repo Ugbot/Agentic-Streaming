@@ -163,19 +163,51 @@ public final class PipelineLoader {
     return buildSystem(loadYaml(path), backendOverride);
   }
 
-  /** Build a ChatClient from the {@code llm:} section (ollama/openai/stub). */
-  @SuppressWarnings("unchecked")
-  static ChatClient chatClient(Map<String, Object> llm) {
-    String provider = (String) (llm == null ? "ollama" : llm.getOrDefault("provider", "ollama"));
+  private static final java.util.regex.Pattern SECRET_KEY = java.util.regex.Pattern.compile(
+      "(?i).*(api[_-]?key|secret|password|credential|auth|bearer|access[_-]?token).*");
+
+  /**
+   * Refuses an {@code llm:} block that cannot work, before any job is submitted: an unknown
+   * provider, or a key that looks like a credential. A workflow document travels with the job and
+   * lands in logs and savepoints, so a key belongs in the environment ({@code OPENAI_API_KEY}).
+   * The message names the offending field and never its value.
+   */
+  public static void checkLlm(Map<String, Object> llm) {
+    Map<String, Object> spec = llm == null ? Map.of() : llm;
+    for (String key : spec.keySet()) {
+      if (SECRET_KEY.matcher(key).matches()) {
+        throw new IllegalArgumentException("llm." + key + " looks like a credential; a workflow "
+            + "document must not carry one. Set it in the environment of the process running the model call");
+      }
+    }
+    String provider = String.valueOf(spec.getOrDefault("provider", "ollama"));
+    if (!List.of("ollama", "openai", "stub").contains(provider)) {
+      throw new IllegalArgumentException("unknown llm provider " + provider + "; choose ollama|openai|stub");
+    }
+  }
+
+  /**
+   * Build a ChatClient from the {@code llm:} section (ollama/openai/stub), honouring {@code model},
+   * {@code base_url}, {@code temperature} and {@code max_tokens}. A sampling setting is sent only
+   * when declared, since newer models refuse it.
+   */
+  public static ChatClient chatClient(Map<String, Object> llm) {
+    checkLlm(llm);
+    Map<String, Object> spec = llm == null ? Map.of() : llm;
+    String provider = String.valueOf(spec.getOrDefault("provider", "ollama"));
+    String baseUrl = spec.get("base_url") == null ? null
+        : GraphBuilder.resolveEnv(String.valueOf(spec.get("base_url")));
+    Double temperature = spec.get("temperature") instanceof Number n ? n.doubleValue() : null;
+    Integer maxTokens = spec.get("max_tokens") instanceof Number n ? n.intValue() : null;
     switch (provider) {
       case "ollama":
-        return new OllamaChatClient((String) llm.getOrDefault("model", "qwen2.5:3b"));
+        return new OllamaChatClient((String) spec.getOrDefault("model", "qwen2.5:3b"), baseUrl,
+            temperature, maxTokens);
       case "openai":
-        return new OpenAIChatClient((String) llm.getOrDefault("model", "gpt-5.4-mini"));
-      case "stub":
-        return ScriptedChatClient.fromSpec(llm);
+        return new OpenAIChatClient((String) spec.getOrDefault("model", "gpt-6-luna"), baseUrl,
+            temperature, maxTokens);
       default:
-        throw new IllegalArgumentException("unknown llm provider " + provider);
+        return ScriptedChatClient.fromSpec(spec);
     }
   }
 }

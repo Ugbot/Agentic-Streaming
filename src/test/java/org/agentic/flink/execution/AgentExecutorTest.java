@@ -3,6 +3,7 @@ package org.agentic.flink.execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -195,6 +196,13 @@ public class AgentExecutorTest {
   }
 
   @Test
+  void theDefaultClientSendsNoTemperatureNobodyDeclared() {
+    try (AgentExecutor executor = AgentExecutor.builder().withAgent(agent(1)).build()) {
+      assertNull(executor.llmClient().getDeclaredTemperature());
+    }
+  }
+
+  @Test
   void turnIdOfPrefersDataThenMetadataThenCorrelationThenFlow() {
     AgentEvent e = new AgentEvent("f", "u", "a", AgentEventType.FLOW_STARTED);
     e.setIterationNumber(3);
@@ -300,6 +308,36 @@ public class AgentExecutorTest {
               .filter(e -> e.getEventType() == AgentEventType.ERROR_OCCURRED)
               .count();
       assertEquals(iterations, errorEvents);
+    }
+  }
+
+  /**
+   * Full jitter draws from {@code [0, cap]}, so a zero wait is a legal draw. It is still a backoff
+   * decision, and {@code maxIterationsCarriesLastErrorAndBacksOffBetweenRetries} used to lose one
+   * about once in a hundred draws. A zero base makes that draw certain.
+   */
+  @Test
+  void everyRetriedIterationBacksOffEvenWhenTheJitterDrawsZero() throws Exception {
+    List<ChatResponse> script = new ArrayList<>();
+    script.add(null);
+    int iterations = ThreadLocalRandom.current().nextInt(2, 5);
+    List<Long> sleeps = new CopyOnWriteArrayList<>();
+    try (AgentExecutor ex =
+        AgentExecutor.builder()
+            .withAgent(agent(iterations))
+            .withLlmClient(LLMClient.builder().withModel("m").build(new ScriptedConnection(script)))
+            .withToolRegistry(ToolRegistry.empty())
+            .withTurnResultStore(new InMemoryTurnResultStore())
+            .withRetryBackoff(Duration.ZERO, Duration.ZERO)
+            .build()) {
+      ex.setSleeper(
+          ms -> {
+            sleeps.add(ms);
+            return 0L;
+          });
+      ExecutionResult r = ex.execute(turn("t-" + UUID.randomUUID())).get(10, TimeUnit.SECONDS);
+      assertFalse(r.isSuccess());
+      assertEquals(iterations - 1, sleeps.size(), "one backoff per retried iteration");
     }
   }
 

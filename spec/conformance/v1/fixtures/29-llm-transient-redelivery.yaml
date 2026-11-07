@@ -1,0 +1,42 @@
+id: llm-transient-redelivery
+description: "A turn whose transient failure outlasts the retry budget ends failed with error class transient, and that does not spend its turn_id. A redelivery runs the turn again rather than answering duplicate, without counting a second turn. Tools the first run called are called again, under fresh indices. Once the turn has completed, a redelivery is a duplicate as usual."
+requires: [llm_brain, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: flaky
+    router: {kind: keyword, default: main}
+    paths:
+      main: {brain: llm, tools: [lookup_order]}
+    verifier: {kind: none}
+  llm:
+    provider: stub
+    script:
+      - {tool: lookup_order, args: {order: "77"}}
+      - {text: "your order shipped", x-fail-attempts: 1}
+  tools:
+    - {id: lookup_order, kind: constant, value: "shipped"}
+turns:
+  - {conversation_id: c1, turn_id: t1, text: "where is my order?"}
+  - {conversation_id: c1, turn_id: t1, text: "where is my order?"}
+  - {conversation_id: c1, turn_id: t1, text: "where is my order?"}
+expect:
+  - turn_id: t1
+    status: failed
+    error_class: transient
+    tool_calls:
+      - {tool: lookup_order, index: 0}
+    events_include: [turn_received, tool_called, turn_failed]
+    state_includes: {turn_count: 1, transcript_length: 0}
+  - turn_id: t1
+    status: completed
+    reply: "your order shipped"
+    tool_calls:
+      - {tool: lookup_order, index: 1}
+    events_include: [routed, tool_called, turn_completed]
+    events_exclude: [turn_received]
+    state_includes: {turn_count: 1, transcript_length: 2}
+  - turn_id: t1
+    status: duplicate
+    reply: "your order shipped"

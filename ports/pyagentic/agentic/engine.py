@@ -8,6 +8,7 @@ conversation is a fold over the event log, so `recover()` rebuilds it after a re
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 import threading
@@ -19,11 +20,13 @@ from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
-from .errors import AgenticError, ToolError, ValidationError
+from .errors import AgenticError, CorruptLog, LogUnavailable, ToolError, TransientError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec
 from .workflow_timers import WorkflowTimers
+
+LOG = logging.getLogger(__name__)
 
 Clock = Callable[[], int]
 Sleep = Callable[[float], None]
@@ -121,6 +124,7 @@ class Engine:
         self._suspended: Dict[Tuple[str, str], _Pending] = {}
         self._guard = threading.Lock()
         self._schema_validators: Dict[int, Draft202012Validator] = {}
+        self._model_failures: Dict[int, int] = {}
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -129,7 +133,11 @@ class Engine:
         results: Dict[Tuple[str, str], Dict[str, Any]] = {}
         suspended: Dict[Tuple[str, str], _Pending] = {}
         for conversation_id in self.log.conversation_ids():
-            log = self.log.read(conversation_id)
+            try:
+                log = self.log.read(conversation_id)
+            except CorruptLog as exc:  # one bad conversation must not stop the others
+                LOG.error("skipping conversation %s on recovery: %s", conversation_id, exc)
+                continue
             by_turn: Dict[str, List[Event]] = {}
             for event in log:
                 by_turn.setdefault(event.turn_id, []).append(event)
@@ -165,34 +173,59 @@ class Engine:
 
     def handle(self, turn: Turn) -> Dict[str, Any]:
         """Process one turn to a terminal status. Must be called by the conversation's
-        single writer."""
+        single writer.
+
+        This is the turn boundary and it does not raise for anything a turn does: whatever
+        escapes the turn's own handling ends it `failed` with class `fatal`. `LogUnavailable`
+        alone passes through, since a turn cannot record its end in a log it cannot reach."""
+        ctx = _TurnContext(turn, turn.text, self.clock())
+        try:
+            return self._process(turn, ctx)
+        except LogUnavailable:
+            raise
+        except Exception as exc:  # the boundary: a per-turn failure must not reach the caller
+            return self._fail_at_boundary(ctx, exc)
+
+    def _fail_at_boundary(self, ctx: _TurnContext, exc: Exception) -> Dict[str, Any]:
+        message = str(exc) or type(exc).__name__
+        ended = ctx.events and ctx.events[-1].type in ("turn_completed", "turn_failed")
+        path, error = self._routed_path(ctx), {"class": "fatal", "message": message}
+        try:
+            return self._finish(ctx, "failed", path, None, error,
+                                event=None if ended else ("turn_failed", {"status": "failed", "reason": message}))
+        except CorruptLog:  # nothing can be recorded on this conversation; the caller still gets a result
+            return self._finish(ctx, "failed", path, None, error)
+
+    def _process(self, turn: Turn, ctx: _TurnContext) -> Dict[str, Any]:
         key = (turn.conversation_id, turn.turn_id)
         idempotent = self.policies.get("idempotency", "turn-id") == "turn-id"
         with self._guard:
             pending = self._suspended.get(key)
             prior = self._results.get(key)
 
+        rerun = idempotent and prior is not None and (prior.get("error") or {}).get("class") == "transient"
         if turn.signal is not None:
-            if pending is None:
-                ctx = _TurnContext(turn, turn.text, self.clock())
-                return self._fail_validation(ctx, None, f"no suspended turn {turn.turn_id!r} to resume")
-            return self._resume(turn, pending)
-        if idempotent and prior is not None:
-            duplicate = dict(prior)
-            duplicate["status"] = "duplicate"
-            duplicate["events"] = []
-            duplicate["runtime_detail"] = {"duplicate_of": prior.get("runtime_detail", {}), "re_executed": False}
-            return duplicate
+            if pending is not None:
+                return self._resume(turn, pending)
+            if rerun:
+                return self._resume(turn, self._pending_of(turn, prior))
+            if prior is not None:
+                return self._duplicate(prior)  # a redelivered signal must not rewrite the turn
+            return self._fail_validation(ctx, None, f"no suspended turn {turn.turn_id!r} to resume")
+        if idempotent and prior is not None and not rerun:
+            return self._duplicate(prior)
 
-        ctx = _TurnContext(turn, turn.text, self.clock())
         history = self.log.read(turn.conversation_id)
+        if rerun:
+            ctx.next_index = self._next_index(turn, history)
         try:
             self.timers.fire_due(turn, history, lambda kind, payload: self._append(ctx, kind, payload),
                                  lambda tool_id, args: self._invoke(ctx, tool_id, args))
         except ToolError as exc:
             return self._finish(ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
                                 event=("turn_failed", {"status": "failed", "reason": str(exc)}))
-        self._append(ctx, "turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
+        if not rerun:
+            self._append(ctx, "turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
         self.timers.schedule(turn, history, lambda kind, payload: self._append(ctx, kind, payload))
         try:
             blocked = self._check_guardrails(self.global_guardrails, "input", turn.text)
@@ -226,12 +259,33 @@ class Engine:
         except ValidationError as exc:
             return self._fail_validation(ctx, self._routed_path(ctx), str(exc))
 
+    @staticmethod
+    def _duplicate(prior: Mapping[str, Any]) -> Dict[str, Any]:
+        duplicate = dict(prior)
+        duplicate["status"] = "duplicate"
+        duplicate["events"] = []
+        duplicate["runtime_detail"] = {"duplicate_of": prior.get("runtime_detail", {}), "re_executed": False}
+        return duplicate
+
+    def _pending_of(self, turn: Turn, prior: Mapping[str, Any]) -> _Pending:
+        """The parked state of a resumed turn that failed transiently, read back from the log."""
+        received = next(e for e in self.log.read(turn.conversation_id)
+                        if e.turn_id == turn.turn_id and e.type == "turn_received")
+        return _Pending(turn.turn_id, str(prior["path"]), str(received.payload.get("text", "")),
+                        str(received.payload.get("user_id", "anonymous")))
+
+    def _next_index(self, turn: Turn, history: Sequence[Event]) -> int:
+        """(turn_id, index) identifies one call across runs of the turn."""
+        return 1 + max((int(e.payload["index"]) for e in history
+                        if e.turn_id == turn.turn_id and "index" in e.payload), default=-1)
+
     def _resume(self, turn: Turn, pending: _Pending) -> Dict[str, Any]:
         key = (turn.conversation_id, turn.turn_id)
         with self._guard:
             self._suspended.pop(key, None)
         resumed = Turn(turn.conversation_id, turn.turn_id, pending.text, pending.user_id, None, turn.metadata)
         ctx = _TurnContext(resumed, pending.text, self.clock())
+        ctx.next_index = self._next_index(turn, self.log.read(turn.conversation_id))
         self._append(ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": dict(turn.signal or {})})
         try:
             if self.saga is not None:
@@ -251,6 +305,9 @@ class Engine:
                 reply = self._draft(ctx, path)
             except ToolError as exc:
                 return self._finish(ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
+                                    event=("turn_failed", {"status": "failed", "reason": str(exc)}))
+            except TransientError as exc:
+                return self._finish(ctx, "failed", path, None, {"class": "transient", "message": str(exc)},
                                     event=("turn_failed", {"status": "failed", "reason": str(exc)}))
             self._append(ctx, "reply_drafted", {"reply": reply})
             blocked = self._check_guardrails(list(self.global_guardrails) + self._path_guardrails(spec),
@@ -313,6 +370,7 @@ class Engine:
                                   f"only the scripted stub provider runs locally", "/llm/provider")
         allowed = set(self.paths[path].get("tools") or [])
         for i, step in enumerate(self.llm.get("script") or []):
+            self._call_model(i, step)
             if "tool" in step:
                 if allowed and step["tool"] not in allowed:
                     raise ValidationError(f"scripted tool {step['tool']!r} is not in the path's tools",
@@ -321,6 +379,23 @@ class Engine:
             else:
                 return str(step["text"])
         raise ValidationError("the llm script ended without a final text", "/llm/script")
+
+    def _call_model(self, index: int, step: Mapping[str, Any]) -> None:
+        """One scripted model call under `policies.retry`. Only the call is retried, so a tool
+        the model already called is not called again."""
+        retry = self.policies.get("retry") or {}
+        max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
+        for attempt in range(1, max_attempts + 1):
+            with self._guard:
+                seen = self._model_failures.get(index, 0) + 1
+                self._model_failures[index] = seen
+            if seen > step.get("x-fail-attempts", 0):
+                return
+            if attempt < max_attempts:
+                delay = retry_delay_ms(retry, attempt, self.rng)
+                if delay:
+                    self.sleep(delay / 1000.0)
+        raise TransientError("stub model unavailable")
 
     def _run_saga(self, ctx: _TurnContext, path: str) -> Dict[str, Any]:
         assert self.saga is not None
@@ -331,11 +406,19 @@ class Engine:
             except ToolError as exc:
                 self._append(ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
                 compensated = 0
+                failed_undos: List[str] = []
                 for completed in reversed(done):
                     undo = completed.get("compensate_with") or self.tools.spec(completed["tool"]).compensation
                     if undo:
-                        self._invoke(ctx, undo, {}, event="compensation_step")
-                        compensated += 1
+                        try:
+                            self._invoke(ctx, undo, {}, event="compensation_step", strict=True)
+                            compensated += 1
+                        except (ToolError, ValidationError):
+                            failed_undos.append(undo)
+                if failed_undos:
+                    message = f"compensation failed for {failed_undos} after: {exc}"
+                    return self._finish(ctx, "failed", path, None, {"class": "fatal", "message": message},
+                                        event=("turn_failed", {"status": "failed", "reason": message}))
                 self._append(ctx, "compensation_completed", {"steps": len(done), "compensated": compensated})
                 return self._finish(ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
                                     event=("turn_failed", {"status": "failed", "reason": str(exc)}))
@@ -421,7 +504,9 @@ class Engine:
         return passages
 
     def _invoke(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any],
-                event: Optional[str] = None) -> Any:
+                event: Optional[str] = None, strict: bool = False) -> Any:
+        """One tool call under `policies.retry`. `strict` raises when the budget is spent whatever
+        `on_tool_error` says: a saga undo that failed must never read as compensated."""
         spec: ToolSpec = self.tools.spec(tool_id)
         self.tools.validate_args(tool_id, args)
         index = ctx.take_index()
@@ -438,7 +523,7 @@ class Engine:
                 self._append(ctx, "tool_failed", {"tool": tool_id, "index": index, "attempt": attempt,
                                                   "args": args, "error": str(exc)})
                 if attempt == max_attempts:
-                    if self.policies.get("on_tool_error", "fail") == "continue":
+                    if self.policies.get("on_tool_error", "fail") == "continue" and not strict:
                         return None
                     raise
                 delay = retry_delay_ms(retry, attempt, self.rng)
@@ -492,7 +577,7 @@ class Engine:
             "status": status,
             "path": path,
             "reply": reply,
-            "state": self.state(ctx.turn.conversation_id),
+            "state": self._state_or_empty(ctx.turn.conversation_id),
             "tool_calls": list(ctx.tool_calls),
             "events": [e.normalized() for e in ctx.events],
             "error": error,
@@ -502,6 +587,13 @@ class Engine:
         with self._guard:
             self._results[(ctx.turn.conversation_id, ctx.turn.turn_id)] = result
         return result
+
+    def _state_or_empty(self, conversation_id: str) -> Dict[str, Any]:
+        """A corrupt log still gets a result."""
+        try:
+            return self.state(conversation_id)
+        except CorruptLog:
+            return {}
 
     def _result_from_events(self, conversation_id: str, turn_id: str, events: Sequence[Event],
                             log: Sequence[Event], status: str) -> Dict[str, Any]:

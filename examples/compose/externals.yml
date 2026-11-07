@@ -3,7 +3,7 @@
 # Everything is behind an SPI, so these are hot-swappable
 # (Redis<->Valkey, Kafka<->Fluss, etc.) without touching agent code.
 #
-#   podman compose -f examples/compose/externals.yml up -d valkey
+#   docker compose -f examples/compose/externals.yml up -d valkey
 #
 # Then, in a pipeline.yaml:
 #   stores: {conversation: {kind: redis, url: "redis://localhost:6379/0"}}

@@ -110,7 +110,7 @@ System properties use the prefix `agentic.flink.` followed by the key verbatim (
 | Key | Default | Description |
 |---|---|---|
 | `openai.api.key` | _(none)_ | OpenAI API key. No default; required only if using OpenAI models |
-| `openai.model` | `gpt-5.4-mini` | OpenAI model name (current options: `gpt-5.5`, `gpt-5.4`/`-mini`/`-nano`) |
+| `openai.model` | `gpt-6-luna` | OpenAI model name (see the [OpenAI model list](https://developers.openai.com/api/docs/models)) |
 
 ### Checkpointing and State Backend (Fault Tolerance)
 
@@ -263,7 +263,7 @@ AGENTIC_FLINK_QDRANT_PORT=6333
 
 # OpenAI (optional -- only if using OpenAI models)
 # AGENTIC_FLINK_OPENAI_API_KEY=sk-...
-# AGENTIC_FLINK_OPENAI_MODEL=gpt-5.4-mini
+# AGENTIC_FLINK_OPENAI_MODEL=gpt-6-luna
 
 # Checkpointing (exactly-once, enabled by default)
 AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS=10000

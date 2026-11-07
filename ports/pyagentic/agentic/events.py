@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence, TypeVar
 
-from .errors import ValidationError
+from .errors import CorruptLog, LogUnavailable, ValidationError
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt
+
+LOG = logging.getLogger(__name__)
 
 EVENT_TYPES: FrozenSet[str] = frozenset({
     "turn_received", "guardrail_rejected", "routed", "brain_started", "tool_called",
@@ -100,7 +109,11 @@ def reduce_state(log: Iterable[Event], context: Optional[Mapping[str, Any]] = No
     """
     window = window_size(context)
     state: Dict[str, Any] = {"turn_count": 0, "transcript_length": 0}
+    expected = 0
     for event in log:
+        if event.sequence != expected:
+            raise _not_dense(event.conversation_id, expected, event.sequence)
+        expected += 1
         if event.type == "turn_received":
             state["turn_count"] += 1
             if event.payload.get("event_time_ms") is not None:
@@ -115,6 +128,11 @@ def reduce_state(log: Iterable[Event], context: Optional[Mapping[str, Any]] = No
         elif event.type == "retrieved":
             state["last_retrieved_ids"] = list(event.payload.get("ids", ()))
     return state
+
+
+def _not_dense(conversation_id: str, expected: int, found: int) -> CorruptLog:
+    return CorruptLog(f"conversation {conversation_id} log is not dense: "
+                      f"expected sequence {expected} but found {found}")
 
 
 def transcript(log: Iterable[Event], context: Optional[Mapping[str, Any]] = None) -> List[ChatMessage]:
@@ -141,6 +159,9 @@ class EventLog(ABC):
 
     @abstractmethod
     def conversation_ids(self) -> Sequence[str]: ...
+
+    def close(self) -> None:
+        """Release whatever the log holds. It must not be used afterwards."""
 
 
 class InMemoryEventLog(EventLog):
@@ -176,16 +197,35 @@ class FileEventLog(EventLog):
     """One JSON-lines file per conversation under `directory`. Survives the process.
 
     Reads happen once per conversation and are then served from memory; appends write
-    the line and `fsync` before returning, so an acknowledged event is on disk. Unknown
-    event types found on disk are preserved (they stay in the file and the in-memory
+    the line and `fsync` before returning, so an acknowledged event is on disk, and the first
+    append to a conversation also syncs the directory so the new file survives a power loss.
+    Unknown event types found on disk are preserved (they stay in the file and the in-memory
     sequence) but rejected on append, because the v1 emitted set is closed.
+
+    A directory has one writer. The log holds an OS lock on `.writer.lock` from construction to
+    `close()`; a second log on the directory, in this process or another, is refused with
+    `LogUnavailable`. The OS drops the lock when a writer dies, so a crash leaves nothing to
+    clean up.
+
+    Loading tolerates exactly what a crash can leave behind. An append writes its newline last,
+    so a final line without one was never acknowledged: it is cut from the file. Anything else
+    that does not read back, or a gap in `sequence`, raises `CorruptLog` for that conversation.
     """
+
+    LOCK_FILE = ".writer.lock"
 
     def __init__(self, directory: str) -> None:
         self.directory = directory
         os.makedirs(directory, exist_ok=True)
         self._cache: Dict[str, List[Event]] = {}
         self._guard = threading.Lock()
+        self._lock_fd: Optional[int] = _acquire_writer_lock(os.path.join(directory, self.LOCK_FILE))
+
+    def close(self) -> None:
+        with self._guard:
+            if self._lock_fd is not None:
+                os.close(self._lock_fd)  # closing the descriptor releases the lock
+                self._lock_fd = None
 
     def _path(self, conversation_id: str) -> str:
         safe = "".join(c if c.isalnum() or c in "-_." else f"%{ord(c):02x}" for c in conversation_id)
@@ -194,17 +234,34 @@ class FileEventLog(EventLog):
     def _load(self, conversation_id: str) -> List[Event]:
         log = self._cache.get(conversation_id)
         if log is None:
-            log = []
-            path = self._path(conversation_id)
-            if os.path.exists(path):
-                with open(path, "r", encoding="utf-8") as fh:
-                    for line in fh:
-                        if line.strip():
-                            rec = json.loads(line)
-                            log.append(Event(conversation_id, rec["turn_id"], rec["sequence"], rec["type"],
-                                             rec.get("payload") or {}, rec.get("timestamp", 0),
-                                             rec.get("metadata") or {}))
+            log = self._read_file(conversation_id)
             self._cache[conversation_id] = log
+        return log
+
+    def _read_file(self, conversation_id: str) -> List[Event]:
+        path = self._path(conversation_id)
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        except FileNotFoundError:
+            return []
+        except OSError as exc:
+            raise LogUnavailable(f"cannot read {path}: {exc}") from exc
+        log: List[Event] = []
+        position = 0
+        while position < len(data):
+            newline = data.find(b"\n", position)
+            if newline == -1:
+                LOG.warning("%s: dropping a torn last line of %d bytes", path, len(data) - position)
+                os.truncate(path, position)
+                break
+            line = data[position:newline]
+            position = newline + 1
+            if line.strip():
+                event = _parse_record(conversation_id, path, line)
+                if event.sequence != len(log):
+                    raise _not_dense(conversation_id, len(log), event.sequence)
+                log.append(event)
         return log
 
     def append(self, conversation_id: str, turn_id: str, type: str,
@@ -218,12 +275,28 @@ class FileEventLog(EventLog):
                           timestamp, dict(metadata or {}))
             record = {"turn_id": turn_id, "sequence": event.sequence, "type": type,
                       "payload": event.payload, "timestamp": timestamp, "metadata": event.metadata}
-            with open(self._path(conversation_id), "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, sort_keys=True) + "\n")
-                fh.flush()
-                os.fsync(fh.fileno())
+            self._write_line(self._path(conversation_id), json.dumps(record, sort_keys=True) + "\n")
             log.append(event)
             return event
+
+    def _write_line(self, path: str, line: str) -> None:
+        if self._lock_fd is None:
+            raise LogUnavailable(f"{self.directory}: this log is closed and no longer holds the writer lock")
+        created = not os.path.exists(path)
+        try:
+            with open(path, "ab") as fh:
+                start = fh.tell()
+                try:
+                    fh.write(line.encode("utf-8"))
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                except OSError:
+                    fh.truncate(start)  # never leave half a record for the next append to extend
+                    raise
+            if created:
+                _sync_directory(self.directory)
+        except OSError as exc:
+            raise LogUnavailable(f"cannot append to {path}: {exc}") from exc
 
     def read(self, conversation_id: str) -> Sequence[Event]:
         with self._guard:
@@ -236,6 +309,38 @@ class FileEventLog(EventLog):
                 if name.endswith(".jsonl"):
                     ids.add(_unescape(name[:-6]))
             return tuple(sorted(ids))
+
+
+def _parse_record(conversation_id: str, path: str, line: bytes) -> Event:
+    try:
+        rec = json.loads(line)
+        return Event(conversation_id, rec["turn_id"], rec["sequence"], rec["type"],
+                     rec.get("payload") or {}, rec.get("timestamp", 0), rec.get("metadata") or {})
+    except (ValueError, KeyError, TypeError) as exc:
+        raise CorruptLog(f"conversation {conversation_id}: unreadable record in {path}: {exc}") from exc
+
+
+def _acquire_writer_lock(path: str) -> int:
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        else:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    except OSError as exc:
+        os.close(fd)
+        raise LogUnavailable(f"another writer holds {path}; a directory has one writer") from exc
+    return fd
+
+
+def _sync_directory(directory: str) -> None:
+    if os.name == "nt":  # a directory cannot be opened for fsync on Windows
+        return
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def _unescape(name: str) -> str:

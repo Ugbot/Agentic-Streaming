@@ -43,7 +43,9 @@ def test_unsupported_requirement_is_a_skip_never_a_pass():
     baseline = {o.fixture_id: o for o in (run_fixture(p) for p in PATHS)}
     outcomes = [run_fixture(p, lambda: Narrow(clock=ManualClock())) for p in PATHS]
     newly_skipped = [o for o in outcomes if o.status == "skip" and baseline[o.fixture_id].status != "skip"]
-    assert {o.fixture_id for o in newly_skipped} == {"tool-failure", "retry-tool"}
+    needs_retry = {f["id"] for f in map(load_yaml, PATHS) if "retry" in f["requires"]}
+    assert needs_retry >= {"tool-failure", "retry-tool"}
+    assert {o.fixture_id for o in newly_skipped} == needs_retry
     assert all("retry=not_tested" in o.reason for o in newly_skipped)
     assert all(o.status == "pass" for o in outcomes if o.status != "skip")
 

@@ -14,10 +14,12 @@ import org.agentic.flink.annotation.Public;
  */
 @Public
 public final class ChatSetup implements Serializable {
-  private static final long serialVersionUID = 1L;
+  private static final long serialVersionUID = 2L;
+
+  public static final double DEFAULT_TEMPERATURE = 0.7;
 
   private final String modelName;
-  private final double temperature;
+  private final Double temperature;
   private final int maxResponseTokens;
   private final List<String> stopSequences;
   private final Long seed;
@@ -37,8 +39,11 @@ public final class ChatSetup implements Serializable {
     return modelName;
   }
 
+  /**
+   * The declared temperature, or {@value #DEFAULT_TEMPERATURE} for a reader that needs a number.
+   */
   public double getTemperature() {
-    return temperature;
+    return temperature == null ? DEFAULT_TEMPERATURE : temperature;
   }
 
   public int getMaxResponseTokens() {
@@ -55,6 +60,11 @@ public final class ChatSetup implements Serializable {
 
   public OutputSchema<?> getOutputSchema() {
     return outputSchema;
+  }
+
+  /** What goes on the wire: null unless a caller set one, so the provider's default applies. */
+  public Double getDeclaredTemperature() {
+    return temperature;
   }
 
   public boolean hasOutputSchema() {
@@ -77,7 +87,7 @@ public final class ChatSetup implements Serializable {
 
   public static final class Builder {
     private String modelName;
-    private double temperature = 0.7;
+    private Double temperature;
     private int maxResponseTokens = 1000;
     private List<String> stopSequences;
     private Long seed;
@@ -88,7 +98,7 @@ public final class ChatSetup implements Serializable {
       return this;
     }
 
-    public Builder withTemperature(double temperature) {
+    public Builder withTemperature(Double temperature) {
       this.temperature = temperature;
       return this;
     }

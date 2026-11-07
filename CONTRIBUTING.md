@@ -15,11 +15,12 @@ pin or enforce; `docs/versioning.md` has the full compatibility matrix.
 |---|---|---|
 | JDK | 21 (enforced by `reactor/pom.xml`; `java.version`) | every JVM module |
 | Maven | the committed wrapper `./mvnw` (Maven 3.9.16; 3.9 or newer is enforced) | never a system `mvn` |
-| Podman | any current release, with `podman compose` or `podman-compose` | compose stacks, Testcontainers suites, `tools/smoke-examples.sh`, `tools/release_dry_run.sh` |
+| Docker or Podman | any current release, with `compose` | compose stacks, Testcontainers suites, `tools/smoke-examples.sh`, `tools/release_dry_run.sh` |
 | Python | 3.11 or newer for contributors (CI runs 3.12); the packages themselves declare `>=3.9` | the two Python packages, the spec tooling, the docs checks |
 
-Docker is not used anywhere in this repository. Compose files and scripts call `podman` and
-`podman compose`; do not introduce Docker commands or images that only exist for Docker.
+Docker works as well as Podman. Compose files run under either, and scripts pick whichever engine
+is running through `tools/container-engine.sh`, so a script must not name one engine directly
+(`tools/ci/test_container_engine.py` checks this).
 
 If `repo.maven.apache.org` rate limits you (HTTP 429), point the wrapper and Maven at the
 Google mirror: set `MVNW_REPOURL=https://maven-central.storage-download.googleapis.com/maven2`

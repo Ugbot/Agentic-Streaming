@@ -89,6 +89,18 @@ public final class Workflows {
     return base(agent);
   }
 
+  /** {@link #billing()} with every path on a model, as {@code llm} declares it. */
+  @SuppressWarnings("unchecked")
+  public static Map<String, Object> billingOnAModel(Map<String, Object> llm) {
+    Map<String, Object> wf = new LinkedHashMap<>(billing());
+    Map<String, Object> agent = new LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
+    agent.put(
+        "paths", Map.of("general", Map.of("brain", "llm"), "billing", Map.of("brain", "llm")));
+    wf.put("agent", agent);
+    wf.put("llm", llm);
+    return wf;
+  }
+
   /** Adds a {@code runtime.flink} block to a workflow. */
   public static Map<String, Object> withFlink(Map<String, Object> wf, Map<String, Object> flink) {
     Map<String, Object> copy = new LinkedHashMap<>(wf);
