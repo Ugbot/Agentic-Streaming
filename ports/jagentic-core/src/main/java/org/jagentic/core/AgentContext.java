@@ -60,6 +60,8 @@ public final class AgentContext {
   public boolean runtimeSignal = false;
   /** The one check every tool call passes; set by RoutedGraph. */
   public ToolPolicy policy = ToolPolicy.DENY_ALL;
+  /** This workflow's per-principal limits; set by RoutedGraph. */
+  public Limits limits = Limits.NONE;
   /** The path this turn was routed to, once it has been. */
   public String path = null;
 
@@ -223,6 +225,7 @@ public final class AgentContext {
     }
     Map<String, Object> answer = recorded == null ? null : (Map<String, Object>) recorded.result();
     if (answer == null) {
+      enforce(limits.admitModel(who(), now()));
       org.jagentic.core.llm.ChatResult fresh = callModel(call);
       answer = new LinkedHashMap<>();
       if (fresh.isToolCall()) {
@@ -232,6 +235,7 @@ public final class AgentContext {
         answer.put("text", fresh.text());
       }
       journal.put(EffectJournal.Entry.pending(key, intent, ToolEffect.READ).succeeded(answer));
+      limits.chargeModel(who(), now(), request.length() + String.valueOf(answer).length());
     }
     Map<String, Object> p = new LinkedHashMap<>();
     p.put("index", index);
@@ -317,9 +321,14 @@ public final class AgentContext {
 
   /** Refuses what the policy refuses: on the log first, then the turn ends. */
   private void authorise(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
-    if (policy.outsideThisProcess() && alreadyBegun()) {
-      return;
+    boolean outside = policy.outsideThisProcess();
+    if (!outside || !alreadyBegun()) {
+      decide(origin, toolId, tool, args);
     }
+    enforce(limits.admitTool(who(), now(), toolId, limits.hasQuota(toolId) && alreadyBegun()));
+  }
+
+  private void decide(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
     ToolPolicy.Decision decision = policy.decide(new ToolPolicy.Request(toolId, origin, path,
         tool == null ? null : tool.effect(), args, principal));
     if (!decision.allowed()) {
@@ -328,6 +337,28 @@ public final class AgentContext {
     if (decision.needsPerson()) {
       gate(origin, toolId);
     }
+  }
+
+  /** Who the limits count this turn against. */
+  String who() {
+    return Limits.who(principal, userId);
+  }
+
+  long now() {
+    return clock != null ? clock.nowMs() : System.currentTimeMillis();
+  }
+
+  /** A limit that was exceeded is on the log, and the turn ends. */
+  void enforce(Limits.Violation violation) {
+    if (violation == null) {
+      return;
+    }
+    Map<String, Object> p = new LinkedHashMap<>();
+    p.put("limit", violation.limit());
+    p.put("who", who());
+    p.putAll(violation.detail());
+    record(EventType.LIMIT_EXCEEDED, p);
+    throw new ToolRefused(violation.limit(), violation.limit() + " exceeded for " + who());
   }
 
   private void refuse(ToolOrigin origin, String toolId, String reason) {

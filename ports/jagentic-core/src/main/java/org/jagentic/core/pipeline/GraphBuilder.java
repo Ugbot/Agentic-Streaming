@@ -259,7 +259,8 @@ public final class GraphBuilder {
     }
     graph = graph.withAgentId(String.valueOf(agent.get("id")))
         .withToolPolicy(toolPolicy(pathGrants, (Map<String, Object>) spec.get("policies")))
-        .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")));
+        .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")))
+        .withLimits(org.jagentic.core.Limits.fromPolicies((Map<String, Object>) spec.get("policies")));
     return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
   }
 

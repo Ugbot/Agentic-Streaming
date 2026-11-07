@@ -254,7 +254,7 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
 `context_window`, `replay`, `suspend_resume`, `timers`, `saga`, `a2a`, `cep`, `event_time`,
 `checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`,
-`tool_policy`, `principal`, `tool_approval`.
+`tool_policy`, `principal`, `tool_approval`, `limits`.
 
 ## 7. Versioning
 
@@ -694,4 +694,22 @@ with any such tag inside it defused, and the system prompt says what the marking
 model and it is not a defence: nothing here can stop a model being talked into asking for a tool.
 The defence is that asking is not enough. A tool the policy denies is refused whatever the model read,
 and a tool that needs a person waits for one.
+
+### Limits
+
+`policies.limits` holds per-principal limits, counted by tenant and subject, or by `user_id` when there
+is no principal: `turns_per_minute`, `tokens_per_day`, `cost_per_day` with `cost_per_1k_tokens`, and
+`tool_calls_per_day` by tool. `kill_switch: true` stops everything. The operator can also stop a
+runtime with `AGENTIC_KILL_SWITCH=true`, or by creating the file `AGENTIC_KILL_SWITCH_FILE` names, with
+no restart.
+
+A limit that is hit appends `limit_exceeded {limit, who}`, with `tool` and `max` where they apply, and
+the turn ends `failed` with class `policy`. A turn is checked after `turn_received`, and a redelivered
+one is not counted twice. A tool quota is checked after the tool policy, and a call already begun
+does not count. A budget is checked before each model call and spent by the call that crosses it, and
+a recorded answer costs nothing. The turn is spent, so retrying needs a new `turn_id`.
+
+Tokens are an estimate of four characters each over what went in and came out, because the clients
+read no provider usage. Counters belong to one runtime process. A binding need not keep them across a
+restart or share them between processes.
 

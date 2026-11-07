@@ -52,7 +52,8 @@ class GatewayTest {
                 "main", Map.of("brain", "rule", "tools", List.of("whoami"), "tool_triggers", Map.of("who", "whoami")),
                 "held", Map.of("brain", "rule", "x-suspend-until", "approval")),
             "verifier", Map.of("kind", "none")),
-        "policies", Map.of("approvers", Map.of("roles", List.of("approver"))),
+        "policies", Map.of("approvers", Map.of("roles", List.of("approver")),
+            "limits", Map.of("tool_calls_per_day", Map.of("whoami", 2))),
         "tools", List.of(Map.of("id", "whoami", "kind", "constant", "effect", "read", "value", "ok")));
   }
 
@@ -172,6 +173,15 @@ class GatewayTest {
     assertEquals("completed", json(approved).path("status").asText());
     String log = call("GET", "/conversations/" + cid, ALICE, null).body();
     assertTrue(log.contains("\"signal_sender\":\"ops\""), log);
+  }
+
+  @Test
+  void aLimitIsA429AndIsOnTheLog() throws Exception {
+    String cid = cid();
+    assertEquals(200, turn(ALICE, cid, "who").statusCode());
+    assertEquals(200, turn(ALICE, cid, "who").statusCode());
+    assertEquals(429, turn(ALICE, cid, "who").statusCode());
+    assertTrue(call("GET", "/conversations/" + cid, ALICE, null).body().contains("limit_exceeded"));
   }
 
   @Test

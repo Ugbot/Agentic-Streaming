@@ -82,6 +82,8 @@ Python owners.
 | `injected-text-cannot-reach-a-denied-tool`, `injected-text-reaches-the-human-gate` | a model that obeys a tool result reaches neither a denied tool nor a gated one |
 | `tool-needs-approval`, `tool-approval-denied`, `tool-approval-bad-signal`, `approval-survives-a-crash` | a person as the gate before a call |
 | `unattended-tool-cannot-wait` | a timer has nobody to ask, so a gated tool is refused |
+| `turn-rate-limit`, `tool-quota`, `token-budget`, `cost-budget`, `kill-switch` | each limit stops the turn, on the log, for that principal alone |
+| `redelivery-is-not-a-new-turn` | a turn redelivered after a crash is not counted twice |
 | `egress-metadata-address`, `egress-not-http`, `egress-private-address` | a URL the egress policy refuses sends nothing and is a definite failure |
 
 Run them against the reference runtime:

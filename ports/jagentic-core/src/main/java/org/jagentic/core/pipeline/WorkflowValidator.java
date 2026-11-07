@@ -42,7 +42,7 @@ public final class WorkflowValidator {
       "guardrails", "verifier", "max_iterations", "threshold", "output_schema");
   private static final Set<String> VERIFIER = Set.of("kind", "pattern", "schema", "prompt");
   private static final Set<String> POLICIES = Set.of("ordering", "idempotency", "retry", "verification",
-      "on_tool_error", "unattended_tools", "approvers", "tool_approval");
+      "on_tool_error", "unattended_tools", "approvers", "tool_approval", "limits");
   private static final Set<String> RETRY = Set.of("kind", "max_attempts", "initial_delay_ms", "multiplier",
       "max_delay_ms", "jitter");
   private static final Set<String> VERIFICATION = Set.of("max_attempts", "on_exhausted");

@@ -217,6 +217,8 @@ class ReferenceRuntime:
         self.journal: Dict[Any, Dict[str, Any]] = {}  # the effect journal: outlives every restart
         self._world: Dict[Any, Any] = {}  # what the `counting` tools and stub model have seen
         self._crash: Optional[Dict[str, Any]] = None
+        self.limits: Dict[str, Any] = self.policies.get("limits") or {}
+        self._ledger = _Ledger(self.limits)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -512,6 +514,10 @@ class ReferenceRuntime:
             self._append(conv, ctx, "turn_received", received)
         if first_turn:
             self._schedule_timers(conv, ctx)
+        if (not rerun and not resuming) or self.limits.get("kill_switch"):
+            stopped = self._admit_turn(conv, ctx)
+            if stopped is not None:
+                return stopped
 
         blocked = self._check_guardrails(self._global_rails(), "input", turn.text)
         if blocked is not None:
@@ -539,6 +545,56 @@ class ReferenceRuntime:
             conv.suspended[turn.turn_id] = payload
             return self._finish(conv, ctx, "suspended", path, None, None)
         return self._after_routing(conv, ctx, path)
+
+    def _exceeded(self, conv: Conversation, ctx: "_TurnContext", limit: str, **detail: Any) -> str:
+        message = f"{limit} exceeded for {_who(ctx.turn)}"
+        self._append(conv, ctx, "limit_exceeded", {"limit": limit, "who": _who(ctx.turn), **detail})
+        return message
+
+    def _admit_turn(self, conv: Conversation, ctx: "_TurnContext") -> Optional[Dict[str, Any]]:
+        """primitives.md section 11: the kill switch, then the principal's rate."""
+        if self.limits.get("kill_switch"):
+            return self._fail(conv, ctx, None, "policy", self._exceeded(conv, ctx, "kill_switch"))
+        rate = self.limits.get("turns_per_minute")
+        seen = self._ledger.turns.setdefault((_who(ctx.turn), self.clock_ms // 60000), set())
+        turn = (ctx.turn.conversation_id, ctx.turn.turn_id)
+        if rate is None or turn in seen:  # a redelivery was already counted
+            return None
+        if len(seen) >= rate:
+            return self._fail(conv, ctx, None, "policy", self._exceeded(conv, ctx, "turns_per_minute", max=rate))
+        seen.add(turn)
+        return None
+
+    def _admit_model(self, conv: Conversation, ctx: "_TurnContext") -> None:
+        """A spent budget stops the next call. A recorded answer costs nothing and is not asked about."""
+        who = _who(ctx.turn)
+        if self.limits.get("kill_switch"):
+            raise ToolRefused(self._exceeded(conv, ctx, "kill_switch"))
+        day = 86400000
+        budget = self.limits.get("tokens_per_day")
+        if budget is not None and self._ledger.counts.get(("tokens", who, "", self.clock_ms // day), 0) >= budget:
+            raise ToolRefused(self._exceeded(conv, ctx, "tokens_per_day", max=budget))
+        cost = self.limits.get("cost_per_day")
+        if cost is not None and self._ledger.counts.get(("cost", who, "", self.clock_ms // day), 0) >= cost:
+            raise ToolRefused(self._exceeded(conv, ctx, "cost_per_day", max=cost))
+
+    def _charge_model(self, ctx: "_TurnContext", request: str, answer: Dict[str, Any]) -> None:
+        """Tokens are an estimate: four characters of what went in and came out."""
+        who = _who(ctx.turn)
+        tokens = max(1, (len(request) + len(json.dumps(answer, sort_keys=True))) // 4)
+        self._ledger.over("tokens", who, 86400000, self.clock_ms, None, tokens)
+        rate = self.limits.get("cost_per_1k_tokens", 0)
+        self._ledger.over("cost", who, 86400000, self.clock_ms, None, tokens / 1000.0 * rate)
+
+    def _admit_tool(self, conv: Conversation, ctx: "_TurnContext", tool_id: str) -> None:
+        quota = (self.limits.get("tool_calls_per_day") or {}).get(tool_id)
+        if self.limits.get("kill_switch"):
+            raise ToolRefused(self._exceeded(conv, ctx, "kill_switch", tool=tool_id))
+        if quota is None:
+            return
+        begun = (ctx.turn.conversation_id, ctx.turn.turn_id, "tool", ctx._tool_index) in self.journal
+        if not begun and self._ledger.over("tool", _who(ctx.turn), 86400000, self.clock_ms, quota, 1, tool_id):
+            raise ToolRefused(self._exceeded(conv, ctx, "tool_calls_per_day", tool=tool_id, max=quota))
 
     def _after_routing(self, conv: Conversation, ctx: "_TurnContext", path: str) -> Dict[str, Any]:
         ctx.path = path
@@ -636,6 +692,7 @@ class ReferenceRuntime:
         if entry is not None and entry["intent"] != intent:
             raise JournalDivergence(f"model call {index} of turn {ctx.turn.turn_id} was {entry['intent']}, now {intent}")
         if entry is None:
+            self._admit_model(conv, ctx)
             self._call_model(step_index, step)
             answer = {k: step[k] for k in ("tool", "args", "text") if k in step}
             if step.get("x-count-calls"):
@@ -643,6 +700,7 @@ class ReferenceRuntime:
                 self._world[("llm", step_index)] = seen
                 answer["text"] = f"{answer['text']} #{seen}"
             entry = self.journal[key] = {"intent": intent, "state": "succeeded", "result": answer}
+            self._charge_model(ctx, f"{request}\0{ctx.turn.text}", answer)
         self._append(conv, ctx, "llm_called", {"index": index, **entry["result"]})
         return entry["result"]
 
@@ -869,6 +927,7 @@ class ReferenceRuntime:
         if spec is None:
             raise ValidationFailure(f"unknown tool {tool_id}")
         self._gate(conv, ctx, tool_id, spec, origin)
+        self._admit_tool(conv, ctx, tool_id)
         self._validate_args(tool_id, spec, args)
         turn = ctx.turn
         index = ctx.next_tool_index()
@@ -1071,6 +1130,28 @@ def _class_of(exc: Exception) -> str:
     if isinstance(exc, ToolRefused):
         return "policy"
     return "validation" if isinstance(exc, ValidationFailure) else "tool"
+
+
+class _Ledger:
+    """Per-principal counters by window, in memory: primitives.md section 11."""
+
+    def __init__(self, limits: Dict[str, Any]) -> None:
+        self.limits = limits
+        self.counts: Dict[Any, float] = {}
+        self.turns: Dict[Any, set] = {}
+
+    def over(self, name: str, who: str, window_ms: int, now: int, limit: Any, amount: float = 0.0, key: str = "") -> bool:
+        slot = (name, who, key, now // window_ms)
+        if limit is not None and self.counts.get(slot, 0.0) + amount > limit:
+            return True
+        self.counts[slot] = self.counts.get(slot, 0.0) + amount
+        return False
+
+
+def _who(turn: Turn) -> str:
+    principal = turn.principal or {}
+    tenant = principal.get("tenant")
+    return f"{tenant}/{turn.user_id}" if tenant else turn.user_id
 
 
 class _Prior:

@@ -44,7 +44,8 @@ import org.jagentic.gateway.auth.Unauthenticated;
  * <p>Who is calling comes from the token and from nowhere else: {@code user_id}, {@code principal}
  * and {@code tenant} in a body are not read. A conversation is keyed by the caller's tenant, so
  * another tenant cannot even name it, and within a tenant only its owner, or a reader role, gets at
- * it. Someone else's conversation answers 404, the same as one that does not exist.
+ * it. Someone else's conversation answers 404, the same as one that does not exist. A turn stopped
+ * by a limit is a 429, and retrying it needs a new {@code turn_id}.
  */
 public final class Gateway implements AutoCloseable {
 
@@ -218,7 +219,8 @@ public final class Gateway implements AutoCloseable {
     Map<String, Object> out = new LinkedHashMap<>(result.toMap());
     out.put("conversation_id", conversationId);
     boolean refused = result.events.stream().anyMatch(e -> e.is(EventType.SIGNAL_REFUSED));
-    send(x, refused ? 403 : 200, JSON.writeValueAsBytes(out));
+    boolean limited = result.events.stream().anyMatch(e -> e.is(EventType.LIMIT_EXCEEDED));
+    send(x, limited ? 429 : refused ? 403 : 200, JSON.writeValueAsBytes(out));
   }
 
   private <T> T await(java.util.concurrent.CompletionStage<T> stage) throws Refusal {

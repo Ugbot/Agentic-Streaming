@@ -1,0 +1,34 @@
+id: tool-quota
+description: 'A tool quota stops the call before it runs, on the log, and the turn ends with class policy.'
+requires: [limits, rule_brain, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: a
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    limits: {tool_calls_per_day: {pay: 1}}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice}}
+- {conversation_id: c1, turn_id: t2, text: pay it, principal: {subject: alice}}
+- {conversation_id: c1, turn_id: t3, text: pay it, principal: {subject: bob}}
+expect:
+- {turn_id: t1, status: completed, reply: '[main] pay returned 1'}
+- turn_id: t2
+  status: failed
+  error_class: policy
+  tool_calls: []
+  events: [turn_received, routed, brain_started, limit_exceeded, turn_failed]
+  event_payloads:
+  - type: limit_exceeded
+    payload: {limit: tool_calls_per_day, who: alice, tool: pay, max: 1}
+- {turn_id: t3, status: completed, reply: '[main] pay returned 2'}

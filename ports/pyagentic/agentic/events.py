@@ -25,7 +25,7 @@ EVENT_TYPES: FrozenSet[str] = frozenset({
     "tool_failed", "retrieved", "reply_drafted", "verification_failed", "memory_written",
     "turn_completed", "turn_failed", "turn_suspended", "turn_resumed", "timer_scheduled",
     "timer_fired", "compensation_started", "compensation_step", "compensation_completed",
-    "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome", "tool_refused", "signal_refused",
+    "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome", "tool_refused", "signal_refused", "limit_exceeded",
 })
 
 TERMINAL_STATUSES: FrozenSet[str] = frozenset({

@@ -136,6 +136,28 @@ that does should use `Untrusted.mark`, or `agentic.untrusted.mark` in Python. A 
 what a tool said, and a path's own allowed tools can still be misused within what they allow, so give
 a path the fewest tools that will do.
 
+## Limits
+
+`policies.limits` sets per-principal `turns_per_minute`, `tokens_per_day`, `cost_per_day` with
+`cost_per_1k_tokens`, and `tool_calls_per_day` by tool. A limit that is hit is `limit_exceeded` on the
+log, the turn ends with class `policy`, and the gateway answers 429. `spec/v1/primitives.md`, section
+11, has the rules, and the fixtures `turn-rate-limit` to `redelivery-is-not-a-new-turn` prove them on
+all five runtimes.
+
+**The kill switch** stops every turn, tool call and model call. `kill_switch: true` in the document
+does it for one workflow. `AGENTIC_KILL_SWITCH=true`, or creating the file `AGENTIC_KILL_SWITCH_FILE`
+names, does it for a runtime, and the file takes effect on the next turn or call with no restart.
+On Flink the file must be visible to every TaskManager.
+
+Three things to know:
+
+- **The counters are in memory.** They are per process and a restart clears them. On Flink that means
+  per subtask, so with parallelism 4 one principal can get up to four times a limit, across
+  conversations on different subtasks. A limit here slows a principal down. It is not a hard ceiling.
+- **Tokens are an estimate,** four characters each. The clients read no provider usage, so a budget is
+  not what the provider will bill.
+- A turn stopped by a limit is spent, so retry with a new `turn_id`.
+
 ## Effects
 
 Every tool and model call goes through the effect journal: intent is written first, the outcome

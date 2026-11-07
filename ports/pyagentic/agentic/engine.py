@@ -44,6 +44,7 @@ from .journal import (
     intent_of,
     model_intent_of,
 )
+from .limits import Limits, Violation, who
 from .opa import Both, from_environment
 from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
@@ -322,6 +323,7 @@ class Engine:
         opa = from_environment()
         if opa is not None:
             self.policy = Both(self.policy, opa)
+        self.limits = Limits(doc)
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
         self.global_guardrails = [g for g in self.guardrails if g.get("name") not in path_scoped]
@@ -588,6 +590,8 @@ class Engine:
         if not ctx.rerun:
             append("turn_received", self.timers.received_payload(turn, self._received_payload(turn)))
         self.timers.schedule(turn, ctx.history, append)
+        if (not ctx.rerun and not resuming) or self.limits.stopped():
+            self._enforce(ctx, self.limits.admit_turn(who(turn), f"{turn.conversation_id}\0{turn.turn_id}", self.clock()))
 
         blocked = self._check_guardrails(self.global_guardrails, "input", turn.text)
         if blocked is not None:
@@ -752,8 +756,13 @@ class Engine:
         index = ctx.take_llm_index()
         key = JournalKey(ctx.turn.conversation_id, ctx.turn.turn_id, LLM, index)
         intent = model_intent_of(self._scope, f"{request}\0{ctx.text}")
+        fresh = self.journal.get(key) is None
+        if fresh:
+            self._enforce(ctx, self.limits.admit_model(who(ctx.turn), self.clock()))
         entry = self.journal.record_or_get(key, intent, READ, _ModelCall(ask))
         answer: Mapping[str, Any] = entry.result
+        if fresh:
+            self.limits.charge_model(who(ctx.turn), self.clock(), len(request) + len(ctx.text) + len(str(answer)))
         model = {"model": self.llm["model"]} if self.llm.get("model") else {}
         self._append(ctx, "llm_called", {"index": index, **model, **answer})
         return answer
@@ -913,8 +922,21 @@ class Engine:
     def _authorise(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any], origin: str) -> None:
         """The one check every tool call passes (`primitives.md` section 11), whatever asked for it.
         A refusal is on the log before the turn ends, and the turn does end: nothing offers it back."""
-        if getattr(self.policy, "outside_this_process", False) and self._already_begun(ctx):
-            return  # allowed when it began: a re-run takes the path the first run took
+        # A call already begun was allowed then: a re-run takes the path the first run took.
+        if not (getattr(self.policy, "outside_this_process", False) and self._already_begun(ctx)):
+            self._decide(ctx, tool_id, args, origin)
+        begun = self.limits.has_quota(tool_id) and self._already_begun(ctx)
+        self._enforce(ctx, self.limits.admit_tool(who(ctx.turn), self.clock(), tool_id, begun))
+
+    def _enforce(self, ctx: _TurnContext, violation: Optional[Violation]) -> None:
+        """A limit that was exceeded is on the log, and the turn ends."""
+        if violation is None:
+            return
+        limit, detail = violation
+        self._append(ctx, "limit_exceeded", {"limit": limit, "who": who(ctx.turn), **detail})
+        raise ToolRefused(f"{limit} exceeded for {who(ctx.turn)}")
+
+    def _decide(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any], origin: str) -> None:
         known = self.tools.ids().get(tool_id)
         effect = known.effect if known is not None else None
         decision = self.policy.decide(ToolRequest(tool_id, origin, ctx.path, effect, args, ctx.turn.principal))

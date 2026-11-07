@@ -165,6 +165,19 @@
           },
           "additionalProperties": false
         },
+        "limits": {
+          "description": "Per-principal limits. A principal is its tenant and subject, or the user_id when there is none. Tokens are an estimate, and cost is that estimate at cost_per_1k_tokens.",
+          "type": "object",
+          "properties": {
+            "turns_per_minute": { "type": "integer", "minimum": 1 },
+            "tokens_per_day": { "type": "integer", "minimum": 1 },
+            "cost_per_day": { "type": "number", "exclusiveMinimum": 0 },
+            "cost_per_1k_tokens": { "type": "number", "minimum": 0 },
+            "tool_calls_per_day": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 1 } },
+            "kill_switch": { "type": "boolean", "default": false }
+          },
+          "additionalProperties": false
+        },
         "unattended_tools": {
           "description": "What a timer or a CEP pattern may call. They run outside any path, so a path's tools do not cover them. Deny by default: a tool not listed here is refused.",
           "type": "array",

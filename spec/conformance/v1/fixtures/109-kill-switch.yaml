@@ -1,0 +1,30 @@
+id: kill-switch
+description: 'The kill switch stops every turn before anything runs, on the log.'
+requires: [limits, rule_brain, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: a
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    limits: {kill_switch: true}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice}}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: policy
+  tool_calls: []
+  events: [turn_received, limit_exceeded, turn_failed]
+  event_payloads:
+  - type: limit_exceeded
+    payload: {limit: kill_switch, who: alice}
