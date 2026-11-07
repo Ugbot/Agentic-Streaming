@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
+import org.jagentic.core.embedding.Embedder;
 import org.jagentic.core.llm.ChatClient;
 
 /**
@@ -64,13 +65,30 @@ public final class Deadlines {
 
   /** {@code client} limited to {@code timeoutMs} per model call; a timeout is transient. */
   public static ChatClient bound(String what, long timeoutMs, ChatClient client) {
-    return (messages, tools) -> {
-      try {
-        return call(what, timeoutMs, () -> client.chat(messages, tools), () -> { });
-      } catch (DeadlineExceeded e) {
-        throw new TransientFailure(e.getMessage(), e);
+    return (messages, tools) -> modelCall(what, timeoutMs, () -> client.chat(messages, tools));
+  }
+
+  /** {@code embedder} limited to {@code timeoutMs} per call; a timeout is transient, as for a chat model. */
+  public static Embedder bound(String what, long timeoutMs, Embedder embedder) {
+    return new Embedder() {
+      @Override
+      public float[] embed(String text) {
+        return modelCall(what, timeoutMs, () -> embedder.embed(text));
+      }
+
+      @Override
+      public int dim() {
+        return modelCall(what, timeoutMs, embedder::dim); // a provider may ask its model
       }
     };
+  }
+
+  private static <T> T modelCall(String what, long timeoutMs, Callable<T> body) {
+    try {
+      return call(what, timeoutMs, body, () -> { });
+    } catch (DeadlineExceeded e) {
+      throw new TransientFailure(e.getMessage(), e);
+    }
   }
 
   private static <T> T call(String what, long timeoutMs, Callable<T> body, Runnable onTimeout) {

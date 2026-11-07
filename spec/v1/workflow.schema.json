@@ -239,7 +239,8 @@
         "provider": { "type": "string", "default": "hashing" },
         "model": { "type": "string" },
         "base_url": { "type": "string" },
-        "dim": { "type": "integer", "minimum": 1, "default": 256 }
+        "dim": { "type": "integer", "minimum": 1, "default": 256 },
+        "timeout_ms": { "type": "integer", "minimum": 1, "description": "limit on one embedding call; default 60000" }
       },
       "additionalProperties": false
     },

@@ -1,6 +1,7 @@
 package org.jagentic.core.pipeline;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,9 +16,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import org.jagentic.core.Deadlines;
 import org.jagentic.core.Event;
+import org.jagentic.core.TransientFailure;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.TurnStatus;
+import org.jagentic.core.embedding.Embedder;
 import org.jagentic.core.llm.ChatResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -167,5 +171,35 @@ class CallDeadlineTest {
         Event.turn("c-" + UUID.randomUUID(), "t-" + UUID.randomUUID(), "u", "hello")));
     assertEquals(TurnStatus.FAILED, r.status);
     assertTrue(r.error.message().contains("timed out"), r.error.message());
+  }
+
+  @Test
+  void anEmbeddingModelThatNeverAnswersIsTransientAtItsLimit() {
+    Embedder stuck = new Embedder() {
+      @Override
+      public float[] embed(String text) {
+        awaitRelease();
+        return new float[] {1f};
+      }
+
+      @Override
+      public int dim() {
+        return 1;
+      }
+    };
+    Embedder bounded = Deadlines.bound("embedding call", 100, stuck);
+    assertEquals(1, bounded.dim());
+    TransientFailure e = assertTimeoutPreemptively(Duration.ofSeconds(5),
+        () -> assertThrows(TransientFailure.class, () -> bounded.embed("hello")));
+    assertTrue(e.getMessage().contains("timed out"), e.getMessage());
+  }
+
+  @Test
+  void aDeclaredEmbeddingProviderIsBuiltWithItsLimit() {
+    Map<String, Object> wf = new LinkedHashMap<>(workflow(httpTool(url("/ok"), 2_000)));
+    wf.put("embeddings", Map.of("provider", "ollama", "base_url", url("/hang"), "timeout_ms", 100));
+    TransientFailure e = assertTimeoutPreemptively(Duration.ofSeconds(5),
+        () -> assertThrows(TransientFailure.class, () -> GraphBuilder.build(wf, null)));
+    assertTrue(e.getMessage().contains("timed out"), e.getMessage());
   }
 }

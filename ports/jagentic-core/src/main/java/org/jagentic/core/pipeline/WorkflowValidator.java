@@ -54,7 +54,7 @@ public final class WorkflowValidator {
   private static final Set<String> LLM = Set.of("provider", "model", "base_url", "temperature",
       "max_tokens", "timeout_ms", "script");
   private static final Set<String> LLM_SCRIPT_STEP = Set.of("text", "tool", "args", "x-fail-attempts");
-  private static final Set<String> EMBEDDINGS = Set.of("provider", "model", "dim", "base_url");
+  private static final Set<String> EMBEDDINGS = Set.of("provider", "model", "dim", "base_url", "timeout_ms");
   private static final Set<String> RETRIEVAL = Set.of("dim", "top_k", "embedder", "kb", "vector_store");
   private static final Set<String> KB_DOC = Set.of("id", "text", "metadata");
   private static final Set<String> CONTEXT = Set.of("max_items", "max_tokens", "compaction");

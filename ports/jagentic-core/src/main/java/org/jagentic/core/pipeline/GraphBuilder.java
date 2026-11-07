@@ -365,7 +365,9 @@ public final class GraphBuilder {
    * deterministic FNV hashing embedder at the retrieval {@code dim} (default 256). */
   private static Embedder buildEmbedder(Map<String, Object> embSpec, Map<String, Object> retrievalSpec) {
     if (embSpec != null) {
-      return Embedders.make(embSpec);
+      Embedder made = Embedders.make(embSpec);
+      return made instanceof HashingEmbedder ? made : Deadlines.bound("embedding call",
+          Deadlines.timeoutOf(embSpec, Deadlines.DEFAULT_MODEL_TIMEOUT_MS), made);
     }
     int dim = retrievalSpec == null ? 256 : ((Number) retrievalSpec.getOrDefault("dim", 256)).intValue();
     return new HashingEmbedder(dim);
