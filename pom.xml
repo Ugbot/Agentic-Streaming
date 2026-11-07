@@ -22,6 +22,7 @@
 
     <properties>
         <fluss.version>0.7.0</fluss.version>
+        <milvus.version>2.6.27</milvus.version>
         <!-- flink.version, java.version, langchain4j.version and junit.version are inherited from
              the reactor parent. Flink 2.x supports 17/21; 25 is not yet viable (see the Lombok
              note below). slf4j.version and log4j.version come from the reactor too. -->
@@ -237,12 +238,15 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Milvus SDK (backs MilvusVectorStore; optional) -->
+        <!-- Milvus SDK, behind MilvusVectorStore. `provided` keeps it out of the uber jar, because
+             the SDK carries its own relocated gRPC and Netty 4.1 that no floor here can reach
+             (docs/security.md). The code still compiles in every build; at runtime MilvusClient
+             says what to do when the classes are missing. `-P milvus` bundles it. -->
         <dependency>
             <groupId>io.milvus</groupId>
             <artifactId>milvus-sdk-java</artifactId>
-            <version>2.6.27</version>
-            <optional>true</optional>
+            <version>${milvus.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- Lombok for reduced boilerplate -->
@@ -710,6 +714,21 @@
                     <groupId>com.alibaba.fluss</groupId>
                     <artifactId>fluss-client</artifactId>
                     <version>${fluss.version}</version>
+                    <scope>compile</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <!-- Bundles the Milvus SDK into the uber jar, for jobs that use the Milvus backend:
+                 ./mvnw -P milvus package
+             The jar then carries everything listed against milvus-sdk-java in docs/security.md. -->
+        <profile>
+            <id>milvus</id>
+            <dependencies>
+                <dependency>
+                    <groupId>io.milvus</groupId>
+                    <artifactId>milvus-sdk-java</artifactId>
+                    <version>${milvus.version}</version>
                     <scope>compile</scope>
                 </dependency>
             </dependencies>
