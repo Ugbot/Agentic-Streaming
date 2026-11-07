@@ -103,7 +103,9 @@ OSV matches coordinates, so it cannot see into a shaded jar. The table below is 
 
 Flink stays on 2.2.1 because the Kafka connector does not support 2.3. Everything in the first five
 rows is in Flink's own jars on the cluster. The build marks them `provided`, and the floors in
-`reactor/pom.xml` reach only the test classpath, so they cannot be overridden from here.
+`reactor/pom.xml` reach only the test classpath, so they cannot be overridden from here. The one
+exception is `flink-shaded-guava`, which resolves at compile scope, so the uber jar carries its own
+copy of the same version.
 
 | Package, as shipped | Arrives through | Advisories | Reachable? |
 | --- | --- | --- | --- |
@@ -113,9 +115,30 @@ rows is in Flink's own jars on the cluster. The build marks them `provided`, and
 | ZooKeeper 3.7.2 (`flink-shaded-zookeeper-3` 3.7.2-20.0) | Flink, relocated | CVE-2024-23944, moderate: information disclosure in persistent watchers | Only with ZooKeeper HA, which no stack here configures. The advisory is on the server side of watch handling. |
 | snappy-java 1.1.10.7 and lz4-java 1.10.3 | Flink, unshaded | snappy: CVE-2026-93451, CVE-2026-108106 (high), CVE-2026-116590. lz4: CVE-2026-106451 (high), CVE-2026-106449, -106450, -106452, -106453, CVE-2026-59949 | Flink feeds them its own state and network buffers, not attacker-chosen bytes, so the decompression bugs need the checkpoint store or the data plane to be compromised first. CVE-2026-106451 replaces the native library in a shared temp directory and needs a local user on the TaskManager host. Job code that bundles the uber jar gets the patched versions (1.1.10.12, 1.13.0) only where the job's classloader wins. |
 | Netty 4.1.100, Jackson 2.15.3, Guava 32.1.3, lz4 1.8.0 (`com.alibaba.fluss:fluss-client` 0.7.0) | Fluss client, relocated. **Not in the default uber jar**: `provided`, and bundled only by `-P fluss` | As for the rows above, plus CVE-2025-66566 and CVE-2025-12183 in lz4 1.8.0 | Not in a default build. With `-P fluss`, or the client added by hand, only when a Fluss backend is selected, and then the client talks only to the operator's Fluss cluster, so a hostile response needs a hostile cluster. `org.apache.fluss:fluss-client` 1.0.0 does not help: it shades Netty 4.1.104, Jackson 2.15.3 and Guava 32.1.3. |
+| Netty 4.1.127 (`io.milvus:milvus-sdk-java` 2.6.27, under `io/milvus/shaded`) | Milvus SDK, relocated, and in the default uber jar | At least 31 in `netty-handler`, `netty-codec`, `netty-codec-http` and `netty-codec-http2` | Only when the Milvus backend is selected, and then only as a client of the operator's Milvus server, so a hostile response needs a hostile server. The SDK builds on gRPC 1.77.0, and that release of `grpc-netty-shaded` carries 4.1.127; the relocated copy has no version file of its own. No upgrade helps: 3.0.12 is on gRPC 1.77.0 too. |
 
 The Fluss client also brought an unrelocated RocksDB into the uber jar, which went with it. Tests
 still see the client, because `provided` is on the test classpath.
 
+The A2A BOM holds gRPC at 1.77.0, so the root pom imports `grpc-bom` 1.84.2 ahead of it, which is what
+the Qdrant client declares. Without that, `grpc-netty-shaded` puts a relocated Netty 4.1.127 in the
+uber jar under `io/grpc/netty/shaded`. It carries 4.2.16 now, which has no OSV advisory.
+
 Quarkus (CVE-2026-50559, CVE-2026-39852) left with the A2A gateway and the tool services, so no
 manifest here resolves it.
+
+### Upgrades proven only at compile level
+
+These versions build and pass their unit tests, and nothing here has run them against the real
+service:
+
+- Milvus SDK 2.6.27. `MilvusVectorStore` compiles and `VectorStoreDiscoveryTest` finds it through
+  `ServiceLoader`. No test talks to a Milvus server, at this version or any other.
+- The Fluss client. `FlussChannelIT` and `FlussConversationStoreIT` start their cluster with host
+  networking, and failed to start it on Docker Desktop for macOS, so they need a Linux host.
+  `FlussClientAbsentTest` covers the jar without the client.
+- `pekko-persistence-cassandra` 1.1.0 on Pekko 1.7.1, without a Cassandra.
+- `kafka-clients` 4.1.2 (Flink) and 3.9.2 (Pekko). No `*IT` class starts a broker.
+- The A2A gRPC transport, built against gRPC 1.77.0 and resolved at 1.84.2. `SdkA2AClient` has no
+  test against a real peer.
+- DJL 0.40.0 with a live model. The `djl` tag stays out of the default and integration runs.

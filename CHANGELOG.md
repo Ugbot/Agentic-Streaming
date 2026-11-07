@@ -101,6 +101,10 @@ exists.
 - The Fluss client is out of the default uber jar, which loses about 64 MB and the client's old
   relocated Netty, Jackson, Guava and lz4. `-P fluss` puts it back. Selecting a Fluss backend
   without the client now fails with a message rather than falling back to the in-JVM store (#101).
+- `QdrantVectorStore` reads vectors back from a current Qdrant server, which returns them in the
+  `dense` variant, and the tests, CI and compose example move to Qdrant v1.20.0 (#101).
+- gRPC moves to 1.84.2, which takes the relocated Netty 4.1.127 out of the Qdrant client's path in
+  the uber jar. The Milvus SDK's own relocated copy stays, as `docs/security.md` records (#101).
 - Flink storage and inference correctness: PostgreSQL `ON CONFLICT` upserts, reopenable stores,
   exact VALID/INVALID verdicts and nested tool-argument JSON (#22).
 - Build, conformance gate and stale documentation fixes from review: nested `Entry` type in
