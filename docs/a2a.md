@@ -118,4 +118,5 @@ default). See `config/ConfigKeys.java`.
 
 `pom.xml` pins the SDK at `io.github.a2asdk` `1.0.0.Alpha3`, an alpha. Upstream has since moved to the
 `org.a2aproject.sdk` coordinates. All SDK types sit behind the `A2AClient` SPI, so an upgrade is
-contained to `SdkA2AClient`.
+contained to `SdkA2AClient`. That upgrade is more than coordinates: the packages move from `io.a2a` to
+`org.a2aproject.sdk`, `A2ACardResolver` becomes a builder, and `cancelTask` takes `CancelTaskParams`.

@@ -32,8 +32,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7,<9"]
-dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1"]
+test = ["pytest>=7,<10"]
+dev = ["pytest>=7,<10", "mypy>=1.8,<2", "ruff>=0.4,<1"]
 
 [project.urls]
 Homepage = "https://github.com/Ugbot/Agentic-Streaming"
@@ -50,7 +50,13 @@ pyagentic = "agentic.conformance:matrix_binding"
 
 # Dev and test installs: `uv sync` in this directory (a dev tool only; nothing here needs it to run).
 [dependency-groups]
-dev = ["pytest>=7,<9", "mypy>=1.8,<2", "ruff>=0.4,<1", "build>=1.2", "twine>=5"]
+dev = ["pytest>=7,<10", "mypy>=1.8,<2", "ruff>=0.4,<1", "build>=1.2", "twine>=5"]
+
+# The lock serves contributors, who run 3.10 or later (CONTRIBUTING.md). Python 3.9 is left out of it
+# because the dev tools have no patched release there (urllib3 2.7, requests 2.33, pytest 9.0.3 all
+# need 3.10), so a 3.9 fork would pin known advisories. The package itself still declares >=3.9.
+[tool.uv]
+environments = ["python_version >= '3.10'"]
 
 [tool.setuptools_scm]
 root = "../.."

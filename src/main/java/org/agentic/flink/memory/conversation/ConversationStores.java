@@ -4,6 +4,9 @@ import java.util.Iterator;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import org.agentic.flink.annotation.Public;
+import org.agentic.flink.config.AgenticFlinkConfig;
+import org.agentic.flink.config.ConfigKeys;
+import org.agentic.flink.config.FlussClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +35,7 @@ public final class ConversationStores {
 
   /** The default store: the first ServiceLoader-registered impl, else the shared in-JVM store. */
   public static ConversationStore discover() {
+    requireFlussClientIfSelected();
     ServiceLoader<ConversationStore> loader = ServiceLoader.load(ConversationStore.class);
     Iterator<ConversationStore> it = loader.iterator();
     while (true) {
@@ -51,5 +55,19 @@ public final class ConversationStores {
       }
     }
     return InMemoryConversationStore.shared();
+  }
+
+  /**
+   * A skipped provider falls back to the in-JVM store, which would quietly lose the durability
+   * {@code conversation.store=fluss} asked for. Fluss is the one store the default uber jar ships
+   * without its client, so that case stops here instead.
+   */
+  private static void requireFlussClientIfSelected() {
+    String selected =
+        AgenticFlinkConfig.fromEnvironment()
+            .get(ConfigKeys.CONVERSATION_STORE, ConfigKeys.DEFAULT_CONVERSATION_STORE);
+    if ("fluss".equalsIgnoreCase(selected)) {
+      FlussClient.require();
+    }
   }
 }

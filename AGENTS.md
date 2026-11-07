@@ -1,7 +1,7 @@
 # Agentic Streaming
 
 Experimental and pre-release; see the status block in `README.md`. This is the Flink adapter, the
-Java and Python cores, Pekko and the `agentic/v1` spec. Java 21 target, Flink 2.2.1, LangChain4J 1.16.3.
+Java and Python cores, Pekko and the `agentic/v1` spec. Java 21 target, Flink 2.2.1, LangChain4J 1.23.0.
 
 ## Project Structure
 

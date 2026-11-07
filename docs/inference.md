@@ -56,17 +56,17 @@ who don't run DL pay nothing transitively. To opt in, add:
 <dependency>
   <groupId>ai.djl</groupId>
   <artifactId>api</artifactId>
-  <version>0.30.0</version>
+  <version>0.40.0</version>
 </dependency>
 <dependency>
   <groupId>ai.djl.huggingface</groupId>
   <artifactId>tokenizers</artifactId>
-  <version>0.30.0</version>
+  <version>0.40.0</version>
 </dependency>
 <dependency>
   <groupId>ai.djl.pytorch</groupId>
   <artifactId>pytorch-engine</artifactId>
-  <version>0.30.0</version>
+  <version>0.40.0</version>
 </dependency>
 ```
 

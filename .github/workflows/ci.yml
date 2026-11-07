@@ -89,7 +89,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 20
       qdrant:
-        image: qdrant/qdrant:v1.13.2
+        image: qdrant/qdrant:v1.20.0
         ports: ["6333:6333"]
       kafka:
         # KRaft single node; the image's default listener advertises localhost:9092.
@@ -186,7 +186,7 @@ jobs:
           --health-cmd "pg_isready -U agentic -d agentic"
           --health-interval 5s --health-timeout 5s --health-retries 20
       qdrant:
-        image: qdrant/qdrant:v1.13.2
+        image: qdrant/qdrant:v1.20.0
         ports: ["6333:6333"]
       redis:
         image: redis:7-alpine

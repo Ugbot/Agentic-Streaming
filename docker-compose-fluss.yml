@@ -9,6 +9,7 @@
 # port>, so a Fluss client on the host can reconnect after bootstrap).
 #
 # Client bootstrap.servers = localhost:9123 (the coordinator's CLIENT listener).
+# Jobs need the Fluss client, which the default uber jar leaves out: ./mvnw -P fluss package
 
 services:
   fluss-zookeeper:
