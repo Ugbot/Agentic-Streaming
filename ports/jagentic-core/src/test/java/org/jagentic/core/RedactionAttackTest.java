@@ -2,6 +2,7 @@ package org.jagentic.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,32 @@ import org.junit.jupiter.api.Test;
  * credential in an exception reached both, while the log had it removed.
  */
 class RedactionAttackTest {
+
+  /**
+   * Credential fields were matched by their whole name, so {@code access_token}, {@code
+   * client_secret}, {@code x-api-key} and {@code apiKey}'s cousins went to the log as they were, and
+   * the shapes knew OpenAI, AWS and JWTs only.
+   */
+  @Test
+  void theCommonNamesAndShapesOfACredentialAreRedacted() {
+    Map<String, Object> args = new java.util.LinkedHashMap<>();
+    args.put("access_token", "opaque-0123456789");
+    args.put("refreshToken", "opaque-1123456789");
+    args.put("client_secret", "opaque-2123456789");
+    args.put("x-api-key", "opaque-3123456789");
+    args.put("AWS_SECRET_ACCESS_KEY", "opaque-4123456789");
+    args.put("db_password", "opaque-5123456789");
+    args.put("Set-Cookie", "opaque-6123456789");
+    args.put("note", "ghp_abcdefghijklmnopqrstuvwxyz0123456789 xoxb-1234567890-abcdefghij "
+        + "sk_live_abcdefghijklmnop0123 AIzaSyA-abcdefghijklmnopqrstuvwxyz012345");
+    args.put("max_tokens", 100);
+    args.put("tokens_per_day", 7);
+    String out = Redactor.DEFAULT.apply(args).toString();
+    for (String leaked : List.of("opaque-", "ghp_", "xoxb-", "sk_live_", "AIzaSy")) {
+      assertFalse(out.contains(leaked), leaked + " in " + out);
+    }
+    assertTrue(out.contains("max_tokens=100") && out.contains("tokens_per_day=7"), "a count is not a credential: " + out);
+  }
 
   @Test
   void aFailedTurnsErrorIsRedactedInTheResultAsOnTheLog() {

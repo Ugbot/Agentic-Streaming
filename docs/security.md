@@ -244,8 +244,9 @@ document that writes the secret itself is rejected when loaded. A `kind: http` t
 the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
 
 **Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are
-always covered: fields such as `password`, `token`, `api_key` and `authorization`, and text shaped like
-a bearer token, an OpenAI or AWS key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
+always covered: a field with `password`, `secret`, `token`, `api_key`, `authorization`, `cookie` or the
+like as a word of its name (so `access_token`, `client_secret` and `x-api-key`, but not `max_tokens`),
+and text shaped like a bearer token, an OpenAI, AWS, GitHub, Slack, Stripe or Google key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
 for personal data. It finds what the patterns describe and nothing else, so it narrows what is recorded
 and does not promise it is clean. The reply the caller receives is not redacted, and neither is a
 results topic's `reply` field. A failed turn's `error` is redacted in the result as on the log.

@@ -125,3 +125,20 @@ def test_a_failed_turns_error_is_redacted_in_the_result_as_on_the_log() -> None:
     assert "abcdefghijklmnop1234" not in str([e.payload for e in log.read(cid)]), "the log was already clean"
     assert "abcdefghijklmnop1234" not in json.dumps(result), result["error"]
     assert "acct 4111" not in json.dumps(result), result["error"]
+
+
+def test_the_common_names_and_shapes_of_a_credential_are_redacted() -> None:
+    """Field names matched whole, so access_token, client_secret and x-api-key were recorded as they were."""
+    from agentic.redact import Redactor
+
+    args = {"access_token": "opaque-0123456789", "refreshToken": "opaque-1123456789",
+            "client_secret": "opaque-2123456789", "x-api-key": "opaque-3123456789",
+            "AWS_SECRET_ACCESS_KEY": "opaque-4123456789", "db_password": "opaque-5123456789",
+            "Set-Cookie": "opaque-6123456789",
+            "note": "ghp_abcdefghijklmnopqrstuvwxyz0123456789 xoxb-1234567890-abcdefghij "
+                    "sk_live_abcdefghijklmnop0123 AIzaSyA-abcdefghijklmnopqrstuvwxyz012345",
+            "max_tokens": 100, "tokens_per_day": 7}
+    out = str(Redactor({}).apply(args))
+    for leaked in ("opaque-", "ghp_", "xoxb-", "sk_live_", "AIzaSy"):
+        assert leaked not in out, out
+    assert "'max_tokens': 100" in out and "'tokens_per_day': 7" in out
