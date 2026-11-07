@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jagentic.core.net.OutboundUrlPolicy;
-import org.agentic.flink.net.OutboundUrlPolicy.BlockedUrlException;
+import org.jagentic.core.net.OutboundUrlPolicy.BlockedUrlException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
