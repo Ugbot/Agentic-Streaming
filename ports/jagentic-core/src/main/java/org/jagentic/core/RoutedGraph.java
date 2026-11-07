@@ -55,6 +55,7 @@ public final class RoutedGraph {
   private final List<org.jagentic.core.cep.SequencePattern> cep;
   private final List<TimerSpec> timers;
   private final Map<String, List<Guardrail>> pathGuardrails;
+  private final String agentId;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -131,10 +132,11 @@ public final class RoutedGraph {
     this.cep = List.copyOf(cep == null ? List.of() : cep);
     this.timers = List.of();
     this.pathGuardrails = Map.of();
+    this.agentId = "";
   }
 
   private RoutedGraph(RoutedGraph base, List<TimerSpec> timers,
-                      Map<String, List<Guardrail>> pathGuardrails) {
+                      Map<String, List<Guardrail>> pathGuardrails, String agentId) {
     this.router = base.router;
     this.paths = base.paths;
     this.verifier = base.verifier;
@@ -148,6 +150,7 @@ public final class RoutedGraph {
     this.cep = base.cep;
     this.timers = List.copyOf(timers == null ? List.of() : timers);
     this.pathGuardrails = Map.copyOf(pathGuardrails);
+    this.agentId = agentId;
   }
 
   /**
@@ -157,12 +160,17 @@ public final class RoutedGraph {
    * for event time.
    */
   public RoutedGraph withTimers(List<TimerSpec> timers) {
-    return new RoutedGraph(this, timers, pathGuardrails);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId);
   }
 
   /** The same graph with rails that apply to one path alone, after routing. */
   public RoutedGraph withPathGuardrails(Map<String, List<Guardrail>> rails) {
-    return new RoutedGraph(this, timers, rails);
+    return new RoutedGraph(this, timers, rails, agentId);
+  }
+
+  /** The same graph under the workflow's {@code agent.id}, which scopes its journal entries. */
+  public RoutedGraph withAgentId(String id) {
+    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -212,6 +220,7 @@ public final class RoutedGraph {
   public TurnResult handle(Event event, AgentContext ctx) {
     ctx.listeners = listeners; // so callTool can fire tool-call hooks
     ctx.contextWindow = contextWindow;
+    ctx.journalScope = agentId;
     if (event.turnId() == null || event.turnId().isBlank()) {
       return refused(event, "a turn needs a non-empty turn_id; it is the idempotency key",
           ctx.conversationState());
@@ -667,6 +676,10 @@ public final class RoutedGraph {
   }
 
   private TurnResult complete(Event event, AgentContext ctx, String path, String reply) {
+    EffectJournal.Key next = ctx.nextToolKey();
+    if (ctx.journal.get(next).isPresent()) {
+      throw new EffectJournal.Divergence(next); // a recorded effect must not vanish behind a success
+    }
     List<Map<String, Object>> messages = new ArrayList<>(2);
     messages.add(map("role", "user", "text", event.text()));
     messages.add(map("role", "assistant", "text", reply));

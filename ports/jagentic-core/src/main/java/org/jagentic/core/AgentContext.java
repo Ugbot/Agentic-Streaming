@@ -46,6 +46,8 @@ public final class AgentContext {
   public LogicalClock clock = null;
   /** The effect journal every tool and model call goes through; none by default. */
   public EffectJournal journal = EffectJournal.NONE;
+  /** What distinguishes this workflow's calls from another's on a shared store: its agent id. */
+  public String journalScope = "";
   /** A test's view of the turn. */
   public TurnProbe probe = TurnProbe.NONE;
   /** The metadata of the turn being handled, stamped on every event. */
@@ -156,6 +158,11 @@ public final class AgentContext {
     return nextToolIndex++;
   }
 
+  /** The key of the call this turn would make next. */
+  EffectJournal.Key nextToolKey() {
+    return new EffectJournal.Key(conversationId, turnId, EffectJournal.TOOL, nextToolIndex);
+  }
+
   /** A re-run turn keeps counting: {@code (turn_id, index)} identifies one call across runs. */
   public void continueToolIndexAfter(List<ToolCall> earlier) {
     for (ToolCall c : earlier) {
@@ -192,12 +199,21 @@ public final class AgentContext {
    * One model call through the journal, by its index in the turn: a recorded answer is reused and
    * the model is not asked again, so a re-run takes the same path. {@code llm_called} follows every
    * answer. A crash during the call leaves nothing recorded, and the model is asked again.
+   *
+   * @param request what identifies the call across runs: the brain's instructions. The transcript is
+   *     not part of it, since a log that kept part of the turn shows more of it than the first run saw
+   * @throws EffectJournal.Divergence when the recorded answer was to a different request
    */
   @SuppressWarnings("unchecked")
-  public org.jagentic.core.llm.ChatResult chat(Supplier<org.jagentic.core.llm.ChatResult> call) {
+  public org.jagentic.core.llm.ChatResult chat(String request, Supplier<org.jagentic.core.llm.ChatResult> call) {
     int index = nextLlmIndex++;
     EffectJournal.Key key = new EffectJournal.Key(conversationId, turnId, EffectJournal.LLM, index);
-    Map<String, Object> answer = journal.get(key).map(e -> (Map<String, Object>) e.result()).orElse(null);
+    String intent = EffectJournal.modelIntentOf(journalScope, request);
+    EffectJournal.Entry recorded = journal.get(key).orElse(null);
+    if (recorded != null && !intent.equals(recorded.intent())) {
+      throw new EffectJournal.Divergence(key, recorded.intent(), intent);
+    }
+    Map<String, Object> answer = recorded == null ? null : (Map<String, Object>) recorded.result();
     if (answer == null) {
       org.jagentic.core.llm.ChatResult fresh = callModel(call);
       answer = new LinkedHashMap<>();
@@ -207,7 +223,7 @@ public final class AgentContext {
       } else {
         answer.put("text", fresh.text());
       }
-      journal.put(EffectJournal.Entry.pending(key, "", ToolEffect.READ).succeeded(answer));
+      journal.put(EffectJournal.Entry.pending(key, intent, ToolEffect.READ).succeeded(answer));
     }
     Map<String, Object> p = new LinkedHashMap<>();
     p.put("index", index);
@@ -301,9 +317,15 @@ public final class AgentContext {
     String key = EffectJournal.idempotencyKey(conversationId, turnId, index);
     ToolRegistry.CallIdentity identity = new ToolRegistry.CallIdentity(conversationId, turnId, index, key);
     Policies.RetryPolicy retry = policies.retry();
+    EffectJournal.Key journalKey = new EffectJournal.Key(conversationId, turnId, EffectJournal.TOOL, index);
+    String intent = EffectJournal.intentOf(journalScope, toolId, args);
+    java.util.ArrayDeque<LogEvent> begun = kept.get(EventType.TOOL_INTENT.wire() + "/" + index + "/null");
+    if (begun != null && !begun.isEmpty()) {
+      // The log says this call was begun, so a journal that lost it must not read as a first call.
+      journal.putIfAbsent(EffectJournal.Entry.pending(journalKey, intent, tool.effect()));
+    }
     EffectJournal.Entry entry = journal.recordOrGet(
-        new EffectJournal.Key(conversationId, turnId, EffectJournal.TOOL, index),
-        intentOf(toolId, args), tool.effect(), new EffectJournal.Call() {
+        journalKey, intent, tool.effect(), new EffectJournal.Call() {
           @Override
           public void onIntent(EffectJournal.Entry recorded) {
             Map<String, Object> p = new LinkedHashMap<>();
@@ -383,20 +405,6 @@ public final class AgentContext {
             String.valueOf(entry.error()), null);
       }
     }
-  }
-
-  private static String intentOf(String toolId, Map<String, Object> args) {
-    return toolId + ":" + java.util.Objects.hash(canonical(args));
-  }
-
-  /** A form of the arguments that does not depend on the map's iteration order. */
-  private static Object canonical(Object value) {
-    if (value instanceof Map<?, ?> m) {
-      java.util.TreeMap<String, Object> sorted = new java.util.TreeMap<>();
-      m.forEach((k, v) -> sorted.put(String.valueOf(k), canonical(v)));
-      return sorted.toString();
-    }
-    return String.valueOf(value);
   }
 
   /** The {@code retrieve} verb: top-{@code k} passages, recorded as a {@code retrieved} event. */

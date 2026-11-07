@@ -17,6 +17,8 @@ public final class EffectJournals {
 
   private static final Map<String, EffectJournal> NAMED = new ConcurrentHashMap<>();
   private static final ObjectMapper JSON = new ObjectMapper();
+  private static final ObjectMapper CANONICAL = new ObjectMapper()
+      .configure(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 
   private EffectJournals() {}
 
@@ -46,7 +48,9 @@ public final class EffectJournals {
             "journal kind " + kind + " is not available on the JVM (memory|postgres|kafka)");
       };
     } catch (EffectJournal.Unavailable e) {
-      if ("degrade".equals(store.get("on_unavailable"))) {
+      // Degrading is for tools that can stand to run again. A call that must happen once does not
+      // run with nothing durable behind it, whatever the block says.
+      if ("degrade".equals(store.get("on_unavailable")) && firstNonIdempotent(spec) == null) {
         return new EffectJournal.InMemory();
       }
       throw e;
@@ -66,12 +70,16 @@ public final class EffectJournals {
    *
    * @return the first such tool's id, or null when the workflow is safe to run
    */
-  @SuppressWarnings("unchecked")
   public static String unsafeForRollback(Map<String, Object> spec) {
     Map<String, Object> store = declared(spec);
     boolean outlives = store != null && (!"memory".equals(store.getOrDefault("kind", "memory"))
         || Boolean.TRUE.equals(store.get(PROCESS_LOCAL_OK)));
-    if (outlives || !(spec.get("tools") instanceof List<?> tools)) {
+    return outlives ? null : firstNonIdempotent(spec);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static String firstNonIdempotent(Map<String, Object> spec) {
+    if (!(spec.get("tools") instanceof List<?> tools)) {
       return null;
     }
     for (Object t : tools) {
@@ -81,6 +89,15 @@ public final class EffectJournals {
       }
     }
     return null;
+  }
+
+  /** {@code value} as JSON with every map's keys sorted, at any depth; the text of an unserializable value. */
+  static String canonicalJson(Object value) {
+    try {
+      return CANONICAL.writeValueAsString(value);
+    } catch (JsonProcessingException e) {
+      return String.valueOf(value);
+    }
   }
 
   /** An entry as the durable stores hold it. */
@@ -100,8 +117,14 @@ public final class EffectJournals {
     m.put("released", e.released());
     try {
       return JSON.writeValueAsString(m);
-    } catch (JsonProcessingException ex) {
-      throw new IllegalArgumentException("a tool result must be JSON-serializable to be journaled", ex);
+    } catch (JsonProcessingException notJson) {
+      // The call has been made by now, so the outcome is recorded in the form that can be.
+      m.put("result", String.valueOf(e.result()));
+      try {
+        return JSON.writeValueAsString(m);
+      } catch (JsonProcessingException ex) {
+        throw new IllegalArgumentException("a journal entry must be serializable", ex);
+      }
     }
   }
 

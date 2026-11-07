@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Optional;
+import java.util.Properties;
 
 import org.jagentic.core.EffectJournal;
 import org.jagentic.core.EffectJournals;
@@ -18,6 +19,8 @@ import org.jagentic.core.EffectJournals;
  */
 public final class PostgresEffectJournal implements EffectJournal {
   private static final String TABLE = "agentic_effect_journal";
+  /** Seconds. A store that stops answering must fail the turn, not hang the task; a URL may override. */
+  private static final String TIMEOUT_SECONDS = "15";
 
   private final String url;
   private final String user;
@@ -40,7 +43,17 @@ public final class PostgresEffectJournal implements EffectJournal {
 
   private synchronized Connection connection() throws SQLException {
     if (connection == null || connection.isClosed()) {
-      connection = DriverManager.getConnection(url, user, password);
+      Properties p = new Properties();
+      if (user != null) {
+        p.setProperty("user", user);
+      }
+      if (password != null) {
+        p.setProperty("password", password);
+      }
+      p.setProperty("connectTimeout", TIMEOUT_SECONDS);
+      p.setProperty("loginTimeout", TIMEOUT_SECONDS);
+      p.setProperty("socketTimeout", TIMEOUT_SECONDS);
+      connection = DriverManager.getConnection(url, p);
     }
     return connection;
   }
@@ -62,7 +75,7 @@ public final class PostgresEffectJournal implements EffectJournal {
         return rows.next() ? Optional.of(EffectJournals.fromJson(rows.getString(1))) : Optional.empty();
       }
     } catch (SQLException e) {
-      connection = null;
+      drop();
       throw new Unavailable("cannot read the effect journal", e);
     }
   }
@@ -87,9 +100,21 @@ public final class PostgresEffectJournal implements EffectJournal {
       st.setString(5, EffectJournals.toJson(entry));
       return st.executeUpdate();
     } catch (SQLException e) {
-      connection = null;
+      drop();
       throw new Unavailable("cannot write the effect journal", e);
     }
+  }
+
+  /** A connection that failed once is not trusted again; the next call opens another. */
+  private void drop() {
+    try {
+      if (connection != null) {
+        connection.close();
+      }
+    } catch (SQLException ignored) {
+      // it is being thrown away because it no longer works
+    }
+    connection = null;
   }
 
   @Override

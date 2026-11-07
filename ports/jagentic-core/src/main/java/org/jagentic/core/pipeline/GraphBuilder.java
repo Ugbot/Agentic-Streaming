@@ -253,6 +253,7 @@ public final class GraphBuilder {
     if (!timers.isEmpty()) {
       graph = graph.withTimers(timers);
     }
+    graph = graph.withAgentId(String.valueOf(agent.get("id")));
     return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
   }
 

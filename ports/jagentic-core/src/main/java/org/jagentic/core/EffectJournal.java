@@ -52,7 +52,8 @@ public interface EffectJournal extends AutoCloseable {
   record Attempt(int attempt, String error) implements Serializable {}
 
   /**
-   * One call. {@code intent} is the tool and a hash of its arguments, and is empty for a model call.
+   * One call. {@code intent} is what the call was, as {@link #intentOf} and {@link #modelIntentOf}
+   * write it.
    * {@code released} means a person said an unknown call did not land and may be made again.
    */
   record Entry(Key key, String intent, String effect, State state, List<Attempt> attempts,
@@ -105,6 +106,11 @@ public interface EffectJournal extends AutoCloseable {
   /** A re-run asked for a different call under a recorded key: the turn did not replay. */
   final class Divergence extends RuntimeException {
     private static final long serialVersionUID = 1L;
+
+    /** The run ended with a recorded call still ahead of it. */
+    public Divergence(Key key) {
+      super("call " + key.index() + " of turn " + key.turnId() + " is recorded but this run ended before it");
+    }
 
     public Divergence(Key key, String recorded, String asked) {
       super("call " + key.index() + " of turn " + key.turnId() + " was recorded as " + recorded
@@ -170,17 +176,19 @@ public interface EffectJournal extends AutoCloseable {
     if (entry.isFinal() || entry.state() == State.UNKNOWN) {
       return entry;
     }
+    // What a run recorded outranks what a later version of the workflow declares.
+    boolean once = ToolEffect.NON_IDEMPOTENT.equals(effect) || ToolEffect.NON_IDEMPOTENT.equals(entry.effect());
     if (entry.released()) {
       // The person's permission covers one call, so it is spent before the call is made: a crash
       // during it leaves a pending entry, which is unknown again.
       entry = new Entry(key, entry.intent(), entry.effect(), State.PENDING, entry.attempts(), null, null, false);
       put(entry);
-    } else if (existing.isPresent() && ToolEffect.NON_IDEMPOTENT.equals(effect)) {
+    } else if (existing.isPresent() && once) {
       entry = entry.unknown();
       put(entry);
       return entry;
     }
-    int budget = ToolEffect.NON_IDEMPOTENT.equals(effect) ? 1 : call.budget();
+    int budget = once ? entry.attempts().size() + 1 : call.budget();
     for (int attempt = entry.attempts().size() + 1; attempt <= budget; attempt++) {
       Object result;
       try {
@@ -188,7 +196,7 @@ public interface EffectJournal extends AutoCloseable {
       } catch (LogUnavailable e) {
         throw e;
       } catch (RuntimeException e) {
-        if (e instanceof OutcomeUnknown && ToolEffect.NON_IDEMPOTENT.equals(effect)) {
+        if (e instanceof OutcomeUnknown && once) {
           entry = entry.unknown();
           put(entry);
           return entry;
@@ -226,6 +234,33 @@ public interface EffectJournal extends AutoCloseable {
       sha.update(turnId.getBytes(StandardCharsets.UTF_8));
       sha.update((byte) 0);
       sha.update(Integer.toString(index).getBytes(StandardCharsets.US_ASCII));
+      return HexFormat.of().formatHex(sha.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is mandatory on the JVM", e);
+    }
+  }
+
+  /**
+   * What a re-run must ask for again under the same key: the tool, then a SHA-256 of the workflow
+   * and the arguments as canonical JSON. A short hash would let two different calls pass for one.
+   *
+   * @param scope the agent id, so a store two workflows share cannot answer one with the other's call
+   */
+  static String intentOf(String scope, String toolId, Map<String, Object> args) {
+    return toolId + ":" + digest(scope, EffectJournals.canonicalJson(args));
+  }
+
+  /** As {@link #intentOf} for a model call; {@code request} is what the brain was told to do. */
+  static String modelIntentOf(String scope, String request) {
+    return "llm:" + digest(scope, request);
+  }
+
+  private static String digest(String scope, String body) {
+    try {
+      MessageDigest sha = MessageDigest.getInstance("SHA-256");
+      sha.update(scope.getBytes(StandardCharsets.UTF_8));
+      sha.update((byte) 0);
+      sha.update(body.getBytes(StandardCharsets.UTF_8));
       return HexFormat.of().formatHex(sha.digest());
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("SHA-256 is mandatory on the JVM", e);

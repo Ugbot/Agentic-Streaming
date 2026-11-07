@@ -109,8 +109,9 @@ public final class LlmBrain implements Brain {
       messages.add(Map.of("role", "user", "content", userText));
     }
 
+    String request = sys + "\u0000" + userText;
     for (int i = 0; i < maxIterations; i++) {
-      ChatResult r = ctx.chat(() -> client.chat(messages, specs));
+      ChatResult r = ctx.chat(request, () -> client.chat(messages, specs));
       if (r.isToolCall()) {
         if (allowedTools != null && !allowedTools.contains(r.tool())) {
           if (strictTools) {

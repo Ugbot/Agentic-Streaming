@@ -40,6 +40,7 @@ import org.jagentic.core.Event;
 import org.jagentic.core.EventType;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LogEvent;
+import org.jagentic.core.LogUnavailable;
 import org.jagentic.core.Policies;
 import org.jagentic.core.TurnError;
 import org.jagentic.core.TurnResult;
@@ -357,6 +358,8 @@ public final class ConversationEntity
     TurnResult result;
     try {
       result = deps.graph().handle(event, ctx);
+    } catch (LogUnavailable e) {
+      throw e; // nothing is staged: the turn stays unspent and fails the entity, as it would the job
     } catch (RuntimeException e) {
       String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
       TurnError error = new TurnError(TurnError.ErrorClass.FATAL, message);
