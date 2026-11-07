@@ -6,6 +6,7 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import io.qdrant.client.QueryFactory;
 import io.qdrant.client.ValueFactory;
+import io.qdrant.client.VectorOutputHelper;
 import io.qdrant.client.VectorsFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.WithVectorsSelectorFactory;
@@ -222,7 +223,9 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     Points.RetrievedPoint point = retrieve(id, true);
     if (point == null) return null;
     if (!point.getVectors().hasVector()) return null;
-    List<Float> data = point.getVectors().getVector().getDataList();
+    // Current servers fill the `dense` variant and leave the deprecated `data` field empty.
+    List<Float> data =
+        VectorOutputHelper.getDenseVector(point.getVectors().getVector()).getDataList();
     float[] out = new float[data.size()];
     for (int i = 0; i < out.length; i++) {
       out[i] = data.get(i);
