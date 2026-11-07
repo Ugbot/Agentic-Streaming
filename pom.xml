@@ -54,6 +54,8 @@
              future baseline bump from being blocked by annotation processing. -->
         <lombok.version>1.18.48</lombok.version>
         <bouncycastle.version>1.86</bouncycastle.version>
+        <!-- What io.qdrant:client 1.20.0 is built on. -->
+        <grpc.version>1.84.2</grpc.version>
     </properties>
 
     <dependencyManagement>
@@ -71,6 +73,16 @@
                 <groupId>io.netty</groupId>
                 <artifactId>netty-bom</artifactId>
                 <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Ahead of the A2A BOM for the same reason: it holds gRPC at 1.77.0, and
+                 grpc-netty-shaded 1.77.0 carries a relocated Netty 4.1.127 that neither OSV nor the
+                 netty-bom above can see. -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>${grpc.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
