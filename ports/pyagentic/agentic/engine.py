@@ -42,6 +42,7 @@ from .journal import (
     JournalKey,
     intent_of,
 )
+from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec, idempotency_key
 from .workflow_timers import WorkflowTimers
@@ -290,6 +291,10 @@ class Engine:
         self.context: Mapping[str, Any] = doc.get("context") or {}
         self.cep: List[SequencePattern] = compile_patterns(doc.get("cep"))
         self.llm: Mapping[str, Any] = doc.get("llm") or {}
+        self.chat_client: Optional[ChatClient] = None
+        if self.llm.get("provider", "stub") != "stub" and any(
+                p.get("brain") == "llm" and "x-brain" not in p for p in self.paths.values()):
+            self.chat_client = make_chat_client(self.llm)
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
         self.global_guardrails = [g for g in self.guardrails if g.get("name") not in path_scoped]
@@ -633,10 +638,8 @@ class Engine:
         return f'[{path}] I can help with {path} questions. You said: "{ctx.text}"'
 
     def _draft_llm(self, ctx: _TurnContext, path: str) -> str:
-        provider = self.llm.get("provider", "stub")
-        if provider != "stub":
-            raise ValidationError(f"llm provider {provider!r} is not available in this runtime; "
-                                  f"only the scripted stub provider runs locally", "/llm/provider")
+        if self.chat_client is not None:
+            return self._draft_react(ctx, path, self.chat_client)
         allowed = set(self.paths[path].get("tools") or [])
         for i, step in enumerate(self.llm.get("script") or []):
             answer = self._ask_model(ctx, lambda i=i, step=step: self._scripted_answer(i, step))  # type: ignore[misc]
@@ -649,6 +652,50 @@ class Engine:
                 return str(answer["text"])
         raise ValidationError("the llm script ended without a final text", "/llm/script")
 
+    def _draft_react(self, ctx: _TurnContext, path: str, client: ChatClient) -> str:
+        """The bounded loop a real provider drives: the model picks a tool or answers. A tool outside
+        the path's list is refused in the loop, so the model can correct itself. The model's view is
+        the log as it stood before this run, which a re-run sees the same. An observation goes back
+        as a user message, because the `tool` role needs a tool_calls id this protocol does not have."""
+        spec = self.paths[path]
+        declared = spec.get("tools")
+        tools = [{"name": s.id, "description": s.description} for s in self.tools.ids().values()
+                 if not declared or s.id in declared]
+        listing = ", ".join(f"{t['name']}: {t['description']}" for t in tools)
+        system = f"{spec.get('prompt', '')}\n{REACT_SYSTEM}{listing}".strip()
+        messages = [{"role": "system", "content": system}]
+        messages += [{"role": m.role, "content": m.text} for m in transcript(ctx.history, self.context)]
+        messages.append({"role": "user", "content": ctx.text})
+        limit = max(1, int(spec.get("max_iterations", DEFAULT_MAX_ITERATIONS)))
+        for _ in range(limit):
+            answer = self._ask_model(ctx, lambda: self._chat(client, messages, tools))
+            if "tool" not in answer:
+                return f"[{path}] {answer.get('text', '')}"
+            tool_id, args = str(answer["tool"]), answer.get("args") or {}
+            messages.append({"role": "assistant", "content": json.dumps({"tool": tool_id, "args": args})})
+            if declared and tool_id not in declared:
+                observation = f"error: tool {tool_id} is not permitted for this agent"
+            else:
+                observation = f"Result of {tool_id}: {self._invoke(ctx, tool_id, args)}"
+            messages.append({"role": "user", "content": observation})
+        return f"[{path}] (stopped after {limit} steps)"
+
+    def _chat(self, client: ChatClient, messages: List[Dict[str, str]], tools: List[Dict[str, str]]) -> Dict[str, Any]:
+        """One model call under `policies.retry`. Only the call is retried, so a tool the model
+        already called is not called again. A refusal is not retried."""
+        retry = self.policies.get("retry") or {}
+        max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return client.chat(list(messages), tools)
+            except TransientError:
+                if attempt >= max_attempts:
+                    raise
+                delay = retry_delay_ms(retry, attempt, self.rng)
+                if delay:
+                    self.sleep(delay / 1000.0)
+        raise AssertionError("unreachable")
+
     def _ask_model(self, ctx: _TurnContext, ask: Callable[[], Mapping[str, Any]]) -> Mapping[str, Any]:
         """One model call, journaled by its own index in the turn: a recorded reply is reused, so a
         re-run takes the same path."""
@@ -656,7 +703,8 @@ class Engine:
         key = JournalKey(ctx.turn.conversation_id, ctx.turn.turn_id, LLM, index)
         entry = self.journal.record_or_get(key, "", READ, _ModelCall(ask))
         answer: Mapping[str, Any] = entry.result
-        self._append(ctx, "llm_called", {"index": index, **answer})
+        model = {"model": self.llm["model"]} if self.llm.get("model") else {}
+        self._append(ctx, "llm_called", {"index": index, **model, **answer})
         return answer
 
     def _scripted_answer(self, index: int, step: Mapping[str, Any]) -> Dict[str, Any]:

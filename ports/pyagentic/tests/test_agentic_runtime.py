@@ -607,13 +607,11 @@ def test_llm_stub_script_runs_tools_then_answers():
     assert result["tool_calls"] == [{"tool": "lookup", "index": 0, "args": {"id": 1}, "result": 7, "attempt": 1}]
 
 
-def test_real_llm_provider_is_refused_not_faked():
+def test_real_llm_provider_with_no_key_is_refused_not_faked(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     spec = Agent(rid("a")).path("main", brain="llm").with_llm("openai", model="gpt").verifier("none").build()
-    rt = LocalRuntime()
-    rt.deploy(spec)
-    result = rt.submit(Turn(rid("c"), "t", "hi"))
-    assert result["status"] == "failed" and result["error"]["class"] == "validation"
-    assert "openai" in result["error"]["message"]
+    with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
+        LocalRuntime().deploy(spec)
 
 
 def test_every_result_validates_against_the_result_schema():

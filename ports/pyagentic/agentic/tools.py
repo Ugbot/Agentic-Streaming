@@ -102,6 +102,7 @@ class ToolSpec:
     parameters: Optional[Mapping[str, Any]] = None
     compensation: Optional[str] = None
     effect: str = "idempotent"
+    description: str = ""
     fail_attempts: Optional[int] = None
     peer: Optional[Mapping[str, Any]] = None
     extensions: Dict[str, Any] = field(default_factory=dict)
@@ -118,6 +119,7 @@ class ToolSpec:
             parameters=entry.get("parameters"),
             compensation=entry.get("compensation"),
             effect=entry.get("effect", "idempotent"),
+            description=entry.get("description", ""),
             fail_attempts=entry.get("x-fail-attempts"),
             extensions={k: v for k, v in entry.items() if k.startswith("x-")},
         )
@@ -125,7 +127,7 @@ class ToolSpec:
     @classmethod
     def from_peer(cls, peer: Mapping[str, Any]) -> "ToolSpec":
         return cls(id=peer.get("name") or peer["id"], kind="agent", peer=dict(peer),
-                   timeout_ms=peer.get("timeout_ms"))
+                   timeout_ms=peer.get("timeout_ms"), description=peer.get("description", ""))
 
 
 class ToolRegistry:
@@ -291,11 +293,13 @@ class ToolRegistry:
 
 
 def _bounded(spec: ToolSpec, default_ms: int, call: Callable[[], Any]) -> Any:
-    """Run `call` for at most `spec.timeout_ms`. It runs on its own daemon thread, because a limit
-    must hold whatever the call is doing. Python cannot stop a thread, so a late call runs on to
-    its end and its answer is dropped: a timeout says the answer did not arrive, not that nothing
-    happened."""
-    limit_ms = spec.timeout_ms or default_ms
+    return bounded(spec.id, spec.timeout_ms or default_ms, call)
+
+
+def bounded(name: str, limit_ms: int, call: Callable[[], Any]) -> Any:
+    """Run `call` for at most `limit_ms`. It runs on its own daemon thread, because a limit must hold
+    whatever the call is doing. Python cannot stop a thread, so a late call runs on to its end and
+    its answer is dropped: a timeout says the answer did not arrive, not that nothing happened."""
     outcome: "queue.Queue[tuple]" = queue.Queue(maxsize=1)
     context = contextvars.copy_context()
 
@@ -305,11 +309,11 @@ def _bounded(spec: ToolSpec, default_ms: int, call: Callable[[], Any]) -> Any:
         except BaseException as exc:  # handed to the caller, who decides what it means
             outcome.put((False, exc))
 
-    threading.Thread(target=run, name=f"tool-{spec.id}", daemon=True).start()
+    threading.Thread(target=run, name=f"tool-{name}", daemon=True).start()
     try:
         ok, value = outcome.get(timeout=limit_ms / 1000.0)
     except queue.Empty:
-        raise OutcomeUnknown(f"{spec.id} timed out after {limit_ms} ms") from None
+        raise OutcomeUnknown(f"{name} timed out after {limit_ms} ms") from None
     if ok:
         return value
     raise value

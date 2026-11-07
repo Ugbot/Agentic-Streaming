@@ -236,7 +236,9 @@ class LocalRuntime(Runtime):
 
     _CAPABILITIES: Dict[str, str] = {
         "routing": "supported", "rule_brain": "supported",
-        "llm_brain": "partial",  # only the scripted `stub` provider runs locally
+        # `stub` runs the fixtures. `openai` and `ollama` are real clients, proven against a local
+        # HTTP server speaking their formats and never against a live model.
+        "llm_brain": "partial",
         "tools": "supported", "structured_tool_args": "supported", "guardrails": "supported",
         "verifier": "supported", "ordering": "supported", "idempotency": "supported",
         "retry": "supported", "memory": "supported", "retrieval": "supported",
