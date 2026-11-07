@@ -187,6 +187,10 @@ and lz4 ([docs/security.md](docs/security.md)). For a Fluss backend, build with 
 package` or put `com.alibaba.fluss:fluss-client` on the job classpath. Without it, selecting Fluss
 fails at startup and says so.
 
+The Milvus SDK is left out for the same reason: it carries its own relocated gRPC and Netty 4.1. For
+the Milvus backend, build with `./mvnw -P milvus package` or put `io.milvus:milvus-sdk-java` on the
+job classpath. Without it, selecting Milvus fails at startup and says so too.
+
 ## Contributing
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) describes the toolchain, the local

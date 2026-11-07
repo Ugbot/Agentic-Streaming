@@ -93,7 +93,7 @@ A third-party jar adds a backend by shipping the same service file name with its
 | In-memory vector | `storage.vector.InMemoryVectorStore` | `VectorStore` | `in-memory` | ServiceLoader | none |
 | pgvector | `storage.vector.PgVectorStore` | `VectorStore` | `pgvector` | ServiceLoader | `org.postgresql:postgresql` |
 | Qdrant | `storage.vector.QdrantVectorStore` | `VectorStore` | `qdrant` | ServiceLoader | `io.qdrant:client` (optional) |
-| Milvus | `storage.vector.MilvusVectorStore` | `VectorStore` | `milvus` | ServiceLoader | `io.milvus:milvus-sdk-java` (optional) |
+| Milvus | `storage.vector.MilvusVectorStore` | `VectorStore` | `milvus` | ServiceLoader | `io.milvus:milvus-sdk-java` (`provided`; `-P milvus` bundles it) |
 | Fluss | `storage.vector.FlussVectorStore` | `VectorStore` | `fluss` | ServiceLoader | `com.alibaba.fluss:fluss-client` (`provided`; `-P fluss` bundles it) |
 | Redis conversation | `memory.conversation.redis.RedisConversationStore` | `ConversationStore` | see class | ServiceLoader | `redis.clients:jedis` (optional) |
 | Fluss conversation | `memory.conversation.fluss.FlussConversationStore` | `ConversationStore` | see class | ServiceLoader | `com.alibaba.fluss:fluss-client` (`provided`; `-P fluss` bundles it) |

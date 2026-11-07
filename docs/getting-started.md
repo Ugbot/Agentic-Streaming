@@ -181,7 +181,7 @@ The second command produces two jars under `target/`:
   with a bare `java -cp` fails (Part 5). It does not contain the Fluss client either, unless
   you build with `-P fluss`: `./mvnw -P fluss package` bundles it. The Fluss classes stay in the
   default jar, and selecting one without the client fails with an `IllegalStateException` that
-  says this.
+  says this. The Milvus SDK is the same, with `-P milvus`.
 
 ### The Flink tests
 
