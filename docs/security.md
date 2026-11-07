@@ -61,9 +61,11 @@ read. The principal comes from the token.
 another tenant cannot name a conversation at all. Within a tenant, only the subject that started a
 conversation can add a turn or read it, and a reader role can read it. Everyone else gets the 404 that
 a conversation with no turns gets, every read. A first turn still running, which a Flink job's log
-does not show yet, is held for its sender by the gateway. That hold is in one gateway process, so two
-gateways in front of one job can each let a different subject start the same conversation: the
-runtime checks the tenant, not the subject.
+does not show yet, is held for its sender by the gateway. That hold is in one gateway process, but the
+runtime owns the rule as well: a conversation belongs to the tenant and the subject of its first turn,
+so when two gateways each let a different subject start the same conversation, the runtime refuses the
+second one's turns with class `policy`. `policies.sharing` (`tenant: true`, or `roles`) is how a
+conversation is meant to have several users, all of its tenant.
 
 **Approvals.** A resume comes with the approver's token, and the runtime checks it against
 `policies.approvers`. A refusal is a 403 and `signal_refused` on the log. A resume of a turn the

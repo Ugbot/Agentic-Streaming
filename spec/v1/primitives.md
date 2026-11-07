@@ -661,11 +661,16 @@ it cannot grow a log.
 A timer the runtime set for itself resumes the turn without an approver: it is not a signal from
 outside, and no event can claim to be one.
 
-### Tenancy on the log
+### Ownership on the log
 
-A conversation belongs to the tenant of its first `turn_received`. A turn with any other tenant, or
-with no principal, is refused with class `policy` and nothing appended. A conversation started with no
-tenant has no such check.
+A conversation belongs to the principal of its first `turn_received`: its tenant and its subject. A
+turn from any other subject, from another tenant, or with no principal, is refused with class `policy`
+and nothing appended, so a turn id it names stays unspent. A conversation started with no principal
+has no such check. The runtime owns this rule, so it holds however many gateways deliver turns.
+
+`policies.sharing` is how a conversation has several users. `tenant: true` admits every principal of
+the conversation's tenant, and `roles` admits one of its tenant with one of those roles. Nothing admits
+a principal of another tenant. A signal is not a turn: who may answer one is the approver rule above.
 
 ### Egress
 

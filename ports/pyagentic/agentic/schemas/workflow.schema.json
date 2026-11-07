@@ -156,6 +156,15 @@
           },
           "additionalProperties": false
         },
+        "sharing": {
+          "description": "Who besides the principal that started a conversation may add turns to it. Deny by default: without this block only that principal can. Either way it must be of the conversation's tenant.",
+          "type": "object",
+          "properties": {
+            "tenant": { "type": "boolean", "default": false, "description": "any principal of the conversation's tenant" },
+            "roles": { "type": "array", "items": { "type": "string" }, "description": "a principal of the conversation's tenant with one of these roles" }
+          },
+          "additionalProperties": false
+        },
         "tool_approval": {
           "description": "Which allowed tools still need a person: the turn suspends before the call until an approver answers. A timer or a CEP pattern has nobody to ask, so such a tool is refused there.",
           "type": "object",

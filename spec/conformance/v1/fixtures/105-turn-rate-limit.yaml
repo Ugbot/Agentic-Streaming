@@ -20,7 +20,7 @@ workflow:
 turns:
 - {conversation_id: c1, turn_id: t1, text: hello, principal: {subject: alice}}
 - {conversation_id: c1, turn_id: t2, text: hello, principal: {subject: alice}}
-- {conversation_id: c1, turn_id: t3, text: hello, principal: {subject: bob}}
+- {conversation_id: c2, turn_id: t3, text: hello, principal: {subject: bob}}
 - {conversation_id: c1, turn_id: t4, text: hello, advance_time_ms: 60000, principal: {subject: alice}}
 expect:
 - {turn_id: t1, status: completed}

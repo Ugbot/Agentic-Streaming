@@ -60,6 +60,7 @@ public final class RoutedGraph {
   private final Approvers approvers;
   private final Limits limits;
   private final Redactor redactor;
+  private final Admission admission;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -141,12 +142,13 @@ public final class RoutedGraph {
     this.approvers = Approvers.NONE;
     this.limits = Limits.NONE;
     this.redactor = Redactor.DEFAULT;
+    this.admission = Admission.OWNER_ONLY;
   }
 
   private RoutedGraph(RoutedGraph base, List<TimerSpec> timers,
                       Map<String, List<Guardrail>> pathGuardrails, String agentId,
                       ToolPolicy toolPolicy, Approvers approvers, Limits limits,
-                      Redactor redactor) {
+                      Redactor redactor, Admission admission) {
     this.router = base.router;
     this.paths = base.paths;
     this.verifier = base.verifier;
@@ -165,6 +167,7 @@ public final class RoutedGraph {
     this.approvers = approvers;
     this.limits = limits;
     this.redactor = redactor;
+    this.admission = admission;
   }
 
   /**
@@ -174,37 +177,42 @@ public final class RoutedGraph {
    * for event time.
    */
   public RoutedGraph withTimers(List<TimerSpec> timers) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor, admission);
   }
 
   /** The same graph under this policy. Without one every tool call is refused. */
   public RoutedGraph withToolPolicy(ToolPolicy policy) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits, redactor, admission);
   }
 
   /** The same graph under these approvers. Without them nobody can resume a turn. */
   public RoutedGraph withApprovers(Approvers who) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits, redactor, admission);
   }
 
   /** The same graph under these limits. */
   public RoutedGraph withLimits(Limits l) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l, redactor, admission);
   }
 
   /** The same graph under this redactor. Credentials are covered without one. */
   public RoutedGraph withRedactor(Redactor r) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, r);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, r, admission);
+  }
+
+  /** The same graph under this sharing rule. Without one only a conversation's owner adds turns. */
+  public RoutedGraph withAdmission(Admission a) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor, a);
   }
 
   /** The same graph with rails that apply to one path alone, after routing. */
   public RoutedGraph withPathGuardrails(Map<String, List<Guardrail>> rails) {
-    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits, redactor, admission);
   }
 
   /** The same graph under the workflow's {@code agent.id}, which scopes its journal entries. */
   public RoutedGraph withAgentId(String id) {
-    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits, redactor, admission);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -339,11 +347,13 @@ public final class RoutedGraph {
     boolean running = prior != null && prior.running();
     boolean retryable = idempotent && applied && prior.retryable();
 
-    String tenant = tenantOf(ctx);
-    if (!event.isResume() && tenant != null
-        && (event.principal() == null || !tenant.equals(event.principal().tenant()))) {
-      return refused(event, TurnError.ErrorClass.POLICY,
-          "conversation " + event.conversationId() + " belongs to another tenant", before);
+    Principal owner = ownerOf(ctx);
+    String tenant = owner == null ? null : owner.tenant();
+    if (!event.isResume()) {
+      String foreign = admission.problem(event.conversationId(), owner, event.principal());
+      if (foreign != null) {
+        return refused(event, TurnError.ErrorClass.POLICY, foreign, before);
+      }
     }
     if (event.isResume() && prior != null && !ctx.runtimeSignal) {
       String problem = approvers.problem(event.principal(), tenant);
@@ -408,12 +418,11 @@ public final class RoutedGraph {
         List.of(), List.of(), state == null ? Map.of() : state.reduced());
   }
 
-  /** The tenant a conversation belongs to: the one that started it (spec section 11). */
-  private static String tenantOf(AgentContext ctx) {
+  /** The principal a conversation belongs to: the one that started it (spec section 11). */
+  private static Principal ownerOf(AgentContext ctx) {
     for (LogEvent e : ctx.log.events(ctx.conversationId)) {
       if (e.is(EventType.TURN_RECEIVED)) {
-        Principal first = Principal.fromMap(e.payload().get("principal"));
-        return first == null ? null : first.tenant();
+        return Principal.fromMap(e.payload().get("principal"));
       }
     }
     return null;

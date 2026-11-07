@@ -87,6 +87,27 @@ class DocumentToolPolicy:
         return Decision(ASK_A_PERSON if gated else ALLOW)
 
 
+def owner_problem(doc: Mapping[str, Any], conversation_id: str, owner: Optional[Mapping[str, Any]],
+                  principal: Optional[Mapping[str, Any]]) -> Optional[str]:
+    """Why this principal may not add a turn to a conversation `owner` started, or None when it may.
+
+    A conversation belongs to the principal of its first `turn_received`: its tenant and its subject.
+    `policies.sharing` lets others of the same tenant in, by role or the whole tenant. A conversation
+    started with no principal has no owner to check (`primitives.md` section 11)."""
+    if owner is None:
+        return None
+    if principal is None or principal.get("tenant") != owner.get("tenant"):
+        return f"conversation {conversation_id} belongs to another tenant"
+    if principal.get("subject") == owner.get("subject"):
+        return None
+    sharing = (doc.get("policies") or {}).get("sharing") or {}
+    if sharing.get("tenant") is True:
+        return None
+    if set(principal.get("roles") or []) & set(sharing.get("roles") or []):
+        return None
+    return f"conversation {conversation_id} belongs to another subject"
+
+
 def approver_problem(doc: Mapping[str, Any], signal_principal: Optional[Mapping[str, Any]],
                      tenant: Optional[str]) -> Optional[str]:
     """Why this principal may not answer a suspended turn of `tenant`, or None when it may. Deny by

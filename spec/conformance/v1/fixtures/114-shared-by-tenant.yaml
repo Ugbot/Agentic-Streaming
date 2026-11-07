@@ -1,0 +1,29 @@
+id: shared-by-tenant
+description: 'policies.sharing.tenant true opens a conversation to every principal of its tenant, and to nobody outside it.'
+requires: [principal, tools, rule_brain]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    sharing: {tenant: true}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice, tenant: acme}}
+- {conversation_id: c1, turn_id: t2, text: pay it, principal: {subject: bob, tenant: acme}}
+- {conversation_id: c1, turn_id: t3, text: pay it, principal: {subject: eve, tenant: beta}}
+- {conversation_id: c1, turn_id: t4, text: pay it, user_id: alice}
+expect:
+- {turn_id: t1, status: completed}
+- {turn_id: t2, status: completed}
+- {turn_id: t3, status: failed, error_class: policy, tool_calls: [], events: []}
+- {turn_id: t4, status: failed, error_class: policy, tool_calls: [], events: []}

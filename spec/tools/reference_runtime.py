@@ -316,11 +316,23 @@ class ReferenceRuntime:
         return ((first["payload"].get("principal") or {}).get("tenant")) if first else None
 
     def _foreign_tenant(self, conv: Conversation, turn: Turn) -> Optional[str]:
-        """primitives.md section 11: a conversation belongs to the tenant that started it."""
-        owner = self._tenant_of(conv)
-        if owner is None or turn.signal is not None or (turn.principal or {}).get("tenant") == owner:
+        """primitives.md section 11: a conversation belongs to the principal that started it, its
+        tenant and its subject, and `policies.sharing` may let others of that tenant in."""
+        if turn.signal is not None:
             return None  # a signal is answered by the approver check, on the log
-        return f"conversation {conv.conversation_id} belongs to another tenant"
+        first = next((e for e in conv.log if e["type"] == "turn_received"), None)
+        owner = first["payload"].get("principal") if first else None
+        if owner is None:
+            return None
+        principal = turn.principal
+        if principal is None or principal.get("tenant") != owner.get("tenant"):
+            return f"conversation {conv.conversation_id} belongs to another tenant"
+        if principal.get("subject") == owner.get("subject"):
+            return None
+        sharing = self.policies.get("sharing") or {}
+        if sharing.get("tenant") is True or set(principal.get("roles") or []) & set(sharing.get("roles") or []):
+            return None
+        return f"conversation {conv.conversation_id} belongs to another subject"
 
     def _not_an_approver(self, conv: Conversation, turn: Turn) -> Optional[str]:
         """Who may answer a suspended turn. Deny by default, and a name alone is nobody."""
