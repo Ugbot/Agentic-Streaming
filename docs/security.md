@@ -271,6 +271,8 @@ What this leaves out, plainly:
   deletion request is not honoured there. Keep those topics on a short retention.
 - **What stays readable:** the owner's identifier, tenant, tool ids, paths, event types and times. That
   is how ownership works, and it is personal data if a subject is. Use an opaque subject.
+- **A turn's `metadata` is not sealed,** because timers and patterns read it. A caller's `metadata`
+  on `POST /agent` goes to the log as it was sent, so keep personal data out of it.
 - **A journal intent is a digest of the arguments,** so low-entropy arguments can be guessed from one
   after an erasure.
 - `FileKeyVault` deletes files, which does not scrub a disk, a snapshot or a backup, and every process
