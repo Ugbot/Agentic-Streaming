@@ -188,6 +188,22 @@ class GatewayAttackTest {
     assertEquals(404, call("GET", "/conversations/a%20b", ALICE, null).statusCode());
   }
 
+  /**
+   * A connection that sends half a request was held open for ever: the JDK server has no limit on
+   * reading a request unless {@code sun.net.httpserver.maxReqTime} is set, so a few thousand slow
+   * clients could hold every file descriptor. The gateway sets it, and leaves an operator's value.
+   */
+  @Test
+  void aRequestThatNeverFinishesArrivingIsCutOff() {
+    java.util.Properties fresh = new java.util.Properties();
+    Gateway.boundRequestTime(fresh);
+    assertEquals("30", fresh.getProperty("sun.net.httpserver.maxReqTime"));
+    java.util.Properties set = new java.util.Properties();
+    set.setProperty("sun.net.httpserver.maxReqTime", "5");
+    Gateway.boundRequestTime(set);
+    assertEquals("5", set.getProperty("sun.net.httpserver.maxReqTime"));
+  }
+
   private String raw(String request) throws Exception {
     try (java.net.Socket socket = new java.net.Socket("127.0.0.1", gateway.port())) {
       socket.setSoTimeout(10_000);

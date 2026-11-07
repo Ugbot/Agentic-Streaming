@@ -54,6 +54,19 @@ public final class Gateway implements AutoCloseable {
   private static final int MAX_BODY = 1 << 20;
   private static final byte[] NOT_FOUND = "{\"error\":\"not found\"}".getBytes(StandardCharsets.UTF_8);
 
+  static {
+    boundRequestTime(System.getProperties());
+  }
+
+  /**
+   * The JDK server reads a request for as long as the client takes, so half a request holds its
+   * connection for ever. This bounds it at 30 seconds unless the operator set {@code
+   * sun.net.httpserver.maxReqTime}. It is read when the JVM's first HttpServer starts.
+   */
+  static void boundRequestTime(java.util.Properties properties) {
+    properties.putIfAbsent("sun.net.httpserver.maxReqTime", "30");
+  }
+
   private final GatewayOptions options;
   private final TurnBackend backend;
   private final Map<String, Object> card;
