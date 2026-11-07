@@ -102,7 +102,7 @@ def test_an_invalid_document_is_refused_as_a_value_error():
 
 # -- what stays on the legacy engine -----------------------------------------------------
 
-@pytest.mark.parametrize("name", ["banking", "banking-llm", "incident"])
+@pytest.mark.parametrize("name", ["banking", "banking-llm"])
 def test_these_examples_run_on_the_core(name):
     system = load(str(PIPELINES / f"{name}.yaml"))
     assert system.legacy_features == []
@@ -116,7 +116,8 @@ def test_these_examples_run_on_the_core(name):
                                           ("banking-rag", "stores.long_term"),
                                           ("tools-mcp", "mcp"),
                                           ("banking-mcp", "mcp"),
-                                          ("multiagent", "a2a transport http")])
+                                          ("multiagent", "a2a transport http"),
+                                          ("incident", "cep on_match submit")])
 def test_these_examples_name_what_keeps_them_on_the_legacy_engine(name, feature):
     assert feature in legacy_features(yaml.safe_load((PIPELINES / f"{name}.yaml").read_text(encoding="utf-8")))
 
@@ -127,6 +128,15 @@ def test_these_examples_name_what_keeps_them_on_the_legacy_engine(name, feature)
     ({"stores": {"keyed_state": {"kind": "memory"}}}, "stores.keyed_state"),
     ({"embeddings": {"provider": "ollama", "dim": 8}}, "embeddings provider ollama"),
     ({"context": {"compaction": "moscow"}}, "context compaction moscow"),
+    ({"context": {"compaction": "none", "max_tokens": 100}}, "context max_tokens"),
+    ({"guardrails": [{"kind": "regex", "deny": ["x"], "check_outputs": True}]}, "guardrails check_outputs"),
+    ({"tools": [{"id": "peer", "kind": "agent", "url": "http://x"}]}, "tools kind agent"),
+    ({"tools": [{"id": "remote", "kind": "mcp"}]}, "tools kind mcp"),
+    ({"cep": [{"name": "p", "pattern": [{"where": {"text_contains": "x"}}]}]}, "cep on_match none"),
+    ({"cep": [{"name": "p", "pattern": [{"where": {"metadata_gt": {"score": 1}}}],
+               "on_match": {"kind": "tool", "tool": "t"}}]}, "cep where metadata_gt"),
+    ({"cep": [{"name": "p", "pattern": [{"where": {"text_contains": ["a", "b"]}}],
+               "on_match": {"kind": "tool", "tool": "t"}}]}, "cep where text_contains list"),
 ])
 def test_each_legacy_feature_is_named(extra, feature):
     assert feature in legacy_features(minimal(**extra))
@@ -138,9 +148,27 @@ def test_each_legacy_feature_is_named(extra, feature):
     {"context": {"compaction": "window", "max_items": 4}},
     {"a2a": [{"name": "peer", "transport": "inproc"}]},
     {"guardrails": [{"kind": "regex", "deny": ["x"]}]},
+    {"cep": [{"name": "p", "pattern": [{"where": {"text_contains": "x"}}],
+              "on_match": {"kind": "tool", "tool": "t"}}]},
 ])
 def test_what_the_core_has_is_not_called_legacy(extra):
     assert legacy_features(minimal(**extra)) == []
+
+
+def test_an_output_schema_on_a_model_path_stays_on_the_legacy_engine():
+    paths = {"general": {"brain": "llm", "output_schema": {"type": "object"}}}
+    assert "paths.general.output_schema" in legacy_features({"agent": {"paths": paths}})
+    paths = {"general": {"brain": "rule", "output_schema": {"type": "object"}}}
+    assert legacy_features({"agent": {"paths": paths}}) == []
+
+
+def test_the_incident_example_still_escalates_after_three_anomalies():
+    from pyagentic.core import Event as LegacyEvent
+
+    system = load(str(PIPELINES / "incident.yaml"))
+    for ts in (0, 60_000, 120_000):
+        system.submit(LegacyEvent("host-7", "anomaly: cpu high", "monitor", {"ts": str(ts)}))
+    assert "incident: 3 anomalies" in " ".join(m.content for m in system.backend.store.history("host-7"))
 
 
 def test_the_cli_says_when_a_pipeline_is_not_on_the_core(capsys):

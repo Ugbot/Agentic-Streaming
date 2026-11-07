@@ -16,17 +16,17 @@ import json
 import logging
 import random
 import re
-import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, Callable, Deque, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
-from .errors import AgenticError, CorruptLog, LogUnavailable, ToolError, TransientError, ValidationError
+from .errors import CorruptLog, LogUnavailable, ToolError, TransientError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .journal import (
     LLM,
@@ -258,10 +258,6 @@ class _ModelCall(EffectCall):
         return dict(self.ask())
 
 
-class _Rejected(AgenticError):
-    error_class = "guardrail"
-
-
 class Engine:
     def __init__(
         self,
@@ -303,7 +299,6 @@ class Engine:
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
         self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4))
         self.timers = WorkflowTimers(doc.get("timers") or [], self.clock)
-        self._guard = threading.Lock()
         self._schema_validators: Dict[int, Draft202012Validator] = {}
         # A test seam: called as (`event`, type, before|after) around every append and as
         # (`call`, tool, before|during|after) around every tool attempt. It must not alter anything;
@@ -642,7 +637,7 @@ class Engine:
             return self._draft_react(ctx, path, self.chat_client)
         allowed = set(self.paths[path].get("tools") or [])
         for i, step in enumerate(self.llm.get("script") or []):
-            answer = self._ask_model(ctx, lambda i=i, step=step: self._scripted_answer(i, step))  # type: ignore[misc]
+            answer = self._ask_model(ctx, partial(self._scripted_answer, i, step))
             if "tool" in answer:
                 if allowed and answer["tool"] not in allowed:
                     raise ValidationError(f"scripted tool {answer['tool']!r} is not in the path's tools",
@@ -668,7 +663,7 @@ class Engine:
         messages.append({"role": "user", "content": ctx.text})
         limit = max(1, int(spec.get("max_iterations", DEFAULT_MAX_ITERATIONS)))
         for _ in range(limit):
-            answer = self._ask_model(ctx, lambda: self._chat(client, messages, tools))
+            answer = self._ask_model(ctx, partial(self._chat, client, messages, tools))
             if "tool" not in answer:
                 return f"[{path}] {answer.get('text', '')}"
             tool_id, args = str(answer["tool"]), answer.get("args") or {}
@@ -947,8 +942,8 @@ class Engine:
                             log: Sequence[Event]) -> Dict[str, Any]:
         """A recorded result, rebuilt from the turn's events alone: those of its last run, which is
         the run that answered."""
-        _, run = _split_runs(events[:-1]) if _is_transient(events[-1]) else _split_runs(events)
-        run = list(run) + ([events[-1]] if _is_transient(events[-1]) else [])
+        end = len(events) - 1 if _is_transient(events[-1]) else len(events)
+        run = list(_split_runs(events[:end])[1]) + list(events[end:])
         path = next((str(e.payload["path"]) for e in reversed(events) if e.type == "routed"), None)
         status = "suspended"
         reply: Optional[str] = None

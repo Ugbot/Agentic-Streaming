@@ -36,10 +36,8 @@ def crash(rt: LocalRuntime, delivery: Any, **plan: Any) -> LocalRuntime:
 
 
 def pay_agent(fn: Any, effect: str = "non_idempotent", **path: Any) -> Any:
-    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}, **path)
-    agent.use_tool("pay", fn)
-    agent._tools["pay"]["effect"] = effect
-    return agent.verifier("none").build()
+    return (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}, **path).use_tool("pay", fn, effect=effect)
+            .verifier("none").build())
 
 
 # -- effect classes and the key --------------------------------------------------------
@@ -85,8 +83,8 @@ def test_non_idempotent_gets_one_attempt_whatever_the_retry_policy():
         calls.append(user)
         raise ValueError("declined")
 
-    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay).verifier("none")
-    agent._tools["pay"]["effect"] = "non_idempotent"
+    agent = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="non_idempotent")
+             .verifier("none"))
     spec = agent.policies(retry={"kind": "fixed", "max_attempts": 5, "initial_delay_ms": 0}).build()
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -96,8 +94,8 @@ def test_non_idempotent_gets_one_attempt_whatever_the_retry_policy():
 
 def test_a_function_that_times_out_is_unknown_and_one_that_raises_is_not():
     release = threading.Event()
-    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", lambda user: release.wait(5))
-    agent._tools["pay"].update(effect="non_idempotent", timeout_ms=20)
+    agent = Agent(rid("a")).path("main", tool_triggers={"pay": "pay"})
+    agent.use_tool("pay", lambda user: release.wait(5), effect="non_idempotent", timeout_ms=20)
     rt = LocalRuntime()
     rt.deploy(agent.verifier("none").build())
     result = rt.submit(Turn("c1", "t1", "pay"))
@@ -337,9 +335,8 @@ def test_a_bad_resolution_is_refused_even_after_a_good_one_was_journaled():
 # -- runs that end transient -----------------------------------------------------------
 
 def model_pay_agent(fn: Any) -> Any:
-    agent = (Agent(rid("a")).path("main", brain="llm", tools=["pay"]).use_tool("pay", fn)
+    agent = (Agent(rid("a")).path("main", brain="llm", tools=["pay"]).use_tool("pay", fn, effect="non_idempotent")
              .with_llm("stub", script=[{"tool": "pay", "args": {}}, {"text": "paid", "x-fail-attempts": 1}]))
-    agent._tools["pay"]["effect"] = "non_idempotent"
     return agent.verifier("none").build()
 
 

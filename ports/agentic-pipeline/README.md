@@ -50,10 +50,12 @@ The core does not have everything. A document that declares any of these runs on
 `pyagentic` engine instead, which has no event log, no `turn_id` and no effect journal, and the CLI
 says so on standard error: `mcp`, an `a2a` peer that is not `inproc`, a conversation store other than
 `memory` or `file`, `stores.long_term`, `stores.keyed_state`, `stores.vector`, a guardrail other than
-`regex`, `skills`, `retrieval.vector_store`, embeddings other than `hashing`, and context compaction
-other than `none` or `window`. `agentic_pipeline.legacy_features(spec)` lists what a document needs.
-Of the examples, `banking`, `banking-llm` and `incident` run on the core; `banking-rag`, `banking-mcp`,
-`tools-mcp` and `multiagent` do not.
+`regex` or one with `check_outputs`, `skills`, `retrieval.vector_store`, embeddings other than
+`hashing`, context compaction other than `none` or `window`, `context.max_tokens`, an `output_schema`
+on a model path, tools of kind `agent` or `mcp`, and a `cep` rule that does anything but call a tool
+on plain text conditions. `agentic_pipeline.legacy_features(spec)` lists what a document needs. Of the
+examples, `banking` and `banking-llm` run on the core; `banking-rag`, `banking-mcp`, `tools-mcp`,
+`multiagent` and `incident` do not.
 
 ## Pieces
 

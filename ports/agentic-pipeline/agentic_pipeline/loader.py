@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from agentic import ir
+from agentic.cep import without_tool_actions
 
 from . import backends
 from .backends import CoreBackend, Event, TurnResult
@@ -66,6 +67,7 @@ def legacy_features(spec: Dict[str, Any]) -> List[str]:
     needs: List[str] = []
     if spec.get("mcp"):
         needs.append("mcp")
+    needs += [f"tools kind {tool['kind']}" for tool in spec.get("tools") or [] if tool.get("kind") in ("agent", "mcp")]
     needs += [f"a2a transport {peer.get('transport', 'http')}" for peer in spec.get("a2a") or []
               if peer.get("transport", "http") != "inproc"]
     stores = spec.get("stores") or {}
@@ -73,8 +75,11 @@ def legacy_features(spec: Dict[str, Any]) -> List[str]:
     if kind not in ("memory", "file"):
         needs.append(f"stores.conversation kind {kind}")
     needs += [f"stores.{name}" for name in ("long_term", "keyed_state", "vector") if stores.get(name)]
-    needs += [f"guardrails kind {rail.get('kind')}" for rail in spec.get("guardrails") or []
-              if rail.get("kind", "regex") != "regex"]
+    for rail in spec.get("guardrails") or []:
+        if rail.get("kind", "regex") != "regex":
+            needs.append(f"guardrails kind {rail.get('kind')}")
+        if rail.get("check_outputs"):
+            needs.append("guardrails check_outputs")
     if spec.get("skills"):
         needs.append("skills")
     if (spec.get("retrieval") or {}).get("vector_store"):
@@ -82,9 +87,29 @@ def legacy_features(spec: Dict[str, Any]) -> List[str]:
     provider = (spec.get("embeddings") or {}).get("provider", "hashing")
     if provider != "hashing":
         needs.append(f"embeddings provider {provider}")
-    compaction = (spec.get("context") or {}).get("compaction", "none")
+    context = spec.get("context") or {}
+    compaction = context.get("compaction", "none")
     if compaction not in ("none", "window"):
         needs.append(f"context compaction {compaction}")
+    if "max_tokens" in context:
+        needs.append("context max_tokens")
+    for name, path in ((spec.get("agent") or {}).get("paths") or {}).items():
+        if path.get("brain") == "llm" and path.get("output_schema"):
+            needs.append(f"paths.{name}.output_schema")
+    return needs + _legacy_cep(spec.get("cep"))
+
+
+def _legacy_cep(patterns: Any) -> List[str]:
+    """The core runs a pattern in the turn when it invokes a tool on plain text conditions. It leaves
+    every other action to stream wiring it does not have, so such a rule would never fire."""
+    needs = [f"cep on_match {(p.get('on_match') or {}).get('kind', 'none')}" for p in without_tool_actions(patterns)]
+    for pattern in patterns or []:
+        for stage in pattern.get("pattern") or []:
+            for key, value in (stage.get("where") or {}).items():
+                if key != "text_contains":
+                    needs.append(f"cep where {key}")
+                elif not isinstance(value, str):
+                    needs.append("cep where text_contains list")
     return needs
 
 
