@@ -287,12 +287,17 @@ start until they are set in `.env`. `OPENAI_API_KEY` is only ever read from the 
 
 ## Dependencies
 
-The resolved test-scope trees of `ports/jagentic-core`, the Flink module and `agentic-pekko`, and both
-`uv.lock` files, have no open advisory in [OSV](https://osv.dev) at any severity. Transitive versions
-are pinned in `dependencyManagement`, so read `./mvnw dependency:tree` rather than the declared
-versions. The two `uv.lock` files cover Python 3.10 and later, because the dev tools have no patched
-release for 3.9. The packages still declare `>=3.9`: at runtime they need only PyYAML and jsonschema,
-neither of which has an advisory, but `pip install ".[test]"` on 3.9 gets a pytest with
+`tools/ci/osv_scan.py` checks every resolved dependency against [OSV](https://osv.dev): the Maven
+reactor at test scope, so what the tests run, and both `uv.lock` files. The `Supply chain` workflow
+runs it on every pull request and weekly, and fails on any advisory that is not in
+`tools/ci/osv-allowlist.txt` with a reason. On 2026-11-07 it found 263 packages and no advisory at any
+severity, so the allowlist is empty. The same workflow publishes CycloneDX SBOMs of the reactor and of
+both Python packages. Release signing waits for the first release.
+
+Transitive versions are pinned in `dependencyManagement`, so read `./mvnw dependency:tree` rather than
+the declared versions. The two `uv.lock` files cover Python 3.10 and later, because the dev tools have
+no patched release for 3.9. The packages still declare `>=3.9`: at runtime they need only PyYAML and
+jsonschema, neither of which has an advisory, but `pip install ".[test]"` on 3.9 gets a pytest with
 CVE-2025-71176.
 
 OSV matches coordinates, so it cannot see into a shaded jar. The table below is what that leaves.

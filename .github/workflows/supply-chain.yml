@@ -1,0 +1,54 @@
+name: Supply chain
+
+# Every resolved dependency, Maven at test scope and both uv.lock files, against OSV. An advisory not
+# in tools/ci/osv-allowlist.txt with a reason fails the run. SBOMs (CycloneDX) for the reactor and
+# both Python packages are published as artifacts. Signing waits for the first release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: OSV scan and SBOMs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install the reactor modules dependency:list needs
+        run: ./mvnw -B -ntp -q -f reactor/pom.xml install -DskipTests
+      - name: Scan tests
+        run: pip install pytest && python -m pytest tools/ci/test_osv_scan.py -q
+      - name: OSV scan
+        run: python tools/ci/osv_scan.py --deps-from-maven --out target/osv.json
+      - name: SBOMs
+        if: always()
+        run: |
+          ./mvnw -B -ntp -q -f reactor/pom.xml org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom \
+            -DoutputFormat=json -DoutputName=sbom -DincludeTestScope=false
+          python tools/ci/sbom_python.py ports/pyagentic/uv.lock target/sbom-pyagentic.json
+          python tools/ci/sbom_python.py ports/agentic-pipeline/uv.lock target/sbom-agentic-pipeline.json
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: supply-chain
+          path: |
+            target/osv.json
+            reactor/target/sbom.json
+            target/sbom-*.json
+          if-no-files-found: warn

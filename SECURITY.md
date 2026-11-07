@@ -14,16 +14,17 @@ maintenance branches to backport to.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a security problem. Use GitHub's private vulnerability
-reporting for this repository:
+Do not put technical detail of a security problem in a public issue.
 
-https://github.com/Ugbot/Agentic-Streaming/security/advisories/new
+GitHub's private vulnerability reporting is switched off for this repository today (the API answered
+`enabled: false` on 2026-11-07), so the advisory form does not work yet. Until it is switched on:
 
-That form creates a draft security advisory that only the maintainer and the reporter can see.
-It depends on the repository setting "Private vulnerability reporting" (Settings, Code
-security and analysis); if GitHub answers that the form is not available, open a regular
-issue that says only that you have a security report and how the maintainer can contact you,
-without any technical detail, and the maintainer will open the advisory from their side.
+1. Open a regular issue titled "Security report" that says only that you have one and which module it
+   is in. No detail, no reproduction.
+2. The maintainer will open a draft security advisory and invite you to it. The advisory and its
+   private fork are visible only to the two of you, and the detail goes there.
+
+Once the setting is on, use https://github.com/Ugbot/Agentic-Streaming/security/advisories/new directly.
 
 Include the affected module (the Flink framework, `ports/jagentic-core`, `agentic-pekko`, one of
 the Python packages, a compose stack), the commit you tested, and the steps or input that reproduce the problem. A minimal
