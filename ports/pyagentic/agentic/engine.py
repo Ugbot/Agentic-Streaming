@@ -44,6 +44,7 @@ from .journal import (
     intent_of,
     model_intent_of,
 )
+from .opa import Both, from_environment
 from .policy import ALLOW, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
@@ -315,6 +316,9 @@ class Engine:
                 p.get("brain") == "llm" and "x-brain" not in p for p in self.paths.values()):
             self.chat_client = make_chat_client(self.llm)
         self.policy: ToolPolicy = policy if policy is not None else DocumentToolPolicy(doc)
+        opa = from_environment()
+        if opa is not None:
+            self.policy = Both(self.policy, opa)
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
         self.global_guardrails = [g for g in self.guardrails if g.get("name") not in path_scoped]
@@ -888,9 +892,17 @@ class Engine:
                                         "scores": [round(p.score, 6) for p in passages]})
         return passages
 
+    def _already_begun(self, ctx: _TurnContext) -> bool:
+        turn = ctx.turn
+        if ctx.prior is not None and ctx.prior.peek("tool_intent", ctx.next_index) is not None:
+            return True
+        return self.journal.get(JournalKey(turn.conversation_id, turn.turn_id, TOOL, ctx.next_index)) is not None
+
     def _authorise(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any], origin: str) -> None:
         """The one check every tool call passes (`primitives.md` section 11), whatever asked for it.
         A refusal is on the log before the turn ends, and the turn does end: nothing offers it back."""
+        if getattr(self.policy, "outside_this_process", False) and self._already_begun(ctx):
+            return  # allowed when it began: a re-run takes the path the first run took
         known = self.tools.ids().get(tool_id)
         effect = known.effect if known is not None else None
         decision = self.policy.decide(ToolRequest(tool_id, origin, ctx.path, effect, args, ctx.turn.principal))

@@ -27,6 +27,31 @@ public interface ToolPolicy {
 
   Decision decide(Request request);
 
+  /**
+   * True when the answer can change between two asks. A call already begun is then not asked about
+   * again, so a re-run takes the path the first run took.
+   */
+  default boolean outsideThisProcess() {
+    return false;
+  }
+
+  /** Both must allow: {@code first} is asked first, so a refusal it gives never leaves the process. */
+  default ToolPolicy and(ToolPolicy second) {
+    ToolPolicy first = this;
+    return new ToolPolicy() {
+      @Override
+      public Decision decide(Request request) {
+        Decision d = first.decide(request);
+        return d.allowed() ? second.decide(request) : d;
+      }
+
+      @Override
+      public boolean outsideThisProcess() {
+        return first.outsideThisProcess() || second.outsideThisProcess();
+      }
+    };
+  }
+
   /** What every context starts with, so a graph that says nothing can call nothing. */
   ToolPolicy DENY_ALL = r -> Decision.deny("no tool policy: tool " + r.tool() + " is refused");
 

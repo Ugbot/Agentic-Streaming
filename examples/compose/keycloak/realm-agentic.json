@@ -1,0 +1,73 @@
+{
+  "realm": "agentic",
+  "enabled": true,
+  "accessTokenLifespan": 300,
+  "roles": { "realm": [ { "name": "approver" }, { "name": "payments" } ] },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\"},{\"name\":\"email\"},{\"name\":\"tenant\",\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]}}]}"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "agentic-lab",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "agentic-gateway", "access.token.claim": "true" }
+        },
+        {
+          "name": "tenant",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenant",
+            "claim.name": "tenant",
+            "jsonType.label": "String",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "some-other-api",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "alice", "enabled": true, "emailVerified": true, "email": "alice@acme.example",
+      "firstName": "Alice", "lastName": "Acme",
+      "attributes": { "tenant": ["acme"] },
+      "credentials": [ { "type": "password", "value": "lab-alice", "temporary": false } ]
+    },
+    {
+      "username": "ops", "enabled": true, "emailVerified": true, "email": "ops@acme.example",
+      "firstName": "Ops", "lastName": "Acme",
+      "attributes": { "tenant": ["acme"] }, "realmRoles": ["approver"],
+      "credentials": [ { "type": "password", "value": "lab-ops", "temporary": false } ]
+    },
+    {
+      "username": "bob", "enabled": true, "emailVerified": true, "email": "bob@beta.example",
+      "firstName": "Bob", "lastName": "Beta",
+      "attributes": { "tenant": ["beta"] }, "realmRoles": ["approver"],
+      "credentials": [ { "type": "password", "value": "lab-bob", "temporary": false } ]
+    }
+  ]
+}

@@ -85,6 +85,23 @@ to `refusal-survives-a-crash` prove it on the reference, Java core, Flink, Pekko
 - Java code that builds a `RoutedGraph` itself has to give it a `ToolPolicy`. Without one every call
   is refused. `ToolPolicy.ALLOW_ALL` exists for such code and a document cannot reach it.
 
+## Open Policy Agent
+
+Set `AGENTIC_OPA_URL` and every tool call the document allows is also put to OPA, in Java and Python
+alike. `ToolPolicy` is the SPI, so another engine is one class. OPA runs after the document and can
+only narrow it: a call the document refuses never leaves the process.
+
+The input is `{tool, origin, path, effect, principal, args}`, so tool arguments reach OPA. The answer
+at `AGENTIC_OPA_POLICY` (default `agentic/tools`) is a boolean, or an object with `allow` and
+optionally `reason`. Anything but a clear yes refuses the call: an OPA that is down, slow past
+`AGENTIC_OPA_TIMEOUT_MS` (default 2000), undefined or confused. So an OPA outage stops every tool.
+
+A call already begun is not asked about again, so a re-run of a turn takes the path the first run took
+even if the policy has changed since.
+
+`examples/compose/opa-lab.yml` is a lab with a sample policy, and `tools/opa-lab.sh` runs the Python
+core against it. `tools/keycloak-lab.sh` does the same for the gateway against a real Keycloak.
+
 ## Workflow documents are trusted input
 
 Treat a workflow document or `pipeline.yaml` as code, and load only documents you wrote or reviewed.

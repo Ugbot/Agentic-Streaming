@@ -309,8 +309,17 @@ public final class AgentContext {
     return invoke(ToolOrigin.COMPENSATION, toolId, forward, EventType.COMPENSATION_STEP, false);
   }
 
+  /** The call about to get the next index was allowed when it began, on the log or in the journal. */
+  private boolean alreadyBegun() {
+    java.util.ArrayDeque<LogEvent> begun = kept.get(EventType.TOOL_INTENT.wire() + "/" + nextToolIndex + "/null");
+    return begun != null && !begun.isEmpty() || journal.get(nextToolKey()).isPresent();
+  }
+
   /** Refuses what the policy refuses: on the log first, then the turn ends. */
   private void authorise(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
+    if (policy.outsideThisProcess() && alreadyBegun()) {
+      return;
+    }
     ToolPolicy.Decision decision = policy.decide(new ToolPolicy.Request(toolId, origin, path,
         tool == null ? null : tool.effect(), args, principal));
     if (decision.allowed()) {

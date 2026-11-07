@@ -1,0 +1,12 @@
+# Open Policy Agent for the tool boundary. See docs/security.md, and tools/opa-lab.sh for a run.
+#
+#   docker compose -f examples/compose/opa-lab.yml up -d
+#   export AGENTIC_OPA_URL=http://127.0.0.1:18181
+services:
+  opa:
+    image: openpolicyagent/opa:1.4.2
+    command: ["run", "--server", "--addr", "0.0.0.0:8181", "--log-level", "error", "/policies"]
+    ports:
+      - "127.0.0.1:18181:8181"
+    volumes:
+      - ./opa:/policies:ro

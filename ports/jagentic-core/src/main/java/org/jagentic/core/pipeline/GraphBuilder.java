@@ -258,7 +258,7 @@ public final class GraphBuilder {
       graph = graph.withTimers(timers);
     }
     graph = graph.withAgentId(String.valueOf(agent.get("id")))
-        .withToolPolicy(ToolPolicy.of(pathGrants, unattendedTools((Map<String, Object>) spec.get("policies"))))
+        .withToolPolicy(toolPolicy(pathGrants, (Map<String, Object>) spec.get("policies")))
         .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")));
     return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
   }
@@ -288,6 +288,18 @@ public final class GraphBuilder {
         throw new WorkflowValidator.WorkflowValidationException(where + ".kind",
             "verifier kind " + kind + " is not implemented by this runtime (prefix|regex|none)");
     }
+  }
+
+  /** What the document says, narrowed by the operator's OPA when there is one. */
+  private static ToolPolicy toolPolicy(Map<String, java.util.Set<String>> pathGrants, Map<String, Object> policies) {
+    ToolPolicy document = ToolPolicy.of(pathGrants, unattendedTools(policies));
+    org.jagentic.core.OpaToolPolicy opa = org.jagentic.core.OpaToolPolicy.fromEnvironment(GraphBuilder::setting);
+    return opa == null ? document : document.and(opa);
+  }
+
+  private static String setting(String name) {
+    String property = System.getProperty(name.toLowerCase().replace('_', '.'));
+    return property != null ? property : System.getenv(name);
   }
 
   private static java.util.Set<String> unattendedTools(Map<String, Object> policies) {

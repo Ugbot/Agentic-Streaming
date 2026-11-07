@@ -1,0 +1,17 @@
+# Keycloak for the gateway, with a realm of two tenants. Development mode and throwaway passwords:
+# this is a lab, on loopback, not a deployment. See tools/keycloak-lab.sh for a run.
+#
+#   docker compose -f examples/compose/keycloak-lab.yml up -d
+#   export AGENTIC_OIDC_ISSUER=http://127.0.0.1:18080/realms/agentic
+#   export AGENTIC_OIDC_AUDIENCE=agentic-gateway
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
