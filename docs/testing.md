@@ -65,7 +65,7 @@ Each class starts the service it needs through Testcontainers:
 | --- | --- | --- |
 | `PostgresConversationStoreIT`, `PostgresA2ATaskStoreIT`, `StorageFactoryPostgresIT` | PostgreSQL | `postgres:16-alpine` |
 | `PgVectorStoreIT` | PostgreSQL with pgvector | `pgvector/pgvector:pg16` |
-| `QdrantVectorStoreIT` | Qdrant (gRPC) | `qdrant/qdrant:v1.13.2` |
+| `QdrantVectorStoreIT` | Qdrant (gRPC) | `qdrant/qdrant:v1.20.0` |
 | `RedisConversationStoreIT`, `RedisHotVectorIndexIT`, `A2ARedisTaskStoreIT`, `RedisA2ABridgeIT`, `RedisJournalIT` (Pekko) | Redis | `redis:7-alpine` |
 | `FlussChannelIT`, `FlussConversationStoreIT` | Fluss (ZooKeeper, coordinator, tablet server) | `fluss/fluss:0.7.0`, `zookeeper:3.9.2` |
 
@@ -100,7 +100,7 @@ Pull the images once if the box has limited bandwidth:
 
 ```
 podman pull docker.io/library/postgres:16-alpine docker.io/pgvector/pgvector:pg16 \
-  docker.io/library/redis:7-alpine docker.io/qdrant/qdrant:v1.13.2 \
+  docker.io/library/redis:7-alpine docker.io/qdrant/qdrant:v1.20.0 \
   docker.io/library/zookeeper:3.9.2 docker.io/fluss/fluss:0.7.0
 ```
 

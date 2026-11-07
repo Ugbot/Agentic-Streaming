@@ -65,7 +65,7 @@ services:
   # Optional: Qdrant vector database for RAG
   # Uncomment if you need vector search capabilities
   # qdrant:
-  #   image: docker.io/qdrant/qdrant:latest
+  #   image: docker.io/qdrant/qdrant:v1.20.0
   #   container_name: agentic-flink-qdrant
   #   ports:
   #     - "127.0.0.1:6333:6333"
