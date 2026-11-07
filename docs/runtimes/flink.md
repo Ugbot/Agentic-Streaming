@@ -16,10 +16,16 @@ The first is described here. The second is deprecated legacy code, kept for now,
 - **It blocks.** `WorkflowTurnFunction.processElement` runs the whole turn synchronously on the Flink
   task thread, including model calls, tool calls and retry sleeps. One slow call stalls every key on
   that subtask and delays checkpoint barriers. Size parallelism accordingly.
-- **Tool calls re-run after a restore.** The log is checkpointed keyed state, so it rolls back up to
-  one checkpoint interval while the outside world does not. A turn that ran after the last completed
-  checkpoint runs again on restore, tools included, and the tool receives no idempotency key. Do not
-  use this for payments or other non-idempotent actions.
+- **The log rolls back; the journal does not.** The log is checkpointed keyed state, so it rolls back
+  up to one checkpoint interval while the outside world does not. A turn that ran after the last
+  completed checkpoint runs again on restore, and its tool and model calls go through the
+  `stores.effects` journal: what was recorded is reused by index, and only a call with no recorded
+  result is made again, under the same `Idempotency-Key`. Declare `postgres` or `kafka`. A job
+  refuses a `non_idempotent` tool without one, and without any journal a re-run calls every tool
+  again, under the same keys. A crash during a call to a `non_idempotent` tool leaves the outcome
+  unknown: the turn suspends and a person answers (`PayAfterRestoreTest` shows each crash point
+  against a real HTTP server, `EffectJournalStoresIT` the two stores). Each journal write blocks the
+  task thread, like the call it guards. The Kafka journal holds the whole topic in every subtask.
 - **A real model on Flink has been tested against a local stand-in server, not a live provider.**
   See [Real models](#real-models).
 

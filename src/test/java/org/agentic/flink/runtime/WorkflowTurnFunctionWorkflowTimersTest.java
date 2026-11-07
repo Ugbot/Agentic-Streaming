@@ -120,8 +120,8 @@ class WorkflowTurnFunctionWorkflowTimersTest {
       h.processElement(new StreamRecord<>(Event.turn(cid, "t3", "u", "hello")));
       TurnResult fired = last(h);
       assertEquals(
-          List.of("timer_fired", "tool_called", "turn_received"),
-          types(fired.events).subList(0, 3));
+          List.of("timer_fired", "tool_intent", "tool_called", "turn_received"),
+          types(fired.events).subList(0, 4));
       assertEquals(1, fired.calls.size());
       assertEquals("lookup_charge", fired.calls.get(0).tool());
       assertEquals(payload, fired.calls.get(0).args());
@@ -204,8 +204,8 @@ class WorkflowTurnFunctionWorkflowTimersTest {
       h.processElement(new StreamRecord<>(Event.turn(cid, "t3", "u", "hello")));
       TurnResult fired = last(h);
       assertEquals(
-          List.of("timer_fired", "tool_called", "turn_received"),
-          types(fired.events).subList(0, 3));
+          List.of("timer_fired", "tool_intent", "tool_called", "turn_received"),
+          types(fired.events).subList(0, 4));
       assertEquals(
           start + after, ((Number) fired.events.get(0).payload().get("due_ms")).longValue());
       assertEquals(List.of("followup"), fired.state.get("fired_timers"));

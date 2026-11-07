@@ -154,12 +154,30 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   /** Stops the running job with a savepoint and starts a new incarnation from it. */
   public void restart() throws Exception {
-    String savepoint =
-        job.stopWithSavepoint(false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
-            .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+    String savepoint = stopWithSavepoint();
     job = null;
     POISONED.get(driverId).set(false);
     startFrom(savepoint);
+  }
+
+  /** A job can be RUNNING before its tasks are, and then has nothing to snapshot yet: try again. */
+  private String stopWithSavepoint() throws Exception {
+    long deadline = System.nanoTime() + timeout.toNanos();
+    while (true) {
+      try {
+        return job.stopWithSavepoint(
+                false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
+            .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+      } catch (java.util.concurrent.ExecutionException e) {
+        if (System.nanoTime() > deadline
+            || !org.apache.flink.util.ExceptionUtils.findThrowableWithMessage(
+                    e, "is not being executed")
+                .isPresent()) {
+          throw e;
+        }
+        Thread.sleep(50);
+      }
+    }
   }
 
   /** Triggers a checkpoint on the running job and waits for it to complete. */

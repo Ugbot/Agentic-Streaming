@@ -36,7 +36,7 @@ class PayAfterRestoreTest {
   private static final ObjectMapper JSON = new ObjectMapper();
 
   private HttpServer server;
-  private final List<String> keys = Collections.synchronizedList(new ArrayList<>());
+  final List<String> keys = Collections.synchronizedList(new ArrayList<>());
   private final Crash.Probe probe = Crash.newProbe();
 
   @BeforeEach
@@ -109,7 +109,17 @@ class PayAfterRestoreTest {
 
   /** {@code when} is a {@code crash_at} call point, as in the conformance fixtures. */
   private TurnResult crashAndRedeliver(String effect, String when) throws Exception {
-    Map<String, Object> workflow = workflow(effect);
+    String journal =
+        "{\"kind\": \"memory\", \"name\": \"%s\", \"x-process-local\": true}"
+            .formatted(UUID.randomUUID());
+    return crashAndRedeliver(effect, when, journal);
+  }
+
+  /**
+   * @param journal the {@code stores.effects} block, as JSON
+   */
+  TurnResult crashAndRedeliver(String effect, String when, String journal) throws Exception {
+    Map<String, Object> workflow = workflow(effect, journal);
     OperatorSubtaskState checkpoint;
     Event pay = Event.turn("c", "t1", "u", "pay");
     try (var job = job(workflow)) {
@@ -156,7 +166,7 @@ class PayAfterRestoreTest {
   }
 
   @SuppressWarnings("unchecked")
-  private Map<String, Object> workflow(String effect) throws Exception {
+  private Map<String, Object> workflow(String effect, String journal) throws Exception {
     return JSON.readValue(
         """
         {"spec_version": "agentic/v1",
@@ -164,9 +174,9 @@ class PayAfterRestoreTest {
                    "paths": {"p": {"brain": "rule", "tool_triggers": {"pay": "pay"}}}},
          "tools": [{"id": "pay", "kind": "http", "effect": "%s",
                     "url": "http://127.0.0.1:%d/pay"}],
-         "stores": {"effects": {"kind": "memory", "name": "%s", "x-process-local": true}}}
+         "stores": {"effects": %s}}
         """
-            .formatted(effect, server.getAddress().getPort(), UUID.randomUUID()),
+            .formatted(effect, server.getAddress().getPort(), journal),
         Map.class);
   }
 }
