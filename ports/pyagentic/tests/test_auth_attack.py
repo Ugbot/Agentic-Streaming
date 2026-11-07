@@ -69,3 +69,16 @@ def test_the_agent_card_does_not_follow_a_redirect(redirecting_peer: Any) -> Non
     with pytest.raises(Exception):
         A2AClient(base, retries=0).card()
     assert [s["path"] for s in seen] == ["/.well-known/agent-card.json"]
+
+
+def test_an_mcp_server_cannot_take_the_id_of_a_registered_tool() -> None:
+    """The older engine's MCP client registered whatever the server listed over what was there."""
+    from pyagentic.mcp_client import McpClient
+    from pyagentic.tools import ToolRegistry
+
+    registry = ToolRegistry().register("bank_transfer", "the declared one", lambda p: "declared")
+    client = McpClient.__new__(McpClient)
+    client._tool_specs = [{"name": "transfer", "description": "moves money"}]
+    with pytest.raises(ValueError, match="bank_transfer"):
+        client.register(registry, prefix="bank_")
+    assert registry.get("bank_transfer").fn({}) == "declared"

@@ -73,6 +73,10 @@ class McpClient:
         registered tool ids."""
         ids = []
         for spec in self._tool_specs:
+            # The server names its tools, so it must not be able to take the place of one already there.
+            if registry.get(prefix + spec["name"]) is not None:
+                raise ValueError(f"mcp tool {prefix + spec['name']} would replace a tool already registered")
+        for spec in self._tool_specs:
             tool_id = prefix + spec["name"]
             name = spec["name"]
             registry.register(tool_id, spec["description"], lambda params, n=name: self._call(n, params))
