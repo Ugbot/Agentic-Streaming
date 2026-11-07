@@ -114,8 +114,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
 
   /**
    * The dead-letter side output: turns that ended {@code failed} with error class {@code fatal} or
-   * {@code transient}. They also appear on the main output; this stream is the one an operator
-   * alerts on, repairs from or redelivers from.
+   * {@code transient}, and turns suspended on an unknown outcome, which wait for a person. They
+   * also appear on the main output; this stream is the one an operator alerts on, repairs from or
+   * redelivers from.
    */
   public static final OutputTag<TurnResult> TURN_FAILURES =
       new OutputTag<>("turn-failures", TurnResultTypeInfo.INSTANCE);
@@ -270,7 +271,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     TurnResult result = null;
     try {
       result = handle(event, keyedLog, ctx.timerService());
-      if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
+      if (result.status == TurnStatus.SUSPENDED
+          && options.timerResume()
+          && !result.awaitsAPerson()) {
         LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
         result = withEvents(result, append(result.events, scheduled));
       }
@@ -474,6 +477,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   }
 
   private static boolean needsAttention(TurnResult result) {
+    if (result.awaitsAPerson()) {
+      return true;
+    }
     if (result.status != TurnStatus.FAILED || result.error == null) {
       return false;
     }

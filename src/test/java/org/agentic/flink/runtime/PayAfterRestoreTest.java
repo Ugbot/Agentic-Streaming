@@ -136,7 +136,13 @@ class PayAfterRestoreTest {
       job.open();
       job.processElement(new StreamRecord<>(pay, 2));
       List<TurnResult> results = results(job);
-      return results.get(results.size() - 1);
+      TurnResult last = results.get(results.size() - 1);
+      var surfaced = job.getSideOutput(WorkflowTurnFunction.TURN_FAILURES);
+      assertEquals(
+          last.status == TurnStatus.SUSPENDED,
+          surfaced != null && !surfaced.isEmpty(),
+          "a turn waiting for a person reaches the operator's stream: " + last);
+      return last;
     }
   }
 

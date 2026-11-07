@@ -7,10 +7,13 @@ import java.io.Serializable;
  * and must not alter anything; only a test has a reason to throw from it.
  */
 public interface TurnProbe extends Serializable {
-  /** Does nothing. */
-  TurnProbe NONE = new TurnProbe() {
-    private static final long serialVersionUID = 1L;
-  };
+  /** Does nothing. An enum constant, so it stays the same object through serialization. */
+  TurnProbe NONE = Nothing.INSTANCE;
+
+  /** The probe that observes nothing. */
+  enum Nothing implements TurnProbe {
+    INSTANCE
+  }
 
   default void beforeAppend(String eventType) {}
 

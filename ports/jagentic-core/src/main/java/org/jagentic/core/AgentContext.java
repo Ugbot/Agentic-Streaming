@@ -298,12 +298,6 @@ public final class AgentContext {
           public void onFailedAttempt(EffectJournal.Attempt failed) {
             calls.add(ToolCall.failed(toolId, index, args, failed.error(), failed.attempt()));
             record(EventType.TOOL_FAILED, payload(toolId, index, failed.attempt(), args, null, failed.error()));
-            if (failed.attempt() < retry.attempts()) {
-              long delay = retry.delayBefore(failed.attempt() + 1, random);
-              if (delay > 0) {
-                sleeper.accept(delay);
-              }
-            }
           }
 
           @Override
@@ -313,6 +307,10 @@ public final class AgentContext {
 
           @Override
           public Object attempt(int attempt) {
+            long delay = attempt > 1 ? retry.delayBefore(attempt, random) : 0;
+            if (delay > 0) {
+              sleeper.accept(delay);
+            }
             probe.beforeCall(toolId);
             try {
               return tool.execute(args, identity);
