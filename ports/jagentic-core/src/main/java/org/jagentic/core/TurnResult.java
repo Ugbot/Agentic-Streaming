@@ -96,6 +96,16 @@ public final class TurnResult implements Serializable {
     return path;
   }
 
+  /** True when the turn waits for a person to say what happened to a call (spec section 10). */
+  public boolean awaitsAPerson() {
+    if (status != TurnStatus.SUSPENDED || events.isEmpty()) {
+      return false;
+    }
+    LogEvent last = events.get(events.size() - 1);
+    return last.is(EventType.TURN_SUSPENDED)
+        && ConversationState.UNKNOWN_OUTCOME.equals(last.payload().get("until"));
+  }
+
   /** The same outcome re-reported for a redelivered {@code turn_id}: status {@code duplicate}, no events. */
   public TurnResult asDuplicate(Map<String, Object> currentState) {
     return new TurnResult(conversationId, turnId, TurnStatus.DUPLICATE, path, reply, error, calls,

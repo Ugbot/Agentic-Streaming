@@ -1,0 +1,29 @@
+id: non-idempotent-timeout
+description: A timeout on a non_idempotent tool says the answer did not arrive, not that nothing happened, so it
+  is an unknown outcome.
+requires: [effect_journal, suspend_resume, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: hanging, effect: non_idempotent, timeout_ms: 50}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: suspended
+  events: [turn_received, routed, brain_started, tool_intent, unknown_outcome, turn_suspended]
+  tool_calls: []

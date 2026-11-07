@@ -221,7 +221,7 @@ class SequencePatternTest {
     assertEquals(0, match.calls.get(0).index());
     assertEquals(Map.of("pattern", "host_incident", "key", host), match.calls.get(0).args());
     List<String> types = match.events.stream().map(e -> e.eventType().orElseThrow().wire()).toList();
-    assertEquals(List.of("turn_received", "routed", "tool_called", "brain_started"), types.subList(0, 4));
+    assertEquals(List.of("turn_received", "routed", "tool_intent", "tool_called", "brain_started"), types.subList(0, 5));
     assertEquals("turn_completed", types.get(types.size() - 1));
 
     LogEvent received = match.events.get(0);

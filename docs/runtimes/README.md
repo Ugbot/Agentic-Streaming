@@ -27,6 +27,7 @@ Until then the results are the `conformance-matrix` artifact and job summary of 
 python spec/tools/conformance_matrix.py --output build/conformance-matrix.json --write-docs build/capabilities.md
 ```
 
-Passing the fixtures is a narrow claim. They are mostly rule brains and scripted stubs: no real
-model, no crash inside a turn. They say nothing about
-what a tool sees when a Flink job restores from a checkpoint.
+Passing the fixtures is a narrow claim. They are mostly rule brains and scripted stubs, with no real
+model. They do crash turns at every event and around every call, and on Flink that is a real job
+restoring a savepoint, against a journal held in the process. What a tool sees across a restore with
+a durable journal is shown by `PayAfterRestoreTest` and `EffectJournalStoresIT`, not by the fixtures.

@@ -1,0 +1,37 @@
+id: two-writers
+description: 'The same turn delivered twice at once is applied once: the second delivery waits behind the first
+  and is a duplicate, and the outside world sees one call.'
+requires: [ordering, parallelism, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  concurrent_with: [t1]
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  concurrent_with: [t1]
+expect:
+- {turn_id: t1, status: completed, reply: '[main] pay returned 1'}
+- turn_id: t1
+  status: duplicate
+  reply: '[main] pay returned 1'
+  events: []

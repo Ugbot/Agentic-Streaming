@@ -43,6 +43,34 @@ rt.close()
 Selecting a runtime whose package is not installed raises `RuntimeNotAvailableError` naming the
 extra (`pip install 'pyagentic[flink]'`); nothing falls back silently.
 
+## Effects and recovery
+
+A tool says what a repeated call does, and one that moves money must say so, since a tool that
+declares nothing may be called again under its key:
+
+```python
+from agentic import Agent, current_call
+
+def pay(user):
+    return gateway.charge(user, idempotency_key=current_call().idempotency_key)
+
+agent = Agent("pay").path("main", tool_triggers={"pay": "pay"}).use_tool("pay", pay, effect="non_idempotent")
+```
+
+`effect` is `read`, `idempotent` (the default) or `non_idempotent`. A `non_idempotent` tool is never
+called twice by the runtime: a crash during the call, a timeout or an HTTP 5xx suspends the turn, and
+a signal with `resolution: applied`, `not_applied` or `failed` says what happened. `http` tools send
+the key as an `Idempotency-Key` header, and peers read it from `delegation.idempotency_key`.
+
+Every tool and model call goes through an effect journal (`agentic/journal.py`):
+`InMemoryEffectJournal` by default, `FileEffectJournal` beside a file log or through
+`Agent.with_journal("file", url=...)`. After a crash, redeliver the turn, or call
+`LocalRuntime.recover_incomplete()` to re-drive every partial turn on the log.
+
+`brain: llm` runs the scripted `stub` provider, or a real client (`agentic/llm.py`): `openai`, for
+anything speaking its format, and `ollama`. `llm.model` is required and an `openai` key comes from
+`OPENAI_API_KEY`. Both are proven against a local HTTP server, not against a live model.
+
 ## Layout
 
 - `agentic/ir.py` -- YAML/JSON loading, schema validation (bundled copies of `spec/v1/*.schema.json`,

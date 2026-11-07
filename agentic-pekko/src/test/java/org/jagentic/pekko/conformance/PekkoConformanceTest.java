@@ -63,20 +63,20 @@ class PekkoConformanceTest {
             Map.of("type", "tool_called"), Map.of("type", "turn_completed")),
         "error", Map.of("class", "tool"));
 
-    assertTrue(PekkoConformanceHarness.checkExpectation(Map.of(
+    assertTrue(org.jagentic.core.conformance.ConformanceHarness.checkExpectation(Map.of(
         "conversation_id", "c1", "status", "completed", "path", "billing", "reply_matches", "^\\[billing\\]",
         "error_class", "tool", "state_includes", Map.of("turn_count", 2),
         "tool_calls", List.of(Map.of("tool", "balance", "index", 0, "args", Map.of("user", "anonymous"))),
         "events_include", List.of("turn_received", "tool_called"),
         "events_exclude", List.of("turn_failed")), actual).isEmpty());
 
-    List<String> problems = PekkoConformanceHarness.checkExpectation(Map.of(
+    List<String> problems = org.jagentic.core.conformance.ConformanceHarness.checkExpectation(Map.of(
         "status", "failed",
         "tool_calls", List.of(Map.of("tool", "balance", "failed", true)),
         "events_include", List.of("tool_called", "routed"),
         "events_exclude", List.of("routed"),
         "state_includes", Map.of("turn_count", 3)), actual);
     assertEquals(5, problems.size(), problems.toString());
-    assertFalse(PekkoConformanceHarness.checkExpectation(Map.of("reply", "other"), actual).isEmpty());
+    assertFalse(org.jagentic.core.conformance.ConformanceHarness.checkExpectation(Map.of("reply", "other"), actual).isEmpty());
   }
 }

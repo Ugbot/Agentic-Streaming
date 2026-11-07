@@ -22,7 +22,7 @@
           "guardrails", "verifier", "ordering", "idempotency", "retry", "memory",
           "retrieval", "context_window", "replay", "suspend_resume", "timers",
           "saga", "a2a", "cep", "event_time", "checkpoint_recovery", "parallelism",
-          "durable_store"
+          "durable_store", "crash_recovery", "effect_journal"
         ]
       }
     },
@@ -53,6 +53,23 @@
             "type": "boolean",
             "default": false
           },
+          "user_id": { "type": "string", "description": "the user the turn or signal arrives with; default anonymous" },
+          "crash_at": {
+            "description": "kill this delivery at a named point, then recover the runtime from whatever it keeps across a crash. The delivery's result has status crashed.",
+            "type": "object",
+            "required": ["when"],
+            "oneOf": [{ "required": ["event"] }, { "required": ["call"] }],
+            "properties": {
+              "event": { "type": "string", "description": "crash around the append of this event type" },
+              "call": { "type": "string", "description": "crash around the execution of this tool" },
+              "when": {
+                "enum": ["before", "during", "after"],
+                "description": "event: before or after the append. call: before the tool runs; during, once it has run and before its outcome is journaled; after, once the outcome is journaled and before it is logged"
+              },
+              "occurrence": { "type": "integer", "minimum": 1, "default": 1 }
+            },
+            "additionalProperties": false
+          },
           "concurrent_with": {
             "description": "turn ids delivered concurrently with this one; the runtime must still apply them in the declared order",
             "type": "array",
@@ -67,11 +84,41 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["turn_id", "status"],
+        "required": ["turn_id"],
+        "anyOf": [{ "required": ["status"] }, { "required": ["status_any"] }],
         "properties": {
           "turn_id": { "type": "string" },
           "conversation_id": { "type": "string" },
-          "status": { "enum": ["completed", "rejected", "unverified", "failed", "suspended", "duplicate"] },
+          "status": { "enum": ["completed", "rejected", "unverified", "failed", "suspended", "duplicate", "crashed"] },
+          "status_any": {
+            "description": "the status is one of these. Only for a point where a log that rolled back and a log that did not may honestly differ, such as a crash after the terminal event",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "events": {
+            "description": "the exact sequence of event types of this result: nothing extra, nothing missing",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "event_payloads": {
+            "description": "each entry names the first event of `type` in the result, or its `occurrence`, and a subset of its payload",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "payload"],
+              "properties": {
+                "type": { "type": "string" },
+                "occurrence": { "type": "integer", "minimum": 1 },
+                "payload": { "type": "object" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "event_fields": {
+            "description": "fields every event of the result must carry",
+            "type": "array",
+            "items": { "enum": ["timestamp", "metadata"] }
+          },
           "path": { "type": ["string", "null"] },
           "reply": { "type": ["string", "null"] },
           "reply_matches": { "type": "string", "description": "ECMA-262 regular expression, matched with search semantics" },
@@ -86,7 +133,8 @@
                 "index": { "type": "integer", "minimum": 0 },
                 "args": { "type": "object" },
                 "attempt": { "type": "integer", "minimum": 1 },
-                "failed": { "type": "boolean", "default": false }
+                "failed": { "type": "boolean", "default": false },
+                "result": { "description": "the recorded result, compared exactly" }
               },
               "additionalProperties": false
             }

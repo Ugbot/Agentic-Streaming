@@ -174,7 +174,8 @@ class WorkflowTurnBoundaryTest {
       TurnResult failed = outputs(h).get(1);
       assertEquals(TurnStatus.FAILED, failed.status);
       assertEquals("tool", failed.error.errorClass().wire());
-      assertEquals(List.of("timer_fired", "tool_failed", "turn_failed"), types(failed));
+      assertEquals(
+          List.of("timer_fired", "tool_intent", "tool_failed", "turn_failed"), types(failed));
       h.processElement(new StreamRecord<>(Event.turn(cid, "t3", "u", "hello"), 3));
       assertEquals(TurnStatus.COMPLETED, outputs(h).get(2).status);
     }

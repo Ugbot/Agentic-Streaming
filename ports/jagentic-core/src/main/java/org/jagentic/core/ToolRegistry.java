@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /** Tools — named {@code params -> result} functions. Mirror of {@code ToolExecutor}.
@@ -23,11 +24,29 @@ public final class ToolRegistry {
   }
 
   /**
+   * Who is calling: the identity of one invocation and the key that stays the same on every attempt
+   * and every re-run of it (spec section 10). A tool that does anything outside the process sends
+   * {@code idempotencyKey} along.
+   */
+  public record CallIdentity(String conversationId, String turnId, int index, String idempotencyKey) {
+    /** The identity of a call made outside any turn, for direct use of a tool. */
+    public static final CallIdentity NONE = new CallIdentity("", "", 0, "");
+  }
+
+  /**
    * A single tool. {@code inputSchema} is a JSON-schema map for the parameters, or null. {@code
    * peer} marks an A2A peer agent exposed as a tool: its calls are recorded as {@code delegated}.
+   * {@code effect} is its {@link ToolEffect} class.
    */
   public record Tool(String id, String description, Map<String, Object> inputSchema,
-                     Function<Map<String, Object>, Object> fn, boolean peer) {
+                     BiFunction<Map<String, Object>, CallIdentity, Object> fn, boolean peer,
+                     String effect) {
+    public Tool(String id, String description, Map<String, Object> inputSchema,
+                Function<Map<String, Object>, Object> fn, boolean peer) {
+      this(id, description, inputSchema, (params, call) -> fn.apply(params), peer,
+          ToolEffect.IDEMPOTENT);
+    }
+
     public Tool(String id, String description, Map<String, Object> inputSchema,
                 Function<Map<String, Object>, Object> fn) {
       this(id, description, inputSchema, fn, false);
@@ -39,7 +58,11 @@ public final class ToolRegistry {
     }
 
     public Object execute(Map<String, Object> params) {
-      return fn.apply(params == null ? Map.of() : params);
+      return execute(params, CallIdentity.NONE);
+    }
+
+    public Object execute(Map<String, Object> params, CallIdentity call) {
+      return fn.apply(params == null ? Map.of() : params, call);
     }
 
     /** The input schema, or the permissive MCP default when none was declared. */
@@ -59,6 +82,22 @@ public final class ToolRegistry {
   public ToolRegistry register(String id, String description, Map<String, Object> inputSchema,
                                Function<Map<String, Object>, Object> fn) {
     tools.put(id, new Tool(id, description, inputSchema, fn));
+    return this;
+  }
+
+  /** Register a tool that is told who is calling, so it can send the idempotency key. */
+  public ToolRegistry registerKeyed(String id, String description, Map<String, Object> inputSchema,
+                                    String effect,
+                                    BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
+    tools.put(id, new Tool(id, description, inputSchema, fn, false,
+        effect == null ? ToolEffect.IDEMPOTENT : effect));
+    return this;
+  }
+
+  /** Register an A2A peer as a tool, told who is calling. */
+  public ToolRegistry registerKeyedPeer(String id, String description,
+                                        BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
+    tools.put(id, new Tool(id, description, null, fn, true, ToolEffect.IDEMPOTENT));
     return this;
   }
 

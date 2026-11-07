@@ -1,8 +1,8 @@
 # Security model
 
 This page states what the code does today, including where it does nothing. The project is
-experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments or
-other non-idempotent actions.**
+experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments:
+the effect journal below stops repeated calls, but nothing here authenticates who asked for one.**
 
 ## The canonical path has no authentication
 
@@ -47,9 +47,27 @@ user text. Tool results and retrieved text are not checked. This is not a prompt
 
 ## Effects
 
-A tool runs first and is recorded afterwards, and a function or HTTP tool receives no idempotency
-key. After a Flink restore, or any redelivery of a turn that did not finish, tool calls run again. See
-the status block in the [README](../README.md) and the [Flink runtime page](runtimes/flink.md).
+Every tool and model call goes through the effect journal: intent is written first, the outcome
+after, and a re-run reuses what is recorded. Every tool receives a deterministic `Idempotency-Key`,
+as a header on HTTP and agent tools, in `_meta` on MCP tools, and with the call's identity in process.
+The key is a SHA-256 of the conversation id, turn id and call index, so it leaks neither.
+
+- A tool declares `effect: read`, `idempotent` or `non_idempotent`. **A tool that declares nothing is
+  `idempotent`**, so it may be called again under its key. Anything that moves money or sends
+  something must declare `non_idempotent`.
+- **A crash during a call to a `non_idempotent` tool leaves the outcome unknown.** The journal cannot
+  tell whether the effect landed. The call is not repeated: the turn suspends with `unknown_outcome`
+  and a person answers with a signal. Treat that person's answer as privileged, because
+  `not_applied` makes the call again. Nothing yet checks who sent it; the sender is recorded as
+  `signal_sender` and is not authenticated.
+- A timeout, a lost connection or an HTTP 5xx from a `non_idempotent` tool is unknown in the same way.
+- The journal holds tool arguments and results in plaintext, as the log does. Protect and expire it
+  as you would the log, and keep entries longer than the longest rollback or redelivery you allow.
+  An entry dropped sooner re-opens that turn to repeat its calls.
+- A worker that lost its lease can still be running a call while its replacement starts. There is no
+  fencing token at the tool, so a tool must not rely on the journal alone to exclude that.
+
+See [Guarantees](../README.md#guarantees) and the [Flink runtime page](runtimes/flink.md).
 
 ## Egress policy
 

@@ -1,8 +1,10 @@
 # Agentic Streaming
 
-> **Status: experimental and pre-release.** There are no published packages. This project is **not
-> safe to use for real payments or other non-idempotent actions yet**: known failures include tool
-> calls re-running after a Flink restore. See [Known failures](#known-failures).
+> **Status: experimental and pre-release.** There are no published packages. Do not run it on real
+> payments yet: the canonical path has no authentication. What is guaranteed now, and what is not, is
+> under [Guarantees](#guarantees). **A crash during a call to a `non_idempotent` tool leaves the
+> outcome unknown.** The runtime will not repeat that call, and it cannot tell you whether it landed:
+> a person has to.
 
 Agentic Streaming is a portable specification for durable, auditable agents over streaming data,
 with a conformance suite and runtimes on Apache Flink, plain Python and Apache Pekko. An agent's
@@ -22,26 +24,50 @@ against the [reference spec](spec/v1/primitives.md).
 | Apache Pekko | `ports/jagentic-core`, in `agentic-pekko` | One event-sourced, cluster-sharded actor per conversation | [Pekko](docs/runtimes/pekko.md) |
 
 The contract is the `agentic/v1` spec under [`spec/v1`](spec/v1/primitives.md), its reference runtime
-and the 31 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
-mostly rule brains and scripted stubs. They do not cover a real model or a crash inside a turn, so
-a pass is a narrow claim; see
+and the 74 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
+mostly rule brains and scripted stubs. They crash turns at every event and around every call, but
+they do not cover a real model, so a pass is a narrow claim; see
 [conformance results](docs/runtimes/README.md#conformance-results).
 
 Everything else was moved out of this repository. The code as it stood is at
 [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone); the
 [list is here](docs/runtimes/experimental.md).
 
+## Guarantees
+
+State is exactly-once. Effects are at-least-once under a stable key. Anything that cannot take a key
+is an explicit human decision. Each line below has a crash test
+([section 10 of the spec](spec/v1/primitives.md) is the contract).
+
+| Thing | Guaranteed | Not guaranteed |
+|---|---|---|
+| Conversation log and state | Exactly-once. A recovered turn leaves the log an uninterrupted run would | Flink's log is keyed state, so it rolls back to the last checkpoint; the journal covers that window |
+| Model calls | A recorded answer is reused by index, so a re-run takes the same path | A crash during a call asks the model again, and you pay twice |
+| `effect: read` tools | A recorded result is reused | With no recorded result the read runs again and may answer differently |
+| `effect: idempotent` tools, the default | At-least-once under a stable `Idempotency-Key` | Exactly one effect, unless the tool honours the key. A tool that declares nothing is treated like this, so anything that moves money must say `non_idempotent` |
+| `effect: non_idempotent` tools | Never called twice by the runtime. A recorded result is reused | A crash during the call leaves the outcome **unknown**. The turn suspends and a person decides. Nothing can do better, because the runtime cannot see the far side of the call |
+| Sagas | Undoes get the forward args and result, run on any failure class, and carry on from the log after a crash | A failed undo is terminal: it is recorded and needs repair by hand |
+| Resume | One state machine: the original user keeps the turn, duplicates and unknown signals rewrite nothing, a crash after `turn_resumed` loses no approval | Who may send a signal: that is authorisation, which does not exist yet |
+
+These hold only with a journal that outlives the crash. `stores.effects` selects it: `postgres` or
+`kafka` on the JVM, `file` in Python. A Flink job refuses a `non_idempotent` tool without one. Without
+a declared journal the JVM keeps one in the process, which covers a task restart at most, so a
+re-run after losing the process calls tools again, under the same keys. The journal must retain
+entries for longer than the longest rollback or redelivery you allow.
+
 ## Known failures
 
-- **Tool calls re-run after a Flink restore, so a payment can fire twice.** Flink state rolls back to
-  the last checkpoint and the outside world does not. A turn that ran after that checkpoint runs
-  again on redelivery, tools and model calls included. Tools receive no idempotency key, so the
-  second call looks like a new one. The same happens to a turn that crashes before finishing on the
-  other runtimes, and to a turn run again after a transient model failure.
-- **A real model has only been exercised against a local stand-in server on Flink.** A document can
-  declare `provider: ollama` or `openai` there. In the `agentic` Python package only a scripted stub
-  runs. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) still sits on the older `pyagentic`
-  package, which has real model clients but no event log.
+- **A turn run again after a transient model failure calls its `read` and `idempotent` tools again**,
+  under the next free indices, as section 4 of the spec says. It is the one re-run that does not reuse
+  the journal. A run that reached a `non_idempotent` tool is replayed instead, so that tool is not
+  repeated.
+- **A real model has only been exercised against a local stand-in server.** A document can declare
+  `provider: ollama` or `openai` on Flink and in the `agentic` Python package.
+- **The `pipeline.yaml` CLI is only partly on the conformance semantics.** `ports/agentic-pipeline`
+  runs a document on the `agentic` core when the core can run all of it. A document that needs MCP,
+  remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing
+  embeddings falls back to the older `pyagentic` engine, which has no event log, no `turn_id` and no
+  journal, and the CLI says so on stderr.
 - **The tool allowlist is not a security control, and the canonical path has no authentication.** See
   [security](docs/security.md).
 
@@ -124,9 +150,9 @@ ordering and durability.
 | Pekko | Actor mailbox and cluster sharding | Pekko Persistence journal |
 | Plain Python | A per-conversation gate | In memory, or a JSONL file |
 
-What the spec aims to make true: state is exactly-once, effects are at-least-once under a stable key,
-and anything that cannot take a key is an explicit human decision. Only the first part holds today,
-and only on Flink within its checkpoints.
+State is exactly-once, effects are at-least-once under a stable key, and anything that cannot take a
+key is an explicit human decision: see [Guarantees](#guarantees) for what that does and does not
+cover.
 
 ## What is in the repository
 

@@ -6,7 +6,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -39,13 +39,20 @@ public final class A2AClient {
 
   @SuppressWarnings("unchecked")
   public Map<String, Object> send(String conversationId, String text, String userId) {
+    return send(conversationId, text, userId, java.util.UUID.randomUUID().toString());
+  }
+
+  /** As above under {@code idempotencyKey}, the same on every retry so the peer can deduplicate. */
+  @SuppressWarnings("unchecked")
+  public Map<String, Object> send(String conversationId, String text, String userId, String idempotencyKey) {
     RuntimeException last = null;
     for (int attempt = 0; attempt <= retries; attempt++) {
       try {
         String body = MAPPER.writeValueAsString(
             Map.of("conversation_id", conversationId, "text", text, "user_id", userId));
         HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(base + "/agent"))
-            .header("Content-Type", "application/json").timeout(Duration.ofSeconds(30))
+            .header("Content-Type", "application/json").header("Idempotency-Key", idempotencyKey)
+            .timeout(Duration.ofSeconds(30))
             .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
         return MAPPER.readValue(r.body(), Map.class);
       } catch (Exception e) {
@@ -61,11 +68,13 @@ public final class A2AClient {
   }
 
   /** A ToolRegistry tool that delegates a turn to a peer agent. */
-  public static Function<Map<String, Object>, Object> peerTool(String baseUrl, int retries) {
+  public static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> peerTool(
+      String baseUrl, int retries) {
     A2AClient client = new A2AClient(baseUrl, retries);
-    return params -> client.send(
-        String.valueOf(params.getOrDefault("conversation_id", "a2a")),
+    return (params, call) -> client.send(
+        String.valueOf(params.getOrDefault("conversation_id", call.conversationId())),
         String.valueOf(params.getOrDefault("text", "")),
-        String.valueOf(params.getOrDefault("user_id", "anonymous")));
+        String.valueOf(params.getOrDefault("user_id", "anonymous")),
+        call.idempotencyKey());
   }
 }

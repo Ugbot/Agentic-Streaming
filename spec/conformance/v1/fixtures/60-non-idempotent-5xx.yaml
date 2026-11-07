@@ -1,0 +1,36 @@
+id: non-idempotent-5xx
+description: 'A 5xx from a non_idempotent tool may have landed, so it is an unknown outcome: one attempt whatever
+  the retry policy says, and the turn waits for a person.'
+requires: [effect_journal, retry, suspend_resume, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: http, effect: non_idempotent, url: '{{http}}/status/503'}
+  policies:
+    on_tool_error: fail
+    retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, jitter: false}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: failed}
+expect:
+- turn_id: t1
+  status: suspended
+  events: [turn_received, routed, brain_started, tool_intent, unknown_outcome, turn_suspended]
+  tool_calls: []
+- {turn_id: t1, status: failed, error_class: tool}

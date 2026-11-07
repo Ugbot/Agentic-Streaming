@@ -1,0 +1,29 @@
+id: output-rail-after-verifier
+description: The verifier judges a draft first. An output rail only sees a reply the verifier accepted, so a draft
+  it rejects ends unverified, not rejected.
+requires: [guardrails, verifier]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main: {brain: rule, prompt: You move money.}
+    verifier: {kind: regex, pattern: ^never$}
+  guardrails:
+  - kind: regex
+    stage: output
+    deny: [help]
+    reason: 'no'
+turns:
+- {conversation_id: c1, turn_id: t1, text: hello}
+expect:
+- turn_id: t1
+  status: unverified
+  error_class: verification
+  events: [turn_received, routed, brain_started, reply_drafted, verification_failed, turn_failed]

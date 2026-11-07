@@ -23,7 +23,8 @@ public final class PekkoBackendProvider implements BackendProvider {
 
   @Override
   public Runtime create(GraphBuilder.Built built, ConversationStore conversationStore) {
-    AgentDeps deps = new AgentDeps(built.graph(), built.tools(), built.retriever());
+    AgentDeps deps = new AgentDeps(built.graph(), built.tools(), built.retriever(),
+        org.jagentic.core.LogicalClock.system(), org.jagentic.core.TurnProbe.NONE, built.journal());
     PekkoSystem system = new PekkoSystem(deps, DurabilityProfile.fromEnvironment());
     return new PekkoRuntime(system.system(), Duration.ofSeconds(30), true);
   }

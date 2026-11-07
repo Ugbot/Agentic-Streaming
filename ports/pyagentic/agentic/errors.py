@@ -48,6 +48,12 @@ class ToolError(AgenticError):
     error_class = "tool"
 
 
+class OutcomeUnknown(ToolError):
+    """An attempt ended without a definite answer: a timeout, a lost connection, an HTTP 5xx. The
+    effect may have landed. A `non_idempotent` tool that raises this suspends the turn for a person;
+    for any other tool it is an ordinary failed attempt, retried under the same key."""
+
+
 class TransientError(AgenticError):
     """A failure that may pass if the same request is made again: a model or network outage.
     Retried under `policies.retry`; a turn that outlasts the budget does not spend its turn_id."""

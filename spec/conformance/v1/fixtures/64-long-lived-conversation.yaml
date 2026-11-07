@@ -1,0 +1,125 @@
+id: long-lived-conversation
+description: A conversation that outlives a restart keeps a dense log and counts every turn. The workflow sets an
+  idle TTL, which must not touch a live conversation; a duplicate of its first turn is still answered from the log.
+requires: [memory, idempotency, durable_store]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main: {brain: rule, prompt: You move money.}
+    verifier: {kind: none}
+  runtime:
+    flink: {state_ttl_ms: 3600000}
+turns:
+- {conversation_id: c1, turn_id: t1, text: hello 1}
+- {conversation_id: c1, turn_id: t2, text: hello 2}
+- {conversation_id: c1, turn_id: t3, text: hello 3}
+- {conversation_id: c1, turn_id: t4, text: hello 4}
+- {conversation_id: c1, turn_id: t5, text: hello 5}
+- {conversation_id: c1, turn_id: t6, text: hello 6}
+- {conversation_id: c1, turn_id: t7, text: hello 7}
+- {conversation_id: c1, turn_id: t8, text: hello 8}
+- {conversation_id: c1, turn_id: t9, text: hello 9}
+- {conversation_id: c1, turn_id: t10, text: hello 10}
+- {conversation_id: c1, turn_id: t11, text: hello 11}
+- {conversation_id: c1, turn_id: t12, text: hello 12}
+- {conversation_id: c1, turn_id: t13, text: hello 13, restart_runtime: true}
+- {conversation_id: c1, turn_id: t14, text: hello 14}
+- {conversation_id: c1, turn_id: t15, text: hello 15}
+- {conversation_id: c1, turn_id: t16, text: hello 16}
+- {conversation_id: c1, turn_id: t17, text: hello 17}
+- {conversation_id: c1, turn_id: t18, text: hello 18}
+- {conversation_id: c1, turn_id: t19, text: hello 19}
+- {conversation_id: c1, turn_id: t20, text: hello 20}
+- {conversation_id: c1, turn_id: t21, text: hello 21}
+- {conversation_id: c1, turn_id: t22, text: hello 22}
+- {conversation_id: c1, turn_id: t23, text: hello 23}
+- {conversation_id: c1, turn_id: t24, text: hello 24}
+- {conversation_id: c1, turn_id: t25, text: hello 25}
+- {conversation_id: c1, turn_id: t1, text: hello 1}
+expect:
+- turn_id: t1
+  status: completed
+  state_includes: {turn_count: 1, transcript_length: 2}
+- turn_id: t2
+  status: completed
+  state_includes: {turn_count: 2, transcript_length: 4}
+- turn_id: t3
+  status: completed
+  state_includes: {turn_count: 3, transcript_length: 6}
+- turn_id: t4
+  status: completed
+  state_includes: {turn_count: 4, transcript_length: 8}
+- turn_id: t5
+  status: completed
+  state_includes: {turn_count: 5, transcript_length: 10}
+- turn_id: t6
+  status: completed
+  state_includes: {turn_count: 6, transcript_length: 12}
+- turn_id: t7
+  status: completed
+  state_includes: {turn_count: 7, transcript_length: 14}
+- turn_id: t8
+  status: completed
+  state_includes: {turn_count: 8, transcript_length: 16}
+- turn_id: t9
+  status: completed
+  state_includes: {turn_count: 9, transcript_length: 18}
+- turn_id: t10
+  status: completed
+  state_includes: {turn_count: 10, transcript_length: 20}
+- turn_id: t11
+  status: completed
+  state_includes: {turn_count: 11, transcript_length: 22}
+- turn_id: t12
+  status: completed
+  state_includes: {turn_count: 12, transcript_length: 24}
+- turn_id: t13
+  status: completed
+  state_includes: {turn_count: 13, transcript_length: 26}
+- turn_id: t14
+  status: completed
+  state_includes: {turn_count: 14, transcript_length: 28}
+- turn_id: t15
+  status: completed
+  state_includes: {turn_count: 15, transcript_length: 30}
+- turn_id: t16
+  status: completed
+  state_includes: {turn_count: 16, transcript_length: 32}
+- turn_id: t17
+  status: completed
+  state_includes: {turn_count: 17, transcript_length: 34}
+- turn_id: t18
+  status: completed
+  state_includes: {turn_count: 18, transcript_length: 36}
+- turn_id: t19
+  status: completed
+  state_includes: {turn_count: 19, transcript_length: 38}
+- turn_id: t20
+  status: completed
+  state_includes: {turn_count: 20, transcript_length: 40}
+- turn_id: t21
+  status: completed
+  state_includes: {turn_count: 21, transcript_length: 42}
+- turn_id: t22
+  status: completed
+  state_includes: {turn_count: 22, transcript_length: 44}
+- turn_id: t23
+  status: completed
+  state_includes: {turn_count: 23, transcript_length: 46}
+- turn_id: t24
+  status: completed
+  state_includes: {turn_count: 24, transcript_length: 48}
+- turn_id: t25
+  status: completed
+  state_includes: {turn_count: 25, transcript_length: 50}
+- turn_id: t1
+  status: duplicate
+  state_includes: {turn_count: 25}

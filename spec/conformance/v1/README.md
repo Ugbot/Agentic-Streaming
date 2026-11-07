@@ -41,6 +41,32 @@ Python owners.
 | `duplicate-signal` | a resume signal redelivered after completion is a duplicate and rewrites nothing |
 | `resume-transient-redelivery` | a resumed turn that fails transiently runs again on its redelivered signal |
 | `timer-tool-failure` | a failing timer tool fails the turn that observed the deadline, and the next turn runs |
+| `sequence-tool-turn`, `sequence-llm-turn`, `sequence-saga-turn` | the whole event sequence of each kind of turn, with the key, the user, a timestamp and metadata |
+| `crash-at-every-event` | a crash around any event of a tool turn, then redelivery, ends as if nothing happened |
+| `crash-call-idempotent`, `crash-call-non-idempotent`, `crash-call-read` | a crash before, during and after a call, for each effect class |
+| `crash-between-attempts` | a crash between retries continues the attempt numbering |
+| `unknown-outcome-applied`, `unknown-outcome-not-applied`, `unknown-outcome-failed` | each way a person can resolve an unknown outcome |
+| `unknown-outcome-never-retries` | redelivery never retries an unknown outcome, before or after a restart |
+| `unknown-outcome-bad-signal` | a signal that does not answer the question is refused and changes nothing |
+| `unknown-outcome-twice` | a resolution is spent before its call, so a crash during that call is unknown again |
+| `transient-after-non-idempotent` | a transient failure after a `non_idempotent` call does not repeat it |
+| `llm-reused-after-crash` | a recorded model answer is reused by index, so a re-run takes the same path |
+| `redelivery-mid-turn` | a partial turn is finished once, and everything after is a duplicate |
+| `compensation-failed-event` | a failed undo is on the log, the others run, the turn ends fatal |
+| `saga-resumes-forward`, `saga-resumes-compensation` | an incomplete saga carries on from the log, either way |
+| `saga-undo-receives-forward` | an undo gets the args and result of the step it undoes |
+| `saga-compensates-any-class` | a step failing on bad arguments compensates too |
+| `signal-unknown-turn`, `signal-while-running`, `turn-during-suspension` | the refused and duplicate cells of the resume state machine |
+| `crash-after-resumed`, `crash-after-resumed-turn-redelivered` | a crash past `turn_resumed` loses no approval |
+| `resume-identity` | the original user keeps the turn; the signal sender is recorded apart |
+| `saga-after-resume` | a resumed turn continues into its saga |
+| `tool-http-5xx`, `tool-http-timeout` | a 5xx and a timeout are failed attempts over real HTTP |
+| `non-idempotent-5xx`, `non-idempotent-4xx`, `non-idempotent-timeout` | what is unknown and what is a definite failure |
+| `idempotency-key-on-the-wire` | the key arrives as a header, and is the one the spec defines |
+| `long-lived-conversation` | a conversation outlives a restart under an idle TTL |
+| `two-writers` | the same turn delivered twice at once is applied once |
+| `allow-rail`, `path-guardrail`, `output-rail-after-verifier` | guardrails the two cores used to read differently |
+| `argument-schema`, `router-static`, `missing-turn-id` | the rest of the differences between the cores |
 
 Run them against the reference runtime:
 
@@ -64,9 +90,38 @@ python spec/tools/run_conformance.py duplicate-turn   # one fixture
    is rebuilt from the log; it does not prove the store survives a process crash. Crash
    durability is claimed and tested per runtime (see the Runtimes section of the
    repository README for the list of those tests).
+   `crash_at` kills the delivery at the named point (see below), and `user_id` is the user the
+   turn or signal arrives with.
 4. Emit one normalized result per turn (`spec/v1/result.schema.json`).
 5. Compare with `check_expectation` in `spec/tools/run_conformance.py`, or an equivalent
    implementation of the rules below.
+
+## The `crash_at` verb
+
+`crash_at` on a turn kills that delivery, as a process death would, and recovers the runtime from
+what it keeps across a crash:
+
+```yaml
+- {conversation_id: c1, turn_id: t1, text: pay, crash_at: {event: tool_called, when: before}}
+- {conversation_id: c1, turn_id: t1, text: pay, crash_at: {call: pay, when: during}}
+```
+
+`event` names an event type and `when` is `before` or `after` its append. `call` names a tool:
+`before` it runs; `during`, once it has run and before its outcome is journaled; `after`, once the
+outcome is journaled and before it is logged. `occurrence` picks the nth, default 1.
+
+The binding raises something the turn cannot catch at that point, so no handler tidies up, and
+records a result of status `crashed` with no events. Recovery then depends on the runtime:
+reference, jvm-core and python keep what was appended, Pekko keeps what it persisted, and Flink
+rolls back to a savepoint taken just before the delivery. What must survive every crash is the
+outside world: the journal, the `counting` tools and the HTTP stub. The fixture's next turn is the
+redelivery, and its expectation holds on every runtime, whatever the crash left behind.
+
+Fixture tools that make this observable: `kind: counting` answers with the number of calls it has
+seen for this conversation, or the number of distinct keys under `x-count-by: keys`, so a repeated
+effect shows in the reply. An llm step with `x-count-calls: true` does the same for model calls. A
+tool url of `{{http}}/...` points at a local stub the binding starts, serving `/ok`,
+`/status/<code>`, `/hang` and `/echo` (`spec/tools/http_stub.py`).
 
 ## Binding output contract
 
@@ -98,8 +153,11 @@ document listing every fixture in the directory, in file order:
   `@@AGENTIC_CONFORMANCE@@` and `@@END@@`, so build tools may interleave their own output
   around it. Only one such block is printed per run.
 
-A binding that only reports through its test framework (JUnit XML, pytest) is still
-conformant; the matrix then records its comparison as made *inside the binding*.
+The JVM bindings report through JUnit and leave their normalized results in
+`target/conformance-results/<fixture id>.json` of their module. The matrix reads skips from the
+JUnit XML and compares the results itself, so every runtime goes through
+`run_conformance.check_expectation`. The ports of that comparator in `ConformanceHarness.java` and
+`agentic/conformance.py` serve a plain `mvn test` or `pytest`; they are not the record.
 
 ## Comparison rules
 
@@ -108,8 +166,13 @@ conformant; the matrix then records its comparison as made *inside the binding*.
 - `tool_calls` is an exact sequence: tool id and order always, plus `index`, `attempt`,
   and `args` where the expectation names them. `failed: true` means the call recorded an
   error.
+- `events` is the exact sequence of emitted event types: nothing extra, nothing missing. Fixtures
+  from `32` on use it. `event_payloads` checks a subset of one event's payload, and `event_fields`
+  checks every event carries `timestamp` or `metadata`.
 - `events_include` is an ordered subsequence of the emitted event types, not the whole
   list, so a runtime may emit extra events. `events_exclude` must not appear at all.
+- `status_any` accepts any of several statuses. It exists only where a log that rolled back and
+  a log that did not honestly differ.
 - `state_includes` is a subset check over the reduced state.
 - Everything under `runtime_detail` is excluded: checkpoint ids, actor addresses,
   offsets, wall-clock timings, engine metrics. Two runtimes may differ there and still

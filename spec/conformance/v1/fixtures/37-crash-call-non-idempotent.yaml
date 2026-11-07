@@ -1,0 +1,58 @@
+id: crash-call-non-idempotent
+description: A non_idempotent call with no recorded result is never made again. Crashed before or during the call
+  the two cases look the same, and the turn suspends for a person. Crashed after the result was recorded, the result
+  is reused.
+requires: [crash_recovery, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+turns:
+- conversation_id: c-before
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: before}
+- {conversation_id: c-before, turn_id: t1, text: pay the invoice}
+- conversation_id: c-during
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c-during, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: after}
+- {conversation_id: c-after, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: suspended
+  events: [turn_received, routed, brain_started, tool_intent, unknown_outcome, turn_suspended]
+  tool_calls: []
+  event_payloads:
+  - type: turn_suspended
+    payload: {until: unknown_outcome, tool: pay, index: 0}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: suspended
+  events: [turn_received, routed, brain_started, tool_intent, unknown_outcome, turn_suspended]
+  tool_calls: []
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]

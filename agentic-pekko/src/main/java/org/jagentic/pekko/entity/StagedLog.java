@@ -28,12 +28,13 @@ final class StagedLog implements ConversationLog {
   }
 
   @Override
-  public synchronized LogEvent append(String cid, String turnId, EventType type, Map<String, Object> payload) {
+  public synchronized LogEvent append(String cid, String turnId, EventType type, Map<String, Object> payload,
+                                      long timestamp, Map<String, String> metadata) {
     if (!conversationId.equals(cid)) {
       throw new IllegalArgumentException("entity " + conversationId + " cannot append to conversation " + cid);
     }
     LogEvent e = new LogEvent(cid, committed.size() + staged.size(), turnId, type.wire(),
-        payload == null ? Map.of() : new LinkedHashMap<>(payload));
+        payload == null ? Map.of() : new LinkedHashMap<>(payload), timestamp, metadata);
     staged.add(e);
     return e;
   }

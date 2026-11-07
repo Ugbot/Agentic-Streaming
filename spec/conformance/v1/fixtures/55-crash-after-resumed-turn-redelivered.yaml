@@ -1,0 +1,43 @@
+id: crash-after-resumed-turn-redelivered
+description: After a crash past turn_resumed, a plain redelivery of the turn finishes it on a log that kept the
+  resume. A log that rolled back is suspended again, answers duplicate, and needs the signal, which its source redelivers
+  too. Both end the same.
+requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+        x-suspend-until: approval
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+  crash_at: {event: turn_resumed, when: after}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+expect:
+- {turn_id: t1, status: suspended}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status_any: [completed, duplicate]
+- turn_id: t1
+  status_any: [completed, duplicate]
+  reply: '[main] pay returned 1'
+  state_includes: {turn_count: 1, transcript_length: 2}

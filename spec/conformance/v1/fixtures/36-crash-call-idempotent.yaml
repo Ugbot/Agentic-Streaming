@@ -1,0 +1,55 @@
+id: crash-call-idempotent
+description: 'An idempotent call that crashed before its result was recorded is made again under the same key, so
+  a server counting calls sees two. Once the result is recorded it is reused and there is one. Exactly one effect
+  needs the tool to honour the key: fixture crash-at-every-event counts by key and sees one.'
+requires: [crash_recovery, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- conversation_id: c-before
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: before}
+- {conversation_id: c-before, turn_id: t1, text: pay the invoice}
+- conversation_id: c-during
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c-during, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: after}
+- {conversation_id: c-after, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 2'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]

@@ -47,18 +47,20 @@ public final class WorkflowValidator {
       "max_delay_ms", "jitter");
   private static final Set<String> VERIFICATION = Set.of("max_attempts", "on_exhausted");
   private static final Set<String> TOOL = Set.of("id", "kind", "description", "value", "url", "method",
-      "timeout_ms", "parameters", "compensation");
+      "timeout_ms", "parameters", "compensation", "effect");
   private static final Set<String> SKILL = Set.of("name", "prompt", "tools", "facts");
   private static final Set<String> GUARDRAIL = Set.of("name", "kind", "stage", "deny", "allow", "reason",
       "classifier", "lexicon", "blocked", "threshold");
   private static final Set<String> LLM = Set.of("provider", "model", "base_url", "temperature",
       "max_tokens", "timeout_ms", "script");
-  private static final Set<String> LLM_SCRIPT_STEP = Set.of("text", "tool", "args", "x-fail-attempts");
+  private static final Set<String> LLM_SCRIPT_STEP = Set.of("text", "tool", "args", "x-fail-attempts",
+      "x-count-calls");
   private static final Set<String> EMBEDDINGS = Set.of("provider", "model", "dim", "base_url", "timeout_ms");
   private static final Set<String> RETRIEVAL = Set.of("dim", "top_k", "embedder", "kb", "vector_store");
   private static final Set<String> KB_DOC = Set.of("id", "text", "metadata");
   private static final Set<String> CONTEXT = Set.of("max_items", "max_tokens", "compaction");
-  private static final Set<String> STORES = Set.of("conversation", "keyed_state", "long_term", "vector");
+  private static final Set<String> STORES = Set.of("conversation", "keyed_state", "long_term", "vector",
+      "effects");
   private static final Set<String> PEER = Set.of("name", "id", "url", "transport", "description", "retries",
       "timeout_ms");
   private static final Set<String> SAGA = Set.of("steps");

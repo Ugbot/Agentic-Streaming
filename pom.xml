@@ -113,6 +113,13 @@
             <groupId>org.jagentic</groupId>
             <artifactId>jagentic-core</artifactId>
         </dependency>
+        <dependency>
+          <groupId>org.jagentic</groupId>
+          <artifactId>jagentic-core</artifactId>
+          <version>${project.version}</version>
+          <type>test-jar</type>
+          <scope>test</scope>
+        </dependency>
 
         <!-- LangChain4J provider SDKs, behind the core's `embeddings: {provider: ollama|openai}`.
              Optional, as in jagentic-core: a consumer of the thin jar adds the one it configures
