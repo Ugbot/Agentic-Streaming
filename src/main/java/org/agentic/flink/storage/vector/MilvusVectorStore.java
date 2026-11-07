@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.agentic.flink.annotation.Public;
+import org.agentic.flink.config.MilvusClient;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageTier;
@@ -41,7 +42,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * {@link VectorStore} implementation backed by <a href="https://milvus.io">Milvus</a> via the
- * official Java SDK ({@code io.milvus:milvus-sdk-java:2.4.8}, v2 high-level client {@link
+ * official Java SDK ({@code io.milvus:milvus-sdk-java:2.6.27}, v2 high-level client {@link
  * MilvusClientV2}).
  *
  * <p>Discovered via {@link java.util.ServiceLoader}; provider name {@code "milvus"}. Requires a
@@ -103,6 +104,7 @@ public final class MilvusVectorStore extends ReopenableStore implements VectorSt
 
   @Override
   protected void open(Map<String, String> config) throws Exception {
+    MilvusClient.require();
     if (config == null) {
       config = Collections.emptyMap();
     }

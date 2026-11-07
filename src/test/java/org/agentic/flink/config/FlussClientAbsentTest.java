@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +24,8 @@ import org.junit.jupiter.api.Test;
  * redefines the framework classes, which is what a job on the default jar sees.
  */
 class FlussClientAbsentTest {
+
+  private static final String FLUSS = "com.alibaba.fluss.";
 
   @Test
   void presentOnTheTestClasspath() {
@@ -85,20 +85,12 @@ class FlussClientAbsentTest {
   void hiddenLoaderReallyHidesTheClient() {
     assertThrows(
         ClassNotFoundException.class,
-        () -> new HidingLoader().loadClass("com.alibaba.fluss.client.Connection"));
-    assertFalse(new HidingLoader().hides("org.agentic.flink.config.FlussClient"));
+        () -> new HidingLoader(FLUSS).loadClass("com.alibaba.fluss.client.Connection"));
+    assertFalse(new HidingLoader(FLUSS).hides("org.agentic.flink.config.FlussClient"));
   }
 
   private static String inHiddenLoader(Class<? extends Callable<String>> probe) throws Exception {
-    ClassLoader previous = Thread.currentThread().getContextClassLoader();
-    ClassLoader hiding = new HidingLoader();
-    Thread.currentThread().setContextClassLoader(hiding);
-    try {
-      Object instance = hiding.loadClass(probe.getName()).getConstructor().newInstance();
-      return ((Callable<?>) instance).call().toString();
-    } finally {
-      Thread.currentThread().setContextClassLoader(previous);
-    }
+    return HidingLoader.run(FLUSS, probe);
   }
 
   private static String messageOf(Callable<?> call) throws Exception {
@@ -106,41 +98,6 @@ class FlussClientAbsentTest {
       return "returned " + call.call();
     } catch (IllegalStateException e) {
       return e.getMessage();
-    }
-  }
-
-  private static final class HidingLoader extends ClassLoader {
-    HidingLoader() {
-      super(FlussClientAbsentTest.class.getClassLoader());
-    }
-
-    boolean hides(String name) {
-      return name.startsWith("com.alibaba.fluss.");
-    }
-
-    @Override
-    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-      if (hides(name)) {
-        throw new ClassNotFoundException(name);
-      }
-      if (!name.startsWith("org.agentic.flink.")) {
-        return super.loadClass(name, resolve);
-      }
-      synchronized (getClassLoadingLock(name)) {
-        Class<?> loaded = findLoadedClass(name);
-        if (loaded != null) {
-          return loaded;
-        }
-        try (InputStream in = getResourceAsStream(name.replace('.', '/') + ".class")) {
-          if (in == null) {
-            throw new ClassNotFoundException(name);
-          }
-          byte[] bytes = in.readAllBytes();
-          return defineClass(name, bytes, 0, bytes.length);
-        } catch (IOException e) {
-          throw new ClassNotFoundException(name, e);
-        }
-      }
     }
   }
 
