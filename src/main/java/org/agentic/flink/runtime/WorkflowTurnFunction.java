@@ -399,6 +399,7 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
             built.graph().policies());
     ProcessingClock clock = options.processingClock();
     agentCtx.clock = () -> clock.nowMs(timerService);
+    agentCtx.probe = options.probe();
     return built.graph().handle(event, agentCtx);
   }
 

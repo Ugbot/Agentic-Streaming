@@ -6,6 +6,7 @@ import org.jagentic.core.Policies;
 import org.jagentic.core.Retrieval;
 import org.jagentic.core.RoutedGraph;
 import org.jagentic.core.ToolRegistry;
+import org.jagentic.core.TurnProbe;
 
 /** The Flink-free "agent brain" the Pekko runtime hosts: a compiled {@link RoutedGraph} plus its
  * {@link ToolRegistry} and retriever. Built once (from {@code GraphBuilder}/{@code Banking}) and
@@ -18,6 +19,7 @@ public final class AgentDeps {
   private final ToolRegistry tools;
   private final Retrieval.TwoTierRetriever retriever;
   private final LogicalClock clock;
+  private final TurnProbe probe;
 
   public AgentDeps(RoutedGraph graph, ToolRegistry tools, Retrieval.TwoTierRetriever retriever) {
     this(graph, tools, retriever, LogicalClock.system());
@@ -25,10 +27,17 @@ public final class AgentDeps {
 
   public AgentDeps(RoutedGraph graph, ToolRegistry tools, Retrieval.TwoTierRetriever retriever,
                    LogicalClock clock) {
+    this(graph, tools, retriever, clock, TurnProbe.NONE);
+  }
+
+  /** @param probe a test's view of every turn, for a fixture's {@code crash_at} */
+  public AgentDeps(RoutedGraph graph, ToolRegistry tools, Retrieval.TwoTierRetriever retriever,
+                   LogicalClock clock, TurnProbe probe) {
     this.graph = graph;
     this.tools = tools;
     this.retriever = retriever;
     this.clock = clock == null ? LogicalClock.system() : clock;
+    this.probe = probe == null ? TurnProbe.NONE : probe;
   }
 
   /** The built-in banking worked example (router → cards/payments/general → verifier). */
@@ -51,6 +60,10 @@ public final class AgentDeps {
   /** The processing-time clock workflow timers read (spec section 8). */
   public LogicalClock clock() {
     return clock;
+  }
+
+  public TurnProbe probe() {
+    return probe;
   }
 
   /** The turn policies (idempotency, retry, verification) declared by the compiled graph. */

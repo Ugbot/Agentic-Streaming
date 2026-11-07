@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -24,6 +25,7 @@ import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Deadlines;
 import org.jagentic.core.Event;
+import org.jagentic.core.FixtureWorld;
 import org.jagentic.core.Guardrail;
 import org.jagentic.core.HnswVectorStore;
 import org.jagentic.core.InMemoryVectorStore;
@@ -76,6 +78,8 @@ public final class GraphBuilder {
 
   /** Tool ids that {@code kind: failing} tools count attempts under; shared across turns like the reference. */
   public static final String FAIL_ATTEMPTS_KEY = "x-fail-attempts";
+  /** The {@link FixtureWorld} a fixture's stateful tools count in; a harness writes it in. */
+  public static final String WORLD_KEY = "x-world";
 
   /**
    * Supplies a ChatClient for an {@code llm:} spec (lets the loader choose the provider). The
@@ -282,13 +286,15 @@ public final class GraphBuilder {
         reg.register(id, desc, parameters, Deadlines.bound(id, timeout, httpTool(id, url, timeout)));
       } else if ("failing".equals(kind)) {
         reg.register(id, desc, parameters, failingTool(id, t));
+      } else if ("counting".equals(kind)) {
+        reg.registerKeyed(id, desc, parameters, (String) t.get("effect"), countingTool(id, t));
       } else if ("hanging".equals(kind)) {
         reg.register(id, desc, parameters,
             Deadlines.bound(id, Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), hangingTool(id)));
       } else {
         throw new WorkflowValidator.WorkflowValidationException("tools[" + id + "].kind",
             "tool kind " + kind + " cannot be bound from a document by this runtime"
-                + " (constant|http|agent|failing|hanging)");
+                + " (constant|http|agent|failing|hanging|counting)");
       }
     }
     return reg;
@@ -304,12 +310,27 @@ public final class GraphBuilder {
     int failFirst = budget == null ? Integer.MAX_VALUE : ((Number) budget).intValue();
     Object value = t.get("value");
     AtomicInteger seen = new AtomicInteger();
+    Object world = t.get(WORLD_KEY);
     return params -> {
-      if (seen.incrementAndGet() <= failFirst) {
+      int attempt = world == null ? seen.incrementAndGet()
+          : FixtureWorld.count(String.valueOf(world), "failing/" + id, "", false);
+      if (attempt <= failFirst) {
         throw new IllegalStateException(id + " failed");
       }
       return value;
     };
+  }
+
+  /**
+   * The spec's fixture tool: answers with how many calls it has seen for this conversation, or how
+   * many distinct keys under {@code x-count-by: keys}, so a repeated effect shows in the reply.
+   */
+  private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> countingTool(
+      String id, Map<String, Object> t) {
+    String world = String.valueOf(t.getOrDefault(WORLD_KEY, java.util.UUID.randomUUID()));
+    boolean byKeys = "keys".equals(t.get("x-count-by"));
+    return (params, call) -> FixtureWorld.count(world, id + "/" + call.conversationId(),
+        call.idempotencyKey(), byKeys);
   }
 
   /** The spec's deterministic timeout tool: never answers, so only an enforced limit ends it. */

@@ -43,6 +43,8 @@ public final class AgentContext {
   public RandomGenerator random = null;
   /** The runtime's processing-time clock for workflow timers (spec section 8); null when the runtime has none. */
   public LogicalClock clock = null;
+  /** A test's view of the turn. */
+  public TurnProbe probe = TurnProbe.NONE;
 
   private int nextToolIndex = 0;
 
@@ -72,8 +74,10 @@ public final class AgentContext {
 
   /** The {@code append} verb for this turn: records the event and remembers it as this turn's. */
   public LogEvent record(EventType type, Map<String, Object> payload) {
+    probe.beforeAppend(type.wire());
     LogEvent e = log.append(conversationId, turnId, type, payload);
     events.add(e);
+    probe.afterAppend(type.wire());
     return e;
   }
 
@@ -163,7 +167,9 @@ public final class AgentContext {
     for (int attempt = 1; attempt <= budget; attempt++) {
       Object result;
       try {
-        result = tool.execute(args);
+        probe.beforeCall(toolId);
+        result = tool.execute(args, new ToolRegistry.CallIdentity(conversationId, turnId, index,
+            java.util.UUID.randomUUID().toString()));
       } catch (RuntimeException e) {
         String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
         calls.add(ToolCall.failed(toolId, index, args, message, attempt));
@@ -183,6 +189,8 @@ public final class AgentContext {
         }
         continue;
       }
+      probe.duringCall(toolId);
+      probe.afterCall(toolId);
       calls.add(ToolCall.succeeded(toolId, index, args, result, attempt));
       EventType type = successEvent != null ? successEvent
           : tool.peer() ? EventType.DELEGATED : EventType.TOOL_CALLED;

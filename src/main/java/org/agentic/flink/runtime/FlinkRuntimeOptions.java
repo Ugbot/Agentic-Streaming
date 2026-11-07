@@ -39,7 +39,8 @@ public record FlinkRuntimeOptions(
     Duration stateTtl,
     Duration resumeAfter,
     TimeDomain timerDomain,
-    ProcessingClock processingClock)
+    ProcessingClock processingClock,
+    org.jagentic.core.TurnProbe probe)
     implements Serializable {
 
   public static final String RUNTIME_KEY = "runtime";
@@ -52,12 +53,13 @@ public record FlinkRuntimeOptions(
       new FlinkRuntimeOptions(null, null, TimeDomain.PROCESSING_TIME);
 
   public FlinkRuntimeOptions(Duration stateTtl, Duration resumeAfter, TimeDomain timerDomain) {
-    this(stateTtl, resumeAfter, timerDomain, ProcessingClock.flink());
+    this(stateTtl, resumeAfter, timerDomain, ProcessingClock.flink(), null);
   }
 
   public FlinkRuntimeOptions {
     timerDomain = timerDomain == null ? TimeDomain.PROCESSING_TIME : timerDomain;
     processingClock = processingClock == null ? ProcessingClock.flink() : processingClock;
+    probe = probe == null ? org.jagentic.core.TurnProbe.NONE : probe;
     if (stateTtl != null && (stateTtl.isZero() || stateTtl.isNegative())) {
       throw new IllegalArgumentException(STATE_TTL_MS + " must be positive, got " + stateTtl);
     }
@@ -67,20 +69,25 @@ public record FlinkRuntimeOptions(
   }
 
   public FlinkRuntimeOptions withStateTtl(Duration ttl) {
-    return new FlinkRuntimeOptions(ttl, resumeAfter, timerDomain, processingClock);
+    return new FlinkRuntimeOptions(ttl, resumeAfter, timerDomain, processingClock, probe);
   }
 
   public FlinkRuntimeOptions withResumeAfter(Duration delay) {
-    return new FlinkRuntimeOptions(stateTtl, delay, timerDomain, processingClock);
+    return new FlinkRuntimeOptions(stateTtl, delay, timerDomain, processingClock, probe);
   }
 
   public FlinkRuntimeOptions withTimerDomain(TimeDomain domain) {
-    return new FlinkRuntimeOptions(stateTtl, resumeAfter, domain, processingClock);
+    return new FlinkRuntimeOptions(stateTtl, resumeAfter, domain, processingClock, probe);
   }
 
   /** The clock workflow timers read for processing time; see {@link ProcessingClock}. */
+  /** A test's view of every turn, for a fixture's {@code crash_at}. */
+  public FlinkRuntimeOptions withProbe(org.jagentic.core.TurnProbe turnProbe) {
+    return new FlinkRuntimeOptions(stateTtl, resumeAfter, timerDomain, processingClock, turnProbe);
+  }
+
   public FlinkRuntimeOptions withProcessingClock(ProcessingClock clock) {
-    return new FlinkRuntimeOptions(stateTtl, resumeAfter, timerDomain, clock);
+    return new FlinkRuntimeOptions(stateTtl, resumeAfter, timerDomain, clock, probe);
   }
 
   /**

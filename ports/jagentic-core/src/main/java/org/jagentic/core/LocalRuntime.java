@@ -29,6 +29,7 @@ public final class LocalRuntime implements Runtime {
   private final Retrieval.TwoTierRetriever retriever;
   private final ConversationLog log;
   private final LogicalClock clock;
+  private TurnProbe probe = TurnProbe.NONE;
   private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
   private final Map<String, CompletableFuture<?>> tails = new ConcurrentHashMap<>();
   private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -65,6 +66,12 @@ public final class LocalRuntime implements Runtime {
     rebuildMaterializedViews();
   }
 
+  /** A test's view of every turn, for a fixture's {@code crash_at}. */
+  public LocalRuntime withProbe(TurnProbe turnProbe) {
+    this.probe = turnProbe;
+    return this;
+  }
+
   public ConversationStore store() {
     return store;
   }
@@ -95,6 +102,7 @@ public final class LocalRuntime implements Runtime {
       AgentContext ctx = new AgentContext(event.conversationId(), event.turnId(), event.userId(),
           store, state, tools, retriever, log, graph.policies());
       ctx.clock = clock;
+      ctx.probe = probe;
       return graph.handle(event, ctx);
     } finally {
       lock.unlock();

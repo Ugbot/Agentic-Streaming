@@ -347,6 +347,7 @@ public final class ConversationEntity
     AgentContext ctx = new AgentContext(conversationId, event.turnId(), event.userId(), store,
         new KeyedStateStore.InMemory(), deps.tools(), deps.retriever(), log, deps.policies());
     ctx.clock = deps.clock();
+    ctx.probe = deps.probe();
     TurnResult result;
     try {
       result = deps.graph().handle(event, ctx);

@@ -13,17 +13,17 @@ never a reimplementation of it:
 | runtime   | binding                                                          | comparison            |
 |-----------|------------------------------------------------------------------|-----------------------|
 | reference | `spec/tools/reference_runtime.py`, in process                    | here, on its results  |
-| jvm-core  | `ports/jagentic-core` JUnit `ConformanceTest`                    | inside the binding    |
-| flink     | `src/test/.../FlinkConformanceTest` on a MiniCluster             | inside the binding    |
-| pekko     | `agentic-pekko` JUnit `PekkoConformanceTest`                     | inside the binding    |
+| jvm-core  | `ports/jagentic-core` JUnit `ConformanceTest`                    | here, on its results  |
+| flink     | `src/test/.../FlinkConformanceTest` on a MiniCluster             | here, on its results  |
+| pekko     | `agentic-pekko` JUnit `PekkoConformanceTest`                     | here, on its results  |
 | python    | an installed `agentic.conformance` entry point (see below)       | here, on its results  |
 
-"Here" means the binding returns one normalized result document per turn (schema
-`spec/v1/result.schema.json`); the runner validates every document against that schema,
-drops `runtime_detail`, and applies `run_conformance.check_expectation`, the comparator the
-conformance README defines. "Inside the binding" means the binding runs the same comparator
-as a port and reports one JUnit test case per fixture; the runner reads the surefire XML and
-records passed / skipped (an aborted assumption) / failed per fixture.
+Every runtime goes through one comparator. Each binding yields one normalized result document
+per turn (schema `spec/v1/result.schema.json`); the runner validates every document against that
+schema, drops `runtime_detail`, and applies `run_conformance.check_expectation`. The JVM bindings
+leave their documents in `target/conformance-results/<fixture id>.json`. Surefire XML says only
+which fixtures ran and which were skipped: an aborted assumption is a skip, and the JUnit port of
+the comparator is a convenience for `mvn test`, not the record.
 
 A Python binding is discovered through the `agentic.conformance` entry-point group (or
 `--python-binding module:callable`). The callable receives the fixture as a mapping (with
@@ -331,6 +331,26 @@ def parse_surefire(reports_dir: Path, fixtures: Dict[str, Dict[str, Any]], suite
     return [seen[f] for f in fixtures]
 
 
+def compare_written_results(outcomes: List[FixtureOutcome], fixtures: Dict[str, Dict[str, Any]],
+                            results_dir: Path) -> List[FixtureOutcome]:
+    """Replace each executed fixture's JUnit verdict with the one comparator's, on the results the
+    binding wrote. A fixture that ran and left no results is a failure, never a pass."""
+    validator = result_validator()
+    compared: List[FixtureOutcome] = []
+    for outcome in outcomes:
+        if outcome.status == SKIPPED:
+            compared.append(outcome)
+            continue
+        path = results_dir / f"{outcome.fixture}.json"
+        if not path.is_file():
+            reason = outcome.problems or ["no results written"]
+            compared.append(FixtureOutcome(outcome.fixture, FAILED, outcome.requires, [f"no results: {reason[0]}"]))
+            continue
+        results = json.loads(path.read_text(encoding="utf-8"))
+        compared.append(outcome_from_results(fixtures[outcome.fixture], results, validator))
+    return compared
+
+
 @dataclass
 class MavenSuite:
     name: str
@@ -371,7 +391,7 @@ def ensure_core_installed(root: Path, logs: Path) -> None:
 
 
 def run_maven_suite(suite: MavenSuite, fixtures: Dict[str, Dict[str, Any]], root: Path, logs: Path) -> RuntimeReport:
-    report = RuntimeReport(suite.name, suite.binding(), "binding", RAN)
+    report = RuntimeReport(suite.name, suite.binding(), "runner", RAN)
     if not _suite_present(root, suite):
         report.status, report.reason = NOT_TESTED, f"binding absent: no {suite.suite}.java under {suite.pom.rsplit('/', 1)[0] or '.'}"
         return report
@@ -387,7 +407,9 @@ def run_maven_suite(suite: MavenSuite, fixtures: Dict[str, Dict[str, Any]], root
             ensure_core_installed(root, logs)
         proc = _run(cmd, root, logs / f"{suite.name}.log")
         reports_dir = root / Path(suite.pom).parent / "target" / "surefire-reports"
-        report.fixtures = parse_surefire(reports_dir, fixtures, suite.suite)
+        report.fixtures = compare_written_results(
+            parse_surefire(reports_dir, fixtures, suite.suite), fixtures,
+            root / Path(suite.pom).parent / "target" / "conformance-results")
         if proc.returncode != 0 and not any(f.status == FAILED for f in report.fixtures):
             raise BindingError(f"mvn exited {proc.returncode} without a failing fixture; see {logs / (suite.name + '.log')}")
     except BindingError as exc:

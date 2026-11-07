@@ -187,6 +187,30 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
     awaitRunning(job, deadline);
   }
 
+  /** Whether a crash happened, waited for by the caller's own means. */
+  @FunctionalInterface
+  public interface CrashWatch {
+    boolean fired() throws InterruptedException;
+  }
+
+  /**
+   * Submits a turn that is armed to kill the task, and waits for the job to come back. Flink
+   * restarts it from its latest checkpoint or savepoint. Returns false when the crash never
+   * happened, in which case the turn's result is still to come.
+   */
+  public boolean submitUntilCrash(Event event, CrashWatch watch) throws Exception {
+    submitEvent(event);
+    if (!watch.fired()) {
+      return false;
+    }
+    long deadline = System.nanoTime() + timeout.toNanos();
+    while (job.getJobStatus().get() == JobStatus.RUNNING) {
+      sleepOrFail(deadline, "job never left RUNNING after the crash");
+    }
+    awaitRunning(job, deadline);
+    return true;
+  }
+
   /** Submits one turn and waits for the result that the job emits for it. */
   public TurnResult submit(Event event) throws Exception {
     List<TurnResult> r = submitAll(List.of(event));
