@@ -1,0 +1,36 @@
+id: argument-schema
+description: Arguments that fail the tool's parameters schema fail the turn with class validation, and nothing reaches
+  the tool.
+requires: [structured_tool_args, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - id: pay
+    kind: counting
+    parameters:
+      type: object
+      required: [order]
+      properties:
+        order: {type: string}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: validation
+  tool_calls: []
+  events: [turn_received, routed, brain_started, turn_failed]

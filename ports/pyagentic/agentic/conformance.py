@@ -8,18 +8,26 @@ Fixtures live in `spec/conformance/v1/fixtures/` of the Agentic-Streaming checko
 are located by walking up from this package or from `AGENTIC_SPEC_DIR`; not finding them
 is an error, never a silent skip. A fixture whose `requires` includes a capability the
 runtime does not declare `supported` or `partial` is recorded as skipped, never passed.
+
+The binding honours the fixture verbs of `spec/conformance/v1/README.md`, `crash_at` among them. A
+crash raises `SimulatedCrash` from `Engine.probe`: a BaseException, so nothing the turn does can
+catch it. The binding then restarts the runtime from what it keeps, and the delivery's result has
+status `crashed`.
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
+import importlib.util
 import os
 import re
 import sys
 from concurrent.futures import Future
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Union, runtime_checkable
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple, Union, runtime_checkable
 
 import yaml
 
@@ -42,6 +50,25 @@ RESULT_DETAIL_KEY = "runtime_detail"  # excluded from every comparison
 
 class FixturesNotFound(AgenticError):
     error_class = "validation"
+
+
+class SimulatedCrash(BaseException):
+    """The `crash_at` verb. A BaseException, so that nothing a turn does can catch it."""
+
+
+class CrashPoint:
+    """An `Engine.probe` that dies at a fixture's `crash_at`: `event` or `call`, `when`, `occurrence`."""
+
+    def __init__(self, plan: Mapping[str, Any]) -> None:
+        self.plan = plan
+        self.seen = 0
+
+    def __call__(self, axis: str, name: str, when: str) -> None:
+        if self.plan.get(axis) != name or self.plan["when"] != when:
+            return
+        self.seen += 1
+        if self.seen == self.plan.get("occurrence", 1):
+            raise SimulatedCrash()
 
 
 def fixtures_dir(start: Optional[Path] = None) -> Path:
@@ -85,6 +112,9 @@ def check_expectation(expected: Mapping[str, Any], actual: Mapping[str, Any]) ->
         if name in expected and expected[name] != actual.get(name):
             mismatch(name, expected[name], actual.get(name))
 
+    if "status_any" in expected and actual.get("status") not in expected["status_any"]:
+        mismatch("status_any", expected["status_any"], actual.get("status"))
+
     if "reply_matches" in expected:
         reply = actual.get("reply") or ""
         if not re.search(expected["reply_matches"], reply):
@@ -104,7 +134,7 @@ def check_expectation(expected: Mapping[str, Any], actual: Mapping[str, Any]) ->
             for i, (w, g) in enumerate(zip(want, got)):
                 if w["tool"] != g["tool"]:
                     mismatch(f"tool_calls[{i}].tool", w["tool"], g["tool"])
-                for key in ("index", "attempt", "args"):
+                for key in ("index", "attempt", "args", "result"):
                     if key in w and w[key] != g.get(key):
                         mismatch(f"tool_calls[{i}].{key}", w[key], g.get(key))
                 if w.get("failed", False) != (g.get("error") is not None):
@@ -121,6 +151,22 @@ def check_expectation(expected: Mapping[str, Any], actual: Mapping[str, Any]) ->
     for unwanted in expected.get("events_exclude", []):
         if unwanted in types:
             problems.append(f"events_exclude: {unwanted} present in {types}")
+    if "events" in expected and expected["events"] != types:
+        mismatch("events", expected["events"], types)
+    for wanted in expected.get("event_payloads", []):
+        found = [e for e in actual.get("events", []) if e["type"] == wanted["type"]]
+        occurrence = wanted.get("occurrence", 1)
+        if len(found) < occurrence:
+            problems.append(f"event_payloads: no {wanted['type']} occurrence {occurrence} in {types}")
+            continue
+        payload = found[occurrence - 1].get("payload") or {}
+        for key, want in wanted["payload"].items():
+            if payload.get(key) != want:
+                mismatch(f"event_payloads.{wanted['type']}.{key}", want, payload.get(key))
+    for name in expected.get("event_fields", []):
+        for event in actual.get("events", []):
+            if event.get(name) is None:
+                problems.append(f"event_fields: {event['type']} has no {name}")
 
     for key, want in (expected.get("state_includes") or {}).items():
         got = (actual.get("state") or {}).get(key)
@@ -177,20 +223,25 @@ def run_fixture_document(fixture: Mapping[str, Any], make_runtime: RuntimeFactor
         declared_as = ", ".join(f"{m}={declared.get(m, 'absent')}" for m in missing)
         return Outcome(fixture_id, path, "skip", [f"requires {missing}, declared {declared_as}"])
 
-    workflow = fixture["workflow"]
     results: List[Dict[str, Any]] = []
-    try:
-        runtime.deploy(workflow)
-        for batch in concurrent_batches(fixture["turns"]):
-            if batch[0].get("restart_runtime"):
-                runtime = _restart(runtime, workflow)
-            if batch[0].get("advance_time_ms"):
-                _advance(runtime, int(batch[0]["advance_time_ms"]))
-            results.extend(_deliver_batch(runtime, batch))
-    except AgenticError as exc:
-        return Outcome(fixture_id, path, "fail", [f"raised {type(exc).__name__}: {exc}"], results)
-    finally:
-        runtime.close()
+    with ExitStack() as stack:
+        workflow = _with_http_stub(fixture["workflow"], stack)
+        try:
+            runtime.deploy(workflow)
+            for batch in concurrent_batches(fixture["turns"]):
+                if batch[0].get("restart_runtime"):
+                    runtime = _restart(runtime, workflow)
+                if batch[0].get("advance_time_ms"):
+                    _advance(runtime, int(batch[0]["advance_time_ms"]))
+                if batch[0].get("crash_at"):
+                    runtime, result = _deliver_to_crash(runtime, workflow, batch[0])
+                    results.append(result)
+                else:
+                    results.extend(_deliver_batch(runtime, batch))
+        except AgenticError as exc:
+            return Outcome(fixture_id, path, "fail", [f"raised {type(exc).__name__}: {exc}"], results)
+        finally:
+            runtime.close()
 
     problems: List[str] = []
     for i, expected in enumerate(fixture["expect"]):
@@ -236,15 +287,58 @@ def concurrent_batches(turns: Sequence[Mapping[str, Any]]) -> List[List[Mapping[
     return batches
 
 
+def _with_http_stub(workflow: Any, stack: ExitStack) -> Any:
+    """A tool url of `{{http}}/...` points at a stub the binding starts, the one the spec keeps in
+    `spec/tools/http_stub.py`. A workflow with no such tool needs no stub, and an `AgentSpec` is
+    handed to `deploy` as it is, since only a fixture document carries the placeholder."""
+    if not isinstance(workflow, Mapping) or not any("{{http}}" in str(tool.get("url", "")) for tool in workflow.get("tools") or []):
+        return workflow
+    source = fixtures_dir().parents[2] / "tools" / "http_stub.py"
+    loader = importlib.util.spec_from_file_location("agentic_http_stub", source)
+    if loader is None or loader.loader is None or not source.exists():
+        raise FixturesNotFound(f"no HTTP stub at {source}")
+    module = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(module)
+    base = stack.enter_context(module.HttpStub()).base
+    resolved: Dict[str, Any] = copy.deepcopy(dict(workflow))
+    for tool in resolved["tools"]:
+        if isinstance(tool.get("url"), str):
+            tool["url"] = tool["url"].replace("{{http}}", base)
+    return resolved
+
+
+def turn_of(spec: Mapping[str, Any]) -> Dict[str, Any]:
+    """A fixture turn as the mapping `Runtime.submit` takes. A mapping rather than a `Turn`, since a
+    fixture may deliver the empty `turn_id` a `Turn` refuses to be built with."""
+    return {"conversation_id": spec["conversation_id"], "turn_id": spec["turn_id"], "text": spec.get("text", ""),
+            "user_id": spec.get("user_id", "anonymous"), "signal": spec.get("signal"),
+            "metadata": turn_metadata(spec)}
+
+
+def _deliver_to_crash(runtime: Runtime, workflow: Mapping[str, Any],
+                      spec: Mapping[str, Any]) -> Tuple[Runtime, Dict[str, Any]]:
+    """One delivery that dies at `crash_at`. Returns the runtime to carry on with, recovered from
+    what it keeps across a crash, and the delivery's result."""
+    engine = getattr(runtime, "engine", None)
+    if engine is None:
+        raise AgenticError(f"runtime {runtime.name!r} has no engine probe; crash_at cannot run against it")
+    engine.probe = CrashPoint(spec["crash_at"])
+    try:
+        result = runtime.submit(turn_of(spec))
+    except SimulatedCrash:
+        return _restart(runtime, workflow), {"conversation_id": spec["conversation_id"], "turn_id": spec["turn_id"],
+                                             "status": "crashed", "events": []}
+    engine.probe = None
+    return runtime, result
+
+
 def _deliver_batch(runtime: Runtime, batch: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     """Deliver one batch of mutually `concurrent_with` turns: on a runtime with `submit_async`
     every turn is handed over in declared order without waiting for the previous one, so the
     turns are in flight together and the runtime decides how they overlap (only within their
     per-conversation order). The results come back in the declared order, whatever order the
     turns finished in. A runtime without `submit_async` receives the turns one after another."""
-    turns = [Turn(conversation_id=spec["conversation_id"], turn_id=spec["turn_id"],
-                  text=spec.get("text", ""), signal=spec.get("signal"),
-                  metadata=turn_metadata(spec)) for spec in batch]
+    turns = [turn_of(spec) for spec in batch]
     if len(turns) == 1 or not isinstance(runtime, AsyncSubmitting):
         return [runtime.submit(turn) for turn in turns]
     futures = [runtime.submit_async(turn) for turn in turns]
@@ -285,7 +379,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("ids", nargs="*", help="fixture ids to run (default: all)")
     parser.add_argument("--runtime", default="local")
     args = parser.parse_args(argv)
-    outcomes = run_all(lambda: get_runtime(args.runtime), args.ids)
+    # Fixtures advance logical time, so the local runtime runs on the same clock as under pytest.
+    make_runtime = fixture_runtime if args.runtime == "local" else (lambda: get_runtime(args.runtime))
+    outcomes = run_all(make_runtime, args.ids)
     counts = {"pass": 0, "fail": 0, "skip": 0}
     for outcome in outcomes:
         counts[outcome.status] += 1

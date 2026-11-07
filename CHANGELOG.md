@@ -13,6 +13,17 @@ exists.
 
 ### Added
 
+- The effect journal (`spec/v1/primitives.md`, section 10): every tool and model call is recorded
+  outside the runtime's state and reused by index on a re-run, so a Flink restore no longer repeats a
+  payment. Stores: in memory, file (Python), Postgres and a compacted Kafka topic (JVM). Tools declare
+  `effect: read`, `idempotent` or `non_idempotent` and receive a deterministic `Idempotency-Key`. A
+  `non_idempotent` call with no recorded result becomes `unknown_outcome` and waits for a person.
+- Events `llm_called`, `tool_intent`, `compensation_failed` and `unknown_outcome`, and fixtures 32 to
+  74 with a `crash_at` harness verb. Every runtime now goes through one comparator, on the whole event
+  sequence.
+- One resume state machine in the spec. Undoes receive the forward args and result, compensate on any
+  failure class, and carry on from the log after a crash.
+
 - `agentic/v1`: the versioned primitive contract (`spec/v1/primitives.md`), the workflow IR
   schema (`spec/v1/workflow.schema.json`), the normalized result schema and the shared
   conformance fixtures under `spec/conformance/v1` (#17). Fixtures 16 to 22 cover the

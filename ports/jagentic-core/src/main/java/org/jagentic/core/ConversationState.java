@@ -19,8 +19,13 @@ public final class ConversationState implements Serializable {
 
   /** The recorded outcome of one applied turn, rebuilt from its events. */
   public record TurnRecord(String turnId, String text, TurnStatus status, String path, String reply,
-                           TurnError error, List<ToolCall> calls, List<LogEvent> events)
+                           TurnError error, List<ToolCall> calls, List<LogEvent> events,
+                           String userId, boolean resumed, boolean started)
       implements Serializable {
+    /** Events and no end: only a crash leaves a turn here (spec section 10). */
+    public boolean running() {
+      return status == null && started;
+    }
     public boolean terminal() {
       return status != null && status != TurnStatus.SUSPENDED;
     }
@@ -33,8 +38,20 @@ public final class ConversationState implements Serializable {
   }
 
   /** A turn parked by {@code turn_suspended} and not yet resumed. */
-  public record Suspended(String turnId, String path, String text, String until)
-      implements Serializable {}
+  public record Suspended(String turnId, String path, String text, String until, String userId,
+                          String tool, int index) implements Serializable {
+    public Suspended(String turnId, String path, String text, String until) {
+      this(turnId, path, text, until, null, null, -1);
+    }
+
+    /** The turn waits for a person to say what happened to a call. */
+    public boolean onUnknownOutcome() {
+      return UNKNOWN_OUTCOME.equals(until);
+    }
+  }
+
+  /** The {@code until} of a turn suspended on an unknown outcome. */
+  public static final String UNKNOWN_OUTCOME = "unknown_outcome";
 
   private final long turnCount;
   private final long transcriptLength;
@@ -100,6 +117,8 @@ public final class ConversationState implements Serializable {
           turnCount++;
           if (b != null) {
             b.text = str(p.get("text"));
+            b.userId = str(p.get("user_id"));
+            b.started = true;
           }
         }
         case MEMORY_WRITTEN -> {
@@ -180,15 +199,18 @@ public final class ConversationState implements Serializable {
         case TURN_SUSPENDED -> {
           String tid = str(p.get("turn_id"));
           suspended.put(tid, new Suspended(tid, str(p.get("path")), str(p.get("text")),
-              str(p.get("until"))));
+              str(p.get("until")), str(p.get("user_id")), str(p.get("tool")),
+              p.containsKey("index") ? intOf(p.get("index")) : -1));
           if (b != null) {
             b.status = TurnStatus.SUSPENDED;
+            b.resumed = false;
           }
         }
         case TURN_RESUMED -> {
           suspended.remove(str(p.get("turn_id")));
           if (b != null) {
             b.status = null;
+            b.resumed = true;
           }
         }
         default -> {
@@ -298,6 +320,9 @@ public final class ConversationState implements Serializable {
     String path;
     String reply;
     TurnError error;
+    String userId;
+    boolean resumed;
+    boolean started;
     final List<ToolCall> calls = new ArrayList<>();
     final List<LogEvent> events = new ArrayList<>();
 
@@ -308,7 +333,7 @@ public final class ConversationState implements Serializable {
     TurnRecord build() {
       return new TurnRecord(turnId, text, status, path, reply, error,
           Collections.unmodifiableList(new ArrayList<>(calls)),
-          Collections.unmodifiableList(new ArrayList<>(events)));
+          Collections.unmodifiableList(new ArrayList<>(events)), userId, resumed, started);
     }
   }
 }

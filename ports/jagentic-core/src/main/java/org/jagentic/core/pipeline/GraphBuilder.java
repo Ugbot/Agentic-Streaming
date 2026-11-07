@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -23,10 +24,14 @@ import org.jagentic.core.Brain;
 import org.jagentic.core.ContextWindow;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Deadlines;
+import org.jagentic.core.EffectJournal;
+import org.jagentic.core.EffectJournals;
 import org.jagentic.core.Event;
+import org.jagentic.core.FixtureWorld;
 import org.jagentic.core.Guardrail;
 import org.jagentic.core.HnswVectorStore;
 import org.jagentic.core.InMemoryVectorStore;
+import org.jagentic.core.OutcomeUnknown;
 import org.jagentic.core.Policies;
 import org.jagentic.core.RegexGuardrail;
 import org.jagentic.core.Retrieval;
@@ -64,18 +69,21 @@ public final class GraphBuilder {
    * memory under {@code on_unavailable: degrade}; empty when everything connected.
    */
   public record Built(RoutedGraph graph, ToolRegistry tools, Retrieval.TwoTierRetriever retriever,
-                      List<String> degradations) {
+                      List<String> degradations, EffectJournal journal) {
     public Built(RoutedGraph graph, ToolRegistry tools, Retrieval.TwoTierRetriever retriever) {
-      this(graph, tools, retriever, List.of());
+      this(graph, tools, retriever, List.of(), new EffectJournal.InMemory());
     }
 
     public Built {
       degradations = degradations == null ? List.of() : List.copyOf(degradations);
+      journal = journal == null ? new EffectJournal.InMemory() : journal;
     }
   }
 
   /** Tool ids that {@code kind: failing} tools count attempts under; shared across turns like the reference. */
   public static final String FAIL_ATTEMPTS_KEY = "x-fail-attempts";
+  /** The {@link FixtureWorld} a fixture's stateful tools count in; a harness writes it in. */
+  public static final String WORLD_KEY = "x-world";
 
   /**
    * Supplies a ChatClient for an {@code llm:} spec (lets the loader choose the provider). The
@@ -205,19 +213,47 @@ public final class GraphBuilder {
     RoutedGraph.Router router = buildRouter((Map<String, Object>) agent.get("router"), new ArrayList<>(paths.keySet()));
     RoutedGraph.Verifier verifier = buildVerifier((Map<String, Object>) agent.get("verifier"), "agent.verifier");
 
+    // A rail a path names applies to that path alone, after routing; the rest are global.
+    Map<String, Guardrail> named = new LinkedHashMap<>();
     List<Guardrail> guardrails = new ArrayList<>();
+    java.util.Set<String> scoped = new java.util.HashSet<>();
+    for (Object ps : pathSpecs.values()) {
+      if (((Map<String, Object>) ps).get("guardrails") instanceof List<?> names) {
+        names.forEach(n -> scoped.add(String.valueOf(n)));
+      }
+    }
     for (Map<String, Object> g : (List<Map<String, Object>>) spec.getOrDefault("guardrails", List.of())) {
-      guardrails.add(buildGuardrail(g, embedder));
+      Guardrail rail = buildGuardrail(g, embedder);
+      if (g.get("name") != null && scoped.contains(String.valueOf(g.get("name")))) {
+        named.put(String.valueOf(g.get("name")), rail);
+      } else {
+        guardrails.add(rail);
+      }
+    }
+    Map<String, List<Guardrail>> pathRails = new LinkedHashMap<>();
+    for (Map.Entry<String, Object> e : pathSpecs.entrySet()) {
+      if (((Map<String, Object>) e.getValue()).get("guardrails") instanceof List<?> names) {
+        List<Guardrail> rails = new ArrayList<>();
+        names.forEach(n -> {
+          if (named.containsKey(String.valueOf(n))) {
+            rails.add(named.get(String.valueOf(n)));
+          }
+        });
+        pathRails.put(e.getKey(), rails);
+      }
     }
 
     RoutedGraph graph = new RoutedGraph(router, paths, verifier, pathVerifiers, guardrails, List.of(), policies,
         saga, suspendUntil, contextWindow,
         org.jagentic.core.cep.SequencePattern.compile((List<Map<String, Object>>) spec.get("cep")));
+    if (!pathRails.isEmpty()) {
+      graph = graph.withPathGuardrails(pathRails);
+    }
     List<TimerSpec> timers = TimerSpec.fromSpecs(spec.get("timers"));
     if (!timers.isEmpty()) {
       graph = graph.withTimers(timers);
     }
-    return new Built(graph, tools, retriever, availability.degradations());
+    return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
   }
 
   /**
@@ -268,9 +304,10 @@ public final class GraphBuilder {
       String kind = (String) t.getOrDefault("kind", "constant");
       String desc = (String) t.getOrDefault("description", id);
       Map<String, Object> parameters = (Map<String, Object>) t.get("parameters");
+      String effect = (String) t.get("effect");
       if ("constant".equals(kind)) {
         Object value = t.get("value");
-        reg.register(id, desc, parameters, params -> value);
+        reg.registerKeyed(id, desc, parameters, effect, (params, call) -> value);
       } else if ("http".equals(kind) || "agent".equals(kind)) {
         // "agent" is an alias: call another agent/gateway's /agent endpoint (A2A-as-tool).
         String url = resolveEnv((String) t.get("url"));
@@ -279,16 +316,21 @@ public final class GraphBuilder {
               kind + " tools need a url");
         }
         long timeout = Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS);
-        reg.register(id, desc, parameters, Deadlines.bound(id, timeout, httpTool(id, url, timeout)));
+        reg.registerKeyed(id, desc, parameters, effect,
+            Deadlines.boundKeyed(id, timeout, httpTool(id, url, timeout)));
       } else if ("failing".equals(kind)) {
-        reg.register(id, desc, parameters, failingTool(id, t));
+        Function<Map<String, Object>, Object> failing = failingTool(id, t);
+        reg.registerKeyed(id, desc, parameters, effect, (params, call) -> failing.apply(params));
+      } else if ("counting".equals(kind)) {
+        reg.registerKeyed(id, desc, parameters, effect, countingTool(id, t));
       } else if ("hanging".equals(kind)) {
-        reg.register(id, desc, parameters,
-            Deadlines.bound(id, Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), hangingTool(id)));
+        Function<Map<String, Object>, Object> hanging = Deadlines.bound(id,
+            Deadlines.timeoutOf(t, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), hangingTool(id));
+        reg.registerKeyed(id, desc, parameters, effect, (params, call) -> hanging.apply(params));
       } else {
         throw new WorkflowValidator.WorkflowValidationException("tools[" + id + "].kind",
             "tool kind " + kind + " cannot be bound from a document by this runtime"
-                + " (constant|http|agent|failing|hanging)");
+                + " (constant|http|agent|failing|hanging|counting)");
       }
     }
     return reg;
@@ -304,12 +346,27 @@ public final class GraphBuilder {
     int failFirst = budget == null ? Integer.MAX_VALUE : ((Number) budget).intValue();
     Object value = t.get("value");
     AtomicInteger seen = new AtomicInteger();
+    Object world = t.get(WORLD_KEY);
     return params -> {
-      if (seen.incrementAndGet() <= failFirst) {
+      int attempt = world == null ? seen.incrementAndGet()
+          : FixtureWorld.count(String.valueOf(world), "failing/" + id, "", false);
+      if (attempt <= failFirst) {
         throw new IllegalStateException(id + " failed");
       }
       return value;
     };
+  }
+
+  /**
+   * The spec's fixture tool: answers with how many calls it has seen for this conversation, or how
+   * many distinct keys under {@code x-count-by: keys}, so a repeated effect shows in the reply.
+   */
+  private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> countingTool(
+      String id, Map<String, Object> t) {
+    String world = String.valueOf(t.getOrDefault(WORLD_KEY, java.util.UUID.randomUUID()));
+    boolean byKeys = "keys".equals(t.get("x-count-by"));
+    return (params, call) -> FixtureWorld.count(world, id + "/" + call.conversationId(),
+        call.idempotencyKey(), byKeys);
   }
 
   /** The spec's deterministic timeout tool: never answers, so only an enforced limit ends it. */
@@ -325,26 +382,33 @@ public final class GraphBuilder {
   }
 
   /**
-   * A POST of the arguments. Anything but a 2xx is a tool failure, and a body that is not JSON is
-   * the result as text, as in the Python runtime.
+   * A POST of the arguments, carrying the call's {@code Idempotency-Key}. A 2xx is the result, and a
+   * body that is not JSON is the result as text, as in the Python runtime. A 4xx is a definite
+   * failure. A 5xx, a timeout or a lost connection may have landed, so it is {@link OutcomeUnknown}
+   * (spec section 10).
    */
-  private static Function<Map<String, Object>, Object> httpTool(String id, String url, long timeoutMs) {
+  private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> httpTool(
+      String id, String url, long timeoutMs) {
     Duration timeout = Duration.ofMillis(timeoutMs);
     HttpClient http = HttpClient.newBuilder().connectTimeout(timeout).build();
-    return params -> {
+    return (params, call) -> {
       try {
         String body = JSON.writeValueAsString(params == null ? Map.of() : params);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
             .timeout(timeout)
             .header("Content-Type", "application/json")
+            .header("Idempotency-Key", call.idempotencyKey())
             .POST(HttpRequest.BodyPublishers.ofString(body)).build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() >= 500) {
+          throw new OutcomeUnknown(id + " failed: HTTP " + resp.statusCode());
+        }
         if (resp.statusCode() / 100 != 2) {
           throw new IllegalStateException(id + " failed: HTTP " + resp.statusCode());
         }
         return parseBody(resp.body());
       } catch (IOException e) {
-        throw new UncheckedIOException(id + " failed: " + e.getMessage(), e);
+        throw new OutcomeUnknown(id + " failed: " + e.getMessage(), e);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IllegalStateException(id + " was interrupted", e);
@@ -452,7 +516,8 @@ public final class GraphBuilder {
   private static Guardrail buildGuardrailOfKind(Map<String, Object> g, String kind, Embedder embedder,
                                                 boolean checkOutputs) {
     if ("regex".equals(kind)) {
-      return new RegexGuardrail((List<String>) g.getOrDefault("deny", List.of()),
+      return new RegexGuardrail((List<String>) g.getOrDefault("allow", List.of()),
+          (List<String>) g.getOrDefault("deny", List.of()),
           (String) g.getOrDefault("reason", "blocked by policy"), checkOutputs);
     }
     if ("classifier".equals(kind)) {
@@ -526,14 +591,14 @@ public final class GraphBuilder {
             throw new WorkflowValidator.WorkflowValidationException("a2a[" + name + "].url",
                 "http peers need a url");
           }
-          tools.registerPeer(name, desc, Deadlines.bound(name,
+          tools.registerKeyedPeer(name, desc, Deadlines.boundKeyed(name,
               Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
               org.jagentic.core.A2AClient.peerTool(url, ((Number) a.getOrDefault("retries", 2)).intValue())));
           break;
         case "inproc":
           Runtime peer = inprocPeers == null ? null : inprocPeers.get(name);
-          tools.registerPeer(name, desc, peer == null ? params -> "[" + name + "] delegated"
-              : Deadlines.bound(name, Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
+          tools.registerKeyedPeer(name, desc, peer == null ? (params, call) -> "[" + name + "] delegated"
+              : Deadlines.boundKeyed(name, Deadlines.timeoutOf(a, Deadlines.DEFAULT_PEER_TIMEOUT_MS),
                   inprocPeer(name, peer)));
           break;
         default:
@@ -548,10 +613,11 @@ public final class GraphBuilder {
    * a turn id derived from the caller's ({@code <turn_id>/<peer>}), so redelivery is idempotent on
    * the peer too.
    */
-  private static Function<Map<String, Object>, Object> inprocPeer(String name, Runtime peer) {
-    return params -> {
-      String conversationId = String.valueOf(params.getOrDefault("conversation_id", "a2a"));
-      String turnId = params.get("turn_id") == null ? null : params.get("turn_id") + "/" + name;
+  private static BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> inprocPeer(
+      String name, Runtime peer) {
+    return (params, call) -> {
+      String conversationId = String.valueOf(params.getOrDefault("conversation_id", call.conversationId()));
+      String turnId = params.getOrDefault("turn_id", call.turnId()) + "/" + name + "/" + call.index();
       TurnResult r = peer.submit(Event.turn(conversationId, turnId,
           String.valueOf(params.getOrDefault("user", params.getOrDefault("user_id", "anonymous"))),
           String.valueOf(params.getOrDefault("text", ""))));
@@ -572,10 +638,13 @@ public final class GraphBuilder {
   private static RoutedGraph.Router buildRouter(Map<String, Object> spec, List<String> paths) {
     Map<String, Object> s = spec == null ? Map.of() : spec;
     String kind = (String) s.getOrDefault("kind", "keyword");
-    if (!"keyword".equals(kind)) {
-      throw new IllegalArgumentException("router kind " + kind + " not supported (use 'keyword')");
-    }
     String defaultPath = (String) s.get("default");
+    if ("static".equals(kind)) {
+      return (event, ctx) -> defaultPath;
+    }
+    if (!"keyword".equals(kind)) {
+      throw new IllegalArgumentException("router kind " + kind + " not supported (keyword|static)");
+    }
     Map<String, List<String>> rules = (Map<String, List<String>>) s.getOrDefault("rules", Map.of());
     return (Event event, AgentContext ctx) -> {
       String low = event.text().toLowerCase();

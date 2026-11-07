@@ -30,6 +30,7 @@ import org.jagentic.core.ChatMessage;
 import org.jagentic.core.ConversationLog;
 import org.jagentic.core.ConversationState;
 import org.jagentic.core.ConversationStore;
+import org.jagentic.core.EffectJournals;
 import org.jagentic.core.Event;
 import org.jagentic.core.EventType;
 import org.jagentic.core.KeyedStateStore;
@@ -61,7 +62,10 @@ import org.jagentic.core.pipeline.WorkflowValidator;
  *       already recorded in the restored log is answered as {@code duplicate} by the core without
  *       re-running the brain, tools or saga. Flink snapshots state between elements, so a partially
  *       processed turn is never checkpointed. A turn that ran after the last completed checkpoint
- *       is not in the restored log, so on redelivery it runs again, tools and model calls included.
+ *       is not in the restored log, so on redelivery it runs again. Its tool and model calls go
+ *       through the {@code stores.effects} journal, which rollback does not touch: what was
+ *       recorded is reused by index, and only a call with no recorded result is made again, under
+ *       the same key. A {@code non_idempotent} tool needs a durable journal, and is never repeated.
  *   <li><b>Timers.</b> When {@link FlinkRuntimeOptions#resumeAfter()} is set, a suspended turn
  *       registers a Flink timer (processing or event time), appends {@code timer_scheduled}, and on
  *       firing appends {@code timer_fired} and resumes the turn with a {@code {kind: "timer"}}
@@ -110,8 +114,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
 
   /**
    * The dead-letter side output: turns that ended {@code failed} with error class {@code fatal} or
-   * {@code transient}. They also appear on the main output; this stream is the one an operator
-   * alerts on, repairs from or redelivers from.
+   * {@code transient}, and turns suspended on an unknown outcome, which wait for a person. They
+   * also appear on the main output; this stream is the one an operator alerts on, repairs from or
+   * redelivers from.
    */
   public static final OutputTag<TurnResult> TURN_FAILURES =
       new OutputTag<>("turn-failures", TurnResultTypeInfo.INSTANCE);
@@ -159,6 +164,14 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     }
     this.spec = copy;
     WorkflowValidator.validate(this.spec);
+    String unsafe = EffectJournals.unsafeForRollback(this.spec);
+    if (unsafe != null) {
+      throw new IllegalArgumentException(
+          "tool "
+              + unsafe
+              + " is non_idempotent, and Flink state rolls back behind the outside world, so a"
+              + " re-run would repeat it: declare a durable stores.effects (postgres or kafka)");
+    }
     if (ChatClientFactories.isFailFast(chatClientFactory)
         && !GraphBuilder.usesScriptedLlm(this.spec)) {
       List<String> llmPaths = llmBrainPaths(this.spec);
@@ -237,6 +250,14 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   }
 
   @Override
+  public void close() throws Exception {
+    if (built != null) {
+      built.journal().close();
+    }
+    super.close();
+  }
+
+  @Override
   public void processElement(Event event, Context ctx, Collector<TurnResult> out) throws Exception {
     String cid = ctx.getCurrentKey();
     if (!cid.equals(event.conversationId())) {
@@ -250,7 +271,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
     TurnResult result = null;
     try {
       result = handle(event, keyedLog, ctx.timerService());
-      if (result.status == TurnStatus.SUSPENDED && options.timerResume()) {
+      if (result.status == TurnStatus.SUSPENDED
+          && options.timerResume()
+          && !result.awaitsAPerson()) {
         LogEvent scheduled = scheduleResume(event.turnId(), keyedLog, ctx);
         result = withEvents(result, append(result.events, scheduled));
       }
@@ -399,6 +422,8 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
             built.graph().policies());
     ProcessingClock clock = options.processingClock();
     agentCtx.clock = () -> clock.nowMs(timerService);
+    agentCtx.probe = options.probe();
+    agentCtx.journal = built.journal();
     return built.graph().handle(event, agentCtx);
   }
 
@@ -452,6 +477,9 @@ public final class WorkflowTurnFunction extends KeyedProcessFunction<String, Eve
   }
 
   private static boolean needsAttention(TurnResult result) {
+    if (result.awaitsAPerson()) {
+      return true;
+    }
     if (result.status != TurnStatus.FAILED || result.error == null) {
       return false;
     }

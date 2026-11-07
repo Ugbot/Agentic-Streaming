@@ -66,11 +66,12 @@ public final class McpStdioClient implements AutoCloseable {
     return List.copyOf(specs);
   }
 
-  private synchronized String callTool(String name, Map<String, Object> args) {
+  private synchronized String callTool(String name, Map<String, Object> args, String idempotencyKey) {
     try {
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("name", name);
       params.put("arguments", args == null ? Map.of() : args);
+      params.put("_meta", Map.of("idempotency_key", idempotencyKey));
       JsonNode resp = request("tools/call", params);
       JsonNode content = resp.path("result").path("content");
       StringBuilder sb = new StringBuilder();
@@ -106,8 +107,9 @@ public final class McpStdioClient implements AutoCloseable {
     for (Map<String, String> spec : specs) {
       String name = spec.get("name");
       String id = p + name;
-      reg.register(id, spec.getOrDefault("description", ""),
-          Deadlines.bound(id, timeoutMs, params -> callTool(name, params), process::destroyForcibly));
+      reg.registerKeyed(id, spec.getOrDefault("description", ""), null, null,
+          Deadlines.boundKeyed(id, timeoutMs,
+              (params, call) -> callTool(name, params, call.idempotencyKey()), process::destroyForcibly));
       ids.add(id);
     }
     return ids;

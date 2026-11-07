@@ -19,6 +19,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.jagentic.core.ConversationLog;
 import org.jagentic.core.ConversationStore;
+import org.jagentic.core.EffectJournals;
 import org.jagentic.core.Event;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LocalRuntime;
@@ -42,9 +43,11 @@ public final class ConformanceHarness {
   public static final Set<String> CAPABILITIES = Set.of(
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
-      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery");
+      "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery",
+      "crash_recovery", "effect_journal");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
+  private static final ObjectMapper JSON = new ObjectMapper();
 
   /** Outcome of one fixture: exactly one of passed, skipped (with reason), or failed (with problems). */
   public record Outcome(String id, String skipReason, List<String> problems) {
@@ -103,39 +106,113 @@ public final class ConformanceHarness {
       workflow = load(fixturePath.getParent().resolve(String.valueOf(fixture.get("workflow_ref"))).normalize());
     }
 
-    // provider: stub is resolved by GraphBuilder itself; anything else is not a fixture provider.
-    GraphBuilder.Built built = GraphBuilder.build(workflow, llm -> {
-      throw new IllegalStateException("conformance fixtures only use llm.provider: stub, got " + llm.get("provider"));
-    });
-    ConversationLog log = new ConversationLog.InMemory();
-    LocalRuntime runtime = newRuntime(built, log, new LogicalClock.Manual());
+    List<Map<String, Object>> results = new ArrayList<>();
+    try (FixtureHttpStub stub = new FixtureHttpStub()) {
+      workflow = prepare(workflow, stub.base());
+      // provider: stub is resolved by GraphBuilder itself; anything else is not a fixture provider.
+      GraphBuilder.Built built = GraphBuilder.build(workflow, llm -> {
+        throw new IllegalStateException("conformance fixtures only use llm.provider: stub, got " + llm.get("provider"));
+      });
+      Crash.Probe probe = Crash.newProbe();
+      ConversationLog log = new ConversationLog.InMemory();
+      LocalRuntime runtime = newRuntime(built, log, new LogicalClock.Manual(), probe);
 
-    List<CompletableFuture<TurnResult>> pending = new ArrayList<>();
-    for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
-      if (Boolean.TRUE.equals(turn.get("restart_runtime"))) {
-        pending.forEach(CompletableFuture::join);
-        runtime = newRuntime(built, log, LogicalClock.Manual.recoveredFrom(log));
+      List<CompletableFuture<TurnResult>> pending = new ArrayList<>();
+      List<Object> delivered = new ArrayList<>();
+      for (Map<String, Object> turn : (List<Map<String, Object>>) fixture.get("turns")) {
+        if (Boolean.TRUE.equals(turn.get("restart_runtime"))) {
+          pending.forEach(CompletableFuture::join);
+          runtime = newRuntime(built, log, LogicalClock.Manual.recoveredFrom(log), probe);
+        }
+        if (turn.get("advance_time_ms") != null) {
+          pending.forEach(CompletableFuture::join);
+          ((LogicalClock.Manual) runtime.clock()).advance(((Number) turn.get("advance_time_ms")).longValue());
+        }
+        Event event = eventOf(turn);
+        if (turn.get("crash_at") != null) {
+          pending.forEach(CompletableFuture::join);
+          probe.arm((Map<String, Object>) turn.get("crash_at"));
+          try {
+            delivered.add(runtime.submit(event));
+          } catch (Crash.SimulatedCrash crash) {
+            delivered.add(crashed(turn));
+            runtime = newRuntime(built, log, LogicalClock.Manual.recoveredFrom(log), probe);
+          } finally {
+            probe.disarm();
+          }
+        } else if (turn.get("concurrent_with") != null) {
+          CompletableFuture<TurnResult> f = runtime.submitAsync(event);
+          pending.add(f);
+          delivered.add(f);
+        } else {
+          pending.forEach(CompletableFuture::join);
+          delivered.add(runtime.submit(event));
+        }
       }
-      if (turn.get("advance_time_ms") != null) {
-        pending.forEach(CompletableFuture::join);
-        ((LogicalClock.Manual) runtime.clock()).advance(((Number) turn.get("advance_time_ms")).longValue());
-      }
-      String conversationId = String.valueOf(turn.get("conversation_id"));
-      String turnId = String.valueOf(turn.get("turn_id"));
-      Map<String, Object> signal = (Map<String, Object>) turn.get("signal");
-      Event event = signal != null
-          ? Event.resume(conversationId, turnId, signal)
-          : Event.turn(conversationId, turnId, "anonymous", String.valueOf(turn.getOrDefault("text", "")),
-              metadata(turn));
-      if (turn.get("concurrent_with") != null) {
-        pending.add(runtime.submitAsync(event));
-      } else {
-        pending.forEach(CompletableFuture::join);
-        pending.add(CompletableFuture.completedFuture(runtime.submit(event)));
+      for (Object d : delivered) {
+        if (d instanceof CompletableFuture<?> f) {
+          results.add(((TurnResult) f.join()).toMap());
+        } else if (d instanceof TurnResult r) {
+          results.add(r.toMap());
+        } else {
+          results.add((Map<String, Object>) d);
+        }
       }
     }
-    List<Map<String, Object>> results = pending.stream().map(f -> f.join().toMap()).toList();
+    writeResults(id, results);
+    return new Outcome(id, null, compare(fixture, results));
+  }
 
+  /** The event a fixture turn delivers: a signal, or a turn, under its {@code user_id}. */
+  @SuppressWarnings("unchecked")
+  public static Event eventOf(Map<String, Object> turn) {
+    String conversationId = String.valueOf(turn.get("conversation_id"));
+    String turnId = String.valueOf(turn.get("turn_id"));
+    String user = String.valueOf(turn.getOrDefault("user_id", "anonymous"));
+    Map<String, Object> signal = (Map<String, Object>) turn.get("signal");
+    return signal != null
+        ? new Event(conversationId, turnId, user, "", Map.of(), signal)
+        : new Event(conversationId, turnId, user, String.valueOf(turn.getOrDefault("text", "")),
+            metadata(turn), null);
+  }
+
+  /** The result a harness records for a delivery its {@code crash_at} killed. */
+  public static Map<String, Object> crashed(Map<String, Object> turn) {
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("conversation_id", turn.get("conversation_id"));
+    m.put("turn_id", turn.get("turn_id"));
+    m.put("status", "crashed");
+    m.put("events", List.of());
+    return m;
+  }
+
+  /**
+   * The workflow as this run sees it: {@code {{http}}} urls point at this binding's stub, and the
+   * fixture's stateful tools count in a world of their own, which outlives a crash.
+   */
+  @SuppressWarnings("unchecked")
+  public static Map<String, Object> prepare(Map<String, Object> workflow, String httpBase) {
+    Map<String, Object> doc = JSON.convertValue(workflow, Map.class);
+    String world = java.util.UUID.randomUUID().toString();
+    for (Map<String, Object> tool : (List<Map<String, Object>>) doc.getOrDefault("tools", List.of())) {
+      if (tool.get("url") instanceof String url) {
+        tool.put("url", url.replace("{{http}}", httpBase));
+      }
+      tool.put(GraphBuilder.WORLD_KEY, world);
+    }
+    if (doc.get("llm") instanceof Map<?, ?> llm) {
+      ((Map<String, Object>) llm).put(GraphBuilder.WORLD_KEY, world);
+    }
+    // A journal the rebuilt graph of a restarted job finds again, as it would a durable one.
+    Map<String, Object> stores = new LinkedHashMap<>((Map<String, Object>) doc.getOrDefault("stores", Map.of()));
+    stores.put("effects", Map.of("kind", "memory", "name", world, EffectJournals.PROCESS_LOCAL_OK, true));
+    doc.put("stores", stores);
+    return doc;
+  }
+
+  /** Every expectation against the results, in fixture order. */
+  @SuppressWarnings("unchecked")
+  public static List<String> compare(Map<String, Object> fixture, List<Map<String, Object>> results) {
     List<String> problems = new ArrayList<>();
     List<Map<String, Object>> expectations = (List<Map<String, Object>>) fixture.get("expect");
     for (int i = 0; i < expectations.size(); i++) {
@@ -148,7 +225,21 @@ public final class ConformanceHarness {
         problems.add("expect[" + i + "] (" + expected.get("turn_id") + ") " + p);
       }
     }
-    return new Outcome(id, null, problems);
+    return problems;
+  }
+
+  /**
+   * Leaves the normalized results for {@code spec/tools/conformance_matrix.py}, which compares every
+   * runtime with the one comparator, {@code run_conformance.check_expectation}.
+   */
+  public static void writeResults(String fixtureId, List<Map<String, Object>> results) {
+    Path dir = Path.of(System.getProperty("user.dir"), "target", "conformance-results");
+    try {
+      Files.createDirectories(dir);
+      JSON.writeValue(dir.resolve(fixtureId + ".json").toFile(), results);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   /** The fixture turn's {@code metadata} (string values, as the spec carries them), empty if none. */
@@ -166,9 +257,10 @@ public final class ConformanceHarness {
    * A restart keeps only the log: every materialized view, pending timers and the logical clock
    * included, is rebuilt from it.
    */
-  private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log, LogicalClock clock) {
+  private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log, LogicalClock clock,
+                                         Crash.Probe probe) {
     return new LocalRuntime(built.graph(), new ConversationStore.InMemory(), new KeyedStateStore.InMemory(),
-        built.tools(), built.retriever(), log, clock);
+        built.tools(), built.retriever(), log, clock).withProbe(probe).withJournal(built.journal());
   }
 
   /** Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance README. */
@@ -179,6 +271,9 @@ public final class ConformanceHarness {
       if (expected.containsKey(field) && !java.util.Objects.equals(expected.get(field), actual.get(field))) {
         problems.add(mismatch(field, expected.get(field), actual.get(field)));
       }
+    }
+    if (expected.get("status_any") instanceof List<?> any && !any.contains(actual.get("status"))) {
+      problems.add(mismatch("status_any", any, actual.get("status")));
     }
     if (expected.containsKey("reply_matches")) {
       String reply = actual.get("reply") == null ? "" : String.valueOf(actual.get("reply"));
@@ -205,8 +300,8 @@ public final class ConformanceHarness {
           if (!java.util.Objects.equals(w.get("tool"), g.get("tool"))) {
             problems.add(mismatch("tool_calls[" + i + "].tool", w.get("tool"), g.get("tool")));
           }
-          for (String key : List.of("index", "attempt", "args")) {
-            if (w.containsKey(key) && !java.util.Objects.equals(w.get(key), g.get(key))) {
+          for (String key : List.of("index", "attempt", "args", "result")) {
+            if (w.containsKey(key) && !sameValue(w.get(key), g.get(key))) {
               problems.add(mismatch("tool_calls[" + i + "]." + key, w.get(key), g.get(key)));
             }
           }
@@ -238,6 +333,32 @@ public final class ConformanceHarness {
         problems.add("events_exclude: " + unwanted + " present in " + types);
       }
     }
+    if (expected.get("events") instanceof List<?> exact && !exact.equals(types)) {
+      problems.add(mismatch("events", exact, types));
+    }
+    List<Map<String, Object>> events = (List<Map<String, Object>>) actual.getOrDefault("events", List.of());
+    for (Map<String, Object> wanted : (List<Map<String, Object>>) expected.getOrDefault("event_payloads", List.of())) {
+      int occurrence = wanted.get("occurrence") instanceof Number n ? n.intValue() : 1;
+      List<Map<String, Object>> found = events.stream().filter(e -> wanted.get("type").equals(e.get("type"))).toList();
+      if (found.size() < occurrence) {
+        problems.add("event_payloads: no " + wanted.get("type") + " occurrence " + occurrence + " in " + types);
+        continue;
+      }
+      Map<String, Object> payload = (Map<String, Object>) found.get(occurrence - 1).getOrDefault("payload", Map.of());
+      for (Map.Entry<String, Object> e : ((Map<String, Object>) wanted.get("payload")).entrySet()) {
+        if (!sameValue(e.getValue(), payload.get(e.getKey()))) {
+          problems.add(mismatch("event_payloads." + wanted.get("type") + "." + e.getKey(), e.getValue(),
+              payload.get(e.getKey())));
+        }
+      }
+    }
+    for (Object name : (List<Object>) expected.getOrDefault("event_fields", List.of())) {
+      for (Map<String, Object> e : events) {
+        if (e.get(String.valueOf(name)) == null) {
+          problems.add("event_fields: " + e.get("type") + " has no " + name);
+        }
+      }
+    }
     Map<String, Object> stateIncludes = (Map<String, Object>) expected.get("state_includes");
     Map<String, Object> state = (Map<String, Object>) actual.getOrDefault("state", Map.of());
     if (stateIncludes != null) {
@@ -255,6 +376,9 @@ public final class ConformanceHarness {
   private static boolean sameValue(Object want, Object got) {
     if (want instanceof Number a && got instanceof Number b) {
       return a.longValue() == b.longValue() && a.doubleValue() == b.doubleValue();
+    }
+    if (want instanceof Map<?, ?> || want instanceof List<?>) {
+      return JSON.valueToTree(want).equals(JSON.valueToTree(got));
     }
     return java.util.Objects.equals(want, got);
   }

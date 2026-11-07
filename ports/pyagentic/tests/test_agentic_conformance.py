@@ -10,7 +10,7 @@ from typing import Dict
 
 import pytest
 
-from agentic.conformance import Outcome, check_expectation, fixture_paths, fixtures_dir, load_yaml, run_fixture
+from agentic.conformance import Outcome, check_expectation, fixture_paths, fixtures_dir, load_yaml, main, run_fixture
 from agentic.runtime import LocalRuntime
 from agentic.workflow_timers import ManualClock
 
@@ -70,6 +70,28 @@ def test_comparator_applies_the_readme_rules():
     assert len(problems) == 5
 
 
+def test_comparator_applies_the_exact_event_rules():
+    actual = {
+        "status": "duplicate", "reply": "r",
+        "tool_calls": [{"tool": "a", "index": 0, "attempt": 1, "result": 1}],
+        "events": [{"type": "tool_intent", "payload": {"index": 0}, "timestamp": 5, "metadata": {}},
+                   {"type": "llm_called", "payload": {"index": 0}, "timestamp": 6, "metadata": {}},
+                   {"type": "llm_called", "payload": {"index": 1}}],
+    }
+    assert check_expectation({"status_any": ["completed", "duplicate"],
+                              "tool_calls": [{"tool": "a", "result": 1}],
+                              "events": ["tool_intent", "llm_called", "llm_called"],
+                              "event_payloads": [{"type": "llm_called", "occurrence": 2, "payload": {"index": 1}}]},
+                             actual) == []
+    problems = check_expectation({"status_any": ["completed"],
+                                  "tool_calls": [{"tool": "a", "result": 2}],
+                                  "events": ["tool_intent"],
+                                  "event_payloads": [{"type": "llm_called", "payload": {"index": 7}},
+                                                     {"type": "turn_failed", "payload": {}}],
+                                  "event_fields": ["timestamp"]}, actual)
+    assert len(problems) == 6
+
+
 def test_every_fixture_declares_requirements_the_runtime_knows():
     declared = LocalRuntime().capabilities()
     for path in PATHS:
@@ -126,3 +148,8 @@ def test_fixture_is_skipped_naming_every_capability_the_runtime_withholds():
     assert skipped.status == "skip"
     for cap in withheld:
         assert f"{cap}=unsupported" in skipped.reason
+
+
+def test_the_command_line_runs_the_local_runtime_on_logical_time(capsys):
+    assert main(["timer-fires"]) == 0
+    assert "pass timer-fires" in capsys.readouterr().out

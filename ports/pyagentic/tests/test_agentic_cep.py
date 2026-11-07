@@ -207,7 +207,7 @@ def test_match_tool_call_is_recorded_on_the_completing_turn_and_replays_from_the
     assert [(c["tool"], c["index"], c["args"], c["result"]) for c in r3["tool_calls"]] == [
         ("open_ticket", 0, {"pattern": "host_incident", "key": host}, "TICKET-OPENED")]
     kinds = [e["type"] for e in r3["events"]]
-    assert kinds[:4] == ["turn_received", "routed", "tool_called", "brain_started"]
+    assert kinds[:5] == ["turn_received", "routed", "tool_intent", "tool_called", "brain_started"]
     assert kinds[-1] == "turn_completed"
     received = [e for e in log.read(host) if e.type == "turn_received"]
     assert [e.payload["event_time_ms"] for e in received] == [0, step, 2 * step, 3 * step]

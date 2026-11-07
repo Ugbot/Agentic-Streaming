@@ -90,7 +90,7 @@ def test_processing_timer_fires_once_before_the_turn_that_observes_the_deadline(
 
     clock.advance(1)
     due = runtime.submit(_turn(cid, 3))
-    assert _types(due)[:3] == ["timer_fired", "tool_called", "turn_received"]
+    assert _types(due)[:4] == ["timer_fired", "tool_intent", "tool_called", "turn_received"]
     assert "timer_scheduled" not in _types(due)
     assert due["tool_calls"][0]["tool"] == "notify"
     assert due["tool_calls"][0]["args"] == {"channel": "email"}
@@ -141,8 +141,8 @@ def test_due_timers_fire_in_deadline_then_id_order_as_the_first_tool_calls():
     assert [c["tool"] for c in calls[:5]] == [by_id[t]["tool"] for t in expected]
     assert [c["args"] for c in calls[:5]] == [by_id[t]["payload"] for t in expected]
     assert [c["index"] for c in calls[:5]] == [0, 1, 2, 3, 4]
-    assert _types(result)[:10] == ["timer_fired", "tool_called"] * 5
-    assert _types(result)[10] == "turn_received"
+    assert _types(result)[:15] == ["timer_fired", "tool_intent", "tool_called"] * 5
+    assert _types(result)[15] == "turn_received"
 
 
 # -- event-time timers --------------------------------------------------------------
@@ -168,7 +168,7 @@ def test_event_timer_reads_the_watermark_and_ignores_processing_time():
     assert late["state"]["watermark_ms"] == base + after - 1
 
     r4 = runtime.submit(_turn(cid, 4, base + after))
-    assert _types(r4)[:3] == ["timer_fired", "tool_called", "turn_received"]
+    assert _types(r4)[:4] == ["timer_fired", "tool_intent", "tool_called", "turn_received"]
     assert r4["tool_calls"][0]["tool"] == "escalate"
     assert r4["state"]["watermark_ms"] == base + after
     assert r4["state"]["fired_timers"] == ["ev"]
@@ -233,7 +233,7 @@ def test_timer_survives_restart_and_fires_exactly_once():
 
     restarted.clock.advance(after - before)
     fired = restarted.submit(_turn(cid, 3))
-    assert _types(fired)[:3] == ["timer_fired", "tool_called", "turn_received"]
+    assert _types(fired)[:4] == ["timer_fired", "tool_intent", "tool_called", "turn_received"]
     assert fired["tool_calls"][0]["args"] == {"k": "v"}
     assert fired["state"]["fired_timers"] == ["remind"]
 

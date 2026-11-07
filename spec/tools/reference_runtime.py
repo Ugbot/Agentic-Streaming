@@ -15,8 +15,13 @@ arguments of `{"user": user_id}` from the rule brain), the reference reproduces 
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
+import urllib.error
+import urllib.request
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -27,7 +32,33 @@ _MASK_32 = 0xFFFFFFFF
 
 
 class ToolError(RuntimeError):
-    """A tool raised. Carries no runtime detail so results stay comparable."""
+    """A tool raised. Carries no runtime detail so results stay comparable. `unknown` says the
+    attempt ended without a definite answer, so the effect may have landed."""
+
+    def __init__(self, message: str, unknown: bool = False) -> None:
+        super().__init__(message)
+        self.unknown = unknown
+
+
+class ValidationFailure(RuntimeError):
+    """Bad arguments or an unknown tool inside a turn. Error class `validation`."""
+
+
+class UnknownOutcome(Exception):
+    """A non_idempotent call has no recorded result. The turn suspends for a person."""
+
+    def __init__(self, tool: str, index: int) -> None:
+        super().__init__(f"{tool} outcome unknown")
+        self.tool = tool
+        self.index = index
+
+
+class JournalDivergence(RuntimeError):
+    """A re-run asked for a different call under a recorded key. Error class `fatal`."""
+
+
+class SimulatedCrash(BaseException):
+    """The `crash_at` verb. A BaseException, so that nothing a turn does can catch it."""
 
 
 class TransientError(RuntimeError):
@@ -44,6 +75,16 @@ def fnv1a_32(token: str) -> int:
         h ^= b
         h = (h * _FNV_PRIME_32) & _MASK_32
     return h
+
+
+def idempotency_key(conversation_id: str, turn_id: str, index: int) -> str:
+    """primitives.md section 10: derived from recorded input alone, so a re-run regenerates it."""
+    material = conversation_id.encode() + b"\x00" + turn_id.encode() + b"\x00" + str(index).encode()
+    return hashlib.sha256(material).hexdigest()
+
+
+def intent_of(tool_id: str, args: Dict[str, Any]) -> str:
+    return tool_id + ":" + hashlib.sha256(json.dumps(args, sort_keys=True).encode()).hexdigest()
 
 
 def embed(text: str, dim: int) -> List[float]:
@@ -77,13 +118,14 @@ class Turn:
 
 @dataclass
 class Conversation:
+    conversation_id: str = ""
     log: List[Dict[str, Any]] = field(default_factory=list)
     results: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     suspended: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     timers: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # pending, by timer id
     watermark_ms: Optional[int] = None
     tool_indices: Dict[str, int] = field(default_factory=dict)  # next call index, by turn id
-    resumed: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # parked state of resumed turns
+    llm_indices: Dict[str, int] = field(default_factory=dict)  # next model call index, by turn id
 
 
 def reduce_state(log: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -151,27 +193,36 @@ class ReferenceRuntime:
         self.dim = (workflow.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
         self.conversations: Dict[str, Conversation] = {}
         self._tool_attempts: Dict[str, int] = {}
+        self.journal: Dict[Any, Dict[str, Any]] = {}  # the effect journal: outlives every restart
+        self._world: Dict[Any, Any] = {}  # what the `counting` tools and stub model have seen
+        self._crash: Optional[Dict[str, Any]] = None
 
     # -- lifecycle ---------------------------------------------------------
 
     def restart(self) -> None:
-        """Drop everything derived and rebuild from the log, exercising replay."""
+        """Drop everything derived and rebuild from the log, exercising replay. The journal and
+        the tools' outside world are not this runtime's memory, so they stay."""
         for conv in self.conversations.values():
-            conv.suspended = {}
-            conv.timers = {}
-            conv.watermark_ms = None
-            for event in conv.log:
-                kind, payload = event["type"], event["payload"]
-                if kind == "turn_suspended":
-                    conv.suspended[payload["turn_id"]] = payload
-                elif kind == "turn_resumed":
-                    conv.suspended.pop(payload["turn_id"], None)
-                elif kind == "timer_scheduled":
-                    conv.timers[payload["timer_id"]] = dict(payload)
-                elif kind == "timer_fired":
-                    conv.timers.pop(payload["timer_id"], None)
-                elif kind == "turn_received" and "event_time_ms" in payload:
-                    conv.watermark_ms = max(conv.watermark_ms or payload["event_time_ms"], payload["event_time_ms"])
+            self._rebuild(conv)
+
+    def _rebuild(self, conv: Conversation, without_turn: Optional[str] = None) -> None:
+        conv.suspended = {}
+        conv.timers = {}
+        conv.watermark_ms = None
+        for event in conv.log:
+            kind, payload = event["type"], event["payload"]
+            if kind == "turn_suspended":
+                conv.suspended[payload["turn_id"]] = payload
+            elif kind in ("turn_resumed", "turn_failed") and event["turn_id"] in conv.suspended:
+                conv.suspended.pop(event["turn_id"], None)
+            if event["turn_id"] == without_turn:
+                continue
+            if kind == "timer_scheduled":
+                conv.timers[payload["timer_id"]] = dict(payload)
+            elif kind == "timer_fired":
+                conv.timers.pop(payload["timer_id"], None)
+            elif kind == "turn_received" and "event_time_ms" in payload:
+                conv.watermark_ms = max(conv.watermark_ms or payload["event_time_ms"], payload["event_time_ms"])
 
     def advance(self, ms: int) -> None:
         """Advance logical processing time. Due timers fire on the next turn of their conversation."""
@@ -181,35 +232,195 @@ class ReferenceRuntime:
 
     # -- turn handling -----------------------------------------------------
 
-    def submit(self, turn: Turn) -> Dict[str, Any]:
-        conv = self.conversations.setdefault(turn.conversation_id, Conversation())
+    def submit(self, turn: Turn, crash_at: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """One delivery. `crash_at` is the fixture verb: the process dies at that point, this
+        delivery has no result, and the runtime recovers from what it keeps across a crash."""
+        self._crash = {"seen": 0, **crash_at} if crash_at else None
+        try:
+            return self._deliver(turn)
+        except SimulatedCrash:
+            self.restart()
+            return {"conversation_id": turn.conversation_id, "turn_id": turn.turn_id,
+                    "status": "crashed", "events": []}
+        finally:
+            self._crash = None
+
+    def _deliver(self, turn: Turn) -> Dict[str, Any]:
+        """The resume state machine of primitives.md section 10, one branch per cell."""
+        conv = self.conversations.setdefault(turn.conversation_id, Conversation(turn.conversation_id))
+        if not turn.turn_id:
+            return self._refused(conv, turn, "a turn needs a non-empty turn_id")
         idempotent = self.policies.get("idempotency", "turn-id") == "turn-id"
+        state = self._turn_state(conv, turn.turn_id)
+        retryable = state == "transient" and idempotent
 
-        if turn.signal is not None and turn.turn_id in conv.suspended:
-            return self._resume(conv, turn)
-        recorded = conv.results.get(turn.turn_id)
-        rerun = idempotent and recorded is not None and (recorded.get("error") or {}).get("class") == "transient"
-        if rerun and turn.signal is not None and turn.turn_id in conv.resumed:
-            conv.suspended[turn.turn_id] = conv.resumed[turn.turn_id]
-            return self._resume(conv, turn)
-        if idempotent and recorded is not None and not rerun:
-            prior = dict(recorded)
-            prior["status"] = "duplicate"
-            prior["events"] = []
-            return prior
+        if turn.signal is not None:
+            if state == "suspended":
+                return self._resume(conv, turn)
+            if state in ("absent", "running"):
+                return self._refused(conv, turn, f"no suspended turn {turn.turn_id!r} to resume")
+            if state == "resuming":
+                return self._run(conv, turn, resuming=True)
+            if retryable and self._reached_non_idempotent(conv, turn.turn_id):
+                ctx = self._context(conv, turn, rerun=False)
+                self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
+                                                         "signal_sender": turn.user_id})
+                return self._continue(conv, turn, ctx, resuming=True)
+            if retryable:
+                return self._rerun_resumed(conv, turn)
+            return self._duplicate(conv, turn)
+        if state in ("running", "resuming"):
+            return self._run(conv, turn, resuming=state == "resuming")
+        if retryable and self._reached_non_idempotent(conv, turn.turn_id):
+            resumed = any(e["type"] == "turn_resumed" for e in self._events_of(conv, turn.turn_id))
+            return self._run(conv, turn, resuming=resumed)
+        if retryable:
+            return self._run(conv, turn, rerun=True)
+        if state != "absent" and idempotent:
+            return self._duplicate(conv, turn)
+        return self._run(conv, turn, fresh=not idempotent)
 
-        ctx = _TurnContext(turn, _tool_index=conv.tool_indices.get(turn.turn_id, 0))
+    @staticmethod
+    def _events_of(conv: Conversation, turn_id: str) -> List[Dict[str, Any]]:
+        return [e for e in conv.log if e["turn_id"] == turn_id]
+
+    def _reached_non_idempotent(self, conv: Conversation, turn_id: str) -> bool:
+        """Such a run is replayed, not run again: that tool is never called twice."""
+        return any(e["type"] == "tool_intent" and e["payload"].get("effect") == "non_idempotent"
+                   for e in self._events_of(conv, turn_id))
+
+    def _turn_state(self, conv: Conversation, turn_id: str) -> str:
+        state = "absent"
+        for event in self._events_of(conv, turn_id):
+            kind = event["type"]
+            if kind == "turn_suspended":
+                state = "suspended"
+            elif kind == "turn_resumed":
+                state = "resuming"
+            elif kind == "turn_completed":
+                state = "terminal"
+            elif kind == "turn_failed":
+                state = "transient" if event["payload"].get("error_class") == "transient" else "terminal"
+            elif state == "absent":
+                state = "running"
+        return state
+
+    def _refused(self, conv: Conversation, turn: Turn, message: str) -> Dict[str, Any]:
+        """Status `failed`, class `validation`, nothing appended: the turn_id stays unspent."""
+        return {"conversation_id": turn.conversation_id, "turn_id": turn.turn_id, "status": "failed",
+                "path": None, "reply": None, "state": reduce_state(conv.log, self.context),
+                "tool_calls": [], "events": [], "error": {"class": "validation", "message": message}}
+
+    def _duplicate(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
+        recorded = conv.results.get(turn.turn_id) or self._result_from_log(conv, turn.turn_id)
+        prior = dict(recorded)
+        prior["status"] = "duplicate"
+        prior["events"] = []
+        prior["state"] = reduce_state(conv.log, self.context)
+        return prior
+
+    def _result_from_log(self, conv: Conversation, turn_id: str) -> Dict[str, Any]:
+        """A turn that ended on the log but whose delivery died before it could answer."""
+        path = reply = error = None
+        calls: List[Dict[str, Any]] = []
+        for event in self._events_of(conv, turn_id):
+            kind, payload = event["type"], event["payload"]
+            if kind == "routed":
+                path = payload["path"]
+            elif kind == "turn_completed":
+                reply = payload["reply"]
+                error = None
+            elif kind == "turn_failed":
+                error = {"class": payload.get("error_class", "fatal"), "message": payload.get("reason", "")}
+            elif kind in ("tool_called", "delegated", "compensation_step"):
+                calls.append({"tool": payload["tool"], "index": payload["index"], "args": payload["args"],
+                              "result": payload.get("result"), "attempt": payload["attempt"]})
+            elif kind == "tool_failed":
+                calls.append({"tool": payload["tool"], "index": payload["index"], "args": payload["args"],
+                              "error": payload["error"], "attempt": payload["attempt"]})
+        return {"conversation_id": conv.conversation_id, "turn_id": turn_id, "status": "completed", "path": path,
+                "reply": reply, "state": reduce_state(conv.log, self.context), "tool_calls": calls,
+                "events": [], "error": error}
+
+    def _context(self, conv: Conversation, turn: Turn, rerun: bool, fresh: bool = False) -> "_TurnContext":
+        """The turn as first received, and what its earlier run already put on the log."""
+        events = self._events_of(conv, turn.turn_id)
+        received = next((e["payload"] for e in events if e["type"] == "turn_received"), None)
+        original = turn
+        if received is not None and not fresh:
+            original = Turn(turn.conversation_id, turn.turn_id, received["text"],
+                            received.get("user_id", "anonymous"), None, dict(received.get("metadata") or {}))
+        ctx = _TurnContext(original)
+        if rerun:
+            ctx._tool_index = conv.tool_indices.get(turn.turn_id, 0)
+            ctx._llm_index = conv.llm_indices.get(turn.turn_id, 0)
+        elif not fresh:
+            ctx.prior = _Prior(events)
+        return ctx
+
+    def _resume(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
+        pending = conv.suspended[turn.turn_id]
+        if pending.get("until") == "unknown_outcome":
+            problem = self._resolve(turn, pending)
+            if problem is not None:
+                return self._refused(conv, turn, problem)
+        conv.suspended.pop(turn.turn_id)
+        ctx = self._context(conv, turn, rerun=False)
+        ctx.prior.answered()
+        self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
+                                                 "signal_sender": turn.user_id})
+        return self._continue(conv, turn, ctx, resuming=True)
+
+    def _resolve(self, turn: Turn, pending: Dict[str, Any]) -> Optional[str]:
+        """A person says what happened to a call. Returns the reason a signal is refused."""
+        resolution = (turn.signal or {}).get("resolution")
+        key = (turn.conversation_id, turn.turn_id, "tool", pending["index"])
+        entry = self.journal[key]
+        if resolution in ("applied", "not_applied", "failed") and entry["state"] != "unknown":
+            return None  # a redelivered signal: this entry has been answered
+        if resolution == "applied":
+            entry.update(state="succeeded", result=(turn.signal or {}).get("result"))
+        elif resolution == "not_applied":
+            entry.update(state="pending", released=True)
+        elif resolution == "failed":
+            error = f"{pending['tool']} resolved as failed"
+            entry["attempts"].append({"attempt": len(entry["attempts"]) + 1, "error": error})
+            entry.update(state="failed", error=error)
+        else:
+            return f"signal needs a resolution of applied, not_applied or failed, got {resolution!r}"
+        return None
+
+    def _rerun_resumed(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
+        ctx = self._context(conv, turn, rerun=True)
+        path = next(e["payload"]["path"] for e in self._events_of(conv, turn.turn_id) if e["type"] == "routed")
+        self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
+                                                 "signal_sender": turn.user_id})
+        return self._after_routing(conv, ctx, path)
+
+    def _run(self, conv: Conversation, turn: Turn, resuming: bool = False, rerun: bool = False,
+             fresh: bool = False) -> Dict[str, Any]:
+        ctx = self._context(conv, turn, rerun, fresh)
+        if resuming:
+            ctx.events.extend(ctx.prior.resumes)
+        return self._continue(conv, turn, ctx, resuming, rerun)
+
+    def _continue(self, conv: Conversation, delivered: Turn, ctx: "_TurnContext", resuming: bool,
+                  rerun: bool = False) -> Dict[str, Any]:
+        turn = ctx.turn
         event_time = turn.event_time_ms()
+        if ctx.prior and not resuming:
+            self._rebuild(conv, without_turn=turn.turn_id)
         if event_time is not None:
             conv.watermark_ms = max(conv.watermark_ms if conv.watermark_ms is not None else event_time, event_time)
-        first_turn = not conv.log
-        if not first_turn:
+        first_turn = all(e["turn_id"] == turn.turn_id for e in conv.log) and not rerun
+        if resuming:
+            ctx.skip_indices_of_timers()
+        elif not first_turn:
             try:
                 self._fire_due_timers(conv, ctx)
             except ToolError as exc:
-                return self._finish(conv, ctx, "failed", None, None, {"class": "tool", "message": str(exc)},
-                                    event=("turn_failed", {"reason": str(exc)}))
-        received: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text}
+                return self._fail(conv, ctx, None, "tool", str(exc))
+        received: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id}
         if event_time is not None:
             received["event_time_ms"] = event_time
         if turn.metadata:
@@ -219,33 +430,51 @@ class ReferenceRuntime:
         if first_turn:
             self._schedule_timers(conv, ctx)
 
-        blocked = self._check_guardrails(turn.text)
+        blocked = self._check_guardrails(self._global_rails(), "input", turn.text)
         if blocked is not None:
             self._append(conv, ctx, "guardrail_rejected", {"reason": blocked})
             return self._finish(conv, ctx, "rejected", None, None, {"class": "guardrail", "message": blocked})
 
         path = self._route(turn.text)
         self._append(conv, ctx, "routed", {"path": path})
-        self._match_patterns(conv, ctx)
+        try:
+            self._match_patterns(conv, ctx)
+        except ToolError as exc:
+            return self._fail(conv, ctx, path, "tool", str(exc))
+        blocked = self._check_guardrails(self._path_rails(path), "input", turn.text)
+        if blocked is not None:
+            self._append(conv, ctx, "guardrail_rejected", {"reason": blocked, "path": path})
+            return self._finish(conv, ctx, "rejected", path, None, {"class": "guardrail", "message": blocked})
 
-        if "x-suspend-until" in self.paths[path]:
-            self._append(conv, ctx, "turn_suspended",
-                         {"turn_id": turn.turn_id, "path": path, "text": turn.text,
-                          "until": self.paths[path]["x-suspend-until"]})
-            conv.suspended[turn.turn_id] = {"turn_id": turn.turn_id, "path": path, "text": turn.text}
+        if "x-suspend-until" in self.paths[path] and not resuming:
+            payload = {"turn_id": turn.turn_id, "path": path, "text": turn.text, "user_id": turn.user_id,
+                       "until": self.paths[path]["x-suspend-until"]}
+            self._append(conv, ctx, "turn_suspended", payload)
+            conv.suspended[turn.turn_id] = payload
             return self._finish(conv, ctx, "suspended", path, None, None)
+        return self._after_routing(conv, ctx, path)
 
-        if self.saga is not None:
-            return self._run_saga(conv, ctx, path)
-        return self._run_brain(conv, ctx, path)
+    def _after_routing(self, conv: Conversation, ctx: "_TurnContext", path: str) -> Dict[str, Any]:
+        try:
+            if self.saga is not None:
+                return self._run_saga(conv, ctx, path)
+            return self._run_brain(conv, ctx, path)
+        except UnknownOutcome as exc:
+            spec = self.tools[exc.tool]
+            payload = {"turn_id": ctx.turn.turn_id, "path": path, "text": ctx.turn.text,
+                       "user_id": ctx.turn.user_id, "until": "unknown_outcome",
+                       "tool": spec["id"], "index": exc.index}
+            self._append(conv, ctx, "turn_suspended", payload)
+            conv.suspended[ctx.turn.turn_id] = payload
+            return self._finish(conv, ctx, "suspended", path, None, None)
+        except (ValidationFailure, JournalDivergence) as exc:
+            cls = "validation" if isinstance(exc, ValidationFailure) else "fatal"
+            return self._fail(conv, ctx, path, cls, str(exc))
 
-    def _resume(self, conv: Conversation, turn: Turn) -> Dict[str, Any]:
-        pending = conv.suspended.pop(turn.turn_id)
-        conv.resumed[turn.turn_id] = pending
-        ctx = _TurnContext(Turn(turn.conversation_id, turn.turn_id, pending["text"]),
-                           _tool_index=conv.tool_indices.get(turn.turn_id, 0))
-        self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal})
-        return self._run_brain(conv, ctx, pending["path"])
+    def _fail(self, conv: Conversation, ctx: "_TurnContext", path: Optional[str], cls: str,
+              message: str) -> Dict[str, Any]:
+        return self._finish(conv, ctx, "failed", path, None, {"class": cls, "message": message},
+                            event=("turn_failed", {"reason": message, "error_class": cls}))
 
     def _run_brain(self, conv: Conversation, ctx: "_TurnContext", path: str) -> Dict[str, Any]:
         attempts = self.policies.get("verification", {}).get("max_attempts", 1)
@@ -255,13 +484,15 @@ class ReferenceRuntime:
             try:
                 reply = self._draft(conv, ctx, path)
             except ToolError as exc:
-                return self._finish(conv, ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
-                                    event=("turn_failed", {"reason": str(exc)}))
+                return self._fail(conv, ctx, path, "tool", str(exc))
             except TransientError as exc:
-                return self._finish(conv, ctx, "failed", path, None, {"class": "transient", "message": str(exc)},
-                                    event=("turn_failed", {"reason": str(exc)}))
+                return self._fail(conv, ctx, path, "transient", str(exc))
             self._append(conv, ctx, "reply_drafted", {"reply": reply})
             if self._verify(path, reply):
+                blocked = self._check_guardrails(self._global_rails() + self._path_rails(path), "output", reply)
+                if blocked is not None:
+                    self._append(conv, ctx, "guardrail_rejected", {"reason": blocked, "stage": "output"})
+                    return self._finish(conv, ctx, "rejected", path, reply, {"class": "guardrail", "message": blocked})
                 return self._complete(conv, ctx, path, reply)
             self._append(conv, ctx, "verification_failed", {"reply": reply})
         on_exhausted = self.policies.get("verification", {}).get("on_exhausted", "unverified")
@@ -300,12 +531,28 @@ class ReferenceRuntime:
         if not script:
             raise SpecError("an llm brain needs llm.script under the stub provider")
         for index, step in enumerate(script):
-            self._call_model(index, step)
-            if "tool" in step:
-                self._invoke(conv, ctx, step["tool"], dict(step.get("args", {})))
+            answer = self._ask_model(conv, ctx, index, step)
+            if "tool" in answer:
+                self._invoke(conv, ctx, answer["tool"], dict(answer.get("args", {})))
             else:
-                return step["text"]
+                return answer["text"]
         raise SpecError("llm.script ended without a final text")
+
+    def _ask_model(self, conv: Conversation, ctx: "_TurnContext", step_index: int, step: Dict[str, Any]) -> Dict[str, Any]:
+        """One model call, journaled by its index in the turn: a recorded reply is reused."""
+        index = ctx.next_llm_index()
+        key = (ctx.turn.conversation_id, ctx.turn.turn_id, "llm", index)
+        entry = self.journal.get(key)
+        if entry is None:
+            self._call_model(step_index, step)
+            answer = {k: step[k] for k in ("tool", "args", "text") if k in step}
+            if step.get("x-count-calls"):
+                seen = self._world.get(("llm", step_index), 0) + 1
+                self._world[("llm", step_index)] = seen
+                answer["text"] = f"{answer['text']} #{seen}"
+            entry = self.journal[key] = {"state": "succeeded", "result": answer}
+        self._append(conv, ctx, "llm_called", {"index": index, **entry["result"]})
+        return entry["result"]
 
     def _call_model(self, index: int, step: Dict[str, Any]) -> None:
         """One scripted model call under `policies.retry`. Only the call is retried, so a tool
@@ -398,48 +645,72 @@ class ReferenceRuntime:
         return matched_at == len(turns) - 1
 
     def _run_saga(self, conv: Conversation, ctx: "_TurnContext", path: str) -> Dict[str, Any]:
-        done: List[Dict[str, Any]] = []
+        done: List[Any] = []
         for step in self.saga["steps"]:
+            args = step.get("args", {})
             try:
-                self._invoke(conv, ctx, step["tool"], step.get("args", {}))
-            except ToolError as exc:
+                result = self._invoke(conv, ctx, step["tool"], args)
+            except (ToolError, ValidationFailure) as exc:
+                cls = "tool" if isinstance(exc, ToolError) else "validation"
                 self._append(conv, ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
-                failed_undos: List[str] = []
-                for completed in reversed(done):
-                    undo = completed.get("compensate_with") or self.tools[completed["tool"]].get("compensation")
-                    if undo:
-                        try:
-                            self._invoke(conv, ctx, undo, {}, event="compensation_step", strict=True)
-                        except ToolError:
-                            failed_undos.append(undo)
+                failed_undos = self._compensate(conv, ctx, done)
                 if failed_undos:
-                    message = f"compensation failed for {failed_undos} after: {exc}"
-                    return self._finish(conv, ctx, "failed", path, None, {"class": "fatal", "message": message},
-                                        event=("turn_failed", {"reason": message}))
+                    return self._fail(conv, ctx, path, "fatal", f"compensation failed for {failed_undos} after: {exc}")
                 self._append(conv, ctx, "compensation_completed", {"steps": len(done)})
-                return self._finish(conv, ctx, "failed", path, None, {"class": "tool", "message": str(exc)},
-                                    event=("turn_failed", {"reason": str(exc)}))
-            done.append(step)
+                return self._fail(conv, ctx, path, cls, str(exc))
+            done.append((step, args, result))
         return self._complete(conv, ctx, path, f"[{path}] saga completed")
+
+    def _compensate(self, conv: Conversation, ctx: "_TurnContext", done: List[Any]) -> List[str]:
+        """Every undo in reverse order, each given what its step did. One that fails is recorded
+        and passed over, so the rest still run."""
+        failed: List[str] = []
+        for completed, args, result in reversed(done):
+            undo = completed.get("compensate_with") or self.tools[completed["tool"]].get("compensation")
+            if not undo:
+                continue
+            forward = {"forward_args": args, "forward_result": result}
+            try:
+                self._invoke(conv, ctx, undo, forward, event="compensation_step", strict=True)
+            except (ToolError, ValidationFailure) as exc:
+                failed.append(undo)
+                last = ctx.tool_calls[-1] if ctx.tool_calls else {"index": None}
+                self._append(conv, ctx, "compensation_failed",
+                             {"tool": undo, "index": last["index"], "step": completed.get("name", completed["tool"]),
+                              "error": str(exc)})
+        return failed
 
     # -- pieces ------------------------------------------------------------
 
     def _route(self, text: str) -> str:
         low = (text or "").lower()
-        for path, keywords in (self.router.get("rules") or {}).items():
-            if any(k.lower() in low for k in keywords):
-                return path
+        if self.router.get("kind", "keyword") == "keyword":
+            for path, keywords in (self.router.get("rules") or {}).items():
+                if any(k.lower() in low for k in keywords):
+                    return path
         default = self.router.get("default")
         if default is None:
             raise SpecError("no rule matched and router.default is not set")
         return default
 
-    def _check_guardrails(self, text: str) -> Optional[str]:
-        for rail in self.guardrails:
-            if rail.get("stage", "input") == "output":
+    def _global_rails(self) -> List[Dict[str, Any]]:
+        scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
+        return [g for g in self.guardrails if g.get("name") not in scoped]
+
+    def _path_rails(self, path: str) -> List[Dict[str, Any]]:
+        names = self.paths[path].get("guardrails") or []
+        return [g for name in names for g in self.guardrails if g.get("name") == name]
+
+    def _check_guardrails(self, rails: List[Dict[str, Any]], stage: str, text: str) -> Optional[str]:
+        for rail in rails:
+            applies = rail.get("stage", "input")
+            if applies != stage and applies != "both":
                 continue
             if rail["kind"] != "regex":
                 raise SpecError(f"the reference runtime implements regex guardrails only, got {rail['kind']}")
+            for pattern in rail.get("allow", []):
+                if not re.search(pattern, text or "", re.IGNORECASE):
+                    return rail.get("reason", "denied")
             for pattern in rail.get("deny", []):
                 if re.search(pattern, text or "", re.IGNORECASE):
                     return rail.get("reason", "denied")
@@ -463,36 +734,98 @@ class ReferenceRuntime:
 
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,
                 args: Dict[str, Any], event: str = None, strict: bool = False) -> Any:
-        """`strict` raises when the budget is spent whatever `on_tool_error` says: a saga undo
-        that failed must never read as compensated."""
+        """`record_or_get` for one tool call (primitives.md section 10). `strict` raises when the
+        budget is spent whatever `on_tool_error` says: a saga undo that failed must never read as
+        compensated."""
         spec = self.tools.get(tool_id)
         if spec is None:
-            raise SpecError(f"unknown tool {tool_id}")
+            raise ValidationFailure(f"unknown tool {tool_id}")
+        self._validate_args(tool_id, spec, args)
+        turn = ctx.turn
         index = ctx.next_tool_index()
+        key = (turn.conversation_id, turn.turn_id, "tool", index)
+        effect = spec.get("effect", "idempotent")
+        ikey = idempotency_key(turn.conversation_id, turn.turn_id, index)
+        kind = event or ("delegated" if spec.get("kind") == "agent" else "tool_called")
+        intent = intent_of(tool_id, args)
+        entry = self.journal.get(key)
+        fresh = entry is None
+        if fresh:
+            entry = self.journal[key] = {"intent": intent, "effect": effect, "state": "pending",
+                                         "attempts": [], "result": None, "error": None}
+        elif entry["intent"] != intent:
+            raise JournalDivergence(f"call {index} of turn {turn.turn_id} was {entry['intent']}, now {intent}")
+        self._append(conv, ctx, "tool_intent", {"tool": tool_id, "index": index, "args": args,
+                                                "effect": effect, "idempotency_key": ikey})
+        for attempt in entry["attempts"]:
+            self._record_failure(conv, ctx, tool_id, index, args, attempt["attempt"], attempt["error"])
+
+        if entry["state"] == "pending" and effect == "non_idempotent" and not fresh and not entry.pop("released", False):
+            entry["state"] = "unknown"
+        if entry["state"] == "unknown":
+            self._append(conv, ctx, "unknown_outcome", {"tool": tool_id, "index": index, "args": args,
+                                                        "idempotency_key": ikey, "reason": "no recorded result"})
+            raise UnknownOutcome(tool_id, index)
+        if entry["state"] == "succeeded":
+            return self._record_success(conv, ctx, kind, tool_id, index, args, len(entry["attempts"]) + 1, entry["result"])
+        if entry["state"] == "failed":
+            return self._give_up(entry["error"], strict)
+
         retry = self.policies.get("retry", {})
         max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
-        for attempt in range(1, max_attempts + 1):
+        if effect == "non_idempotent":
+            max_attempts = 1
+        for attempt in range(len(entry["attempts"]) + 1, max_attempts + 1):
+            self._hit("call", tool_id, "before")
             try:
-                result = self._execute(tool_id, spec)
+                result = self._execute(tool_id, spec, turn.conversation_id, ikey)
             except ToolError as exc:
-                ctx.tool_calls.append({"tool": tool_id, "index": index, "args": args,
-                                       "error": str(exc), "attempt": attempt})
-                self._append(conv, ctx, "tool_failed",
-                             {"tool": tool_id, "index": index, "attempt": attempt, "error": str(exc)})
-                if attempt == max_attempts:
-                    if self.policies.get("on_tool_error", "fail") == "continue" and not strict:
-                        return None
-                    raise
+                if exc.unknown and effect == "non_idempotent":
+                    entry["state"] = "unknown"
+                    self._append(conv, ctx, "unknown_outcome", {"tool": tool_id, "index": index, "args": args,
+                                                                "idempotency_key": ikey, "reason": str(exc)})
+                    raise UnknownOutcome(tool_id, index) from exc
+                entry["attempts"].append({"attempt": attempt, "error": str(exc)})
+                self._record_failure(conv, ctx, tool_id, index, args, attempt, str(exc))
+                if attempt >= max_attempts:
+                    entry.update(state="failed", error=str(exc))
+                    return self._give_up(str(exc), strict)
                 continue
-            ctx.tool_calls.append({"tool": tool_id, "index": index, "args": args,
-                                   "result": result, "attempt": attempt})
-            kind = event or ("delegated" if spec.get("kind") == "agent" else "tool_called")
-            self._append(conv, ctx, kind,
-                         {"tool": tool_id, "index": index, "attempt": attempt, "args": args})
-            return result
-        raise AssertionError("unreachable")
+            self._hit("call", tool_id, "during")
+            entry.update(state="succeeded", result=result)
+            self._hit("call", tool_id, "after")
+            return self._record_success(conv, ctx, kind, tool_id, index, args, attempt, result)
+        entry.update(state="failed", error=entry["attempts"][-1]["error"] if entry["attempts"] else "budget spent")
+        return self._give_up(entry["error"], strict)
 
-    def _execute(self, tool_id: str, spec: Dict[str, Any]) -> Any:
+    def _record_failure(self, conv: Conversation, ctx: "_TurnContext", tool_id: str, index: int,
+                        args: Dict[str, Any], attempt: int, error: str) -> None:
+        ctx.tool_calls.append({"tool": tool_id, "index": index, "args": args, "error": error, "attempt": attempt})
+        self._append(conv, ctx, "tool_failed",
+                     {"tool": tool_id, "index": index, "attempt": attempt, "args": args, "error": error})
+
+    def _record_success(self, conv: Conversation, ctx: "_TurnContext", kind: str, tool_id: str, index: int,
+                        args: Dict[str, Any], attempt: int, result: Any) -> Any:
+        ctx.tool_calls.append({"tool": tool_id, "index": index, "args": args, "result": result, "attempt": attempt})
+        self._append(conv, ctx, kind, {"tool": tool_id, "index": index, "attempt": attempt, "args": args, "result": result})
+        return result
+
+    def _give_up(self, error: str, strict: bool) -> None:
+        if self.policies.get("on_tool_error", "fail") == "continue" and not strict:
+            return None
+        raise ToolError(error)
+
+    @staticmethod
+    def _validate_args(tool_id: str, spec: Dict[str, Any], args: Dict[str, Any]) -> None:
+        schema = spec.get("parameters")
+        if schema is None:
+            return
+        from jsonschema import Draft202012Validator
+        errors = sorted(Draft202012Validator(schema).iter_errors(args), key=lambda e: list(e.absolute_path))
+        if errors:
+            raise ValidationFailure(f"tool {tool_id} arguments rejected: {errors[0].message}")
+
+    def _execute(self, tool_id: str, spec: Dict[str, Any], conversation_id: str, ikey: str) -> Any:
         kind = spec.get("kind", "constant")
         if kind == "constant":
             return spec.get("value")
@@ -507,15 +840,62 @@ class ReferenceRuntime:
             return spec.get("value")
         if kind == "hanging":
             # never answers; the reference has no wall clock, so the limit is reached at once
-            raise ToolError(f"{tool_id} timed out after {spec.get('timeout_ms', 10000)} ms")
+            raise ToolError(f"{tool_id} timed out after {spec.get('timeout_ms', 10000)} ms", unknown=True)
+        if kind == "counting":
+            return self._count(tool_id, spec, conversation_id, ikey)
+        if kind == "http":
+            return self._http(tool_id, spec, ikey)
         raise SpecError(f"the reference runtime does not implement tool kind {kind}")
+
+    def _count(self, tool_id: str, spec: Dict[str, Any], conversation_id: str, ikey: str) -> int:
+        """The outside world, in miniature: how many calls landed, or how many distinct keys.
+        It answers with that number, so a repeated effect shows in the reply."""
+        seen = self._world.setdefault((tool_id, conversation_id), [])
+        if spec.get("x-count-by") == "keys":
+            if ikey not in seen:
+                seen.append(ikey)
+        else:
+            seen.append(ikey)
+        return len(seen)
+
+    def _http(self, tool_id: str, spec: Dict[str, Any], ikey: str) -> Any:
+        request = urllib.request.Request(spec["url"], data=b"{}", method="POST", headers={
+            "Content-Type": "application/json", "Idempotency-Key": ikey})
+        try:
+            with urllib.request.urlopen(request, timeout=spec.get("timeout_ms", 10000) / 1000.0) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            raise ToolError(f"{tool_id} failed: HTTP {exc.code}", unknown=exc.code >= 500) from exc
+        except (urllib.error.URLError, OSError) as exc:
+            raise ToolError(f"{tool_id} failed: {exc}", unknown=True) from exc
+        try:
+            return json.loads(raw)
+        except ValueError:
+            return raw
 
     # -- bookkeeping -------------------------------------------------------
 
+    def _hit(self, axis: str, name: str, when: str) -> None:
+        """The `crash_at` verb: die here if this is the armed point."""
+        plan = self._crash
+        if plan is None or plan.get(axis) != name or plan["when"] != when:
+            return
+        plan["seen"] += 1
+        if plan["seen"] == plan.get("occurrence", 1):
+            raise SimulatedCrash()
+
     def _append(self, conv: Conversation, ctx: "_TurnContext", kind: str, payload: Dict[str, Any]) -> None:
-        event = {"type": kind, "sequence": len(conv.log), "payload": payload}
+        """At-most-once per (turn_id, type, index, attempt): what the log kept is reused."""
+        kept = ctx.prior.take(kind, payload) if ctx.prior else None
+        if kept is not None:
+            ctx.events.append(kept)
+            return
+        self._hit("event", kind, "before")
+        event = {"type": kind, "sequence": len(conv.log), "payload": payload, "turn_id": ctx.turn.turn_id,
+                 "timestamp": self.clock_ms, "metadata": dict(ctx.turn.metadata)}
         conv.log.append(event)
         ctx.events.append(event)
+        self._hit("event", kind, "after")
 
     def _complete(self, conv: Conversation, ctx: "_TurnContext", path: str, reply: str) -> Dict[str, Any]:
         self._append(conv, ctx, "memory_written",
@@ -523,12 +903,13 @@ class ReferenceRuntime:
                                    {"role": "assistant", "text": reply}]})
         return self._finish(conv, ctx, "completed", path, reply, None,
                             event=("turn_completed", {"reply": reply}))
+
     def _finish(self, conv: Conversation, ctx: "_TurnContext", status: str, path: Optional[str],
                 reply: Optional[str], error: Optional[Dict[str, Any]], event=None) -> Dict[str, Any]:
         if event is not None:
             self._append(conv, ctx, event[0], event[1])
         elif status in ("rejected", "unverified"):
-            self._append(conv, ctx, "turn_failed", {"status": status})
+            self._append(conv, ctx, "turn_failed", {"status": status, "error_class": (error or {}).get("class")})
         result = {
             "conversation_id": ctx.turn.conversation_id,
             "turn_id": ctx.turn.turn_id,
@@ -537,13 +918,44 @@ class ReferenceRuntime:
             "reply": reply,
             "state": reduce_state(conv.log, self.context),
             "tool_calls": ctx.tool_calls,
-            "events": [{"type": e["type"], "sequence": e["sequence"], "payload": e["payload"]}
-                       for e in ctx.events],
+            "events": [{k: e[k] for k in ("type", "sequence", "payload", "timestamp", "metadata")}
+                       for e in ctx.segment()],
             "error": error,
         }
         conv.results[ctx.turn.turn_id] = result
         conv.tool_indices[ctx.turn.turn_id] = ctx._tool_index
+        conv.llm_indices[ctx.turn.turn_id] = ctx._llm_index
         return result
+
+
+class _Prior:
+    """What an earlier run of this turn left on the log, by (type, index, attempt)."""
+
+    def __init__(self, events: List[Dict[str, Any]]) -> None:
+        self.events = events
+        self._kept: Dict[Any, deque] = {}
+        self.resumes = [e for e in events if e["type"] == "turn_resumed"]
+        last_resume = self.resumes[-1]["sequence"] if self.resumes else -1
+        for event in events:
+            answered = event["type"] in ("turn_suspended", "unknown_outcome") and event["sequence"] < last_resume
+            if event["type"] != "turn_resumed" and not answered:  # each resume and each wait is its own
+                self._kept.setdefault(self._key(event["type"], event["payload"]), deque()).append(event)
+
+    @staticmethod
+    def _key(kind: str, payload: Dict[str, Any]) -> Any:
+        return kind, payload.get("index"), payload.get("attempt")
+
+    def __bool__(self) -> bool:
+        return bool(self.events)
+
+    def answered(self) -> None:
+        """A new `turn_resumed` opens this run: every earlier wait is over and may not be reused."""
+        for key in [k for k in self._kept if k[0] in ("turn_suspended", "unknown_outcome")]:
+            del self._kept[key]
+
+    def take(self, kind: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        kept = self._kept.get(self._key(kind, payload))
+        return kept.popleft() if kept else None
 
 
 @dataclass
@@ -551,9 +963,30 @@ class _TurnContext:
     turn: Turn
     events: List[Dict[str, Any]] = field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    prior: Optional[_Prior] = None
     _tool_index: int = 0
+    _llm_index: int = 0
 
     def next_tool_index(self) -> int:
         index = self._tool_index
         self._tool_index += 1
         return index
+
+    def next_llm_index(self) -> int:
+        index = self._llm_index
+        self._llm_index += 1
+        return index
+
+    def skip_indices_of_timers(self) -> None:
+        """A resume does not fire timers again, so the calls they made keep their indices."""
+        for event in self.prior.events if self.prior else []:
+            if event["type"] == "turn_received":
+                return
+            if "index" in event["payload"]:
+                self._tool_index = max(self._tool_index, event["payload"]["index"] + 1)
+
+    def segment(self) -> List[Dict[str, Any]]:
+        """The result's events: the turn's, from its last `turn_resumed`."""
+        ordered = sorted(self.events, key=lambda e: e["sequence"])
+        starts = [i for i, e in enumerate(ordered) if e["type"] == "turn_resumed"]
+        return ordered[starts[-1]:] if starts else ordered

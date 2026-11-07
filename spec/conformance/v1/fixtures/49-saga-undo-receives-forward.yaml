@@ -1,0 +1,42 @@
+id: saga-undo-receives-forward
+description: An undo receives the args and the result of the step it undoes, so it can know what to undo.
+requires: [saga, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main: {brain: rule, prompt: You move money.}
+    verifier: {kind: none}
+  tools:
+  - {id: reserve, kind: constant, value: reservation-9, compensation: release}
+  - {id: post, kind: failing}
+  - {id: release, kind: constant, value: released}
+  saga:
+    steps:
+    - name: reserve
+      tool: reserve
+      args: {order: '77'}
+    - {name: post, tool: post}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  tool_calls:
+  - tool: reserve
+    index: 0
+    args: {order: '77'}
+  - {tool: post, index: 1, failed: true}
+  - tool: release
+    index: 2
+    args:
+      forward_args: {order: '77'}
+      forward_result: reservation-9

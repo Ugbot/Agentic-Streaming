@@ -1,0 +1,43 @@
+id: path-guardrail
+description: A rail named by a path applies to that path alone, after routing.
+requires: [guardrails, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [vip]
+        open: [pay]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+        guardrails: [vip_only]
+      open:
+        brain: rule
+        prompt: Open.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+  guardrails:
+  - name: vip_only
+    kind: regex
+    stage: input
+    deny: [pay]
+    reason: not on this path
+turns:
+- {conversation_id: c1, turn_id: t1, text: vip pay}
+- {conversation_id: c1, turn_id: t2, text: pay}
+expect:
+- turn_id: t1
+  status: rejected
+  path: main
+  error_class: guardrail
+  events: [turn_received, routed, guardrail_rejected, turn_failed]
+- {turn_id: t2, status: completed, path: open}

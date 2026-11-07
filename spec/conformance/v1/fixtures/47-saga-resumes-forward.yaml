@@ -1,0 +1,40 @@
+id: saga-resumes-forward
+description: 'A saga that crashed between steps carries on from the log: the finished step is reused and the next
+  runs, each once.'
+requires: [crash_recovery, effect_journal, tools, idempotency, saga]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main: {brain: rule, prompt: You move money.}
+    verifier: {kind: none}
+  tools:
+  - {id: a, kind: counting, x-count-by: keys, compensation: undo_a}
+  - {id: b, kind: counting, x-count-by: keys}
+  - {id: undo_a, kind: counting, x-count-by: keys}
+  saga:
+    steps:
+    - {name: a, tool: a}
+    - {name: b, tool: b}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: tool_called, when: after}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] saga completed'
+  events: [turn_received, routed, tool_intent, tool_called, tool_intent, tool_called, memory_written, turn_completed]
+  tool_calls:
+  - {tool: a, index: 0, result: 1}
+  - {tool: b, index: 1, result: 1}

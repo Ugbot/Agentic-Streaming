@@ -29,6 +29,8 @@ public final class LocalRuntime implements Runtime {
   private final Retrieval.TwoTierRetriever retriever;
   private final ConversationLog log;
   private final LogicalClock clock;
+  private TurnProbe probe = TurnProbe.NONE;
+  private EffectJournal journal = new EffectJournal.InMemory();
   private final Map<String, ReentrantLock> locks = new ConcurrentHashMap<>();
   private final Map<String, CompletableFuture<?>> tails = new ConcurrentHashMap<>();
   private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -65,6 +67,39 @@ public final class LocalRuntime implements Runtime {
     rebuildMaterializedViews();
   }
 
+  /** A test's view of every turn, for a fixture's {@code crash_at}. */
+  public LocalRuntime withProbe(TurnProbe turnProbe) {
+    this.probe = turnProbe;
+    return this;
+  }
+
+  /**
+   * The journal every tool and model call goes through. By default it lives and dies with this
+   * object, so a restart over a durable log needs the same journal passed in.
+   */
+  public LocalRuntime withJournal(EffectJournal effectJournal) {
+    this.journal = effectJournal;
+    return this;
+  }
+
+  /**
+   * Finishes every turn the log shows as started and not ended, from the log and the journal: what
+   * a restart does for turns nobody will redeliver. Incomplete sagas carry on, forward or backward.
+   *
+   * @return the results of those turns
+   */
+  public java.util.List<TurnResult> recoverIncomplete() {
+    java.util.List<TurnResult> recovered = new java.util.ArrayList<>();
+    for (String cid : log.conversations()) {
+      for (ConversationState.TurnRecord turn : log.state(cid).turns().values()) {
+        if (turn.running()) {
+          recovered.add(submit(Event.turn(cid, turn.turnId(), turn.userId(), turn.text())));
+        }
+      }
+    }
+    return recovered;
+  }
+
   public ConversationStore store() {
     return store;
   }
@@ -95,6 +130,8 @@ public final class LocalRuntime implements Runtime {
       AgentContext ctx = new AgentContext(event.conversationId(), event.turnId(), event.userId(),
           store, state, tools, retriever, log, graph.policies());
       ctx.clock = clock;
+      ctx.probe = probe;
+      ctx.journal = journal;
       return graph.handle(event, ctx);
     } finally {
       lock.unlock();

@@ -1,0 +1,33 @@
+id: sequence-saga-turn
+description: 'The whole event sequence of a saga that compensates: every call has its intent, the undo included,
+  and the turn has no brain.'
+requires: [saga, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main: {brain: rule, prompt: You move money.}
+    verifier: {kind: none}
+  tools:
+  - {id: reserve, kind: counting, compensation: release}
+  - {id: post, kind: failing}
+  - {id: release, kind: counting}
+  saga:
+    steps:
+    - {name: reserve, tool: reserve}
+    - {name: post, tool: post}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  events: [turn_received, routed, tool_intent, tool_called, tool_intent, tool_failed, compensation_started, tool_intent,
+    compensation_step, compensation_completed, turn_failed]

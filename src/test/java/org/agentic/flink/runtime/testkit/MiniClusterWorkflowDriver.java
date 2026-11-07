@@ -154,12 +154,30 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
 
   /** Stops the running job with a savepoint and starts a new incarnation from it. */
   public void restart() throws Exception {
-    String savepoint =
-        job.stopWithSavepoint(false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
-            .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+    String savepoint = stopWithSavepoint();
     job = null;
     POISONED.get(driverId).set(false);
     startFrom(savepoint);
+  }
+
+  /** A job can be RUNNING before its tasks are, and then has nothing to snapshot yet: try again. */
+  private String stopWithSavepoint() throws Exception {
+    long deadline = System.nanoTime() + timeout.toNanos();
+    while (true) {
+      try {
+        return job.stopWithSavepoint(
+                false, savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
+            .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+      } catch (java.util.concurrent.ExecutionException e) {
+        if (System.nanoTime() > deadline
+            || !org.apache.flink.util.ExceptionUtils.findThrowableWithMessage(
+                    e, "is not being executed")
+                .isPresent()) {
+          throw e;
+        }
+        Thread.sleep(50);
+      }
+    }
   }
 
   /** Triggers a checkpoint on the running job and waits for it to complete. */
@@ -185,6 +203,30 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
       sleepOrFail(deadline, "job never left RUNNING after the injected failure");
     }
     awaitRunning(job, deadline);
+  }
+
+  /** Whether a crash happened, waited for by the caller's own means. */
+  @FunctionalInterface
+  public interface CrashWatch {
+    boolean fired() throws InterruptedException;
+  }
+
+  /**
+   * Submits a turn that is armed to kill the task, and waits for the job to come back. Flink
+   * restarts it from its latest checkpoint or savepoint. Returns false when the crash never
+   * happened, in which case the turn's result is still to come.
+   */
+  public boolean submitUntilCrash(Event event, CrashWatch watch) throws Exception {
+    submitEvent(event);
+    if (!watch.fired()) {
+      return false;
+    }
+    long deadline = System.nanoTime() + timeout.toNanos();
+    while (job.getJobStatus().get() == JobStatus.RUNNING) {
+      sleepOrFail(deadline, "job never left RUNNING after the crash");
+    }
+    awaitRunning(job, deadline);
+    return true;
   }
 
   /** Submits one turn and waits for the result that the job emits for it. */

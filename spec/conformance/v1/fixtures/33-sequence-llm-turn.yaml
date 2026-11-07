@@ -1,0 +1,42 @@
+id: sequence-llm-turn
+description: 'The whole event sequence of a model turn: llm_called follows every model answer, and a tool call''s
+  intent follows the answer that asked for it.'
+requires: [llm_brain, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: llm
+        prompt: You move money.
+        tools: [pay]
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+  llm:
+    provider: stub
+    script:
+    - tool: pay
+      args: {order: '77'}
+    - {text: paid, x-count-calls: true}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: completed
+  reply: 'paid #1'
+  events: [turn_received, routed, brain_started, llm_called, tool_intent, tool_called, llm_called, reply_drafted,
+    memory_written, turn_completed]
+  event_payloads:
+  - type: llm_called
+    payload: {index: 0, tool: pay}
+  - type: llm_called
+    occurrence: 2
+    payload: {index: 1}
