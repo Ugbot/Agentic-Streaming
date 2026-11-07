@@ -1,0 +1,16 @@
+# The workflow tools/kafka-journal-tm-loss.sh runs: two payments that must never be repeated, with
+# their effect journal on a compacted Kafka topic.
+spec_version: agentic/v1
+agent:
+  id: pay-once
+  router: {kind: static, default: main}
+  paths:
+    main:
+      brain: rule
+      tool_triggers: {pay: pay, hold: hold}
+  verifier: {kind: none}
+tools:
+  - {id: pay, kind: http, effect: non_idempotent, url: "http://agentic-flink-bank:8080/pay"}
+  - {id: hold, kind: http, effect: non_idempotent, timeout_ms: 300000, url: "http://agentic-flink-bank:8080/hold"}
+stores:
+  effects: {kind: kafka, url: "kafka:29092", topic: agentic.effects}
