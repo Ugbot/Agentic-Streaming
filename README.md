@@ -1,8 +1,10 @@
 # Agentic Streaming
 
-> **Status: experimental and pre-release.** There are no published packages. This project is **not
-> safe to use for real payments or other non-idempotent actions yet**: known failures include tool
-> calls re-running after a Flink restore. See [Known failures](#known-failures).
+> **Status: experimental and pre-release.** There are no published packages. Do not run it on real
+> payments yet: the canonical path has no authentication. What is guaranteed now, and what is not, is
+> under [Guarantees](#guarantees). **A crash during a call to a `non_idempotent` tool leaves the
+> outcome unknown.** The runtime will not repeat that call, and it cannot tell you whether it landed:
+> a person has to.
 
 Agentic Streaming is a portable specification for durable, auditable agents over streaming data,
 with a conformance suite and runtimes on Apache Flink, plain Python and Apache Pekko. An agent's
@@ -22,26 +24,63 @@ against the [reference spec](spec/v1/primitives.md).
 | Apache Pekko | `ports/jagentic-core`, in `agentic-pekko` | One event-sourced, cluster-sharded actor per conversation | [Pekko](docs/runtimes/pekko.md) |
 
 The contract is the `agentic/v1` spec under [`spec/v1`](spec/v1/primitives.md), its reference runtime
-and the 31 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
-mostly rule brains and scripted stubs. They do not cover a real model or a crash inside a turn, so
-a pass is a narrow claim; see
+and the 76 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
+mostly rule brains and scripted stubs. They crash turns at every event and around every call, but
+they do not cover a real model, so a pass is a narrow claim; see
 [conformance results](docs/runtimes/README.md#conformance-results).
 
 Everything else was moved out of this repository. The code as it stood is at
 [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone); the
 [list is here](docs/runtimes/experimental.md).
 
+## Guarantees
+
+State is exactly-once. Effects are at-least-once under a stable key. Anything that cannot take a key
+is an explicit human decision. Each line below has a crash test
+([section 10 of the spec](spec/v1/primitives.md) is the contract).
+
+| Thing | Guaranteed | Not guaranteed |
+|---|---|---|
+| Conversation log and state | Exactly-once. A recovered turn leaves the log an uninterrupted run would | Flink's log is keyed state, so it rolls back to the last checkpoint; the journal covers that window |
+| Model calls | A recorded answer is reused by index, so a re-run takes the same path | A crash during a call asks the model again, and you pay twice |
+| `effect: read` tools | A recorded result is reused | With no recorded result the read runs again and may answer differently |
+| `effect: idempotent` tools | At-least-once under a stable `Idempotency-Key` | Exactly one effect, unless the tool honours the key |
+| `effect: non_idempotent` tools, the default | Never called twice by the runtime. A recorded result is reused | A crash during the call leaves the outcome **unknown**. The turn suspends and a person decides. Nothing can do better, because the runtime cannot see the far side of the call. A tool that declares nothing is treated like this, so one that is safe to repeat must say `read` or `idempotent` |
+| Sagas | Undoes get the forward args and result, run on any failure class, and carry on from the log after a crash | A failed undo is terminal: it is recorded and needs repair by hand |
+| Resume | One state machine: the original user keeps the turn, duplicates and unknown signals rewrite nothing, a crash after `turn_resumed` loses no approval | Who may send a signal: that is authorisation, which does not exist yet |
+
+These hold only with a journal that outlives the crash. `stores.effects` selects it: `postgres` or
+`kafka` on the JVM, `file` in Python. A Flink job refuses a `non_idempotent` tool, which includes any
+tool, peer or MCP server that declares no effect, without one. Without a declared journal the JVM keeps one in the process, which covers a task restart at most, so a
+re-run after losing the process calls tools again, under the same keys. The journal must retain
+entries for longer than the longest rollback or redelivery you allow. Effects were tested with a
+real TaskManager killed on a Flink 2.2.1 session cluster and the Kafka journal
+(`tools/kafka-journal-tm-loss.sh`), with a rescale restore on Postgres and Kafka
+(`EffectJournalStoresIT`), and with a journal that fails or stalls at each write
+(`EffectJournalAttackTest`, `test_agentic_journal_attack.py`). Postgres has not been run on a real
+session cluster, and Pekko's journal outage is tested only on one node.
+
 ## Known failures
 
-- **Tool calls re-run after a Flink restore, so a payment can fire twice.** Flink state rolls back to
-  the last checkpoint and the outside world does not. A turn that ran after that checkpoint runs
-  again on redelivery, tools and model calls included. Tools receive no idempotency key, so the
-  second call looks like a new one. The same happens to a turn that crashes before finishing on the
-  other runtimes, and to a turn run again after a transient model failure.
-- **A real model has only been exercised against a local stand-in server on Flink.** A document can
-  declare `provider: ollama` or `openai` there. In the `agentic` Python package only a scripted stub
-  runs. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) still sits on the older `pyagentic`
-  package, which has real model clients but no event log.
+- **A turn run again after a transient model failure calls its `read` and `idempotent` tools again**,
+  under the next free indices, as section 4 of the spec says. It is the one re-run that does not reuse
+  the journal. A run that reached a `non_idempotent` tool is replayed instead, so that tool is not
+  repeated.
+- **A real model has only been exercised against a local stand-in server.** A document can declare
+  `provider: ollama`, `openai`, `anthropic` or `gemini` on Flink and Pekko, and `ollama` or `openai`
+  in the `agentic` Python package. No live provider has been called; the stubs check each provider's
+  documented wire format, so a change on the provider's side would not show.
+- **A rollback followed by a timer coming due stops the turn.** Calls are matched by index, so a
+  timer that was not due on the first run and is on the re-run shifts them. Nothing is repeated, but
+  the turn ends `fatal` and needs a person, even though the payment landed.
+- **Two live writers on one Kafka journal key are not excluded.** A topic has no compare-and-set, and
+  a process that has been replaced but is still running can race its replacement. Postgres excludes
+  them on the intent through the primary key, but later writes are plain upserts on both.
+- **The `pipeline.yaml` CLI is only partly on the conformance semantics.** `ports/agentic-pipeline`
+  runs a document on the `agentic` core when the core can run all of it. A document that needs MCP,
+  remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing
+  embeddings falls back to the older `pyagentic` engine, which has no event log, no `turn_id` and no
+  journal, and the CLI says so on stderr.
 - **The tool allowlist is not a security control, and the canonical path has no authentication.** See
   [security](docs/security.md).
 
@@ -124,9 +163,9 @@ ordering and durability.
 | Pekko | Actor mailbox and cluster sharding | Pekko Persistence journal |
 | Plain Python | A per-conversation gate | In memory, or a JSONL file |
 
-What the spec aims to make true: state is exactly-once, effects are at-least-once under a stable key,
-and anything that cannot take a key is an explicit human decision. Only the first part holds today,
-and only on Flink within its checkpoints.
+State is exactly-once, effects are at-least-once under a stable key, and anything that cannot take a
+key is an explicit human decision: see [Guarantees](#guarantees) for what that does and does not
+cover.
 
 ## What is in the repository
 
@@ -136,13 +175,10 @@ and only on Flink within its checkpoints.
 | [`ports/jagentic-core`](ports/jagentic-core/README.md) | The Java core |
 | [`ports/pyagentic`](ports/pyagentic/README.md) | The Python core: the conformance-tested `agentic` package and the older `pyagentic` package |
 | [`ports/agentic-pipeline`](ports/agentic-pipeline/README.md) | The `pipeline.yaml` CLI; `local` is its only backend |
-| Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) and, for now, the deprecated legacy Flink DSL and its examples |
+| Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) |
 | [`agentic-pekko`](agentic-pekko/README.md) | The Pekko runtime |
 | [`examples/pipelines`](examples/pipelines) | Example workflow documents |
 | `reactor/` | The Maven parent and aggregator for the JVM modules |
-
-The legacy DSL (`Agent.builder()` under `org.agentic.flink.dsl`) is outside the spec and no fixture
-measures it. It is still in the root module and will be removed in a later change.
 
 ## Documentation
 
@@ -152,7 +188,6 @@ measures it. It is still in the root module and will be removed in a later chang
 | [docs/runtimes/](docs/runtimes/README.md) | What each runtime is made of, and where conformance results are |
 | [docs/portability/pipelines.md](docs/portability/pipelines.md) | The `pipeline.yaml` schema |
 | [docs/python.md](docs/python.md) | The Python API |
-| [docs/concepts.md](docs/concepts.md) | Core concepts |
 | [docs/configuration.md](docs/configuration.md) | Configuration reference |
 | [docs/security.md](docs/security.md) | What the code does and does not do about security |
 | [docs/guides/flink-agents-integration.md](docs/guides/flink-agents-integration.md) | How this compares with Apache Flink Agents, which is the better choice today if you are on Flink |
@@ -170,17 +205,9 @@ Nothing is published to Maven Central or PyPI. Everything is built from a checko
 
 For `flink run`, the shaded jar is `target/agentic-flink-1.0.0-SNAPSHOT-uber.jar`; it excludes the
 Flink runtime a cluster provides. `bash tools/check-jar-launch.sh` boots it under JDK 21. The thin
-`agentic-flink` jar marks its provider SDKs and drivers optional, so add the ones you use to your own
-pom; see the `<optional>` entries in the root `pom.xml`.
+`agentic-flink` jar marks the embedding SDKs and the Postgres driver optional, so add the ones you use
+to your own pom; see the `<optional>` entries in the root `pom.xml`.
 
-The uber jar leaves out the Fluss client, which carries old relocated copies of Netty, Jackson, Guava
-and lz4 ([docs/security.md](docs/security.md)). For a Fluss backend, build with `./mvnw -P fluss
-package` or put `com.alibaba.fluss:fluss-client` on the job classpath. Without it, selecting Fluss
-fails at startup and says so.
-
-The Milvus SDK is left out for the same reason: it carries its own relocated gRPC and Netty 4.1. For
-the Milvus backend, build with `./mvnw -P milvus package` or put `io.milvus:milvus-sdk-java` on the
-job classpath. Without it, selecting Milvus fails at startup and says so too.
 
 ## Contributing
 

@@ -7,8 +7,8 @@ commands on a hosted runner.
 ## Unit suites
 
 The Maven reactor (`reactor/pom.xml`) builds every first-class JVM module in dependency
-order. The default surefire run executes the `*Test.java` classes of each module and
-excludes the `integration` and `djl` JUnit tags; it never runs `*IT.java` classes.
+order. The default surefire run executes the `*Test.java` classes of each module; it never runs
+`*IT.java` classes.
 
 ```
 ./mvnw -f reactor/pom.xml -DskipTests install   # build everything once
@@ -16,13 +16,6 @@ excludes the `integration` and `djl` JUnit tags; it never runs `*IT.java` classe
 ./mvnw test                                     # the Flink framework (root module) alone
 ./mvnw -f ports/jagentic-core/pom.xml test      # shared JVM core
 ./mvnw -f agentic-pekko/pom.xml test            # Pekko runtime
-```
-
-`ZeroMqChannelTest` has no per-test timeout and hangs on some hosts. Exclude it when needed:
-
-```
-./mvnw -f reactor/pom.xml test -Dtest='!ZeroMqChannelTest' \
-  -Dsurefire.failIfNoSpecifiedTests=false
 ```
 
 `-Dtest` replaces surefire's include patterns rather than narrowing them, so a pattern made
@@ -47,36 +40,15 @@ export MVNW_REPOURL=https://maven-central.storage-download.googleapis.com/maven2
 
 Integration tests live in `*IT.java` classes and run through `maven-failsafe-plugin`, which
 the `integration-tests` profile binds to the `integration-test` and `verify` phases in
-`reactor/pom.xml`. The profile also lifts the `integration` tag exclusion from surefire for
-the few `*Test.java` classes that carry it. The `djl` tag stays excluded (it downloads a
-native PyTorch runtime; see the `djl-native` profile).
+`reactor/pom.xml`. Only `agentic-pekko` has any.
 
 ```
 ./mvnw -f reactor/pom.xml verify -P integration-tests   # whole reactor
-./mvnw verify -P integration-tests                      # root module alone
 ./mvnw -f agentic-pekko/pom.xml verify -P integration-tests
-./mvnw verify -P integration-tests -Dit.test=PgVectorStoreIT \
-  -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false   # one class
 ```
 
-Each class starts the service it needs through Testcontainers:
-
-| Class | Service | Image |
-| --- | --- | --- |
-| `PostgresConversationStoreIT`, `PostgresA2ATaskStoreIT`, `StorageFactoryPostgresIT` | PostgreSQL | `postgres:16-alpine` |
-| `PgVectorStoreIT` | PostgreSQL with pgvector | `pgvector/pgvector:pg16` |
-| `QdrantVectorStoreIT` | Qdrant (gRPC) | `qdrant/qdrant:v1.20.0` |
-| `RedisConversationStoreIT`, `RedisHotVectorIndexIT`, `A2ARedisTaskStoreIT`, `RedisA2ABridgeIT`, `RedisJournalIT` (Pekko) | Redis | `redis:7-alpine` |
-| `FlussChannelIT`, `FlussConversationStoreIT` | Fluss (ZooKeeper, coordinator, tablet server) | `fluss/fluss:0.7.0`, `zookeeper:3.9.2` |
-
-`StorageFactoryPostgresIT` also proves that both the `postgres` and the `postgresql` factory
-aliases produce a usable `PostgresConversationStore`. The H2 database is no longer a test
-dependency: every SQL-backed test runs against PostgreSQL.
-
-If no container runtime is reachable, these classes fail with a message that names the
-socket they looked for. They do not skip. The Fluss helper
-(`org.agentic.flink.testkit.FlussTestCluster`) honours `FLUSS_BOOTSTRAP_SERVERS` for an
-externally managed cluster and fails if that address does not answer.
+`RedisJournalIT` starts Redis (`redis:7-alpine`) through Testcontainers. If no container runtime is
+reachable it fails with a message that names the socket it looked for. It does not skip.
 
 ### Podman
 
@@ -92,30 +64,7 @@ export TESTCONTAINERS_RYUK_DISABLED=true
 `systemctl --user start podman.socket` is equivalent where user services are available.
 Ryuk, the Testcontainers reaper side-car, needs a privileged container and Docker Hub
 short-name resolution that rootless Podman does not provide by default; the integration
-classes stop their containers in `@AfterAll`, so Ryuk is not needed. The Fluss cluster uses
-host networking with random free ports because rootless Podman's CNI backend does not
-reliably keep the user-defined networks Testcontainers would otherwise create.
-
-Pull the images once if the box has limited bandwidth:
-
-```
-podman pull docker.io/library/postgres:16-alpine docker.io/pgvector/pgvector:pg16 \
-  docker.io/library/redis:7-alpine docker.io/qdrant/qdrant:v1.20.0 \
-  docker.io/library/zookeeper:3.9.2 docker.io/fluss/fluss:0.7.0
-```
-
-### Not covered by an integration test
-
-- `MilvusVectorStore`: Milvus standalone is a multi-process deployment (Milvus plus etcd
-  and an object store) with an image of more than a gigabyte, and the driver has no
-  single-container mode this harness can start deterministically. It is compiled and
-  discovered through `ServiceLoader` by `VectorStoreDiscoveryTest` but not exercised against
-  a server.
-- `StandaloneLLMIT` and `StandaloneToolExecutionIT`: need a local Ollama with the
-  `qwen2.5:latest` model and are `@Disabled` with that reason. They are the only `*IT`
-  classes that report as skipped.
-- `DjlRecallIT`: downloads a native PyTorch runtime on first use; run it with
-  `./mvnw test -P djl-native -Dtest=DjlRecallIT`.
+classes stop their containers in `@AfterAll`, so Ryuk is not needed.
 
 ## Conformance suite
 
@@ -152,8 +101,8 @@ declared conformance capability gaps, Ollama, and the two `agentic-pekko` tests 
 reports and fails for any other skip. A test must not skip because a fixture file is
 missing or because a service that Testcontainers can start is unreachable.
 
-Outside the Maven root module, `ports/jagentic-core` still has tests that probe optional
-services (`StoreTest.qdrantColdTierIfAvailable`, `postgresLongTermIfAvailable`,
+`ports/jagentic-core` has tests that probe optional services
+(`StoreTest.qdrantColdTierIfAvailable`, `pgvectorColdTierIfAvailable`, `postgresLongTermIfAvailable`,
 `redisConversationStoreIfAvailable`, `EmbeddingTest.ollamaEmbedderIfAvailable`,
 `McpTest.mcpClientRegistersAndCallsTools`) and abort when the service is absent; CI
 provisions those services on fixed ports. These skips are explained

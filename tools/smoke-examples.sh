@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke test for examples/pipelines/ in no-key mode: each spec runs one turn on the Python core,
-# the Java core and, for banking.yaml, on Pekko, with a per-example timeout. It stops on the first
+# the Java core and a Flink MiniCluster and, for banking.yaml, on Pekko, with a per-example timeout. It stops on the first
 # failure. An example that cannot run here is reported as SKIP with the reason, never silently.
 #
 #   bash tools/smoke-examples.sh
@@ -61,7 +61,11 @@ on_pekko() {
   ./mvnw -q -f agentic-pekko/pom.xml compile exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \
     -Dexec.args="examples/pipelines/$1.yaml --text '$2'"
 }
-export -f on_python on_jvm on_pekko
+on_flink() {
+  ./mvnw -q -P examples compile exec:exec -Dexec.mainClass=org.agentic.flink.pipeline.FlinkPipelineRunner \
+    -Dexec.args="examples/pipelines/$1.yaml --text '$2'"
+}
+export -f on_python on_jvm on_pekko on_flink
 export PYTHON
 
 "$PYTHON" -c 'import pyagentic, agentic_pipeline' \
@@ -75,15 +79,18 @@ run_example "spec.validate" "0 failure" "$PYTHON" spec/tools/validate_spec.py
 for y in banking banking-llm banking-rag; do
   run_example "pipeline.$y.python" 'path=payments ok=True' on_python "$y" "$TEXT"
   run_example "pipeline.$y.jvm" 'path=payments ok=true' on_jvm "$y" "$TEXT"
+  run_example "pipeline.$y.flink" 'path=payments \| ok=true' on_flink "$y" "$TEXT"
 done
 run_example "pipeline.incident.python" 'path=monitor ok=True' on_python incident "$TEXT"
 run_example "pipeline.incident.jvm" 'path=monitor ok=true' on_jvm incident "$TEXT"
+run_example "pipeline.incident.flink" 'path=monitor \| ok=true' on_flink incident "$TEXT"
 run_example "pipeline.banking.pekko" 'path=payments ok=true' on_pekko banking "$TEXT"
 run_example "pipeline.multiagent.python.no-peer" 'path=triage ok=True' on_python multiagent "what time do you open?"
 
 if [ "$HAVE_MCP" = "1" ]; then
   run_example "pipeline.tools-mcp.python" 'ok=True' on_python tools-mcp "what is 40 plus 2?"
   run_example "pipeline.tools-mcp.jvm" 'ok=true' on_jvm tools-mcp "what is 40 plus 2?"
+  run_example "pipeline.tools-mcp.flink" 'ok=true' on_flink tools-mcp "what is 40 plus 2?"
 else
   skip "pipeline.tools-mcp.*" "python3 on PATH has no MCP SDK (pip install \"mcp<2\")"
 fi

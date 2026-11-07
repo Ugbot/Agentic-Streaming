@@ -1,0 +1,30 @@
+id: undeclared-tool-no-retry
+description: A tool that declares no effect is non_idempotent, so a retry policy gives it one attempt.
+requires: [tools, retry, effect_journal]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay]
+    paths:
+      main:
+        brain: rule
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: failing}
+  policies:
+    retry: {kind: fixed, max_attempts: 3, initial_delay_ms: 0, jitter: false}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, failed: true}

@@ -10,6 +10,7 @@ normalized results (spec/v1/result.schema.json) and calls `check_expectation` on
 
 from __future__ import annotations
 
+import copy
 import re
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ from typing import Any, Dict, List
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from http_stub import HttpStub  # noqa: E402
 from reference_runtime import ReferenceRuntime, SpecError, Turn  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parents[1] / "conformance" / "v1" / "fixtures"
@@ -35,7 +37,7 @@ REFERENCE_CAPABILITIES = {
     "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
     "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay",
     "suspend_resume", "timers", "saga", "a2a", "cep", "event_time", "checkpoint_recovery",
-    "parallelism", "durable_store",
+    "parallelism", "durable_store", "crash_recovery", "effect_journal",
 }
 
 
@@ -53,6 +55,9 @@ def check_expectation(expected: Dict[str, Any], actual: Dict[str, Any]) -> List[
     for field in ("conversation_id", "status", "path", "reply"):
         if field in expected and expected[field] != actual.get(field):
             mismatch(field, expected[field], actual.get(field))
+
+    if "status_any" in expected and actual.get("status") not in expected["status_any"]:
+        mismatch("status_any", expected["status_any"], actual.get("status"))
 
     if "reply_matches" in expected:
         reply = actual.get("reply") or ""
@@ -73,7 +78,7 @@ def check_expectation(expected: Dict[str, Any], actual: Dict[str, Any]) -> List[
             for i, (w, g) in enumerate(zip(want, got)):
                 if w["tool"] != g["tool"]:
                     mismatch(f"tool_calls[{i}].tool", w["tool"], g["tool"])
-                for key in ("index", "attempt", "args"):
+                for key in ("index", "attempt", "args", "result"):
                     if key in w and w[key] != g.get(key):
                         mismatch(f"tool_calls[{i}].{key}", w[key], g.get(key))
                 if w.get("failed", False) != (g.get("error") is not None):
@@ -90,6 +95,22 @@ def check_expectation(expected: Dict[str, Any], actual: Dict[str, Any]) -> List[
     for unwanted in expected.get("events_exclude", []):
         if unwanted in types:
             problems.append(f"events_exclude: {unwanted} present in {types}")
+    if "events" in expected and expected["events"] != types:
+        mismatch("events", expected["events"], types)
+    for wanted in expected.get("event_payloads", []):
+        found = [e for e in actual.get("events", []) if e["type"] == wanted["type"]]
+        occurrence = wanted.get("occurrence", 1)
+        if len(found) < occurrence:
+            problems.append(f"event_payloads: no {wanted['type']} occurrence {occurrence} in {types}")
+            continue
+        payload = found[occurrence - 1].get("payload") or {}
+        for key, want in wanted["payload"].items():
+            if payload.get(key) != want:
+                mismatch(f"event_payloads.{wanted['type']}.{key}", want, payload.get(key))
+    for name in expected.get("event_fields", []):
+        for event in actual.get("events", []):
+            if event.get(name) is None:
+                problems.append(f"event_fields: {event['type']} has no {name}")
 
     for key, want in (expected.get("state_includes") or {}).items():
         got = actual.get("state", {}).get(key)
@@ -99,31 +120,46 @@ def check_expectation(expected: Dict[str, Any], actual: Dict[str, Any]) -> List[
     return problems
 
 
+def resolve_http(workflow: Dict[str, Any], base: str) -> Dict[str, Any]:
+    """Every binding does this: a tool url of `{{http}}/...` points at its own local stub."""
+    doc = copy.deepcopy(workflow)
+    for tool in doc.get("tools") or []:
+        if isinstance(tool.get("url"), str):
+            tool["url"] = tool["url"].replace("{{http}}", base)
+    return doc
+
+
+def execute(fixture: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Deliver a fixture's turns to the reference runtime. `fixture` has `workflow` resolved."""
+    with HttpStub() as stub:
+        runtime = ReferenceRuntime(resolve_http(fixture["workflow"], stub.base))
+        results: List[Dict[str, Any]] = []
+        for spec in fixture["turns"]:
+            if spec.get("restart_runtime"):
+                runtime.restart()
+            if "advance_time_ms" in spec:
+                runtime.advance(spec["advance_time_ms"])
+            results.append(runtime.submit(Turn(
+                conversation_id=spec["conversation_id"],
+                turn_id=spec["turn_id"],
+                text=spec.get("text", ""),
+                user_id=spec.get("user_id", "anonymous"),
+                signal=spec.get("signal"),
+                metadata=dict(spec.get("metadata") or {}),
+            ), spec.get("crash_at")))
+        return results
+
+
 def run_fixture(path: Path) -> List[str]:
     fixture = load(path)
     missing = set(fixture["requires"]) - REFERENCE_CAPABILITIES
     if missing:
         return [f"SKIP requires {sorted(missing)}"]
 
-    workflow = fixture.get("workflow")
-    if workflow is None:
-        workflow = load((path.parent / fixture["workflow_ref"]).resolve())
+    if fixture.get("workflow") is None:
+        fixture["workflow"] = load((path.parent / fixture["workflow_ref"]).resolve())
 
-    runtime = ReferenceRuntime(workflow)
-    results: List[Dict[str, Any]] = []
-    for spec in fixture["turns"]:
-        if spec.get("restart_runtime"):
-            runtime.restart()
-        if "advance_time_ms" in spec:
-            runtime.advance(spec["advance_time_ms"])
-        results.append(runtime.submit(Turn(
-            conversation_id=spec["conversation_id"],
-            turn_id=spec["turn_id"],
-            text=spec.get("text", ""),
-            signal=spec.get("signal"),
-            metadata=dict(spec.get("metadata") or {}),
-        )))
-
+    results = execute(fixture)
     problems: List[str] = []
     for i, expected in enumerate(fixture["expect"]):
         if i >= len(results):

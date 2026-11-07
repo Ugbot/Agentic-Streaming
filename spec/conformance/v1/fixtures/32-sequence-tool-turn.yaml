@@ -1,0 +1,47 @@
+id: sequence-tool-turn
+description: 'The whole event sequence of a tool turn, not a subsequence: intent before the call, the key on the
+  intent, the user on turn_received, and a timestamp and metadata on every event.'
+requires: [effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  user_id: alice
+  metadata: {source: web}
+expect:
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  event_fields: [timestamp, metadata]
+  tool_calls:
+  - tool: pay
+    index: 0
+    attempt: 1
+    args: {user: alice}
+    result: 1
+  event_payloads:
+  - type: turn_received
+    payload: {turn_id: t1, user_id: alice}
+  - type: tool_intent
+    payload: {tool: pay, index: 0, effect: idempotent, idempotency_key: 4dce4871000d3c792626309090b13fe70a301367eb3686841299da15556a6340}
+  - type: tool_called
+    payload: {tool: pay, index: 0, attempt: 1, result: 1}

@@ -1,0 +1,40 @@
+id: crash-after-resumed
+description: 'A crash after turn_resumed does not lose the approval: the redelivered signal finishes the turn, with
+  one turn_resumed on the log.'
+requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+        x-suspend-until: approval
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+  crash_at: {event: turn_resumed, when: after}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+expect:
+- {turn_id: t1, status: suspended}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_resumed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1}

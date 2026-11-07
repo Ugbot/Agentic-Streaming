@@ -116,7 +116,7 @@ class FlinkConformanceTest {
             Map.of("class", "tool"));
 
     assertTrue(
-        FlinkConformanceHarness.checkExpectation(
+        org.jagentic.core.conformance.ConformanceHarness.checkExpectation(
                 Map.of(
                     "conversation_id",
                     "c1",
@@ -141,7 +141,7 @@ class FlinkConformanceTest {
             .isEmpty());
 
     List<String> problems =
-        FlinkConformanceHarness.checkExpectation(
+        org.jagentic.core.conformance.ConformanceHarness.checkExpectation(
             Map.of(
                 "status", "failed",
                 "tool_calls", List.of(Map.of("tool", "balance", "failed", true)),
@@ -151,7 +151,9 @@ class FlinkConformanceTest {
             actual);
     assertEquals(5, problems.size(), problems.toString());
     assertFalse(
-        FlinkConformanceHarness.checkExpectation(Map.of("reply", "other"), actual).isEmpty());
+        org.jagentic.core.conformance.ConformanceHarness.checkExpectation(
+                Map.of("reply", "other"), actual)
+            .isEmpty());
   }
 
   @Test

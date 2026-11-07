@@ -14,7 +14,7 @@ workflow:
     on_tool_error: fail
     retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, max_delay_ms: 0, jitter: false}
   tools:
-    - {id: stuck_service, kind: hanging, timeout_ms: 20, description: Never answers}
+    - {id: stuck_service, kind: hanging, effect: idempotent, timeout_ms: 20, description: Never answers}
 turns:
   - {conversation_id: c1, turn_id: t1, text: "lookup my order"}
   - {conversation_id: c1, turn_id: t2, text: "hello again"}

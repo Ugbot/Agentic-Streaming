@@ -110,7 +110,7 @@ class SpecSemanticsTest {
   void retryPolicyNumbersAttemptsAndOnlyTheLastOneSucceeds() {
     int failures = ThreadLocalRandom.current().nextInt(1, 4);
     Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tool_triggers", Map.of("charge", "flaky"));
-    Map<String, Object> flaky = new HashMap<>(Map.of("id", "flaky", "kind", "failing", "value", "ok"));
+    Map<String, Object> flaky = new HashMap<>(Map.of("id", "flaky", "kind", "failing", "effect", "idempotent", "value", "ok"));
     flaky.put("x-fail-attempts", failures);
     LocalRuntime rt = runtime(spec(
         Map.of("retry", Map.of("kind", "fixed", "max_attempts", failures + 1, "initial_delay_ms", 0)),
@@ -276,7 +276,8 @@ class SpecSemanticsTest {
     List<String> t = types(r.events);
     int started = t.indexOf("compensation_started");
     assertTrue(started > 0);
-    assertEquals(List.of("compensation_step", "compensation_step", "compensation_completed", "turn_failed"),
+    assertEquals(List.of("tool_intent", "compensation_step", "tool_intent", "compensation_step",
+        "compensation_completed", "turn_failed"),
         t.subList(started + 1, t.size()));
   }
 

@@ -1,0 +1,39 @@
+id: unknown-outcome-failed
+description: A person says the call failed. The turn fails as if the tool had.
+requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: failed}
+expect:
+- {turn_id: t1, status: crashed}
+- {turn_id: t1, status: suspended}
+- turn_id: t1
+  status: failed
+  error_class: tool
+  events: [turn_resumed, tool_failed, turn_failed]
+  tool_calls:
+  - {tool: pay, index: 0, failed: true}

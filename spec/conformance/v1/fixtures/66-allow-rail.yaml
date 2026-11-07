@@ -1,0 +1,35 @@
+id: allow-rail
+description: An allow rail rejects what does not match it. It is not ignored.
+requires: [guardrails, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+  guardrails:
+  - kind: regex
+    stage: input
+    allow: [^pay]
+    reason: payments only
+turns:
+- {conversation_id: c1, turn_id: t1, text: hello there}
+- {conversation_id: c1, turn_id: t2, text: pay it}
+expect:
+- turn_id: t1
+  status: rejected
+  error_class: guardrail
+  events: [turn_received, guardrail_rejected, turn_failed]
+- {turn_id: t2, status: completed, reply: '[main] pay returned 1'}

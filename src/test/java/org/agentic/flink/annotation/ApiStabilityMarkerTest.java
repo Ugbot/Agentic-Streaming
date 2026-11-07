@@ -20,14 +20,14 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * Every public top-level type compiled from {@code src/main} carries exactly one of {@link Public},
- * {@link Experimental} or {@link Internal}. The check runs over the compiled classes so it covers
- * whatever the active Maven profiles include.
+ * Every public top-level type compiled from {@code src/main} carries exactly one of {@link Public}
+ * or {@link Internal}. The check runs over the compiled classes so it covers whatever the active
+ * Maven profiles include.
  */
 class ApiStabilityMarkerTest {
 
   private static final List<Class<? extends Annotation>> MARKERS =
-      List.of(Public.class, Experimental.class, Internal.class);
+      List.of(Public.class, Internal.class);
 
   @Test
   void everyPublicTopLevelTypeHasExactlyOneMarker() throws IOException, URISyntaxException {
@@ -60,7 +60,7 @@ class ApiStabilityMarkerTest {
     assertEquals(
         List.of(),
         unmarked,
-        "public top-level types without a stability marker (@Public, @Experimental or @Internal)");
+        "public top-level types without a stability marker (@Public or @Internal)");
     assertEquals(List.of(), overMarked, "public top-level types with more than one marker");
   }
 
@@ -91,7 +91,7 @@ class ApiStabilityMarkerTest {
 
   static class Unmarked {}
 
-  @Experimental
+  @Internal
   static class OnceMarked {}
 
   @Public

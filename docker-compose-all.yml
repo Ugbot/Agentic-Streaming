@@ -2,9 +2,7 @@
 #
 # Brings up:
 #   - Postgres, Redis, Ollama        (base infra)
-#   - Kafka + ZooKeeper              (one ZK serves both Kafka and Fluss in a normal deploy,
-#                                      but we keep them isolated locally for clarity)
-#   - Fluss coordinator + tablet     (durable streaming storage)
+#   - Kafka + ZooKeeper
 #   - Flink session cluster (JM+TM)  (long-running job slots)
 #
 # Useful when you want every service without thinking about which sub-stack you need.
@@ -20,5 +18,4 @@
 include:
   - docker-compose.yml
   - docker-compose-kafka.yml
-  - docker-compose-fluss.yml
   - docker-compose-session.yml

@@ -82,7 +82,6 @@
              nearest declaration would otherwise win, so the BOM below pins the whole family. -->
         <jackson.version>2.22.4</jackson.version>
         <postgresql.version>42.7.14</postgresql.version>
-        <hikaricp.version>5.0.1</hikaricp.version>
         <!-- SLF4J 2.x API line; the matching log4j binding is log4j-slf4j2-impl (log4j 2.19+). -->
         <slf4j.version>2.0.17</slf4j.version>
         <log4j.version>2.26.1</log4j.version>
@@ -206,11 +205,6 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.zaxxer</groupId>
-                <artifactId>HikariCP</artifactId>
-                <version>${hikaricp.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -392,8 +386,7 @@
         <!-- Runs the *IT.java classes of every module through maven-failsafe-plugin in the
              integration-test and verify phases, on top of the unit suite:
                  ./mvnw -f reactor/pom.xml verify -P integration-tests
-             The classes start the services they need (PostgreSQL, pgvector, Redis, Qdrant,
-             Fluss) through Testcontainers and fail with an explicit message when no container
+             The classes start the services they need through Testcontainers and fail with an explicit message when no container
              runtime is reachable; they never skip themselves. Locally that runtime is Podman:
                  export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
                  export TESTCONTAINERS_RYUK_DISABLED=true

@@ -8,7 +8,10 @@
   "properties": {
     "conversation_id": { "type": "string" },
     "turn_id": { "type": "string" },
-    "status": { "enum": ["completed", "rejected", "unverified", "failed", "suspended", "duplicate"] },
+    "status": {
+      "description": "`crashed` is written only by a conformance harness for a delivery its `crash_at` verb killed; no runtime returns it",
+      "enum": ["completed", "rejected", "unverified", "failed", "suspended", "duplicate", "crashed"]
+    },
     "path": { "type": ["string", "null"], "description": "the path the router selected, null when a guardrail rejected before routing" },
     "reply": { "type": ["string", "null"] },
     "state": {
@@ -44,11 +47,13 @@
               "verification_failed", "memory_written", "turn_completed", "turn_failed",
               "turn_suspended", "turn_resumed", "timer_scheduled", "timer_fired",
               "compensation_started", "compensation_step", "compensation_completed",
-              "delegated"
+              "delegated", "llm_called", "tool_intent", "compensation_failed", "unknown_outcome"
             ]
           },
           "sequence": { "type": "integer", "minimum": 0 },
-          "payload": { "type": "object" }
+          "payload": { "type": "object" },
+          "timestamp": { "type": "integer", "description": "epoch millis, engine clock; excluded from semantic comparison" },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" } }
         },
         "additionalProperties": false
       }

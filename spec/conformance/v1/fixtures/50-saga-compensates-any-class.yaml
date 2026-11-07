@@ -1,0 +1,40 @@
+id: saga-compensates-any-class
+description: A step that fails on bad arguments compensates like any other failure, and the turn keeps the step's
+  error class.
+requires: [saga, structured_tool_args, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main: {brain: rule, prompt: You move money.}
+    verifier: {kind: none}
+  tools:
+  - {id: reserve, kind: constant, value: r, compensation: release}
+  - id: post
+    kind: constant
+    value: p
+    parameters:
+      type: object
+      required: [ledger]
+  - {id: release, kind: constant, value: released}
+  saga:
+    steps:
+    - {name: reserve, tool: reserve}
+    - {name: post, tool: post}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: validation
+  tool_calls:
+  - {tool: reserve, index: 0}
+  - {tool: release, index: 1}
+  events_include: [compensation_started, compensation_step, compensation_completed, turn_failed]

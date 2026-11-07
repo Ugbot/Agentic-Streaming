@@ -1,0 +1,29 @@
+id: tool-http-timeout
+description: An HTTP tool that does not answer inside timeout_ms fails that attempt.
+requires: [tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: http, effect: idempotent, url: '{{http}}/hang', timeout_ms: 200}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, failed: true}

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import conformance_matrix as cm
+from reference_runtime import ReferenceRuntime, Turn
 
 FIXTURES = cm.fixture_index()
 
@@ -39,8 +40,8 @@ def test_reference_runtime_passes_and_is_supported_only_where_a_fixture_proves_i
 
 def test_runner_comparator_rejects_schema_violations_and_ignores_runtime_detail() -> None:
     fixture = FIXTURES["routing-keyword"]
-    runtime = cm.ReferenceRuntime(fixture["workflow"])
-    results = [runtime.submit(cm.Turn(t["conversation_id"], t["turn_id"], t.get("text", ""))) for t in fixture["turns"]]
+    runtime = ReferenceRuntime(fixture["workflow"])
+    results = [runtime.submit(Turn(t["conversation_id"], t["turn_id"], t.get("text", ""))) for t in fixture["turns"]]
     assert cm.compare_results(fixture, results) == []
 
     with_detail = [dict(r, runtime_detail={"checkpoint": "abc", "actor": "/user/x"}) for r in results]

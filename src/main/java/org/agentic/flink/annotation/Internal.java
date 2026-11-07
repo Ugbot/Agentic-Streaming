@@ -11,9 +11,8 @@ import java.lang.annotation.Target;
  * to reach it.
  *
  * <p>An {@code @Internal} type is not API. It may change or disappear in any release, including
- * patch releases, and it is not covered by the deprecation policy. Flink functions and operators
- * that the builders wire up, codecs, type information, helpers and the examples fall in this
- * category. See {@code docs/api-stability.md}.
+ * patch releases, and it is not covered by the deprecation policy. Flink functions, codecs, type
+ * information and helpers fall in this category. See {@code docs/api-stability.md}.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

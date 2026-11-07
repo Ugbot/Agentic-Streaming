@@ -17,7 +17,7 @@ workflow:
       general: {brain: rule, prompt: You answer general questions.}
     verifier: {kind: none}
   tools:
-    - {id: get_balance, kind: constant, value: "1234.56"}
+    - {id: get_balance, kind: constant, effect: read, value: "1234.56"}
 turns:
   - {conversation_id: c1, turn_id: t1, text: "what is my balance?"}
   - {conversation_id: c1, turn_id: t2, text: "hello there"}

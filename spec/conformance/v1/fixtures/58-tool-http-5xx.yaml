@@ -1,0 +1,35 @@
+id: tool-http-5xx
+description: An HTTP 500 from a tool is a failed attempt, never a result. Attempts are numbered under one key and
+  the turn fails with class tool.
+requires: [retry, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: http, effect: idempotent, url: '{{http}}/status/500'}
+  policies:
+    on_tool_error: fail
+    retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, jitter: false}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, failed: true}
+  - {tool: pay, index: 0, attempt: 2, failed: true}
+  events: [turn_received, routed, brain_started, tool_intent, tool_failed, tool_failed, turn_failed]

@@ -37,22 +37,29 @@ public final class ScriptedChatClient implements ChatClient {
   public static final String PROVIDER = "stub";
   /** Script step key: the step's first {@code n} model calls fail transiently. */
   public static final String FAIL_ATTEMPTS_KEY = "x-fail-attempts";
+  /** Script step key: the step's text carries the number of real model calls it has answered. */
+  public static final String COUNT_CALLS_KEY = "x-count-calls";
 
   private final List<ChatResult> script;
   private final int[] failFirst;
   private final AtomicIntegerArray failed;
+  private final boolean[] counted;
+  private final String world;
 
   public ScriptedChatClient(List<ChatResult> script) {
-    this(script, new int[script == null ? 0 : script.size()]);
+    this(script, new int[script == null ? 0 : script.size()],
+        new boolean[script == null ? 0 : script.size()], "local");
   }
 
-  private ScriptedChatClient(List<ChatResult> script, int[] failFirst) {
+  private ScriptedChatClient(List<ChatResult> script, int[] failFirst, boolean[] counted, String world) {
     if (script == null || script.isEmpty()) {
       throw new IllegalArgumentException("llm.script must have at least one step for provider stub");
     }
     this.script = List.copyOf(script);
     this.failFirst = failFirst;
     this.failed = new AtomicIntegerArray(script.size());
+    this.counted = counted;
+    this.world = world;
   }
 
   /** True when {@code llmSpec} selects this provider ({@code provider: stub}, the spec default). */
@@ -77,6 +84,7 @@ public final class ScriptedChatClient implements ChatClient {
     }
     List<ChatResult> script = new ArrayList<>(steps.size());
     int[] failFirst = new int[steps.size()];
+    boolean[] counted = new boolean[steps.size()];
     for (int i = 0; i < steps.size(); i++) {
       if (!(steps.get(i) instanceof Map<?, ?> step)) {
         throw new IllegalArgumentException("llm.script[" + i + "] must be a mapping");
@@ -84,6 +92,7 @@ public final class ScriptedChatClient implements ChatClient {
       if (step.get(FAIL_ATTEMPTS_KEY) instanceof Number n) {
         failFirst[i] = n.intValue();
       }
+      counted[i] = Boolean.TRUE.equals(step.get(COUNT_CALLS_KEY));
       Object tool = step.get("tool");
       if (tool != null) {
         Object args = step.get("args");
@@ -102,7 +111,8 @@ public final class ScriptedChatClient implements ChatClient {
         throw new IllegalArgumentException("llm.script[" + i + "] needs either tool or text");
       }
     }
-    return new ScriptedChatClient(script, failFirst);
+    return new ScriptedChatClient(script, failFirst, counted,
+        String.valueOf(llmSpec.getOrDefault("x-world", java.util.UUID.randomUUID())));
   }
 
   /** The scripted steps, in order. */
@@ -119,6 +129,10 @@ public final class ScriptedChatClient implements ChatClient {
     if (failFirst[step] > 0 && failed.incrementAndGet(step) <= failFirst[step]) {
       throw new TransientFailure("stub model unavailable");
     }
+    if (counted[step]) {
+      int n = org.jagentic.core.FixtureWorld.count(world, "llm/" + step, "", false);
+      return ChatResult.text(script.get(step).text() + " #" + n);
+    }
     return script.get(step);
   }
 
@@ -127,11 +141,12 @@ public final class ScriptedChatClient implements ChatClient {
     int taken = 0;
     for (int i = messages.size() - 1; i >= 0; i--) {
       String role = messages.get(i).get("role");
-      if ("user".equals(role)) {
-        break;
-      }
-      if ("tool".equals(role)) {
+      boolean observation = "user".equals(role)
+          && String.valueOf(messages.get(i).get("content")).startsWith(LlmBrain.OBSERVATION);
+      if (observation) {
         taken++;
+      } else if ("user".equals(role)) {
+        break;
       }
     }
     return taken;

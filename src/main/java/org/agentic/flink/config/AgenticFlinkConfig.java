@@ -14,10 +14,10 @@ import org.agentic.flink.annotation.Public;
  *
  * <ol>
  *   <li>Explicit properties passed via constructor or {@link #fromMap(Map)}
- *   <li>Environment variables with {@code AGENTIC_FLINK_} prefix (e.g., {@code ollama.base.url}
- *       maps to {@code AGENTIC_FLINK_OLLAMA_BASE_URL})
+ *   <li>Environment variables with {@code AGENTIC_FLINK_} prefix (e.g., {@code
+ *       checkpoint.interval.ms} maps to {@code AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS})
  *   <li>System properties with {@code agentic.flink.} prefix (e.g., {@code
- *       agentic.flink.ollama.base.url})
+ *       agentic.flink.checkpoint.interval.ms})
  *   <li>Default values from {@link ConfigKeys}
  * </ol>
  *
@@ -29,11 +29,11 @@ import org.agentic.flink.annotation.Public;
  * <pre>{@code
  * // From environment (production)
  * AgenticFlinkConfig config = AgenticFlinkConfig.fromEnvironment();
- * String ollamaUrl = config.get(ConfigKeys.OLLAMA_BASE_URL, ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
+ * long interval = config.getLong(ConfigKeys.CHECKPOINT_INTERVAL_MS, 10_000L);
  *
  * // From explicit properties (programmatic)
  * Map<String, String> props = new HashMap<>();
- * props.put(ConfigKeys.OLLAMA_BASE_URL, "http://my-ollama:11434");
+ * props.put(ConfigKeys.CHECKPOINT_INTERVAL_MS, "30000");
  * AgenticFlinkConfig config = AgenticFlinkConfig.fromMap(props);
  *
  * // For testing (all defaults, no env vars)
@@ -56,16 +56,6 @@ public class AgenticFlinkConfig implements Serializable {
 
   static {
     Map<String, String> defaults = new HashMap<>();
-    defaults.put(ConfigKeys.OLLAMA_BASE_URL, ConfigKeys.DEFAULT_OLLAMA_BASE_URL);
-    defaults.put(ConfigKeys.OLLAMA_MODEL, ConfigKeys.DEFAULT_OLLAMA_MODEL);
-    defaults.put(ConfigKeys.REDIS_HOST, ConfigKeys.DEFAULT_REDIS_HOST);
-    defaults.put(ConfigKeys.REDIS_PORT, ConfigKeys.DEFAULT_REDIS_PORT);
-    defaults.put(ConfigKeys.POSTGRES_URL, ConfigKeys.DEFAULT_POSTGRES_URL);
-    defaults.put(ConfigKeys.POSTGRES_USER, ConfigKeys.DEFAULT_POSTGRES_USER);
-    defaults.put(ConfigKeys.POSTGRES_PASSWORD, ConfigKeys.DEFAULT_POSTGRES_PASSWORD);
-    defaults.put(ConfigKeys.QDRANT_HOST, ConfigKeys.DEFAULT_QDRANT_HOST);
-    defaults.put(ConfigKeys.QDRANT_PORT, ConfigKeys.DEFAULT_QDRANT_PORT);
-    defaults.put(ConfigKeys.OPENAI_MODEL, ConfigKeys.DEFAULT_OPENAI_MODEL);
     defaults.put(ConfigKeys.CHECKPOINT_ENABLED, ConfigKeys.DEFAULT_CHECKPOINT_ENABLED);
     defaults.put(ConfigKeys.CHECKPOINT_INTERVAL_MS, ConfigKeys.DEFAULT_CHECKPOINT_INTERVAL_MS);
     defaults.put(ConfigKeys.CHECKPOINT_MIN_PAUSE_MS, ConfigKeys.DEFAULT_CHECKPOINT_MIN_PAUSE_MS);
@@ -130,7 +120,7 @@ public class AgenticFlinkConfig implements Serializable {
    * Returns the resolved value for {@code key}, or {@code null} if no value is found at any level
    * (explicit, env, sysprop, defaults).
    *
-   * @param key the configuration key (e.g., {@code "ollama.base.url"})
+   * @param key the configuration key (e.g., {@code "checkpoint.interval.ms"})
    * @return resolved value or {@code null}
    */
   public String get(String key) {
@@ -254,14 +244,14 @@ public class AgenticFlinkConfig implements Serializable {
     }
 
     if (resolveEnv) {
-      // 2. Environment variable: AGENTIC_FLINK_OLLAMA_BASE_URL
+      // 2. Environment variable: AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS
       String envKey = ENV_PREFIX + key.toUpperCase().replace('.', '_');
       value = System.getenv(envKey);
       if (value != null) {
         return value;
       }
 
-      // 3. System property: agentic.flink.ollama.base.url
+      // 3. System property: agentic.flink.checkpoint.interval.ms
       String sysPropKey = SYS_PROP_PREFIX + key;
       value = System.getProperty(sysPropKey);
       if (value != null) {

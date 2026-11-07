@@ -54,13 +54,14 @@ agent:
     kind: prefix
 
 tools:
-  - {id: get_balance, kind: constant, description: Look up the user's balance, value: 1234.56}
+  - {id: get_balance, kind: constant, effect: read, description: Look up the user's balance, value: 1234.56}
 
 # Register an external MCP server's tools. transport: stdio launches the server process;
 # its tools are surfaced into the registry id-prefixed by `name_` (here tools_util_add, ...).
 mcp:
   - name: tools
     transport: stdio
+    effect: read         # covers every tool this server offers
     command: [python3, examples/pipelines/mcp_util_server.py]
 
 # Register a peer agent as a tool (peer-as-tool over A2A). The peer can be any A2A agent;
@@ -68,6 +69,7 @@ mcp:
 a2a:
   - id: specialist
     transport: http
+    effect: idempotent   # the peer is sent the key; without this it would be called once only
     url: "${AGENTIC_PEER_AGENT_URL}"
     description: "Delegate complex disputes to the fraud specialist agent."
     retries: 2

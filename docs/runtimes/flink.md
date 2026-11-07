@@ -1,25 +1,27 @@
 # Flink runtime
 
 Apache Flink 2.2.1 is the primary runtime. The main module (root `pom.xml`, artifact
-`org.jagentic:agentic-flink`) carries two things that must not be confused:
-
-| Surface | Package | Contract | Conformance binding |
-|---|---|---|---|
-| `agentic/v1` event-sourced runtime | `org.agentic.flink.runtime` | `spec/v1`, one workflow document, normalized results | `flink` |
-| Legacy Flink DSL | `org.agentic.flink.dsl`, `execution`, `job`, `statemachine` | `Agent.builder()`, `ToolExecutor`, Flink-state memory | none |
-
-The first is described here. The second is deprecated legacy code, kept for now, and has its
-[own section](#legacy-flink-dsl-pure-flink-flavor) at the end.
+`org.jagentic:agentic-flink`) is the `agentic/v1` event-sourced runtime: `org.agentic.flink.runtime`
+and `org.agentic.flink.pipeline`, with one workflow document, normalized results and the `flink`
+conformance binding.
 
 ## What this runtime does not do yet
 
 - **It blocks.** `WorkflowTurnFunction.processElement` runs the whole turn synchronously on the Flink
   task thread, including model calls, tool calls and retry sleeps. One slow call stalls every key on
   that subtask and delays checkpoint barriers. Size parallelism accordingly.
-- **Tool calls re-run after a restore.** The log is checkpointed keyed state, so it rolls back up to
-  one checkpoint interval while the outside world does not. A turn that ran after the last completed
-  checkpoint runs again on restore, tools included, and the tool receives no idempotency key. Do not
-  use this for payments or other non-idempotent actions.
+- **The log rolls back; the journal does not.** The log is checkpointed keyed state, so it rolls back
+  up to one checkpoint interval while the outside world does not. A turn that ran after the last
+  completed checkpoint runs again on restore, and its tool and model calls go through the
+  `stores.effects` journal: what was recorded is reused by index, and only a call with no recorded
+  result is made again, under the same `Idempotency-Key`. Declare `postgres` or `kafka`. A job
+  refuses a `non_idempotent` tool without one, and without any journal a re-run calls every tool
+  again, under the same keys. A crash during a call to a `non_idempotent` tool leaves the outcome
+  unknown: the turn suspends and a person answers (`PayAfterRestoreTest` shows each crash point
+  against a real HTTP server, `EffectJournalStoresIT` the two stores,
+  `tools/kafka-journal-tm-loss.sh` a killed TaskManager on a session cluster). Each journal write
+  blocks the task thread, like the call it guards, and a read of the Kafka journal asks the broker
+  for its end offsets first. The Kafka journal holds the whole topic in every subtask.
 - **A real model on Flink has been tested against a local stand-in server, not a live provider.**
   See [Real models](#real-models).
 
@@ -99,6 +101,33 @@ job carries on. A turn ending `fatal` or `transient` reaches it as `{"kind": "tu
 or Podman: it submits `banking.yaml`, sends a poison record and a redelivery, kills the TaskManager
 after a checkpoint and checks that the conversation carries on from the restored log.
 
+From your own job, `KafkaPipelineJob.assemble` puts the same graph on your environment:
+
+```java complete
+import java.nio.file.Path;
+import java.util.Map;
+import org.agentic.flink.pipeline.FlinkPipelineRunner;
+import org.agentic.flink.pipeline.KafkaPipelineJob;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+
+public final class BankingJob {
+  public static void main(String[] args) throws Exception {
+    Map<String, Object> spec = FlinkPipelineRunner.loadYaml(Path.of(args[0]));
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+    KafkaPipelineJob.assemble(
+        env,
+        spec,
+        new KafkaPipelineJob.Options(
+            "localhost:9092",
+            "agentic.turns",
+            "agentic.turns.results",
+            "agentic.turns.results.failures",
+            "agentic-banking"));
+    env.execute("banking");
+  }
+}
+```
+
 To run a document once on a local cluster, in its own JVM:
 
 ```bash
@@ -117,8 +146,11 @@ is a state backend failure, still fails the job (`WorkflowTurnBoundaryTest`).
 ## Real models
 
 `ChatClientFactories.fromWorkflow()` builds the client the document's `llm` block declares, with the
-same code the cores use (`PipelineLoader.chatClient`): `provider: ollama` or `openai`, with `model`,
-`base_url`, `temperature`, `max_tokens` and `timeout_ms`. `FlinkPipelineRunner` uses it. Code calling
+same code the cores use (`PipelineLoader.chatClient`): `provider: ollama`, `openai`, `anthropic` or
+`gemini`, with `model`, `base_url`, `temperature`, `max_tokens` and `timeout_ms`. `anthropic` defaults
+to `claude-sonnet-5-5`, reads `ANTHROPIC_API_KEY` and, for `base_url`, `ANTHROPIC_BASE_URL`; send a
+`temperature` only to a model that takes one, since current Claude models refuse a non-default value.
+`gemini` must name its `model`, and reads `GEMINI_API_KEY` and `GEMINI_BASE_URL`. `FlinkPipelineRunner` uses it. Code calling
 `assembleResults` or `new WorkflowTurnFunction` passes it explicitly; their default refuses an `llm`
 brain when the job is built.
 
@@ -180,16 +212,3 @@ timer fires exactly once across a restart. The `flink` binding runs the three ti
 ./mvnw package -DskipTests
 ./mvnw test -Dtest=FlinkConformanceTest                     # the flink conformance binding
 ```
-
-## Legacy Flink DSL (pure-Flink flavor)
-
-The `AgentBuilder` DSL (`Agent.builder().withId(...).withSystemPrompt(...).withTools(...).build()`
-under `org.agentic.flink.dsl`, with `execution`, `job` and `statemachine`) is deprecated legacy
-code, kept for now, for writing agents as Flink jobs directly: LangChain4J chat models, `ToolExecutor`
-tools, Flink-state short-term memory, the conversation store SPI, CEP, sagas and outbound A2A.
-[docs/getting-started.md](../getting-started.md), [docs/memory.md](../memory.md) and the Flink-runtime
-showcases under `docs/examples/` describe it.
-
-It is a different contract from `agentic/v1`: no workflow document, no `spec/v1` event set, no
-normalized result, and no conformance binding. Nothing on this page above this section applies to
-it, and no fixture measures it.

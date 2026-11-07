@@ -244,13 +244,18 @@ class Agent:
         return self
 
     def use_tool(self, tool_id: str, fn: ToolFn, description: Optional[str] = None,
-                 compensation: Optional[str] = None, parameters: Optional[Mapping[str, Any]] = None) -> "Agent":
-        """Register a Python function as a tool. Arguments arrive as keyword arguments."""
+                 compensation: Optional[str] = None, parameters: Optional[Mapping[str, Any]] = None,
+                 effect: Optional[str] = None, timeout_ms: Optional[int] = None) -> "Agent":
+        """Register a Python function as a tool. Arguments arrive as keyword arguments, and
+        `agentic.current_call()` gives its idempotency key. A tool that declares no `effect` is
+        `non_idempotent`: it is never called twice, so one that is safe to repeat says `read` or
+        `idempotent`."""
         if not callable(fn):
             raise ValidationError(f"use_tool({tool_id!r}) needs a callable")
         doc_lines = (fn.__doc__ or "").strip().splitlines()
+        fields = {k: v for k, v in (("effect", effect), ("timeout_ms", timeout_ms)) if v is not None}
         self.tool(tool_id, "function", description or (doc_lines[0] if doc_lines else f"Python function {tool_id}"),
-                  compensation, parameters)
+                  compensation, parameters, **fields)
         self._bindings.tools[tool_id] = fn
         return self
 
@@ -300,6 +305,15 @@ class Agent:
             store["url"] = url
         store.update(fields)
         self._doc.setdefault("stores", {})["conversation"] = store
+        return self
+
+    def with_journal(self, kind: str = "memory", url: Optional[str] = None, on_unavailable: str = "fail") -> "Agent":
+        """Where the effect journal lives: `memory`, or `file` with url=<dir>. A file log gets a file
+        journal beside it without being asked."""
+        store: Dict[str, Any] = {"kind": kind, "on_unavailable": on_unavailable}
+        if url:
+            store["url"] = url
+        self._doc.setdefault("stores", {})["effects"] = store
         return self
 
     def with_retrieval(self, kb: Sequence[Mapping[str, Any]], dim: int = 256, top_k: int = 4,

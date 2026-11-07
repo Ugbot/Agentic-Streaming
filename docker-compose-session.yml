@@ -1,16 +1,12 @@
 # Flink 2.2.1 (Java 21) session cluster for local development, matching the Flink version the
-# root module builds against. Sits on the same network as `docker-compose-fluss.yml` so
-# submitted jobs can reach `fluss-coordinator:9120` by service
-# name (use `FLUSS_BOOTSTRAP=fluss-coordinator:9120` for inter-container jobs, or
-# `localhost:9123` for clients running on the host).
+# root module builds against.
 #
 # Docker or Podman; with Podman read `podman` for `docker` below.
 #
-#   docker network create agentic-flink-network        # once, shared with fluss compose
-#   docker compose -f docker-compose-fluss.yml -f docker-compose-session.yml up -d
+#   docker network create agentic-flink-network        # once
+#   docker compose -f docker-compose-kafka.yml -f docker-compose-session.yml up -d
 #
 # JM REST API at http://localhost:8081 ; submit jars + run jobs via /jars/upload + /jars/{id}/run.
-# Inter-container ZeroMQ endpoints should bind on 0.0.0.0 and use container-local ports.
 #
 # KAFKA_BOOTSTRAP defaults to the broker's in-network listener from docker-compose-kafka.yml. A job's
 # main() runs in the JobManager, where localhost is not Kafka; host clients use localhost:9092.

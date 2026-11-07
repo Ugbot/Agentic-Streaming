@@ -11,22 +11,23 @@ import java.util.UUID;
  * turn of the same {@code turnId}.
  *
  * <p>The pre-spec constructors ({@code (conversationId, userId, text[, metadata])}) still work and
- * mint a fresh random {@code turnId}, so callers that never redeliver keep their behaviour.</p>
+ * mint a fresh random {@code turnId}, so callers that never redeliver keep their behaviour. The
+ * canonical constructor mints nothing: an event that arrives without a {@code turnId} cannot be
+ * deduplicated, and {@link RoutedGraph} refuses it.</p>
  */
 public record Event(String conversationId, String turnId, String userId, String text,
                     Map<String, String> metadata, Map<String, Object> signal) implements Serializable {
 
   public Event {
-    turnId = turnId == null || turnId.isBlank() ? UUID.randomUUID().toString() : turnId;
     metadata = metadata == null ? Map.of() : metadata;
   }
 
   public Event(String conversationId, String userId, String text) {
-    this(conversationId, null, userId, text, Map.of(), null);
+    this(conversationId, UUID.randomUUID().toString(), userId, text, Map.of(), null);
   }
 
   public Event(String conversationId, String userId, String text, Map<String, String> metadata) {
-    this(conversationId, null, userId, text, metadata, null);
+    this(conversationId, UUID.randomUUID().toString(), userId, text, metadata, null);
   }
 
   /** A turn with an explicit idempotency key. */
@@ -42,7 +43,13 @@ public record Event(String conversationId, String turnId, String userId, String 
 
   /** The resume command for a suspended turn: same {@code turnId}, carrying the external signal. */
   public static Event resume(String conversationId, String turnId, Map<String, Object> signal) {
-    return new Event(conversationId, turnId, null, "", Map.of(), signal == null ? Map.of() : signal);
+    return resume(conversationId, turnId, null, signal);
+  }
+
+  /** As above, naming who sent the signal. The turn still runs as its original user. */
+  public static Event resume(String conversationId, String turnId, String sender,
+                             Map<String, Object> signal) {
+    return new Event(conversationId, turnId, sender, "", Map.of(), signal == null ? Map.of() : signal);
   }
 
   public boolean isResume() {

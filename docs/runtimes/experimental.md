@@ -10,4 +10,5 @@ These were never part of the core and are not supported. The code as it stood is
 - [`tool-services`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/tool-services): the standalone tool packs
 - [`a2a-gateway`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/a2a-gateway): the Quarkus inbound A2A gateway
 - [`banking-job`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/banking-job) and [`banking-kb`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/banking-kb): the banking demo job and knowledge base
+- [`src/main/java/org/agentic/flink`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/src/main/java/org/agentic/flink): the legacy Flink DSL (`Agent.builder()`) and everything only it used, with the Fluss and Milvus backends, the web toolkit, channels and the Java examples
 - [`notebooks`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/notebooks) and [`examples-bin`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-cornerstone/examples-bin): the notebooks and example scripts

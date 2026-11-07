@@ -1,8 +1,8 @@
 # Security model
 
 This page states what the code does today, including where it does nothing. The project is
-experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments or
-other non-idempotent actions.**
+experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments:
+the effect journal below stops repeated calls, but nothing here authenticates who asked for one.**
 
 ## The canonical path has no authentication
 
@@ -34,9 +34,6 @@ tool boundary, so it is not a security control:
 - Timer, CEP and saga calls bypass the check.
 - Outside scripted mode, a refused tool is fed back to the model, which may try again.
 
-The deprecated legacy DSL has its own check (`Agent.canUseTool`, called from `ToolExecutionEngine`).
-It does not apply to the canonical path.
-
 ## Workflow documents are trusted input
 
 Treat a workflow document or `pipeline.yaml` as code. `mcp[].command` starts a process when the
@@ -50,15 +47,46 @@ user text. Tool results and retrieved text are not checked. This is not a prompt
 
 ## Effects
 
-A tool runs first and is recorded afterwards, and a function or HTTP tool receives no idempotency
-key. After a Flink restore, or any redelivery of a turn that did not finish, tool calls run again. See
-the status block in the [README](../README.md) and the [Flink runtime page](runtimes/flink.md).
+Every tool and model call goes through the effect journal: intent is written first, the outcome
+after, and a re-run reuses what is recorded. Every tool receives a deterministic `Idempotency-Key`,
+as a header on HTTP and agent tools, in `_meta` on MCP tools, and with the call's identity in process.
+The key is a SHA-256 of the conversation id, turn id and call index, so it leaks neither.
+
+- A tool declares `effect: read`, `idempotent` or `non_idempotent`. **A tool that declares nothing is
+  `non_idempotent`**, so it is never called twice, gets one attempt, and a call with no recorded
+  result waits for a person. Only a tool that is safe to repeat should say otherwise. The same goes
+  for a peer, whose client retries are switched off, and an MCP server.
+- **A crash during a call to a `non_idempotent` tool leaves the outcome unknown.** The journal cannot
+  tell whether the effect landed. The call is not repeated: the turn suspends with `unknown_outcome`
+  and a person answers with a signal. Treat that person's answer as privileged, because
+  `not_applied` makes the call again. Nothing yet checks who sent it; the sender is recorded as
+  `signal_sender` and is not authenticated.
+- A timeout, a lost connection or an HTTP 5xx from a `non_idempotent` tool is unknown in the same way.
+- The journal holds tool arguments and results in plaintext, as the log does. Protect and expire it
+  as you would the log, and keep entries longer than the longest rollback or redelivery you allow.
+  An entry dropped sooner re-opens that turn to repeat its calls.
+- A worker that lost its lease can still be running a call while its replacement starts. There is no
+  fencing token at the tool, so a tool must not rely on the journal alone to exclude that. A Kafka
+  journal has no compare-and-set at all, so its two writers can both see no entry and both call;
+  Postgres stops the second at the intent, by its primary key.
+- A journal that cannot be reached stops the call: the intent is written first, and a failed write
+  ends the delivery, on Flink by failing the task. `on_unavailable: degrade` falls back to memory only
+  when no tool is `non_idempotent`. Journal reads and writes are bounded, at 15 seconds on a Postgres
+  socket and 30 on Kafka, so a stalled store fails the task rather than hanging it.
+- A journal entry cannot answer a different call: its intent is a SHA-256 of the agent id, the tool
+  and the arguments, and a mismatch ends the turn `fatal` with nothing called. Two agents with the
+  same `agent.id` on one store are not told apart.
+- Model keys come from the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`) and
+  travel in headers. A document that carries one is refused. A provider's error body reaches logs and
+  the turn's error cut to 200 characters with the key removed, but what else it says is the provider's.
+
+See [Guarantees](../README.md#guarantees) and the [Flink runtime page](runtimes/flink.md).
 
 ## Egress policy
 
-`org.agentic.flink.net.OutboundUrlPolicy` constrains outbound URLs in the Flink module's web toolkit
-(`Fetcher`, and through it `WebFetchTool` and `CrawlerCore`). It does not apply to `kind: http` tools
-or A2A peers in the cores: those URLs are operator supplied and are trusted.
+`org.jagentic.core.net.OutboundUrlPolicy` is in the core and nothing calls it yet. The Flink web
+toolkit that used it is gone. It is there for the first tool that takes a URL from a model. `kind:
+http` tools and A2A peers do not use it: those URLs are operator supplied and are trusted.
 
 The policy:
 
@@ -69,25 +97,19 @@ The policy:
   `169.254.169.254`, unspecified and multicast addresses, IPv6 unique-local addresses, and
   IPv4 addresses embedded in IPv6 (mapped, NAT64 and 6to4 forms);
 - optionally restricts hosts to an allowlist of exact names or `*.suffix` patterns, set with
-  `WebToolkitOptions.withUrlPolicy(OutboundUrlPolicy.fromAllowlist(...))`.
+  `OutboundUrlPolicy.fromAllowlist(...)`.
 
-Fetchers never let the HTTP client follow redirects on its own. Each `301`, `302`, `303`, `307` or
-`308` location is validated against the same policy before it is followed, and the chain is capped
-(five hops by default). `OutboundUrlPolicy.allowingPrivateAddresses()` turns the private-address
-check off and is for development only.
+A caller must not let its HTTP client follow redirects on its own: validate each location against
+the same policy, and stop after five hops by default. `OutboundUrlPolicy.allowingPrivateAddresses()`
+turns the private-address check off and is for development only.
 
 ## Compose stacks
 
 The compose stacks publish every port on `127.0.0.1` and carry no committed credential.
 `POSTGRES_PASSWORD` and `REDIS_PASSWORD` are required variables (`${VAR:?...}`), so compose refuses to
-start until they are set in `.env`. Provider API keys (`OPENAI_API_KEY`, `GOOGLE_API_KEY`,
-`ANTHROPIC_API_KEY`) are only ever read from the environment and have no committed values.
+start until they are set in `.env`. `OPENAI_API_KEY` is only ever read from the environment and has no committed value.
 
 ## Dependencies
-
-The outbound A2A client is built on the `a2a-java` SDK at an alpha version (`1.0.0.Alpha3`). No
-advisory names it, but upstream has moved to `org.a2aproject.sdk`, and `SdkA2AClient` has no test
-against a real peer to prove the move.
 
 The resolved test-scope trees of `ports/jagentic-core`, the Flink module and `agentic-pekko`, and both
 `uv.lock` files, have no open advisory in [OSV](https://osv.dev) at any severity. Transitive versions
@@ -114,19 +136,6 @@ copy of the same version.
 | Guava 33.4.0 (`flink-shaded-guava` 33.4.0-jre-20.0) | Flink, relocated | CVE-2026-102554, high: memory exhaustion on Java deserialisation of some collections | Only if an attacker can feed Flink's Java deserialisation, at which point this is the lesser problem. |
 | ZooKeeper 3.7.2 (`flink-shaded-zookeeper-3` 3.7.2-20.0) | Flink, relocated | CVE-2024-23944, moderate: information disclosure in persistent watchers | Only with ZooKeeper HA, which no stack here configures. The advisory is on the server side of watch handling. |
 | snappy-java 1.1.10.7 and lz4-java 1.10.3 | Flink, unshaded | snappy: CVE-2026-93451, CVE-2026-108106 (high), CVE-2026-116590. lz4: CVE-2026-106451 (high), CVE-2026-106449, -106450, -106452, -106453, CVE-2026-59949 | Flink feeds them its own state and network buffers, not attacker-chosen bytes, so the decompression bugs need the checkpoint store or the data plane to be compromised first. CVE-2026-106451 replaces the native library in a shared temp directory and needs a local user on the TaskManager host. Job code that bundles the uber jar gets the patched versions (1.1.10.12, 1.13.0) only where the job's classloader wins. |
-| Netty 4.1.100, Jackson 2.15.3, Guava 32.1.3, lz4 1.8.0 (`com.alibaba.fluss:fluss-client` 0.7.0) | Fluss client, relocated. **Not in the default uber jar**: `provided`, and bundled only by `-P fluss` | As for the rows above, plus CVE-2025-66566 and CVE-2025-12183 in lz4 1.8.0 | Not in a default build. With `-P fluss`, or the client added by hand, only when a Fluss backend is selected, and then the client talks only to the operator's Fluss cluster, so a hostile response needs a hostile cluster. `org.apache.fluss:fluss-client` 1.0.0 does not help: it shades Netty 4.1.104, Jackson 2.15.3 and Guava 32.1.3. |
-| Netty 4.1.127 (`io.milvus:milvus-sdk-java` 2.6.27, under `io/milvus/shaded`) | Milvus SDK, relocated. **Not in the default uber jar**: `provided`, and bundled only by `-P milvus` | At least 31 in `netty-handler`, `netty-codec`, `netty-codec-http` and `netty-codec-http2` | Not in a default build. With `-P milvus`, or the SDK added by hand, only when the Milvus backend is selected, and then only as a client of the operator's Milvus server, so a hostile response needs a hostile server. The SDK builds on gRPC 1.77.0, and that release of `grpc-netty-shaded` carries 4.1.127; the relocated copy has no version file of its own. No upgrade helps: 3.0.12 is on gRPC 1.77.0 too. |
-
-The Fluss client also brought an unrelocated RocksDB into the uber jar, which went with it. Tests
-still see the client, because `provided` is on the test classpath.
-
-The Milvus SDK took okhttp 4.12.0, okio 3.6.0, the Kotlin standard library 2.2.21 and commons-text
-1.14.0 with it, because nothing else brought them and no class left in the uber jar refers to them.
-`-P milvus` puts them back.
-
-The A2A BOM holds gRPC at 1.77.0, so the root pom imports `grpc-bom` 1.84.2 ahead of it, which is what
-the Qdrant client declares. Without that, `grpc-netty-shaded` puts a relocated Netty 4.1.127 in the
-uber jar under `io/grpc/netty/shaded`. It carries 4.2.16 now, which has no OSV advisory.
 
 Quarkus (CVE-2026-50559, CVE-2026-39852) left with the A2A gateway and the tool services, so no
 manifest here resolves it.
@@ -136,14 +145,6 @@ manifest here resolves it.
 These versions build and pass their unit tests, and nothing here has run them against the real
 service:
 
-- Milvus SDK 2.6.27, opt-in behind `-P milvus`. `MilvusVectorStore` compiles and
-  `VectorStoreDiscoveryTest` finds it through `ServiceLoader`. No test talks to a Milvus server, at
-  this version or any other. `MilvusClientAbsentTest` covers the jar without the SDK.
-- The Fluss client. `FlussChannelIT` and `FlussConversationStoreIT` start their cluster with host
-  networking, and failed to start it on Docker Desktop for macOS, so they need a Linux host.
-  `FlussClientAbsentTest` covers the jar without the client.
 - `pekko-persistence-cassandra` 1.1.0 on Pekko 1.7.1, without a Cassandra.
 - `kafka-clients` 4.1.2 (Flink) and 3.9.2 (Pekko). No `*IT` class starts a broker.
-- The A2A gRPC transport, built against gRPC 1.77.0 and resolved at 1.84.2. `SdkA2AClient` has no
-  test against a real peer.
-- DJL 0.40.0 with a live model. The `djl` tag stays out of the default and integration runs.
+

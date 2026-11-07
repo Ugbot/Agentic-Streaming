@@ -40,6 +40,7 @@ import org.jagentic.core.Event;
 import org.jagentic.core.EventType;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LogEvent;
+import org.jagentic.core.LogUnavailable;
 import org.jagentic.core.Policies;
 import org.jagentic.core.TurnError;
 import org.jagentic.core.TurnResult;
@@ -95,8 +96,8 @@ public final class ConversationEntity
   /** Apply one turn (or resume signal) and reply with its normalized result. {@code event.turnId()} is the idempotency key. */
   public record ProcessTurn(Event event, ActorRef<TurnReply> replyTo) implements Command {
     public ProcessTurn {
-      if (event == null || event.turnId() == null || event.turnId().isBlank()) {
-        throw new IllegalArgumentException("ProcessTurn requires an event with a turn_id");
+      if (event == null) {
+        throw new IllegalArgumentException("ProcessTurn requires an event");
       }
     }
   }
@@ -185,14 +186,19 @@ public final class ConversationEntity
   }
 
   // ---- journal entry: exactly one spec log event ----
-  public record Appended(long sequence, String turnId, String type, Map<String, Object> payload)
+  public record Appended(long sequence, String turnId, String type, Map<String, Object> payload,
+                         long timestamp, Map<String, String> metadata)
       implements CborSerializable {
+    public Appended(long sequence, String turnId, String type, Map<String, Object> payload) {
+      this(sequence, turnId, type, payload, System.currentTimeMillis(), Map.of());
+    }
+
     public static Appended of(LogEvent e) {
-      return new Appended(e.sequence(), e.turnId(), e.type(), e.payload());
+      return new Appended(e.sequence(), e.turnId(), e.type(), e.payload(), e.timestamp(), e.metadata());
     }
 
     public LogEvent toLogEvent(String conversationId) {
-      return new LogEvent(conversationId, sequence, turnId, type, payload);
+      return new LogEvent(conversationId, sequence, turnId, type, payload, timestamp, metadata);
     }
   }
 
@@ -318,7 +324,7 @@ public final class ConversationEntity
     Event event = cmd.event();
     ConversationState folded = state.folded;
     boolean resumesSuspended = event.isResume() && folded.suspended().containsKey(event.turnId());
-    ConversationState.TurnRecord prior = folded.turn(event.turnId());
+    ConversationState.TurnRecord prior = event.turnId() == null ? null : folded.turn(event.turnId());
     if (!resumesSuspended && prior != null && prior.status() != null && !prior.retryable()
         && deps.policies().idempotency() == Policies.Idempotency.TURN_ID) {
       TurnReply dup = TurnReply.of(recorded(prior).asDuplicate(folded.reduced()));
@@ -347,9 +353,13 @@ public final class ConversationEntity
     AgentContext ctx = new AgentContext(conversationId, event.turnId(), event.userId(), store,
         new KeyedStateStore.InMemory(), deps.tools(), deps.retriever(), log, deps.policies());
     ctx.clock = deps.clock();
+    ctx.probe = deps.probe();
+    ctx.journal = deps.journal();
     TurnResult result;
     try {
       result = deps.graph().handle(event, ctx);
+    } catch (LogUnavailable e) {
+      throw e; // nothing is staged: the turn stays unspent and fails the entity, as it would the job
     } catch (RuntimeException e) {
       String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
       TurnError error = new TurnError(TurnError.ErrorClass.FATAL, message);

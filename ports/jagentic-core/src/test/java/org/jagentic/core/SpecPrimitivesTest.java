@@ -60,7 +60,8 @@ class SpecPrimitivesTest {
     List<String> wire = List.of("turn_received", "guardrail_rejected", "routed", "brain_started", "tool_called",
         "tool_failed", "retrieved", "reply_drafted", "verification_failed", "memory_written", "turn_completed",
         "turn_failed", "turn_suspended", "turn_resumed", "timer_scheduled", "timer_fired",
-        "compensation_started", "compensation_step", "compensation_completed", "delegated");
+        "compensation_started", "compensation_step", "compensation_completed", "delegated",
+        "llm_called", "tool_intent", "compensation_failed", "unknown_outcome");
     assertEquals(wire.size(), EventType.values().length);
     for (String w : wire) {
       assertEquals(w, EventType.parse(w).orElseThrow().wire());

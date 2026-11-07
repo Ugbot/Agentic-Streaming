@@ -161,7 +161,7 @@ def test_event_types_are_closed_and_sequences_dense():
     with pytest.raises(ValidationError, match="closed set"):
         log.append(cid, "t1", "made_up_event", {}, 0)
     assert [e.sequence for e in log.read(cid)] == [0, 1, 2, 3, 4]
-    assert len(EVENT_TYPES) == 20
+    assert len(EVENT_TYPES) == 24
 
 
 def test_state_is_a_fold_over_the_log():
@@ -343,7 +343,7 @@ def test_unavailable_store_fails_unless_degrade_is_configured():
 def test_retry_attempts_and_delays_follow_the_policy():
     slept: List[float] = []
     spec = (Agent(rid("a")).path("main", tool_triggers={"go": "flaky"})
-            .tool("flaky", "failing", value="ok", **{"x-fail-attempts": 2})
+            .tool("flaky", "failing", value="ok", effect="idempotent", **{"x-fail-attempts": 2})
             .policies(retry={"kind": "exponential", "max_attempts": 4, "initial_delay_ms": 100, "multiplier": 2.0,
                              "max_delay_ms": 150})
             .verifier("none").build())
@@ -353,7 +353,7 @@ def test_retry_attempts_and_delays_follow_the_policy():
     assert result["status"] == "completed"
     assert [(c["attempt"], "error" in c) for c in result["tool_calls"]] == [(1, True), (2, True), (3, False)]
     tool_events = [e["type"] for e in result["events"] if e["type"].startswith("tool")]
-    assert tool_events == ["tool_failed", "tool_failed", "tool_called"]
+    assert tool_events == ["tool_intent", "tool_failed", "tool_failed", "tool_called"]
     assert [e["type"] for e in result["events"]].count("turn_received") == 1
     assert slept == [0.1, 0.15]
 
@@ -369,7 +369,7 @@ def test_retry_delay_math():
 
 
 def test_retry_exhaustion_fails_with_tool_error_class():
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing")
+    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing", effect="idempotent")
             .policies(retry="fixed", max_attempts=2).verifier("none").build())
     rt = LocalRuntime(sleep=lambda _: None)
     rt.deploy(spec)
@@ -508,6 +508,7 @@ def test_output_guardrail_rejects_the_draft():
 
 def test_saga_compensates_completed_steps_in_reverse_order():
     order: List[str] = []
+    undone: List[Any] = []
 
     def step(name: str):
         def fn() -> str:
@@ -515,9 +516,16 @@ def test_saga_compensates_completed_steps_in_reverse_order():
             return name
         return fn
 
+    def undo(name: str):
+        def fn(forward_args: Dict[str, Any], forward_result: Any) -> str:
+            order.append(name)
+            undone.append((forward_args, forward_result))
+            return name
+        return fn
+
     spec = (Agent(rid("a")).path("main")
-            .use_tool("s1", step("s1"), compensation="u1").use_tool("u1", step("u1"))
-            .use_tool("s2", step("s2")).use_tool("u2", step("u2"))
+            .use_tool("s1", step("s1"), compensation="u1").use_tool("u1", undo("u1"))
+            .use_tool("s2", step("s2")).use_tool("u2", undo("u2"))
             .tool("s3", "failing")
             .saga({"name": "one", "tool": "s1"}, {"name": "two", "tool": "s2", "compensate_with": "u2"},
                   {"name": "three", "tool": "s3"})
@@ -527,6 +535,7 @@ def test_saga_compensates_completed_steps_in_reverse_order():
     result = rt.submit(Turn(rid("c"), "t", "go"))
     assert result["status"] == "failed" and result["error"]["class"] == "tool"
     assert order == ["s1", "s2", "u2", "u1"]
+    assert undone == [({}, "s2"), ({}, "s1")]
     assert [c["tool"] for c in result["tool_calls"]] == ["s1", "s2", "s3", "u2", "u1"]
     types = [e["type"] for e in result["events"]]
     phases = ("compensation_started", "compensation_step", "compensation_completed")
@@ -598,13 +607,11 @@ def test_llm_stub_script_runs_tools_then_answers():
     assert result["tool_calls"] == [{"tool": "lookup", "index": 0, "args": {"id": 1}, "result": 7, "attempt": 1}]
 
 
-def test_real_llm_provider_is_refused_not_faked():
+def test_real_llm_provider_with_no_key_is_refused_not_faked(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     spec = Agent(rid("a")).path("main", brain="llm").with_llm("openai", model="gpt").verifier("none").build()
-    rt = LocalRuntime()
-    rt.deploy(spec)
-    result = rt.submit(Turn(rid("c"), "t", "hi"))
-    assert result["status"] == "failed" and result["error"]["class"] == "validation"
-    assert "openai" in result["error"]["message"]
+    with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
+        LocalRuntime().deploy(spec)
 
 
 def test_every_result_validates_against_the_result_schema():

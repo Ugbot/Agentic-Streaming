@@ -34,7 +34,7 @@ agent:
   verifier:
     kind: prefix
 tools:
-  - {id: get_balance, kind: constant, value: 1234.56}
+  - {id: get_balance, kind: constant, effect: read, value: 1234.56}
 ```
 
 `examples/pipelines/banking-llm.yaml` gives the `payments` path an `llm` brain and makes it
@@ -115,10 +115,10 @@ tools: [get_balance]
 ### The specification behind the file
 
 The workflow documents are instances of the `agentic/v1` specification. Its reference runtime
-is pure Python and its 24 conformance fixtures run in about a second, also without a model:
+is pure Python and its 31 conformance fixtures run in about a second, also without a model:
 
 ```bash
-python spec/tools/validate_spec.py        # checked 33 document(s), 0 failure(s)
+python spec/tools/validate_spec.py        # checked 40 document(s), 0 failure(s)
 python spec/tools/run_conformance.py      # 31 passed, 0 failed, 0 skipped
 ```
 
@@ -178,10 +178,7 @@ The second command produces two jars under `target/`:
 - `agentic-flink-1.0.0-SNAPSHOT-uber.jar`: the shaded jar for `flink run`. It does not contain
   Flink itself: `flink-streaming-java` and `flink-clients` are `provided` scope and are
   excluded from the shade, because a Flink cluster supplies them. That is why running it
-  with a bare `java -cp` fails (Part 5). It does not contain the Fluss client either, unless
-  you build with `-P fluss`: `./mvnw -P fluss package` bundles it. The Fluss classes stay in the
-  default jar, and selecting one without the client fails with an `IllegalStateException` that
-  says this. The Milvus SDK is the same, with `-P milvus`.
+  with a bare `java -cp` fails with `NoClassDefFoundError`.
 
 ### The Flink tests
 
@@ -204,10 +201,10 @@ MiniCluster with the test classpath.
 ./mvnw -q test -Dtest=FlinkConformanceTest
 ```
 
-Result on 2026-11-06 (the class runs the 31 fixtures plus two checks of its own):
+Result on 2026-11-06 (the class runs the 76 fixtures plus two checks of its own):
 
 ```
-Tests run: 33, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 78, Failures: 0, Errors: 0, Skipped: 0
 ```
 
 A skip, when there is one, is never a pass.
@@ -256,64 +253,51 @@ Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
 
 ## Part 4: Optional: a real model, a vector store, containers
 
-Nothing above needs any of this. Skip the section until you want a live LLM or the RAG and
-storage examples.
+Nothing above needs any of this. Skip the section until you want a live LLM or an external store.
 
 ### Ollama
 
-Ollama is only needed for the examples that call a live model, and for `provider: ollama` in a
-workflow document.
+Ollama is only needed for `provider: ollama` in a workflow document.
 
 ```bash
 ollama serve
-ollama pull llama3.1:latest
+ollama pull qwen2.5:3b
 ollama pull nomic-embed-text
 ```
 
-`SimpleAgentExample` is configured for `llama3.1:latest` at `http://localhost:11434`, but does not
-reach Ollama on a fresh clone; see Part 5. `QuickStartExample` uses `qwen2.5:3b` at the same address
-and exits non-zero if the model call fails:
-
-```bash
-./mvnw -q test-compile exec:java -Dexec.mainClass=org.agentic.flink.example.QuickStartExample \
-  -Dexec.classpathScope=test
-```
-
-To point
-`examples/pipelines/banking-llm.yaml` at a model instead of the script, change the `llm` block
-to `provider: ollama` and `model: qwen2.5:3b` (pull that model first); `provider: openai` reads
-`OPENAI_API_KEY`. [configuration.md](configuration.md) lists the provider keys.
+To point `examples/pipelines/banking-llm.yaml` at a model instead of the script, change the `llm`
+block to `provider: ollama` and `model: qwen2.5:3b`; `provider: openai` reads `OPENAI_API_KEY`,
+`anthropic` reads `ANTHROPIC_API_KEY` and `gemini` reads `GEMINI_API_KEY`.
+[using a real model](portability/using-a-real-model.md) has the keys.
 
 ### Qdrant, Postgres, Valkey
 
-Only the RAG and storage examples and the integration tests need them. Use Podman:
+Only a document that declares them and the service-backed tests need them. Use Podman:
 
 ```bash
 podman run -d -p 6333:6333 qdrant/qdrant
-podman run -d -p 5432:5432 -e POSTGRES_PASSWORD=agentic postgres:16
+podman run -d -p 5432:5432 -e POSTGRES_PASSWORD=agentic pgvector/pgvector:pg16
 podman run -d -p 6379:6379 valkey/valkey
 ```
 
 Tests that need these skip cleanly when they are not running. In CI they are not allowed to:
 the workflow provisions the services and `tools/ci/skip_audit.py` fails the job for any skip
 whose reason is not listed in `tools/ci/skip-allowlist.txt`; every entry there states why
-(declared conformance capability gaps, Ollama, Fluss, and the two `AGENTIC_PEKKO_INTEGRATION`
+(declared conformance capability gaps, Ollama, and the two `AGENTIC_PEKKO_INTEGRATION`
 tests the workflow explains). To run the service-backed tests locally, start the services and
 export the same variables the `core` job in `.github/workflows/ci.yml` sets
 (`AGENTIC_TEST_PG_URL`, `AGENTIC_TEST_REDIS_URL`, `AGENTIC_KAFKA_BOOTSTRAP`, ...).
 
 ### Testcontainers through Podman
 
-The Testcontainers suites (`./mvnw test -P integration-tests`: `Postgres*Test`, `Redis*IT`)
-start their own containers through the Docker API. With Podman, start the compatibility
-socket and point Testcontainers at it; `src/test/resources/testcontainers.properties`
-already disables the startup checks Podman does not implement:
+The Pekko Testcontainers suite (`RedisJournalIT`) starts its own container through the Docker API.
+With Podman, start the compatibility socket and point Testcontainers at it:
 
 ```bash
 systemctl --user enable --now podman.socket        # or: podman system service --time=0 &
 export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
 export TESTCONTAINERS_RYUK_DISABLED=true           # Ryuk needs a privileged container and Docker Hub short names; the tests stop their containers themselves
-./mvnw test -P integration-tests
+./mvnw -f agentic-pekko/pom.xml verify -P integration-tests
 ```
 
 GitHub-hosted runners provide Docker, which Testcontainers finds without configuration; both
@@ -321,29 +305,12 @@ runtimes run the same tests.
 
 ### Compose stacks
 
-`docker-compose.yml` holds Postgres, Redis and Ollama, and `docker-compose-kafka.yml`,
-`docker-compose-fluss.yml`, `docker-compose-session.yml` and `docker-compose-markets.yml` add Kafka,
-Fluss and a Flink session cluster. `docker-compose-all.yml` includes the lot. Each file's header says
-how to start it. `tools/smoke-examples.sh` runs `examples/pipelines/` in no-key mode and needs none of
+`docker-compose.yml` holds Postgres, Redis and Ollama, and `docker-compose-kafka.yml` and
+`docker-compose-session.yml` add Kafka and a Flink session cluster. `docker-compose-all.yml` includes
+the lot. Each file's header says how to start it. `tools/smoke-examples.sh` runs `examples/pipelines/` in no-key mode and needs none of
 them.
 
-## Part 5: Example entry points that do not work from a fresh clone
-
-These are the commands earlier versions of this page told you to run. Each was tried again on
-a fresh clone on 2026-09-25 and each failed, for the reason shown. They are listed so nobody wastes
-time on them.
-
-| Command | Failure |
-|---|---|
-| `java -cp target/agentic-flink-1.0.0-SNAPSHOT-uber.jar org.agentic.flink.example.SimpleAgentExample` | `NoClassDefFoundError: org/apache/flink/configuration/ReadableConfig`. The uber jar excludes the provided Flink runtime. |
-| `./mvnw -q compile exec:java -Dexec.mainClass=org.agentic.flink.example.SimpleAgentExample -Dexec.classpathScope=provided` | `Invalid classpath scope: provided` from exec-maven-plugin 3.2.0, which accepts only `compile`, `runtime` and `test`. |
-| the same with `test-compile` and `-Dexec.classpathScope=test` | `Object org.agentic.flink.stream.AgentExecutionStream$$Lambda ... is not serializable` during job graph construction. |
-
-There is no `MyFirstAgentExample` in the repository; an earlier version of this page invented
-it. `RagAgentExample` and `ContextManagementExample` exist but have the same uber-jar problem
-as `SimpleAgentExample`.
-
-## Part 6: The other runtimes
+## Part 5: The other runtimes
 
 Pekko, after the core install from Part 2:
 
@@ -364,11 +331,10 @@ workflow, is one page each under [runtimes/](runtimes/README.md).
 
 ## Next steps
 
-1. [concepts.md](concepts.md) for how agents, tools, and events fit together.
-2. [reference/examples.md](reference/examples.md) for the example catalogue.
-3. [reference/agent-framework.md](reference/agent-framework.md) for the framework API.
-4. [reference/troubleshooting.md](reference/troubleshooting.md) for common failures.
-5. [runtimes/](runtimes/README.md) for what each runtime is made of, and its
+1. [the banking agent on every runtime](examples/banking-everywhere.md) for one document on each
+   runtime.
+2. [`pipeline.yaml`](portability/pipelines.md) for the document's schema.
+3. [runtimes/](runtimes/README.md) for what each runtime is made of, and its
    [conformance results](runtimes/README.md#conformance-results).
 
 ## Common questions
@@ -385,9 +351,8 @@ workflow, is one page each under [runtimes/](runtimes/README.md).
 
 ### Can I use OpenAI instead of Ollama?
 
-Yes. The LLM provider is configured per agent (`AgentConfig.setLlmModel` and
-`addLlmProperty` in the code-first DSL, or `llm:` in a pipeline file). See
-[configuration.md](configuration.md).
+Yes: `provider: openai` in the document's `llm:` block. See
+[using a real model](portability/using-a-real-model.md).
 
 ### How do I see more logging?
 

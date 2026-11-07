@@ -109,6 +109,87 @@ class WorkflowTurnRealModelTest {
     }
   }
 
+  /** One turn through a shipped operator, with the model a local server at {@code path}. */
+  private List<String> runAgainstAStub(
+      Map<String, Object> llm, String path, String reply, String keyHeader, List<String> keys)
+      throws Exception {
+    List<String> bodies = new CopyOnWriteArrayList<>();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        path,
+        e -> {
+          bodies.add(new String(e.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          keys.add(e.getRequestHeaders().getFirst(keyHeader));
+          byte[] body = reply.getBytes(StandardCharsets.UTF_8);
+          e.sendResponseHeaders(200, body.length);
+          e.getResponseBody().write(body);
+          e.close();
+        });
+    server.start();
+    try {
+      Map<String, Object> declared = new LinkedHashMap<>(llm);
+      declared.put("base_url", "http://127.0.0.1:" + server.getAddress().getPort());
+      Map<String, Object> wf = workflow(declared);
+      WorkflowTurnFunction fn =
+          new WorkflowTurnFunction(
+              wf, FlinkRuntimeOptions.fromSpec(wf), ChatClientFactories.fromWorkflow());
+      WorkflowTurnFunction shipped = InstantiationUtil.clone(fn, getClass().getClassLoader());
+      try (var h =
+          new KeyedOneInputStreamOperatorTestHarness<String, Event, TurnResult>(
+              new KeyedProcessOperator<>(shipped), Event::conversationId, Types.STRING)) {
+        h.setup(
+            TurnResultTypeInfo.INSTANCE.createSerializer(
+                h.getExecutionConfig().getSerializerConfig()));
+        h.open();
+        h.processElement(
+            new StreamRecord<>(
+                Event.turn("c-" + UUID.randomUUID(), "t1", "u", "what is the answer?"), 1));
+        TurnResult r = outputs(h).get(0);
+        assertEquals(TurnStatus.COMPLETED, r.status, String.valueOf(r.error));
+        assertTrue(r.reply.contains("it is 42"), r.reply);
+      }
+      return bodies;
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void anthropicDeclaredInTheDocumentRunsOnFlink() throws Exception {
+    List<String> keys = new CopyOnWriteArrayList<>();
+    List<String> bodies =
+        runAgainstAStub(
+            Map.of("provider", "anthropic"),
+            "/v1/messages",
+            "{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"text\\\":\\\"it is 42\\\"}\"}]}",
+            "x-api-key",
+            keys);
+    assertEquals(List.of("stub-anthropic-key"), keys);
+    assertTrue(bodies.get(0).contains("claude-sonnet-5-5"), bodies.get(0));
+  }
+
+  @Test
+  void geminiDeclaredInTheDocumentRunsOnFlink() throws Exception {
+    List<String> keys = new CopyOnWriteArrayList<>();
+    runAgainstAStub(
+        Map.of("provider", "gemini", "model", "some-gemini"),
+        "/models/some-gemini:generateContent",
+        "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"{\\\"text\\\":\\\"it is 42\\\"}\"}]}}]}",
+        "x-goog-api-key",
+        keys);
+    assertEquals(List.of("stub-gemini-key"), keys);
+  }
+
+  @Test
+  void geminiWithoutAModelIsRefusedWhenTheJobIsBuilt() {
+    Map<String, Object> wf = workflow(Map.of("provider", "gemini"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new WorkflowTurnFunction(
+                wf, FlinkRuntimeOptions.fromSpec(wf), ChatClientFactories.fromWorkflow()));
+  }
+
   @Test
   void anUnknownProviderIsRefusedWhenTheJobIsBuilt() {
     Map<String, Object> wf = workflow(Map.of("provider", "no-such-provider"));

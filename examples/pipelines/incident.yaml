@@ -25,7 +25,7 @@ agent:
       tool_triggers: {incident: open_ticket}
 
 tools:
-  - {id: open_ticket, kind: constant, description: Open an incident ticket, value: "TICKET-OPENED"}
+  - {id: open_ticket, kind: constant, effect: idempotent, description: Open an incident ticket, value: "TICKET-OPENED"}
 
 # Complex event processing — the headline weave. 3 anomalies on one host within 5 minutes -> escalate.
 cep:

@@ -90,7 +90,16 @@ class LocalWorkflowSessionTest {
         "tools",
         List.of(
             Map.of(
-                "id", "lookup_charge", "kind", "http", "description", "Last charge", "url", url)));
+                "id",
+                "lookup_charge",
+                "kind",
+                "http",
+                "effect",
+                "read",
+                "description",
+                "Last charge",
+                "url",
+                url)));
     return wf;
   }
 

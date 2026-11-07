@@ -74,7 +74,7 @@ class WorkflowTimerEntityTest {
     wf.put("spec_version", "agentic/v1");
     wf.put("backend", "local");
     wf.put("agent", agent);
-    wf.put("tools", List.of(Map.of("id", "notify", "kind", "constant", "description", "Notify", "value", "sent")));
+    wf.put("tools", List.of(Map.of("id", "notify", "kind", "constant", "effect", "read", "description", "Notify", "value", "sent")));
     wf.put("timers", List.of(timer));
     GraphBuilder.Built built = GraphBuilder.build(wf, llm -> {
       throw new IllegalStateException("no llm");
@@ -113,7 +113,7 @@ class WorkflowTimerEntityTest {
 
     clock.advance(1 + RND.nextLong(0L, 1_000L));
     TurnResult fired = rt.submit(Event.turn(cid, "t3", "u", "hello"));
-    assertEquals(List.of("timer_fired", "tool_called", "turn_received"), types(fired.events).subList(0, 3));
+    assertEquals(List.of("timer_fired", "tool_intent", "tool_called", "turn_received"), types(fired.events).subList(0, 4));
     assertEquals("notify", fired.calls.get(0).tool());
     assertEquals(payload, fired.calls.get(0).args());
     assertEquals(List.of("followup"), fired.state.get("fired_timers"));
@@ -165,7 +165,7 @@ class WorkflowTimerEntityTest {
     rt.passivate(cid);
     clock.advance(after - beforeRestart);
     TurnResult fired = rt.submit(Event.turn(cid, "t3", "u", "hello"));
-    assertEquals(List.of("timer_fired", "tool_called", "turn_received"), types(fired.events).subList(0, 3));
+    assertEquals(List.of("timer_fired", "tool_intent", "tool_called", "turn_received"), types(fired.events).subList(0, 4));
     assertEquals(after, ((Number) fired.events.get(0).payload().get("due_ms")).longValue());
     assertEquals(List.of("followup"), fired.state.get("fired_timers"));
     assertEquals(3L, ((Number) fired.state.get("turn_count")).longValue());

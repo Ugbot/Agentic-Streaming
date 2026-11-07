@@ -35,12 +35,18 @@ final class KeyedConversationLog implements ConversationLog {
   }
 
   @Override
-  public LogEvent append(String cid, String turnId, EventType type, Map<String, Object> payload) {
+  public LogEvent append(
+      String cid,
+      String turnId,
+      EventType type,
+      Map<String, Object> payload,
+      long timestamp,
+      Map<String, String> metadata) {
     requireCurrentKey(cid);
     try {
       Long seq = nextSequence.value();
       long next = seq == null ? 0L : seq;
-      LogEvent e = new LogEvent(cid, next, turnId, type.wire(), payload);
+      LogEvent e = new LogEvent(cid, next, turnId, type.wire(), payload, timestamp, metadata);
       events.add(e);
       nextSequence.update(next + 1);
       return e;

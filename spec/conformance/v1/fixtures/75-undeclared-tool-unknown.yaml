@@ -1,0 +1,46 @@
+id: undeclared-tool-unknown
+description: A tool that declares no effect is non_idempotent. A crash during it is unknown, it is never called
+  again on its own, and a person says what happened.
+requires: [crash_recovery, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: applied, result: done by hand}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: suspended
+  events: [turn_received, routed, brain_started, tool_intent, unknown_outcome, turn_suspended]
+  tool_calls: []
+  event_payloads:
+  - type: tool_intent
+    payload: {tool: pay, index: 0, effect: non_idempotent}
+  - type: turn_suspended
+    payload: {until: unknown_outcome, tool: pay, index: 0}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned done by hand'
+  state_includes: {turn_count: 1}

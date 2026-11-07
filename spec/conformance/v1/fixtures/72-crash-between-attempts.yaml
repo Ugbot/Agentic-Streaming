@@ -1,0 +1,41 @@
+id: crash-between-attempts
+description: 'A crash between two attempts of one call continues the numbering: the failed attempt is recorded,
+  the next one succeeds, and the sequence is the uninterrupted one.'
+requires: [crash_recovery, effect_journal, tools, idempotency, retry]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: failing, effect: idempotent, x-fail-attempts: 1, value: paid}
+  policies:
+    on_tool_error: fail
+    retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, jitter: false}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: tool_failed, when: after}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned paid'
+  events: [turn_received, routed, brain_started, tool_intent, tool_failed, tool_called, reply_drafted, memory_written,
+    turn_completed]
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, failed: true}
+  - {tool: pay, index: 0, attempt: 2}

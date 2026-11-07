@@ -79,7 +79,7 @@ class WorkflowTurnBoundaryTest {
   }
 
   private static final Map<String, Object> LOOKUP =
-      Map.of("id", "lookup_charge", "kind", "constant", "value", 42.5);
+      Map.of("id", "lookup_charge", "kind", "constant", "effect", "read", "value", 42.5);
 
   private static List<String> types(TurnResult r) {
     return r.events.stream().map(LogEvent::type).toList();
@@ -93,8 +93,8 @@ class WorkflowTurnBoundaryTest {
         List.of(
             LOOKUP,
             firstStepTool,
-            Map.of("id", "post", "kind", "failing"),
-            Map.of("id", "release", "kind", "failing")));
+            Map.of("id", "post", "kind", "failing", "effect", "idempotent"),
+            Map.of("id", "release", "kind", "failing", "effect", "idempotent")));
     wf.put(
         "saga",
         Map.of(
@@ -106,7 +106,17 @@ class WorkflowTurnBoundaryTest {
   }
 
   private static Map<String, Object> constantReserve() {
-    return Map.of("id", "reserve", "kind", "constant", "value", 1, "compensation", "release");
+    return Map.of(
+        "id",
+        "reserve",
+        "kind",
+        "constant",
+        "effect",
+        "read",
+        "value",
+        1,
+        "compensation",
+        "release");
   }
 
   @Test
@@ -138,7 +148,9 @@ class WorkflowTurnBoundaryTest {
   @Test
   void aSagaTurnWithNoUserIdRunsTheSaga() throws Exception {
     Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
-    wf.put("tools", List.of(LOOKUP, Map.of("id", "reserve", "kind", "constant", "value", 1)));
+    wf.put(
+        "tools",
+        List.of(LOOKUP, Map.of("id", "reserve", "kind", "constant", "effect", "read", "value", 1)));
     wf.put("saga", Map.of("steps", List.of(Map.of("name", "reserve", "tool", "reserve"))));
     try (var h = harness(wf)) {
       h.open();
@@ -153,7 +165,8 @@ class WorkflowTurnBoundaryTest {
   @Test
   void aFailingTimerToolFailsThatTurnAndTheNextOneRuns() throws Exception {
     Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
-    wf.put("tools", List.of(LOOKUP, Map.of("id", "nudge", "kind", "failing")));
+    wf.put(
+        "tools", List.of(LOOKUP, Map.of("id", "nudge", "kind", "failing", "effect", "idempotent")));
     wf.put("timers", List.of(Map.of("id", "followup", "after_ms", 10, "tool", "nudge")));
     String clock = rnd("clock");
     FlinkRuntimeOptions options = FlinkRuntimeOptions.fromSpec(wf).withManualClock(clock);
@@ -174,7 +187,8 @@ class WorkflowTurnBoundaryTest {
       TurnResult failed = outputs(h).get(1);
       assertEquals(TurnStatus.FAILED, failed.status);
       assertEquals("tool", failed.error.errorClass().wire());
-      assertEquals(List.of("timer_fired", "tool_failed", "turn_failed"), types(failed));
+      assertEquals(
+          List.of("timer_fired", "tool_intent", "tool_failed", "turn_failed"), types(failed));
       h.processElement(new StreamRecord<>(Event.turn(cid, "t3", "u", "hello"), 3));
       assertEquals(TurnStatus.COMPLETED, outputs(h).get(2).status);
     }
@@ -269,6 +283,8 @@ class WorkflowTurnBoundaryTest {
                 "reserve",
                 "kind",
                 "http",
+                "effect",
+                "read",
                 "url",
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/reserve",
                 "compensation",

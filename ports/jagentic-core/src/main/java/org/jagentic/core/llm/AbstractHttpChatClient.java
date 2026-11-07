@@ -23,6 +23,7 @@ import org.jagentic.core.TransientFailure;
 abstract class AbstractHttpChatClient implements ChatClient {
 
   static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final int ERROR_BODY_LIMIT = 200;
 
   protected final String model;
   protected final URI uri;
@@ -51,7 +52,7 @@ abstract class AbstractHttpChatClient implements ChatClient {
       headers.forEach(b::header);
       HttpResponse<String> resp = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
       if (resp.statusCode() / 100 != 2) {
-        String message = "chat HTTP " + resp.statusCode() + ": " + resp.body();
+        String message = "chat HTTP " + resp.statusCode() + ": " + shortened(resp.body());
         throw transientStatus(resp.statusCode()) ? new TransientFailure(message)
             : new RuntimeException(message);
       }
@@ -66,6 +67,18 @@ abstract class AbstractHttpChatClient implements ChatClient {
     } catch (Exception e) {
       throw new RuntimeException("chat call failed: " + e.getMessage(), e);
     }
+  }
+
+  /** An error body ends up in logs and on the turn, so it is cut short and any credential goes. */
+  private String shortened(String body) {
+    String clean = body == null ? "" : body;
+    for (String value : headers.values()) {
+      clean = clean.replace(value, "[redacted]");
+      if (value.startsWith("Bearer ")) {
+        clean = clean.replace(value.substring("Bearer ".length()), "[redacted]");
+      }
+    }
+    return clean.length() <= ERROR_BODY_LIMIT ? clean : clean.substring(0, ERROR_BODY_LIMIT) + "...";
   }
 
   /** Worth asking again: timeouts, rate limits and server-side errors, not a refused request. */

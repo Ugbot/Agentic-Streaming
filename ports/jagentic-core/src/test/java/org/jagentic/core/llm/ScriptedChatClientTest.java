@@ -179,17 +179,17 @@ class ScriptedChatClientTest {
     List<Map<String, String>> messages = new ArrayList<>();
     messages.add(Map.of("role", "system", "content", "s"));
     messages.add(Map.of("role", "user", "content", "old turn"));
-    messages.add(Map.of("role", "tool", "content", "leftover observation"));
+    messages.add(Map.of("role", "user", "content", LlmBrain.OBSERVATION + "a: leftover"));
     messages.add(Map.of("role", "assistant", "content", "old reply"));
     messages.add(Map.of("role", "user", "content", "new turn"));
     assertEquals("a", client.chat(messages, List.of()).tool());
     messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"a\"}"));
-    messages.add(Map.of("role", "tool", "content", "obs"));
+    messages.add(Map.of("role", "user", "content", LlmBrain.OBSERVATION + "a: obs"));
     assertEquals("b", client.chat(messages, List.of()).tool());
     messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"b\"}"));
-    messages.add(Map.of("role", "tool", "content", "obs"));
+    messages.add(Map.of("role", "user", "content", LlmBrain.OBSERVATION + "a: obs"));
     assertEquals("final", client.chat(messages, List.of()).text());
-    messages.add(Map.of("role", "tool", "content", "one too many"));
+    messages.add(Map.of("role", "user", "content", LlmBrain.OBSERVATION + "a: one too many"));
     assertThrows(ScriptedChatClient.ScriptExhausted.class, () -> client.chat(messages, List.of()));
   }
 }

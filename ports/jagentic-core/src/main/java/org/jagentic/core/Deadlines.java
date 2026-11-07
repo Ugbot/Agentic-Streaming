@@ -38,7 +38,7 @@ public final class Deadlines {
   private Deadlines() {}
 
   /** The limit was reached. {@code message} names what timed out and for how long. */
-  public static final class DeadlineExceeded extends RuntimeException {
+  public static final class DeadlineExceeded extends OutcomeUnknown {
     private static final long serialVersionUID = 1L;
 
     public DeadlineExceeded(String message) {
@@ -61,6 +61,21 @@ public final class Deadlines {
   public static Function<Map<String, Object>, Object> bound(
       String what, long timeoutMs, Function<Map<String, Object>, Object> fn, Runnable onTimeout) {
     return params -> call(what, timeoutMs, () -> fn.apply(params), onTimeout);
+  }
+
+  /** {@code fn} limited to {@code timeoutMs} per call, given the call's identity. */
+  public static java.util.function.BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> boundKeyed(
+      String what, long timeoutMs,
+      java.util.function.BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> fn) {
+    return boundKeyed(what, timeoutMs, fn, () -> { });
+  }
+
+  /** As above; {@code onTimeout} runs at the limit, for a call an interrupt cannot reach. */
+  public static java.util.function.BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> boundKeyed(
+      String what, long timeoutMs,
+      java.util.function.BiFunction<Map<String, Object>, ToolRegistry.CallIdentity, Object> fn,
+      Runnable onTimeout) {
+    return (params, identity) -> call(what, timeoutMs, () -> fn.apply(params, identity), onTimeout);
   }
 
   /** {@code client} limited to {@code timeoutMs} per model call; a timeout is transient. */

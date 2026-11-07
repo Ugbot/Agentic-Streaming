@@ -128,3 +128,22 @@ def test_repr_is_notebook_friendly():
     spec = Agent(rid("a")).path("main").build()
     text = repr(spec)
     assert "paths=[main]" in text and "requires=" in text
+
+
+def test_a_function_tool_can_declare_its_effect_and_its_limit():
+    spec = (Agent("pay").path("main", tool_triggers={"pay": "pay"})
+            .use_tool("pay", lambda user: "ok", effect="non_idempotent", timeout_ms=250).build())
+    assert spec.document["tools"][0]["effect"] == "non_idempotent"
+    assert spec.document["tools"][0]["timeout_ms"] == 250
+
+
+def test_a_function_tool_says_nothing_about_its_effect_unless_asked():
+    spec = Agent("pay").path("main").use_tool("pay", lambda: "ok").build()
+    assert "effect" not in spec.document["tools"][0]
+
+
+def test_with_journal_declares_the_effects_store():
+    spec = Agent("pay").path("main").with_journal("file", url="/var/lib/effects", on_unavailable="degrade").build()
+    assert spec.document["stores"]["effects"] == {"kind": "file", "url": "/var/lib/effects",
+                                                  "on_unavailable": "degrade"}
+    assert "effect_journal" in spec.requirements

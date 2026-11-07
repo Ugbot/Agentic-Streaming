@@ -1,4 +1,4 @@
-# Optional Kafka overlay for the content-moderation example.
+# Kafka for the pipeline job (FlinkPipelineRunner with --input-topic; see tools/kafka-flink-e2e.sh).
 #
 # Boot together with the base compose (after `docker network create agentic-flink-network`):
 #   docker compose -f docker-compose.yml -f docker-compose-kafka.yml up -d

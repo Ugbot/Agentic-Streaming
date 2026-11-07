@@ -1,0 +1,31 @@
+id: idempotency-key-on-the-wire
+description: An HTTP tool sends the deterministic key as the Idempotency-Key header; the stub echoes it back. Compensations
+  and later calls have their own.
+requires: [tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: http, url: '{{http}}/echo'}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: completed
+  tool_calls:
+  - tool: pay
+    index: 0
+    result: {key: 4dce4871000d3c792626309090b13fe70a301367eb3686841299da15556a6340}

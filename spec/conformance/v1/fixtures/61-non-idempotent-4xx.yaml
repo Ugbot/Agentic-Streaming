@@ -1,0 +1,32 @@
+id: non-idempotent-4xx
+description: 'A 4xx from a non_idempotent tool is a definite failure: one attempt, no human needed.'
+requires: [effect_journal, retry, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: http, effect: non_idempotent, url: '{{http}}/status/422'}
+  policies:
+    on_tool_error: fail
+    retry: {kind: fixed, max_attempts: 2, initial_delay_ms: 0, jitter: false}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, failed: true}

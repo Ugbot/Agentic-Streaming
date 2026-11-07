@@ -98,7 +98,7 @@ class PekkoBackendPipelineTest {
             "paths", Map.of(
                 "payments", Map.of("brain", "rule", "tool_triggers", Map.of("balance", "get_balance")),
                 "general", Map.of("brain", "rule"))),
-        "tools", java.util.List.of(Map.of("id", "get_balance", "kind", "constant", "value", "1234.56"))),
+        "tools", java.util.List.of(Map.of("id", "get_balance", "kind", "constant", "effect", "read", "value", "1234.56"))),
         null);
     Runtime rt = Backends.create("pekko", built);
     try {

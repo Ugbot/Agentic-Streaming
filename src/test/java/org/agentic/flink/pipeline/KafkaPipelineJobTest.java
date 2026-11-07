@@ -222,10 +222,20 @@ class KafkaPipelineJobTest {
     wf.put(
         "tools",
         List.of(
-            Map.of("id", "lookup_charge", "kind", "constant", "value", 1),
-            Map.of("id", "reserve", "kind", "constant", "value", 1, "compensation", "release"),
-            Map.of("id", "post", "kind", "failing"),
-            Map.of("id", "release", "kind", "failing")));
+            Map.of("id", "lookup_charge", "kind", "constant", "effect", "read", "value", 1),
+            Map.of(
+                "id",
+                "reserve",
+                "kind",
+                "constant",
+                "effect",
+                "read",
+                "value",
+                1,
+                "compensation",
+                "release"),
+            Map.of("id", "post", "kind", "failing", "effect", "idempotent"),
+            Map.of("id", "release", "kind", "failing", "effect", "idempotent")));
     wf.put(
         "saga",
         Map.of(

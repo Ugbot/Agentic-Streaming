@@ -28,6 +28,9 @@ public final class LlmBrain implements Brain {
           + "else. To call a tool: {\"tool\": \"<name>\", \"args\": {<json args>}}. To give "
           + "the final answer: {\"text\": \"<answer>\"}. Available tools: ";
 
+  /** How a message that reports a tool's result begins. */
+  static final String OBSERVATION = "Result of ";
+
   private final ChatClient client;
   private final String name;
   private final String systemPrompt;
@@ -109,27 +112,40 @@ public final class LlmBrain implements Brain {
       messages.add(Map.of("role", "user", "content", userText));
     }
 
+    String request = sys + "\u0000" + userText;
     for (int i = 0; i < maxIterations; i++) {
-      ChatResult r = ctx.callModel(() -> client.chat(messages, specs));
+      ChatResult r = ctx.chat(request, () -> client.chat(messages, specs));
       if (r.isToolCall()) {
         if (allowedTools != null && !allowedTools.contains(r.tool())) {
           if (strictTools) {
             throw new ToolNotPermitted(r.tool(), name, allowedTools);
           }
-          messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"" + r.tool() + "\"}"));
-          messages.add(Map.of("role", "tool", "content",
-              "error: tool " + r.tool() + " is not permitted for this agent"));
+          messages.add(asked(r));
+          messages.add(observed(r, "error: tool " + r.tool() + " is not permitted for this agent"));
           continue;
         }
         Object observation = ctx.callTool(r.tool(), r.args());
-        messages.add(Map.of("role", "assistant", "content", "{\"tool\":\"" + r.tool() + "\"}"));
-        messages.add(Map.of("role", "tool", "content", String.valueOf(observation)));
+        messages.add(asked(r));
+        messages.add(observed(r, String.valueOf(observation)));
         continue;
       }
       String answer = finalize(r.text(), ctx);
       return verbatimReply ? answer : "[" + name + "] " + answer;
     }
     return "[" + name + "] (stopped after " + maxIterations + " steps)";
+  }
+
+  private static Map<String, String> asked(ChatResult r) {
+    return Map.of("role", "assistant", "content", "{\"tool\":\"" + r.tool() + "\"}");
+  }
+
+  /**
+   * An observation goes back as a user message. The {@code tool} role needs the id of a
+   * {@code tool_calls} entry, which this JSON protocol does not have, and OpenAI refuses it without
+   * one; Anthropic and Gemini have no such role at all.
+   */
+  private static Map<String, String> observed(ChatResult r, String observation) {
+    return Map.of("role", "user", "content", OBSERVATION + r.tool() + ": " + observation);
   }
 
   /**

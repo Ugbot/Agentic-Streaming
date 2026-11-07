@@ -66,11 +66,12 @@ public final class McpStdioClient implements AutoCloseable {
     return List.copyOf(specs);
   }
 
-  private synchronized String callTool(String name, Map<String, Object> args) {
+  private synchronized String callTool(String name, Map<String, Object> args, String idempotencyKey) {
     try {
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("name", name);
       params.put("arguments", args == null ? Map.of() : args);
+      params.put("_meta", Map.of("idempotency_key", idempotencyKey));
       JsonNode resp = request("tools/call", params);
       JsonNode content = resp.path("result").path("content");
       StringBuilder sb = new StringBuilder();
@@ -101,13 +102,19 @@ public final class McpStdioClient implements AutoCloseable {
    * that call and every later one fail, rather than a stuck reader holding the client's lock.
    */
   public List<String> register(ToolRegistry reg, String prefix, long timeoutMs) {
+    return register(reg, prefix, timeoutMs, null);
+  }
+
+  /** As above with the server's declared {@code effect}, which all its tools take; null is the default. */
+  public List<String> register(ToolRegistry reg, String prefix, long timeoutMs, String effect) {
     List<String> ids = new ArrayList<>();
     String p = prefix == null ? "" : prefix;
     for (Map<String, String> spec : specs) {
       String name = spec.get("name");
       String id = p + name;
-      reg.register(id, spec.getOrDefault("description", ""),
-          Deadlines.bound(id, timeoutMs, params -> callTool(name, params), process::destroyForcibly));
+      reg.registerKeyed(id, spec.getOrDefault("description", ""), null, effect,
+          Deadlines.boundKeyed(id, timeoutMs,
+              (params, call) -> callTool(name, params, call.idempotencyKey()), process::destroyForcibly));
       ids.add(id);
     }
     return ids;

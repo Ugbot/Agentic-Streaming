@@ -1,0 +1,18 @@
+# Overlay for tools/kafka-journal-tm-loss.sh: a bank to pay, the workflow, and no checkpoint during
+# the run, so losing the TaskManager rolls every conversation's log back to nothing.
+services:
+  flink-jobmanager:
+    environment:
+      AGENTIC_FLINK_CHECKPOINT_INTERVAL_MS: "3600000"
+    volumes:
+      - ./tools/e2e:/opt/agentic/e2e:ro
+  bank:
+    image: docker.io/library/python:3.13-alpine
+    container_name: agentic-flink-bank
+    command: ["python", "/bank.py"]
+    ports:
+      - "127.0.0.1:18099:8080"
+    volumes:
+      - ./tools/e2e/bank.py:/bank.py:ro
+    networks:
+      - agentic-flink-network

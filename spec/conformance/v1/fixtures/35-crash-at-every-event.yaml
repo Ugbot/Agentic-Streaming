@@ -1,0 +1,230 @@
+id: crash-at-every-event
+description: 'A crash before or after any event of a tool turn, then redelivery. The turn ends as if nothing had
+  happened: one effect under the key, one turn counted, and the whole event sequence. After the terminal event a
+  log that rolled back runs the turn again and one that did not answers duplicate; the reply is the same.'
+requires: [crash_recovery, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+turns:
+- conversation_id: c-after-turn-received
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: turn_received, when: after}
+- {conversation_id: c-after-turn-received, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-routed
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: routed, when: after}
+- {conversation_id: c-after-routed, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-brain-started
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: brain_started, when: after}
+- {conversation_id: c-after-brain-started, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-tool-intent
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: tool_intent, when: after}
+- {conversation_id: c-after-tool-intent, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-tool-called
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: tool_called, when: after}
+- {conversation_id: c-after-tool-called, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-reply-drafted
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: reply_drafted, when: after}
+- {conversation_id: c-after-reply-drafted, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-memory-written
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: memory_written, when: after}
+- {conversation_id: c-after-memory-written, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-turn-received
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: turn_received, when: before}
+- {conversation_id: c-before-turn-received, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-routed
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: routed, when: before}
+- {conversation_id: c-before-routed, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-brain-started
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: brain_started, when: before}
+- {conversation_id: c-before-brain-started, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-tool-intent
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: tool_intent, when: before}
+- {conversation_id: c-before-tool-intent, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-tool-called
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: tool_called, when: before}
+- {conversation_id: c-before-tool-called, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-reply-drafted
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: reply_drafted, when: before}
+- {conversation_id: c-before-reply-drafted, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-memory-written
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: memory_written, when: before}
+- {conversation_id: c-before-memory-written, turn_id: t1, text: pay the invoice}
+- conversation_id: c-before-turn-completed
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: turn_completed, when: before}
+- {conversation_id: c-before-turn-completed, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after-end
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: turn_completed, when: after}
+- {conversation_id: c-after-end, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+  state_includes: {turn_count: 1, transcript_length: 2}
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status_any: [completed, duplicate]
+  reply: '[main] pay returned 1'
+  state_includes: {turn_count: 1, transcript_length: 2}

@@ -11,7 +11,50 @@ exists.
 
 ## [Unreleased]
 
+### Changed
+
+- **Behaviour change: a tool that declares no `effect` is now `non_idempotent`, not `idempotent`.**
+  It is never called twice: `policies.retry` gives it one attempt, and a call with no recorded result
+  becomes `unknown_outcome` and suspends for a person, where before it was made again under its key.
+  The same goes for `a2a` peers, whose client retries are switched off under `non_idempotent`, and
+  `mcp` servers; both now accept `effect`. A Flink job refuses an undeclared tool without a durable
+  `stores.effects`. To keep the old behaviour, say `effect: idempotent` on the tool; a tool that only
+  reads says `effect: read`. Every example declares its tools.
+- A journal entry's `intent` is now a SHA-256 of the agent id and canonical JSON, and a model entry
+  has one too. An entry a run of an earlier build left behind no longer matches and ends that turn
+  `fatal`, so let turns in flight finish before upgrading.
+- `on_unavailable: degrade` on `stores.effects` no longer applies to a workflow with a
+  `non_idempotent` tool: the journal failing to open stops the workflow.
+
+### Fixed
+
+- `LlmBrain` sent the `tool` role, which OpenAI refuses with a 400 without a `tool_call_id`. An
+  observation now goes back as a user message, as in Python.
+- A journal could answer one call with another's result: the JVM's intent was a 32-bit hash, a model
+  entry had no intent, and two workflows on one store shared entries. See `spec/v1/primitives.md`,
+  section 10.
+- A durable log over a journal that lost its entry made a second call on the JVM, and a re-run that
+  stopped short of a recorded call completed quietly. Both are now refused.
+- A new workflow version declaring a recorded `non_idempotent` call as `idempotent` repeated it.
+- The Kafka journal served reads from what it held when opened, so a conversation that moved to an
+  already open process missed what was written elsewhere. A Postgres that stopped answering hung the
+  turn for good. A journal outage on Pekko spent the `turn_id`.
+
 ### Added
+
+- `provider: anthropic` and `provider: gemini` on the JVM, so on Flink and Pekko, declared in the
+  document, keys from `ANTHROPIC_API_KEY` and `GEMINI_API_KEY`. Tested against local stubs only.
+- `tools/kafka-journal-tm-loss.sh`: the Kafka journal across a killed TaskManager.
+- The effect journal (`spec/v1/primitives.md`, section 10): every tool and model call is recorded
+  outside the runtime's state and reused by index on a re-run, so a Flink restore no longer repeats a
+  payment. Stores: in memory, file (Python), Postgres and a compacted Kafka topic (JVM). Tools declare
+  `effect: read`, `idempotent` or `non_idempotent` and receive a deterministic `Idempotency-Key`. A
+  `non_idempotent` call with no recorded result becomes `unknown_outcome` and waits for a person.
+- Events `llm_called`, `tool_intent`, `compensation_failed` and `unknown_outcome`, and fixtures 32 to
+  76 with a `crash_at` harness verb. Every runtime now goes through one comparator, on the whole event
+  sequence.
+- One resume state machine in the spec. Undoes receive the forward args and result, compensate on any
+  failure class, and carry on from the log after a crash.
 
 - `agentic/v1`: the versioned primitive contract (`spec/v1/primitives.md`), the workflow IR
   schema (`spec/v1/workflow.schema.json`), the normalized result schema and the shared
@@ -119,6 +162,14 @@ exists.
 
 ### Removed
 
+- The legacy Flink DSL: `Agent.builder()`, `AgentJobGenerator` and everything only they used, in
+  all about 58,000 lines of main code and 25,000 of tests. That takes the Java examples, the old
+  `a2a`, `inference`, `web`, `retrieve`, `corpus`, `ingest`, `channel`, `storage` and `memory`
+  packages, the Fluss and Milvus backends with `-P fluss` and `-P milvus`, the Anthropic and Gemini
+  chat connections, and the `@Experimental` annotation. A workflow document on
+  `WorkflowTurnFunction` is the one way to define an agent on Flink. The code as it stood is at tag
+  `pre-cornerstone`. `OutboundUrlPolicy` moved to `jagentic-core`, and pgvector came across as
+  `retrieval.vector_store` kind `pgvector`.
 - `pyflink/`, `python/`, `agentic-clj/`, `tool-services/`, `a2a-gateway/`, `banking-job/`,
   `banking-kb/`, `notebooks/` and `examples-bin/`, with the compose files, Dockerfile, env examples
   and scripts that only served them. Their entries in the reactor, CI, Dependabot and the conformance

@@ -29,42 +29,19 @@ are optional dependencies of the framework that the shade plugin nevertheless bu
 
 Apache License, Version 2.0:
 - Apache Flink CEP (org.apache.flink:flink-cep 2.2.1)
-- Apache Flink Kafka connector (org.apache.flink:flink-connector-kafka 5.0.0-2.2) (optional)
-- LangChain4j and its Ollama, OpenAI, Anthropic and Google AI Gemini modules
-  (dev.langchain4j:* 1.16.3)
+- Apache Flink Kafka connector (org.apache.flink:flink-connector-kafka 5.0.0-2.2)
+- Apache Kafka client (org.apache.kafka:kafka-clients 4.1.2)
+- LangChain4j and its Ollama and OpenAI modules (dev.langchain4j:* 1.23.0) (optional)
 - Jackson databind, YAML dataformat and parameter-names module
-  (com.fasterxml.jackson.*:* 2.18.10)
-- HikariCP (com.zaxxer:HikariCP 5.0.1)
-- Apache Commons IO (commons-io:commons-io 2.16.1) (optional)
-- Apache Tika core and standard parsers (org.apache.tika:* 2.9.2) (optional)
-- crawler-commons (com.github.crawler-commons:crawler-commons 1.4) (optional)
-- Deep Java Library API, HuggingFace tokenizers and PyTorch engine (ai.djl*:* 0.30.0)
-  (optional)
-- Qdrant Java client (io.qdrant:client 1.11.0) (optional)
-- Milvus Java SDK (io.milvus:milvus-sdk-java 2.6.27) (optional; bundled only by -P milvus)
-- Apache Fluss client (com.alibaba.fluss:fluss-client 0.7.0) (optional; bundled only by -P fluss)
-- A2A Java SDK spec, client and JSON-RPC, gRPC and REST client transports
-  (io.github.a2asdk:* 1.0.0.Alpha3) (optional)
-
-MIT License:
-- Jedis (redis.clients:jedis 5.1.0) (optional)
-- jsoup (org.jsoup:jsoup 1.18.1) (optional)
+  (com.fasterxml.jackson.*:* 2.22.4)
 
 BSD 2-Clause License:
-- PostgreSQL JDBC Driver (org.postgresql:postgresql 42.7.13)
-
-Mozilla Public License 2.0:
-- JeroMQ (org.zeromq:jeromq 0.6.0) (optional)
-
-WTFPL and Apache License, Version 2.0 (dual licensed):
-- Reflections (org.reflections:reflections 0.10.2)
+- PostgreSQL JDBC Driver (org.postgresql:postgresql 42.7.14)
 
 Transitive components
 ---------------------
 
-The transitive closure of the components above (Netty, Guava, Protocol Buffers, gRPC,
-Apache Hadoop and Parquet client libraries pulled in by Tika and Flink, Jetty, PDFBox, and
-others) is also bundled. Their license texts and notices are carried inside the jar under
+The transitive closure of the components above is also bundled. Their license texts and notices are carried inside the jar under
 META-INF/ (META-INF/LICENSE*, META-INF/NOTICE*, META-INF/licenses/ and
 META-INF/license/) because the shade plugin keeps those resources. Run
 `unzip -l target/agentic-flink-1.0.0-SNAPSHOT-uber.jar | grep META-INF/maven/` for the

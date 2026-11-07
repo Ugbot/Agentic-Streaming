@@ -23,7 +23,11 @@ public enum EventType {
   COMPENSATION_STARTED,
   COMPENSATION_STEP,
   COMPENSATION_COMPLETED,
-  DELEGATED;
+  DELEGATED,
+  LLM_CALLED,
+  TOOL_INTENT,
+  COMPENSATION_FAILED,
+  UNKNOWN_OUTCOME;
 
   /** The snake_case wire name used in logs and normalized results. */
   public String wire() {
