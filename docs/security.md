@@ -42,7 +42,7 @@ read `X-Forwarded-*`, so nothing a proxy passes on changes who it thinks is call
 | --- | --- |
 | `AGENTIC_OIDC_ISSUER` | the exact `iss`. Setting it selects OIDC |
 | `AGENTIC_OIDC_AUDIENCE` | the `aud` a token must name. Required |
-| `AGENTIC_OIDC_JWKS_URL` | default `<issuer>/protocol/openid-connect/certs` |
+| `AGENTIC_OIDC_JWKS_URL` | default `<issuer>/protocol/openid-connect/certs`. Must be `https`, except on loopback |
 | `AGENTIC_OIDC_TENANT_CLAIM` | default `tenant` |
 | `AGENTIC_OIDC_ROLES_CLAIM` | default `realm_access.roles`, dotted for a nested claim |
 | `AGENTIC_GATEWAY_STATIC_TOKENS` | `token=subject\|tenant\|role,role;...`, local development only. Needs `AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true`, works on loopback only, and refuses a token under 16 characters |
@@ -58,10 +58,15 @@ read. The principal comes from the token.
 **Tenancy.** The runtime's conversation key is `<tenant>/<conversation_id>`, each part encoded, so
 another tenant cannot name a conversation at all. Within a tenant, only the subject that started a
 conversation can add a turn or read it, and a reader role can read it. Everyone else gets the 404 that
-a conversation with no turns gets, every read.
+a conversation with no turns gets, every read. A first turn still running, which a Flink job's log
+does not show yet, is held for its sender by the gateway. That hold is in one gateway process, so two
+gateways in front of one job can each let a different subject start the same conversation: the
+runtime checks the tenant, not the subject.
 
 **Approvals.** A resume comes with the approver's token, and the runtime checks it against
-`policies.approvers`. A refusal is a 403 and `signal_refused` on the log.
+`policies.approvers`. A refusal is a 403 and `signal_refused` on the log. A resume of a turn the
+conversation does not have is the 404 of no conversation, and a refused signal from someone who is
+neither the owner nor a reader gets the refusal and nothing else of the conversation.
 
 **In front of Flink** the gateway writes turns to the input topic with the verified principal and
 reads answers from the results topic. A conversation is read from that topic, so it shows no further

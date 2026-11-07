@@ -59,6 +59,12 @@ public final class Gateway implements AutoCloseable {
   private final Map<String, Object> card;
   private final HttpServer server;
   private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
+  /**
+   * Who sent the first turn of a conversation the backend does not show yet. A Flink job's log is
+   * seen only through its results, so until the first one comes back the conversation looks empty,
+   * and without this anyone in the tenant could put a turn into it.
+   */
+  private final Map<String, Principal> claims = new java.util.concurrent.ConcurrentHashMap<>();
 
   private Gateway(GatewayOptions options, TurnBackend backend, Map<String, Object> card) throws IOException {
     this.options = options;
@@ -129,8 +135,13 @@ public final class Gateway implements AutoCloseable {
     }
   }
 
-  private static String decode(String part) {
-    return URLDecoder.decode(part, StandardCharsets.UTF_8);
+  /** A path segment's percent escapes, and nothing else: a {@code +} is a plus, as in the body. */
+  private static String decode(String part) throws Refusal {
+    try {
+      return URLDecoder.decode(part.replace("+", "%2B"), StandardCharsets.UTF_8);
+    } catch (IllegalArgumentException e) {
+      throw new Refusal(400, error("malformed path"));
+    }
   }
 
   private Principal authenticate(HttpExchange x) throws Refusal {
@@ -156,26 +167,61 @@ public final class Gateway implements AutoCloseable {
     Map<String, Object> body = body(x);
     String conversationId = required(body, "conversation_id");
     String key = scopedKey(who.tenant(), conversationId);
-    requireAccess(who, key, false);
+    boolean claimed = requireAccess(who, key, false).isEmpty();
+    if (claimed) {
+      Principal first = claims.putIfAbsent(key, who);
+      if (first != null && !sameOwner(first, who)) {
+        throw new Refusal(404, NOT_FOUND);
+      }
+    }
     String turnId = body.get("turn_id") instanceof String t && !t.isBlank() ? t : UUID.randomUUID().toString();
     String text = required(body, "text");
     Map<String, String> metadata = new LinkedHashMap<>();
     if (body.get("metadata") instanceof Map<?, ?> m) {
       m.forEach((k, v) -> metadata.put(String.valueOf(k), String.valueOf(v)));
     }
-    answer(x, conversationId, await(backend.submit(
-        new Event(key, turnId, who.subject(), text, metadata, null, who))));
+    TurnResult result;
+    try {
+      result = await(backend.submit(new Event(key, turnId, who.subject(), text, metadata, null, who)));
+    } catch (Refusal r) {
+      if (claimed && r.status != 504) {
+        claims.remove(key, who); // nothing is running, so nothing is claimed; a 504 may still land
+      }
+      throw r;
+    }
+    if (claimed) {
+      claims.remove(key, who); // the backend shows the turn now, or it left nothing behind
+    }
+    answer(x, conversationId, result);
+  }
+
+  private static boolean sameOwner(Principal a, Principal b) {
+    return a.subject().equals(b.subject()) && java.util.Objects.equals(a.tenant(), b.tenant());
   }
 
   private void resume(HttpExchange x, Principal who, String conversationId, String turnId)
       throws IOException, Refusal {
     Map<String, Object> signal = body(x);
     String key = scopedKey(who.tenant(), conversationId);
-    if (await(backend.conversation(key)).isEmpty()) {
-      throw new Refusal(404, NOT_FOUND);
+    List<LogEvent> events = await(backend.conversation(key));
+    if (events.stream().noneMatch(e -> turnId.equals(e.turnId()))) {
+      throw new Refusal(404, NOT_FOUND); // no such turn says no more than no such conversation
     }
-    answer(x, conversationId, await(backend.submit(
-        new Event(key, turnId, who.subject(), "", Map.of(), signal, who))));
+    TurnResult result = await(backend.submit(new Event(key, turnId, who.subject(), "", Map.of(), signal, who)));
+    Principal owner = ownerOf(events);
+    boolean insider = owner != null && sameOwner(owner, who)
+        || who.roles().stream().anyMatch(options.readerRoles()::contains);
+    if (!insider && result.events.stream().anyMatch(e -> e.is(EventType.SIGNAL_REFUSED))) {
+      // Someone who may not answer this turn learns that, and nothing about the conversation.
+      Map<String, Object> out = new LinkedHashMap<>();
+      out.put("conversation_id", conversationId);
+      out.put("turn_id", turnId);
+      out.put("status", result.status.wire());
+      out.put("error", result.error == null ? null : result.error.toMap());
+      send(x, 403, JSON.writeValueAsBytes(out));
+      return;
+    }
+    answer(x, conversationId, result);
   }
 
   private void readConversation(HttpExchange x, Principal who, String conversationId)
@@ -197,8 +243,9 @@ public final class Gateway implements AutoCloseable {
       }
       return events;
     }
+    claims.remove(key); // the backend shows the conversation now, and its first turn says who owns it
     Principal owner = ownerOf(events);
-    boolean owns = owner != null && who.subject().equals(owner.subject()) && who.tenant().equals(owner.tenant());
+    boolean owns = owner != null && sameOwner(owner, who);
     boolean reader = reading && who.roles().stream().anyMatch(options.readerRoles()::contains);
     if (!owns && !reader) {
       throw new Refusal(404, NOT_FOUND);
