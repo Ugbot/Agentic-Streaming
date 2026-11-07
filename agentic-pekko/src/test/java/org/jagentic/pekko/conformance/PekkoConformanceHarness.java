@@ -122,7 +122,7 @@ public final class PekkoConformanceHarness {
       GraphBuilder.Built built = GraphBuilder.build(workflow, llm -> {
         throw new IllegalStateException("conformance fixtures only use llm.provider: stub, got " + llm.get("provider"));
       });
-      try (PekkoSystem sys = new PekkoSystem(new AgentDeps(built.graph(), built.tools(), built.retriever(), clock, probe));
+      try (PekkoSystem sys = new PekkoSystem(new AgentDeps(built.graph(), built.tools(), built.retriever(), clock, probe, built.journal()));
            PekkoRuntime runtime = new PekkoRuntime(sys.system(), TIMEOUT)) {
         List<Object> delivered = new ArrayList<>();
         List<CompletableFuture<TurnResult>> pending = new ArrayList<>();
