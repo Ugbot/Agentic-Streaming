@@ -16,6 +16,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export AGENTIC_EGRESS_ALLOW_PRIVATE=true
 # The one MCP server the examples start. A document can start nothing the operator did not list.
 export AGENTIC_MCP_ALLOWED_COMMANDS="python3 examples/pipelines/mcp_util_server.py"
+export AGENTIC_PEER_TOKEN="${AGENTIC_PEER_TOKEN:-smoke-peer-$RANDOM$RANDOM$RANDOM$RANDOM}"
 SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-300}"
 PEER_PORT="${SMOKE_PEER_PORT:-8085}"
 PYTHON="${PYTHON:-python3}"
@@ -102,7 +103,10 @@ fi
 # The multi-agent examples call a peer: the Pekko HTTP front door.
 peer_up() { curl -fsS "http://127.0.0.1:$PEER_PORT/.well-known/agent-card.json" >/dev/null 2>&1; }
 if ! peer_up; then
-  AGENTIC_PEKKO_HTTP_PORT="$PEER_PORT" ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
+  # The peer is behind the gateway, with a local-only token the examples name as env:AGENTIC_PEER_TOKEN.
+  AGENTIC_GATEWAY_PORT="$PEER_PORT" AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true \
+  AGENTIC_GATEWAY_STATIC_TOKENS="$AGENTIC_PEER_TOKEN=agent|local" \
+  ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
     -Dexec.mainClass=org.jagentic.pekko.http.HttpMain >"$LOG_DIR/a2a.peer.log" 2>&1 &
   PEER_PID=$!
   for _ in $(seq 1 120); do peer_up && break; sleep 1; done

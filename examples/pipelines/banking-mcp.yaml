@@ -72,6 +72,7 @@ a2a:
     transport: http
     effect: idempotent   # the peer is sent the key; without this it would be called once only
     url: "${AGENTIC_PEER_AGENT_URL}"
+    auth: {bearer: "env:AGENTIC_PEER_TOKEN"}   # the peer's gateway wants a token; this names it, never holds it
     description: "Delegate complex disputes to the fraud specialist agent."
     retries: 2
 
