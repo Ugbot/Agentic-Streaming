@@ -1,0 +1,38 @@
+id: unknown-outcome-not-applied
+description: A person says the call did not land. That is a decision, so the call runs again under the same key;
+  the counter shows the first attempt had in fact landed, which is the risk the person took.
+requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: not_applied}
+expect:
+- {turn_id: t1, status: crashed}
+- {turn_id: t1, status: suspended}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 2'
+  events: [turn_resumed, tool_called, reply_drafted, memory_written, turn_completed]

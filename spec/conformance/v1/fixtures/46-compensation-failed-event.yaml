@@ -1,0 +1,47 @@
+id: compensation-failed-event
+description: A failed undo is on the log as compensation_failed, the other undo still runs, and the turn ends fatal.
+  The full sequence shows the order.
+requires: [saga, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: a, kind: constant, value: a, compensation: undo_a}
+  - {id: b, kind: constant, value: b, compensation: undo_b}
+  - {id: post, kind: failing}
+  - {id: undo_a, kind: constant, value: undone}
+  - {id: undo_b, kind: failing}
+  saga:
+    steps:
+    - {name: first, tool: a}
+    - {name: second, tool: b}
+    - {name: post, tool: post}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: fatal
+  events: [turn_received, routed, tool_intent, tool_called, tool_intent, tool_called, tool_intent, tool_failed,
+    compensation_started, tool_intent, tool_failed, compensation_failed, tool_intent, compensation_step, turn_failed]
+  event_payloads:
+  - type: compensation_failed
+    payload: {tool: undo_b, index: 3, step: second}
+- turn_id: t1
+  status: duplicate
+  error_class: fatal
+  events: []

@@ -1,0 +1,34 @@
+id: turn-during-suspension
+description: 'A redelivered turn while it is suspended is a duplicate: nothing runs and it stays suspended.'
+requires: [suspend_resume, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+        x-suspend-until: approval
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+expect:
+- {turn_id: t1, status: suspended}
+- turn_id: t1
+  status: duplicate
+  events: []
+- {turn_id: t1, status: completed, reply: '[main] pay returned 1'}

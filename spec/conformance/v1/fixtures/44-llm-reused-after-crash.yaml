@@ -1,0 +1,41 @@
+id: llm-reused-after-crash
+description: 'A model answer recorded before a crash is reused by index: the model is not asked again, so the re-run
+  takes the same path. The stub numbers its real calls, so a second ask would read #2.'
+requires: [crash_recovery, effect_journal, tools, idempotency, llm_brain]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: llm
+        prompt: You move money.
+        tools: [pay]
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}
+  llm:
+    provider: stub
+    script:
+    - tool: pay
+      args: {order: '77'}
+    - {text: paid, x-count-calls: true}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {event: reply_drafted, when: before}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: 'paid #1'
+  events: [turn_received, routed, brain_started, llm_called, tool_intent, tool_called, llm_called, reply_drafted,
+    memory_written, turn_completed]

@@ -223,7 +223,8 @@
               "tool": { "type": "string" },
               "args": { "type": "object" },
               "text": { "type": "string" },
-              "x-fail-attempts": { "type": "integer", "minimum": 1, "description": "this step's first n model calls fail transiently, counted across turns" }
+              "x-fail-attempts": { "type": "integer", "minimum": 1, "description": "this step's first n model calls fail transiently, counted across turns" },
+              "x-count-calls": { "type": "boolean", "description": "append ` #n` to the step's text, n counting its real model calls, so a fixture can see a repeated call" }
             },
             "oneOf": [{ "required": ["tool"] }, { "required": ["text"] }],
             "additionalProperties": false

@@ -1,0 +1,38 @@
+id: saga-after-resume
+description: After a resume the turn continues into the saga, which is where it would have gone.
+requires: [suspend_resume, saga, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+        x-suspend-until: approval
+    verifier: {kind: none}
+  tools:
+  - {id: a, kind: constant, value: a}
+  saga:
+    steps:
+    - {name: a, tool: a}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {kind: approval}
+expect:
+- {turn_id: t1, status: suspended}
+- turn_id: t1
+  status: completed
+  reply: '[main] saga completed'
+  tool_calls:
+  - {tool: a, index: 0}
+  events: [turn_resumed, tool_intent, tool_called, memory_written, turn_completed]

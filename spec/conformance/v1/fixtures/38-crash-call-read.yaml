@@ -1,0 +1,54 @@
+id: crash-call-read
+description: A read with no recorded result simply runs again; a recorded result is reused, so a re-run takes the
+  same decisions.
+requires: [crash_recovery, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: read}
+turns:
+- conversation_id: c-before
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: before}
+- {conversation_id: c-before, turn_id: t1, text: pay the invoice}
+- conversation_id: c-during
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c-during, turn_id: t1, text: pay the invoice}
+- conversation_id: c-after
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: after}
+- {conversation_id: c-after, turn_id: t1, text: pay the invoice}
+expect:
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 2'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  events: [turn_received, routed, brain_started, tool_intent, tool_called, reply_drafted, memory_written, turn_completed]

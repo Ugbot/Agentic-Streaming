@@ -63,8 +63,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from reference_runtime import ReferenceRuntime, SpecError, Turn  # noqa: E402
-from run_conformance import FIXTURES, REFERENCE_CAPABILITIES, check_expectation, load  # noqa: E402
+from reference_runtime import SpecError  # noqa: E402
+from run_conformance import FIXTURES, REFERENCE_CAPABILITIES, check_expectation, execute, load  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULT_SCHEMA = ROOT / "spec" / "v1" / "result.schema.json"
@@ -75,7 +75,7 @@ CAPABILITIES: List[str] = [
     "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails",
     "verifier", "ordering", "idempotency", "retry", "memory", "retrieval", "context_window",
     "replay", "suspend_resume", "timers", "saga", "a2a", "cep", "event_time",
-    "checkpoint_recovery", "parallelism", "durable_store",
+    "checkpoint_recovery", "parallelism", "durable_store", "crash_recovery", "effect_journal",
 ]
 
 CELL_VALUES = ("supported", "partial", "unsupported", "not_tested")
@@ -219,19 +219,8 @@ def run_reference(fixtures: Dict[str, Dict[str, Any]]) -> RuntimeReport:
         if missing:
             report.fixtures.append(skip_outcome(fixture, missing))
             continue
-        runtime = ReferenceRuntime(fixture["workflow"])
-        results: List[Dict[str, Any]] = []
         try:
-            for spec in fixture["turns"]:
-                if spec.get("restart_runtime"):
-                    runtime.restart()
-                if "advance_time_ms" in spec:
-                    runtime.advance(spec["advance_time_ms"])
-                results.append(runtime.submit(Turn(
-                    conversation_id=spec["conversation_id"], turn_id=spec["turn_id"],
-                    text=spec.get("text", ""), signal=spec.get("signal"),
-                    metadata=dict(spec.get("metadata") or {}),
-                )))
+            results = execute(fixture)
         except (SpecError, KeyError) as exc:
             report.fixtures.append(FixtureOutcome(fixture["id"], FAILED, list(fixture["requires"]),
                                                   [f"raised {type(exc).__name__}: {exc}"]))
