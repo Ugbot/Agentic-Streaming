@@ -251,7 +251,11 @@ What it does not cover:
 
 **Per-tool secrets are references.** `tools[].auth: {bearer: env:NAME}` or `file:/path`, and the same on
 `a2a[]`. It is resolved at the moment of the call, so it reaches the wire and nothing else, and a
-document that writes the secret itself is rejected when loaded. A `kind: http` tool, a Java A2A peer and
+document that writes the secret itself is rejected when loaded. A reference must also be on the operator's list,
+`AGENTIC_SECRET_REFS` (comma-separated prefixes), whose default is `env:AGENTIC_,file:/run/secrets/,file:/var/run/secrets/`,
+so a document cannot read `env:HOME` or `file:/etc/passwd`. A `${NAME}` connection link in a URL or
+a store setting is under the same list, as `env:NAME`. A file path is normalised before the check, and
+a symbolic link inside a listed directory is followed, so keep none there. A `kind: http` tool, a Java A2A peer and
 the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
 
 **Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are

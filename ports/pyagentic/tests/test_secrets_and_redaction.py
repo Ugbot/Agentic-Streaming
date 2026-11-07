@@ -27,7 +27,9 @@ def test_a_secret_in_a_document_is_refused() -> None:
         LocalRuntime().deploy(doc("http://127.0.0.1:9/", "my-actual-token"))
 
 
-def test_the_secret_reaches_the_tool_and_nothing_that_is_recorded(tmp_path: Path) -> None:
+def test_the_secret_reaches_the_tool_and_nothing_that_is_recorded(tmp_path: Path,
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENTIC_SECRET_REFS", f"file:{tmp_path}/")
     value = "tool-secret-value"
     file = tmp_path / "token"
     file.write_text(value + "\n")

@@ -49,8 +49,8 @@ def test_a_peer_cannot_redirect_the_call_or_its_bearer(redirecting_peer: Any,
     """A 302 from a peer was followed, and urllib carried the Authorization header to the new
     location, which could be any host, the metadata address included."""
     base, seen = redirecting_peer
-    monkeypatch.setenv("PEER_TOKEN", "s3cret-peer-token-value")
-    client = A2AClient(base, retries=0, bearer="env:PEER_TOKEN")
+    monkeypatch.setenv("AGENTIC_PEER_TOKEN", "s3cret-peer-token-value")
+    client = A2AClient(base, retries=0, bearer="env:AGENTIC_PEER_TOKEN")
     with pytest.raises(RuntimeError):
         client.send("c", "hi")
     assert [s["path"] for s in seen] == ["/agent"]

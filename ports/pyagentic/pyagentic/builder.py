@@ -76,12 +76,10 @@ def _build_tools(specs: List[Dict[str, Any]]) -> ToolRegistry:
 
 
 def _resolve_env(value: str) -> str:
-    """Expand a ``${ENV}`` connection link (used for agent/http tool URLs)."""
-    import os
+    """Expand a ``${ENV}`` connection link (used for agent/http tool URLs), if the operator lists it."""
+    from agentic.secret_refs import expand
 
-    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-        return os.environ.get(value[2:-1], "")
-    return value
+    return expand(value)
 
 
 def _http_tool(url: str) -> Callable[[Dict[str, Any]], Any]:

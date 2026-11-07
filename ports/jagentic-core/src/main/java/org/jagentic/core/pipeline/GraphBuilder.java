@@ -701,13 +701,9 @@ public final class GraphBuilder {
     };
   }
 
-  /** Expand a {@code ${ENV}} connection link (used for agent/http/mcp/a2a URLs). */
+  /** Expand a {@code ${ENV}} connection link (used for agent/http/mcp/a2a URLs), if the operator lists it. */
   static String resolveEnv(String value) {
-    if (value != null && value.startsWith("${") && value.endsWith("}")) {
-      String v = System.getenv(value.substring(2, value.length() - 1));
-      return v == null ? "" : v;
-    }
-    return value;
+    return org.jagentic.core.Secrets.expand(value);
   }
 
   @SuppressWarnings("unchecked")
