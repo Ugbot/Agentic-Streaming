@@ -95,7 +95,7 @@ class OrchestrationTest {
       var tool = A2AClient.peerTool(base, 2);
       @SuppressWarnings("unchecked")
       Map<String, Object> out = (Map<String, Object>) tool.apply(
-          Map.of("conversation_id", "c1", "text", "delegate this"));
+          Map.of("conversation_id", "c1", "text", "delegate this"), ToolRegistry.CallIdentity.NONE);
       assertNotNull(out);
       assertEquals("echo: delegate this", out.get("reply"));
     } finally {

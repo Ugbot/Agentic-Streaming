@@ -26,7 +26,7 @@ public final class Backends {
     if ("local".equals(key)) {
       return new LocalRuntime(built.graph(),
           conversationStore == null ? new ConversationStore.InMemory() : conversationStore,
-          new KeyedStateStore.InMemory(), built.tools(), built.retriever());
+          new KeyedStateStore.InMemory(), built.tools(), built.retriever()).withJournal(built.journal());
     }
     // Engine modules (such as pekko) register a BackendProvider on the
     // classpath via ServiceLoader, so `backend: <name>` resolves without the core knowing them.

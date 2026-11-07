@@ -36,7 +36,7 @@ public final class ToolRegistry {
   /**
    * A single tool. {@code inputSchema} is a JSON-schema map for the parameters, or null. {@code
    * peer} marks an A2A peer agent exposed as a tool: its calls are recorded as {@code delegated}.
-   * {@code effect} is its declared class.
+   * {@code effect} is its {@link ToolEffect} class.
    */
   public record Tool(String id, String description, Map<String, Object> inputSchema,
                      BiFunction<Map<String, Object>, CallIdentity, Object> fn, boolean peer,
@@ -44,7 +44,7 @@ public final class ToolRegistry {
     public Tool(String id, String description, Map<String, Object> inputSchema,
                 Function<Map<String, Object>, Object> fn, boolean peer) {
       this(id, description, inputSchema, (params, call) -> fn.apply(params), peer,
-          "idempotent");
+          ToolEffect.IDEMPOTENT);
     }
 
     public Tool(String id, String description, Map<String, Object> inputSchema,
@@ -90,14 +90,14 @@ public final class ToolRegistry {
                                     String effect,
                                     BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
     tools.put(id, new Tool(id, description, inputSchema, fn, false,
-        effect == null ? "idempotent" : effect));
+        effect == null ? ToolEffect.IDEMPOTENT : effect));
     return this;
   }
 
   /** Register an A2A peer as a tool, told who is calling. */
   public ToolRegistry registerKeyedPeer(String id, String description,
                                         BiFunction<Map<String, Object>, CallIdentity, Object> fn) {
-    tools.put(id, new Tool(id, description, null, fn, true, "idempotent"));
+    tools.put(id, new Tool(id, description, null, fn, true, ToolEffect.IDEMPOTENT));
     return this;
   }
 

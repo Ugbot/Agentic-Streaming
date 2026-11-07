@@ -19,6 +19,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import org.jagentic.core.ConversationLog;
 import org.jagentic.core.ConversationStore;
+import org.jagentic.core.EffectJournals;
 import org.jagentic.core.Event;
 import org.jagentic.core.KeyedStateStore;
 import org.jagentic.core.LocalRuntime;
@@ -202,6 +203,10 @@ public final class ConformanceHarness {
     if (doc.get("llm") instanceof Map<?, ?> llm) {
       ((Map<String, Object>) llm).put(GraphBuilder.WORLD_KEY, world);
     }
+    // A journal the rebuilt graph of a restarted job finds again, as it would a durable one.
+    Map<String, Object> stores = new LinkedHashMap<>((Map<String, Object>) doc.getOrDefault("stores", Map.of()));
+    stores.put("effects", Map.of("kind", "memory", "name", world, EffectJournals.PROCESS_LOCAL_OK, true));
+    doc.put("stores", stores);
     return doc;
   }
 
@@ -255,7 +260,7 @@ public final class ConformanceHarness {
   private static LocalRuntime newRuntime(GraphBuilder.Built built, ConversationLog log, LogicalClock clock,
                                          Crash.Probe probe) {
     return new LocalRuntime(built.graph(), new ConversationStore.InMemory(), new KeyedStateStore.InMemory(),
-        built.tools(), built.retriever(), log, clock).withProbe(probe);
+        built.tools(), built.retriever(), log, clock).withProbe(probe).withJournal(built.journal());
   }
 
   /** Port of {@code run_conformance.check_expectation}: the comparison rules of the conformance README. */

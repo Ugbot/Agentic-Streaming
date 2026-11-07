@@ -19,7 +19,14 @@ import java.util.TreeSet;
 public interface ConversationLog {
 
   /** Appends and returns the stored event with its assigned sequence. */
-  LogEvent append(String conversationId, String turnId, EventType type, Map<String, Object> payload);
+  LogEvent append(String conversationId, String turnId, EventType type, Map<String, Object> payload,
+                  long timestamp, Map<String, String> metadata);
+
+  /** {@link #append} stamped with the wall clock and no metadata. */
+  default LogEvent append(String conversationId, String turnId, EventType type,
+                          Map<String, Object> payload) {
+    return append(conversationId, turnId, type, payload, System.currentTimeMillis(), Map.of());
+  }
 
   /** All events of one conversation in sequence order (empty if unknown). */
   List<LogEvent> events(String conversationId);
@@ -44,10 +51,11 @@ public interface ConversationLog {
 
     @Override
     public synchronized LogEvent append(String conversationId, String turnId, EventType type,
-                                        Map<String, Object> payload) {
+                                        Map<String, Object> payload, long timestamp,
+                                        Map<String, String> metadata) {
       List<LogEvent> log = byConversation.computeIfAbsent(conversationId, k -> new ArrayList<>());
       LogEvent e = new LogEvent(conversationId, log.size(), turnId, type.wire(),
-          payload == null ? Map.of() : new LinkedHashMap<>(payload));
+          payload == null ? Map.of() : new LinkedHashMap<>(payload), timestamp, metadata);
       log.add(e);
       return e;
     }

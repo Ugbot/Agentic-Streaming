@@ -5,7 +5,7 @@ package org.jagentic.core;
  * turn did. It is the one failure the turn boundary lets through. A turn cannot record its own end
  * in a log it cannot reach, so the runtime has to treat this as infrastructure and restart.
  */
-public final class LogUnavailable extends RuntimeException {
+public class LogUnavailable extends RuntimeException {
   private static final long serialVersionUID = 1L;
 
   public LogUnavailable(String message, Throwable cause) {

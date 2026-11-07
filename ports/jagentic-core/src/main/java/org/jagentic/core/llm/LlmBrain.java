@@ -110,7 +110,7 @@ public final class LlmBrain implements Brain {
     }
 
     for (int i = 0; i < maxIterations; i++) {
-      ChatResult r = ctx.callModel(() -> client.chat(messages, specs));
+      ChatResult r = ctx.chat(() -> client.chat(messages, specs));
       if (r.isToolCall()) {
         if (allowedTools != null && !allowedTools.contains(r.tool())) {
           if (strictTools) {

@@ -276,7 +276,8 @@ class SpecSemanticsTest {
     List<String> t = types(r.events);
     int started = t.indexOf("compensation_started");
     assertTrue(started > 0);
-    assertEquals(List.of("compensation_step", "compensation_step", "compensation_completed", "turn_failed"),
+    assertEquals(List.of("tool_intent", "compensation_step", "tool_intent", "compensation_step",
+        "compensation_completed", "turn_failed"),
         t.subList(started + 1, t.size()));
   }
 

@@ -122,7 +122,7 @@ class WorkflowTimersTest {
     TurnResult fired = rt.submit(Event.turn(cid, "t-fire", "u", "now?"));
     assertEquals(TurnStatus.COMPLETED, fired.status);
     List<String> t = types(fired.events);
-    assertEquals(List.of("timer_fired", "tool_called", "turn_received"), t.subList(0, 3));
+    assertEquals(List.of("timer_fired", "tool_intent", "tool_called", "turn_received"), t.subList(0, 4));
     assertEquals(1, fired.calls.size());
     assertEquals("nudge", fired.calls.get(0).tool());
     assertEquals(0, fired.calls.get(0).index());
@@ -155,8 +155,9 @@ class WorkflowTimersTest {
     assertEquals(List.of("c", "a", "b"), r.state.get("fired_timers"));
     assertEquals(List.of("c", "a", "b"), r.calls.stream().map(c -> c.args().get("k")).toList());
     assertEquals(List.of(0, 1, 2), r.calls.stream().map(c -> c.index()).toList());
-    assertEquals(List.of("timer_fired", "tool_called", "timer_fired", "tool_called", "timer_fired",
-        "tool_called", "turn_received"), types(r.events).subList(0, 7));
+    assertEquals(List.of("timer_fired", "tool_intent", "tool_called", "timer_fired", "tool_intent",
+        "tool_called", "timer_fired", "tool_intent", "tool_called", "turn_received"),
+        types(r.events).subList(0, 10));
   }
 
   @RepeatedTest(5)
@@ -192,7 +193,7 @@ class WorkflowTimersTest {
     assertEquals(high, noEventTime.state.get("watermark_ms"));
 
     TurnResult fired = rt.submit(turnAt(cid, "t4", start + after + RND.nextLong(0, 100)));
-    assertEquals(List.of("timer_fired", "tool_called", "turn_received"), types(fired.events).subList(0, 3));
+    assertEquals(List.of("timer_fired", "tool_intent", "tool_called", "turn_received"), types(fired.events).subList(0, 4));
     assertEquals(Map.of("reason", "sla"), fired.calls.get(0).args());
     assertEquals(List.of("sla"), fired.state.get("fired_timers"));
   }
@@ -231,7 +232,7 @@ class WorkflowTimersTest {
     clock.advance(after - before + RND.nextLong(0, 100));
     TurnResult t3 = rt.submit(Event.turn(cid, "t3", "u", "checkout?"));
     List<String> types = types(t3.events);
-    assertEquals(List.of("timer_fired", "tool_called", "turn_received"), types.subList(0, 3));
+    assertEquals(List.of("timer_fired", "tool_intent", "tool_called", "turn_received"), types.subList(0, 4));
     assertFalse(types.contains("timer_scheduled"), "a restart never re-schedules");
     assertEquals(1, t3.calls.size());
     assertEquals(List.of("expiry"), t3.state.get("fired_timers"));
