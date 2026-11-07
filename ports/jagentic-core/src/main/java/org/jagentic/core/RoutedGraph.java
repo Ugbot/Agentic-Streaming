@@ -450,10 +450,20 @@ public final class RoutedGraph {
         return refused(signal, TurnError.ErrorClass.VALIDATION, problem, ctx.conversationState());
       }
     }
+    Map<String, Object> resumed = resumedPayload(signal);
+    if (parked.onToolApproval()) {
+      if (!(signal.signal().get("approved") instanceof Boolean approved)) {
+        return refused(signal, TurnError.ErrorClass.VALIDATION,
+            "signal needs approved true or false, got " + signal.signal().get("approved"), ctx.conversationState());
+      }
+      Map<String, Object> approval = map("tool", parked.tool(), "index", parked.index());
+      approval.put("approved", approved);
+      resumed.put("approval", approval);
+    }
     ctx.replayOverAndResume(prior.events());
     Event turn = original(signal, prior, ctx);
     ctx.metadata = turn.metadata();
-    ctx.record(EventType.TURN_RESUMED, resumedPayload(signal));
+    ctx.record(EventType.TURN_RESUMED, resumed);
     ctx.keepIndicesOfTimers(prior.events());
     return run(turn, ctx, TimerState.fold(List.of()), false, true, false);
   }
@@ -626,7 +636,7 @@ public final class RoutedGraph {
       Map<String, Object> p = map("turn_id", event.turnId(), "path", path);
       p.put("text", event.text());
       p.put("user_id", event.userId() == null ? "anonymous" : event.userId());
-      p.put("until", ConversationState.UNKNOWN_OUTCOME);
+      p.put("until", e.until);
       p.put("tool", e.tool);
       p.put("index", e.index);
       ctx.record(EventType.TURN_SUSPENDED, p);

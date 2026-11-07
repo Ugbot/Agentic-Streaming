@@ -48,10 +48,18 @@ public final class ConversationState implements Serializable {
     public boolean onUnknownOutcome() {
       return UNKNOWN_OUTCOME.equals(until);
     }
+
+    /** The turn waits for a person to allow a call. */
+    public boolean onToolApproval() {
+      return TOOL_APPROVAL.equals(until);
+    }
   }
 
   /** The {@code until} of a turn suspended on an unknown outcome. */
   public static final String UNKNOWN_OUTCOME = "unknown_outcome";
+
+  /** The {@code until} of a turn waiting for a person to allow a call. */
+  public static final String TOOL_APPROVAL = "tool_approval";
 
   private final long turnCount;
   private final long transcriptLength;

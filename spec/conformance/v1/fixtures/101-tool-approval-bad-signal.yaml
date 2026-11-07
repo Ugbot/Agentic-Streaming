@@ -1,0 +1,34 @@
+id: tool-approval-bad-signal
+description: 'A signal that does not say yes or no is refused and changes nothing, so the turn is still waiting.'
+requires: [tool_approval, tool_policy, effect_journal, suspend_resume, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    approvers: {roles: [approver]}
+    tool_approval: {effects: [non_idempotent]}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it}
+- conversation_id: c1
+  turn_id: t1
+  signal: {approved: maybe}
+  principal: {subject: ops, roles: [approver]}
+- conversation_id: c1
+  turn_id: t1
+  signal: {approved: true}
+  principal: {subject: ops, roles: [approver]}
+expect:
+- {turn_id: t1, status: suspended}
+- {turn_id: t1, status: failed, error_class: validation, events: []}
+- {turn_id: t1, status: completed}

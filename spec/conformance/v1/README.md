@@ -79,6 +79,9 @@ Python owners.
 | `unauthorised-approver`, `no-approvers-means-none`, `unauthenticated-signal`, `wrong-tenant-approver` | who cannot answer a suspended turn, and that the attempt is on the log |
 | `unauthorised-settlement` | someone who is not an approver cannot settle an unknown outcome |
 | `wrong-tenant-turn` | a conversation belongs to the tenant that started it |
+| `injected-text-cannot-reach-a-denied-tool`, `injected-text-reaches-the-human-gate` | a model that obeys a tool result reaches neither a denied tool nor a gated one |
+| `tool-needs-approval`, `tool-approval-denied`, `tool-approval-bad-signal`, `approval-survives-a-crash` | a person as the gate before a call |
+| `unattended-tool-cannot-wait` | a timer has nobody to ask, so a gated tool is refused |
 | `egress-metadata-address`, `egress-not-http`, `egress-private-address` | a URL the egress policy refuses sends nothing and is a definite failure |
 
 Run them against the reference runtime:

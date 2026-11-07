@@ -322,19 +322,52 @@ public final class AgentContext {
     }
     ToolPolicy.Decision decision = policy.decide(new ToolPolicy.Request(toolId, origin, path,
         tool == null ? null : tool.effect(), args, principal));
-    if (decision.allowed()) {
-      return;
+    if (!decision.allowed()) {
+      refuse(origin, toolId, decision.reason());
     }
+    if (decision.needsPerson()) {
+      gate(origin, toolId);
+    }
+  }
+
+  private void refuse(ToolOrigin origin, String toolId, String reason) {
     Map<String, Object> p = new LinkedHashMap<>();
     p.put("tool", toolId);
     p.put("origin", origin.wire());
     p.put("path", path);
-    p.put("reason", decision.reason());
+    p.put("reason", reason);
     if (principal != null) {
       p.put("principal", principal.toMap());
     }
     record(EventType.TOOL_REFUSED, p);
-    throw new ToolRefused(toolId, decision.reason());
+    throw new ToolRefused(toolId, reason);
+  }
+
+  /** A tool that needs a person waits for one. A timer or a pattern has nobody to ask. */
+  private void gate(ToolOrigin origin, String toolId) {
+    if (origin.unattended()) {
+      refuse(origin, toolId, "tool " + toolId + " needs a person and " + origin.wire() + " has nobody to ask");
+    }
+    Boolean answer = approvalOf(toolId, nextToolIndex);
+    if (answer == null) {
+      throw new TurnSuspendedOnUnknown(toolId, nextToolIndex, ConversationState.TOOL_APPROVAL);
+    }
+    if (!answer) {
+      refuse(origin, toolId, "an approver refused tool " + toolId);
+    }
+  }
+
+  /** What the log says an approver answered about this call, the last answer standing. */
+  private Boolean approvalOf(String toolId, int index) {
+    Boolean answer = null;
+    for (LogEvent e : log.events(conversationId)) {
+      if (e.is(EventType.TURN_RESUMED) && turnId.equals(e.turnId())
+          && e.payload().get("approval") instanceof Map<?, ?> a
+          && toolId.equals(a.get("tool")) && a.get("index") instanceof Number n && n.intValue() == index) {
+        answer = Boolean.TRUE.equals(a.get("approved"));
+      }
+    }
+    return answer;
   }
 
   private Object invoke(ToolOrigin origin, String toolId, Map<String, Object> params,

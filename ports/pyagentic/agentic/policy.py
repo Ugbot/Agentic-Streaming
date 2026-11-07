@@ -11,6 +11,7 @@ from typing import Any, Dict, Mapping, Optional, Protocol, Sequence, Set
 
 ALLOW = "allow"
 DENY = "deny"
+ASK_A_PERSON = "ask_a_person"  # allowed once an approver says so
 
 UNATTENDED_ORIGINS = frozenset({"timer", "cep"})  # they run outside any path
 
@@ -60,7 +61,11 @@ class DocumentToolPolicy:
     """A path's `tools` and `policies.unattended_tools`. What neither lists is refused."""
 
     def __init__(self, doc: Mapping[str, Any]) -> None:
-        self._unattended = (doc.get("policies") or {}).get("unattended_tools") or []
+        policies = doc.get("policies") or {}
+        self._unattended = policies.get("unattended_tools") or []
+        gate = policies.get("tool_approval") or {}
+        self._gated_tools = gate.get("tools") or []
+        self._gated_effects = gate.get("effects") or []
         skills = {s.get("name"): s.get("tools") or [] for s in doc.get("skills") or []}
         self._tools: Dict[str, Set[str]] = {}
         for name, path in ((doc.get("agent") or {}).get("paths") or {}).items():
@@ -74,12 +79,12 @@ class DocumentToolPolicy:
 
     def decide(self, request: ToolRequest) -> Decision:
         if request.origin in UNATTENDED_ORIGINS:
-            if request.tool in self._unattended:
-                return Decision(ALLOW)
-            return Decision(DENY, f"tool {request.tool} is not in policies.unattended_tools")
-        if request.tool in self.tools_of(request.path):
-            return Decision(ALLOW)
-        return Decision(DENY, f"tool {request.tool} is not in the tools of path {request.path}")
+            if request.tool not in self._unattended:
+                return Decision(DENY, f"tool {request.tool} is not in policies.unattended_tools")
+        elif request.tool not in self.tools_of(request.path):
+            return Decision(DENY, f"tool {request.tool} is not in the tools of path {request.path}")
+        gated = request.tool in self._gated_tools or request.effect in self._gated_effects
+        return Decision(ASK_A_PERSON if gated else ALLOW)
 
 
 def approver_problem(doc: Mapping[str, Any], signal_principal: Optional[Mapping[str, Any]],

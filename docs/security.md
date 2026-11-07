@@ -114,10 +114,27 @@ with, matched word for word after environment expansion: `python3 examples/pipel
 allows that script and not `python3 -c ...`. A bare `python3` allows whatever Python will run. On Flink
 the list is read on the TaskManager.
 
-## Input guardrails
+## Prompt injection
 
-Guardrails are regular expressions and classifiers you configure. The examples use one regex over
-user text. Tool results and retrieved text are not checked. This is not a prompt-injection defence.
+**The defence is the tool policy, not a filter.** Guardrails are regular expressions and classifiers
+you configure. They see user text and the final reply, and they will not stop an injection: nothing
+here can stop a model being talked into asking for something. What holds is that asking is not
+enough.
+
+- A tool the path does not list is refused, whatever the model read. `injected-text-cannot-reach-a-denied-tool`
+  proves this on all five runtimes with a model that obeys the tool result, and `InjectionTest` and
+  `test_an_injected_call_to_a_denied_tool_is_refused...` prove it through the real loop.
+- `policies.tool_approval: {effects: [non_idempotent]}` puts a person in front of those tools. The
+  turn suspends before the call and an approver answers `approved` true or false, which is
+  `injected-text-reaches-the-human-gate`. A timer or a CEP pattern has nobody to ask, so such a tool is
+  refused there. Without this block an allowed tool runs when a model asks for it, injected or not.
+- Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
+  the system prompt says what that means. This helps a model. It is not a boundary.
+
+Left out: the LLM brain puts no retrieved text in a prompt, so nothing marks it there. A custom brain
+that does should use `Untrusted.mark`, or `agentic.untrusted.mark` in Python. A reply can still repeat
+what a tool said, and a path's own allowed tools can still be misused within what they allow, so give
+a path the fewest tools that will do.
 
 ## Effects
 

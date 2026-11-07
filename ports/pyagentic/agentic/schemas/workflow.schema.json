@@ -156,6 +156,15 @@
           },
           "additionalProperties": false
         },
+        "tool_approval": {
+          "description": "Which allowed tools still need a person: the turn suspends before the call until an approver answers. A timer or a CEP pattern has nobody to ask, so such a tool is refused there.",
+          "type": "object",
+          "properties": {
+            "effects": { "type": "array", "items": { "enum": ["read", "idempotent", "non_idempotent"] } },
+            "tools": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
         "unattended_tools": {
           "description": "What a timer or a CEP pattern may call. They run outside any path, so a path's tools do not cover them. Deny by default: a tool not listed here is refused.",
           "type": "array",

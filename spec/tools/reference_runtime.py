@@ -50,12 +50,14 @@ class ToolRefused(ValidationFailure):
 
 
 class UnknownOutcome(Exception):
-    """A non_idempotent call has no recorded result. The turn suspends for a person."""
+    """A non_idempotent call has no recorded result, or one needs a person before it runs. The turn
+    suspends for a person, `until` saying which."""
 
-    def __init__(self, tool: str, index: int) -> None:
+    def __init__(self, tool: str, index: int, until: str = "unknown_outcome") -> None:
         super().__init__(f"{tool} outcome unknown")
         self.tool = tool
         self.index = index
+        self.until = until
 
 
 class JournalDivergence(RuntimeError):
@@ -436,10 +438,17 @@ class ReferenceRuntime:
             problem = self._resolve(turn, pending)
             if problem is not None:
                 return self._refused(conv, turn, problem)
+        approval = None
+        if pending.get("until") == "tool_approval":
+            approved = (turn.signal or {}).get("approved")
+            if not isinstance(approved, bool):
+                return self._refused(conv, turn, f"signal needs approved true or false, got {approved!r}")
+            approval = {"tool": pending["tool"], "index": pending["index"], "approved": approved}
         conv.suspended.pop(turn.turn_id)
         ctx = self._context(conv, turn, rerun=False)
         ctx.prior.answered()
-        self._append(conv, ctx, "turn_resumed", self._resumed_payload(turn))
+        self._append(conv, ctx, "turn_resumed", {**self._resumed_payload(turn),
+                                                 **({"approval": approval} if approval else {})})
         return self._continue(conv, turn, ctx, resuming=True)
 
     def _resolve(self, turn: Turn, pending: Dict[str, Any]) -> Optional[str]:
@@ -540,7 +549,7 @@ class ReferenceRuntime:
         except UnknownOutcome as exc:
             spec = self.tools[exc.tool]
             payload = {"turn_id": ctx.turn.turn_id, "path": path, "text": ctx.turn.text,
-                       "user_id": ctx.turn.user_id, "until": "unknown_outcome",
+                       "user_id": ctx.turn.user_id, "until": exc.until,
                        "tool": spec["id"], "index": exc.index}
             self._append(conv, ctx, "turn_suspended", payload)
             conv.suspended[ctx.turn.turn_id] = payload
@@ -824,9 +833,31 @@ class ReferenceRuntime:
             return
         scope = "policies.unattended_tools" if unattended else f"the tools of path {ctx.path}"
         reason = f"tool {tool_id} is not in {scope}"
+        self._refuse(conv, ctx, tool_id, origin, reason)
+
+    def _refuse(self, conv: Conversation, ctx: "_TurnContext", tool_id: str, origin: str, reason: str) -> None:
         self._append(conv, ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path, "reason": reason,
                                                   **_principal_of(ctx.turn)})
         raise ToolRefused(reason)
+
+    def _needs_a_person(self, tool_id: str, spec: Dict[str, Any]) -> bool:
+        gate = self.policies.get("tool_approval") or {}
+        return tool_id in (gate.get("tools") or []) or spec.get("effect", "non_idempotent") in (gate.get("effects") or [])
+
+    def _gate(self, conv: Conversation, ctx: "_TurnContext", tool_id: str, spec: Dict[str, Any], origin: str) -> None:
+        """primitives.md section 11: a tool that needs a person waits for one, before anything else."""
+        if not self._needs_a_person(tool_id, spec):
+            return
+        if origin in ("timer", "cep"):
+            self._refuse(conv, ctx, tool_id, origin, f"tool {tool_id} needs a person and {origin} has nobody to ask")
+        index = ctx._tool_index
+        answers = [e["payload"]["approval"] for e in self._events_of(conv, ctx.turn.turn_id)
+                   if e["type"] == "turn_resumed" and (e["payload"].get("approval") or {}).get("index") == index
+                   and e["payload"]["approval"]["tool"] == tool_id]
+        if not answers:
+            raise UnknownOutcome(tool_id, index, "tool_approval")
+        if not answers[-1]["approved"]:
+            self._refuse(conv, ctx, tool_id, origin, f"an approver refused tool {tool_id}")
 
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,
                 args: Dict[str, Any], event: str = None, strict: bool = False, origin: str = "brain") -> Any:
@@ -837,6 +868,7 @@ class ReferenceRuntime:
         spec = self.tools.get(tool_id)
         if spec is None:
             raise ValidationFailure(f"unknown tool {tool_id}")
+        self._gate(conv, ctx, tool_id, spec, origin)
         self._validate_args(tool_id, spec, args)
         turn = ctx.turn
         index = ctx.next_tool_index()

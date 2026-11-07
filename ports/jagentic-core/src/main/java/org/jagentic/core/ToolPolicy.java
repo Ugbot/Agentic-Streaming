@@ -16,12 +16,13 @@ public interface ToolPolicy {
   record Request(String tool, ToolOrigin origin, String path, String effect, Map<String, Object> args,
                  Principal principal) {}
 
-  /** The answer, with the reason a refusal gives. */
-  record Decision(boolean allowed, String reason) {
-    public static final Decision ALLOW = new Decision(true, "");
+  /** The answer, with the reason a refusal gives. {@code needsPerson}: allowed once an approver says so. */
+  record Decision(boolean allowed, String reason, boolean needsPerson) {
+    public static final Decision ALLOW = new Decision(true, "", false);
+    public static final Decision ASK_A_PERSON = new Decision(true, "", true);
 
     public static Decision deny(String reason) {
-      return new Decision(false, reason);
+      return new Decision(false, reason, false);
     }
   }
 
@@ -42,7 +43,11 @@ public interface ToolPolicy {
       @Override
       public Decision decide(Request request) {
         Decision d = first.decide(request);
-        return d.allowed() ? second.decide(request) : d;
+        if (!d.allowed()) {
+          return d;
+        }
+        Decision then = second.decide(request);
+        return then.allowed() && d.needsPerson() ? Decision.ASK_A_PERSON : then;
       }
 
       @Override
@@ -60,15 +65,24 @@ public interface ToolPolicy {
 
   /** What a document says: a path's tools, and what timers and CEP patterns may call. */
   static ToolPolicy of(Map<String, Set<String>> pathTools, Set<String> unattended) {
+    return of(pathTools, unattended, Set.of(), Set.of());
+  }
+
+  /** As above, with what still needs a person ({@code policies.tool_approval}), by id and by effect. */
+  static ToolPolicy of(Map<String, Set<String>> pathTools, Set<String> unattended,
+                       Set<String> gatedTools, Set<String> gatedEffects) {
     Map<String, Set<String>> paths = new LinkedHashMap<>(pathTools);
     Set<String> background = Set.copyOf(unattended);
     return r -> {
-      if (r.origin().unattended()) {
-        return background.contains(r.tool()) ? Decision.ALLOW
-            : Decision.deny("tool " + r.tool() + " is not in policies.unattended_tools");
+      boolean listed = r.origin().unattended() ? background.contains(r.tool())
+          : paths.getOrDefault(r.path(), Set.of()).contains(r.tool());
+      if (!listed) {
+        return Decision.deny(r.origin().unattended()
+            ? "tool " + r.tool() + " is not in policies.unattended_tools"
+            : "tool " + r.tool() + " is not in the tools of path " + r.path());
       }
-      return paths.getOrDefault(r.path(), Set.of()).contains(r.tool()) ? Decision.ALLOW
-          : Decision.deny("tool " + r.tool() + " is not in the tools of path " + r.path());
+      return gatedTools.contains(r.tool()) || gatedEffects.contains(r.effect())
+          ? Decision.ASK_A_PERSON : Decision.ALLOW;
     };
   }
 }

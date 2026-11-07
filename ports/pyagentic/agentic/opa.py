@@ -3,7 +3,8 @@
 The Python peer of `OpaToolPolicy`. The document's policy is the floor: this runs after it and can only
 narrow it. Anything but a clear yes is a no, so an OPA that is down, slow, undefined or confused
 refuses the call. The input is `{tool, origin, path, effect, principal, args}`; the answer is a boolean
-at the policy's path, or an object with `allow` and optionally `reason`.
+at the policy's path, or an object with `allow` and optionally `reason`, or `approval` true to send the
+call to a person.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Mapping, Optional
 
-from .policy import ALLOW, DENY, Decision, ToolPolicy, ToolRequest
+from .policy import ALLOW, ASK_A_PERSON, DENY, Decision, ToolPolicy, ToolRequest
 
 
 class OpaToolPolicy:
@@ -37,7 +38,8 @@ class OpaToolPolicy:
             return Decision(DENY, f"opa unavailable for tool {request.tool}")
         allowed = result if isinstance(result, bool) else isinstance(result, dict) and result.get("allow") is True
         if allowed:
-            return Decision(ALLOW)
+            gated = isinstance(result, dict) and result.get("approval") is True
+            return Decision(ASK_A_PERSON if gated else ALLOW)
         reason = result.get("reason") if isinstance(result, dict) else None
         return Decision(DENY, str(reason) if reason else f"opa refused tool {request.tool}")
 
@@ -63,4 +65,7 @@ class Both:
 
     def decide(self, request: ToolRequest) -> Decision:
         decision = self.first.decide(request)
-        return self.second.decide(request) if decision.verdict == ALLOW else decision
+        if decision.verdict == DENY:
+            return decision
+        then = self.second.decide(request)
+        return decision if then.verdict != DENY and decision.verdict == ASK_A_PERSON else then

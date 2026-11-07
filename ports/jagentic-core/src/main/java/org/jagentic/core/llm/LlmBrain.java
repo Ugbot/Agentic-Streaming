@@ -13,6 +13,7 @@ import org.jagentic.core.ChatMessage;
 import org.jagentic.core.ContextItem;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Priority;
+import org.jagentic.core.Untrusted;
 
 /**
  * A {@link Brain} that drives a bounded ReAct loop over a {@link ChatClient} (thought →
@@ -83,7 +84,7 @@ public final class LlmBrain implements Brain {
         .map(s -> s.get("name") + ": " + s.get("description"))
         .collect(Collectors.joining(", "));
 
-    String sys = (systemPrompt + "\n" + REACT_SYSTEM + toolList).strip();
+    String sys = (systemPrompt + "\n" + REACT_SYSTEM + toolList + "\n" + Untrusted.RULE).strip();
     if (outputSchema != null) {
       sys += "\n" + org.jagentic.core.structured.Structured.schemaInstruction(outputSchema);
     }
@@ -125,7 +126,8 @@ public final class LlmBrain implements Brain {
    * one; Anthropic and Gemini have no such role at all.
    */
   private static Map<String, String> observed(ChatResult r, String observation) {
-    return Map.of("role", "user", "content", OBSERVATION + r.tool() + ": " + observation);
+    return Map.of("role", "user",
+        "content", OBSERVATION + r.tool() + ": " + Untrusted.mark("tool:" + r.tool(), observation));
   }
 
   /**

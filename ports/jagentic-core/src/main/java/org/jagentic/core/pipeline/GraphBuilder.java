@@ -291,8 +291,12 @@ public final class GraphBuilder {
   }
 
   /** What the document says, narrowed by the operator's OPA when there is one. */
+  @SuppressWarnings("unchecked")
   private static ToolPolicy toolPolicy(Map<String, java.util.Set<String>> pathGrants, Map<String, Object> policies) {
-    ToolPolicy document = ToolPolicy.of(pathGrants, unattendedTools(policies));
+    Map<String, Object> gate = policies != null && policies.get("tool_approval") instanceof Map<?, ?> g
+        ? (Map<String, Object>) g : Map.of();
+    ToolPolicy document = ToolPolicy.of(pathGrants, unattendedTools(policies), names(gate.get("tools")),
+        names(gate.get("effects")));
     org.jagentic.core.OpaToolPolicy opa = org.jagentic.core.OpaToolPolicy.fromEnvironment(GraphBuilder::setting);
     return opa == null ? document : document.and(opa);
   }
@@ -303,9 +307,13 @@ public final class GraphBuilder {
   }
 
   private static java.util.Set<String> unattendedTools(Map<String, Object> policies) {
+    return policies == null ? java.util.Set.of() : names(policies.get("unattended_tools"));
+  }
+
+  private static java.util.Set<String> names(Object listed) {
     java.util.Set<String> out = new java.util.LinkedHashSet<>();
-    if (policies != null && policies.get("unattended_tools") instanceof List<?> listed) {
-      listed.forEach(t -> out.add(String.valueOf(t)));
+    if (listed instanceof List<?> l) {
+      l.forEach(t -> out.add(String.valueOf(t)));
     }
     return out;
   }

@@ -1,0 +1,44 @@
+id: tool-needs-approval
+description: 'policies.tool_approval makes a person the gate: the turn suspends before the call, with no intent and no journal entry, and an approver lets it run.'
+requires: [tool_approval, tool_policy, effect_journal, suspend_resume, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  policies:
+    approvers: {roles: [approver]}
+    tool_approval: {effects: [non_idempotent]}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it}
+- conversation_id: c1
+  turn_id: t1
+  signal: {approved: true}
+  principal: {subject: ops, roles: [approver]}
+- {conversation_id: c1, turn_id: t1, text: pay it}
+expect:
+- turn_id: t1
+  status: suspended
+  tool_calls: []
+  events: [turn_received, routed, brain_started, turn_suspended]
+  event_payloads:
+  - type: turn_suspended
+    payload: {until: tool_approval, tool: pay, index: 0}
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned 1'
+  tool_calls:
+  - {tool: pay, index: 0, args: {user: anonymous}}
+  event_payloads:
+  - type: turn_resumed
+    payload: {approval: {tool: pay, index: 0, approved: true}}
+- {turn_id: t1, status: duplicate, reply: '[main] pay returned 1'}

@@ -38,7 +38,7 @@ class ProviderWireFormatTest {
       Map.of("role", "system", "content", "be brief"),
       Map.of("role", "user", "content", "hello"),
       Map.of("role", "assistant", "content", "{\"tool\":\"look\"}"),
-      Map.of("role", "user", "content", "Result of look: 42"));
+      Map.of("role", "user", "content", "Result of look: <untrusted source=\"tool:look\">\n42\n</untrusted>"));
 
   private HttpServer server;
   private final List<JsonNode> bodies = new ArrayList<>();

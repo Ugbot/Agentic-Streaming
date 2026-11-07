@@ -18,7 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * that is down, slow, undefined or confused refuses the call.
  *
  * <p>The input is {@code {tool, origin, path, effect, principal, args}}. The answer is a boolean at
- * the policy's path, or an object with {@code allow} and optionally {@code reason}.
+ * the policy's path, or an object with {@code allow} and optionally {@code reason}, or {@code
+ * approval} true to send the call to a person.
  */
 public final class OpaToolPolicy implements ToolPolicy {
 
@@ -85,7 +86,7 @@ public final class OpaToolPolicy implements ToolPolicy {
     boolean allowed = result.isBoolean() ? result.booleanValue()
         : result.path("allow").isBoolean() && result.path("allow").booleanValue();
     if (allowed) {
-      return Decision.ALLOW;
+      return result.path("approval").asBoolean(false) ? Decision.ASK_A_PERSON : Decision.ALLOW;
     }
     String reason = result.path("reason").asText("");
     return Decision.deny(reason.isBlank() ? "opa refused tool " + tool : reason);

@@ -254,7 +254,7 @@ Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
 `context_window`, `replay`, `suspend_resume`, `timers`, `saga`, `a2a`, `cep`, `event_time`,
 `checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`,
-`tool_policy`, `principal`.
+`tool_policy`, `principal`, `tool_approval`.
 
 ## 7. Versioning
 
@@ -622,7 +622,8 @@ for it. The check denies by default.
 `tools: []` means none, and a path with no `tools` has none. A `tool_triggers` entry, a saga step, a
 timer's `tool` and a pattern's `on_match.tool` each say what to call; none of them grants it.
 
-A refused call appends `tool_refused {tool, origin, path, reason}` and nothing else: no index, no
+A refused call appends `tool_refused {tool, origin, path, reason}`, with `principal` when there is
+one, and nothing else: no index, no
 `tool_intent`, no journal entry. The turn then ends `failed` with class `policy`. A refused tool is
 not offered back to a model, which sees only the tools the policy grants its path, so a model
 that asks for another gets no second try in that turn. In a saga a refused step is a failed step: what
@@ -674,4 +675,23 @@ link-local or metadata address unless the operator allows it. The settings belon
 deployment, not to the document. A refused attempt is a definite failure with the error `<tool>
 failed: blocked by egress policy`, so a `non_idempotent` tool is not left unknown. Redirects are not
 followed. A binding allows its own local stub and nothing else, so a fixture can prove the refusals.
+
+### Tools that need a person
+
+`policies.tool_approval` names `tools` and `effects` that stay allowed but need a person first, such as
+`effects: [non_idempotent]`. Such a call suspends the turn before it is validated, journaled or given
+an index: `turn_suspended {until: tool_approval, tool, index}`. An approver answers with a signal
+carrying `approved` true or false, and a signal with neither is refused as section 10 says. The
+answer is on `turn_resumed` as `approval {tool, index, approved}`, so a crash after it loses nothing,
+and the run reaches the same call and finds it. False refuses the call, as above, with nothing run.
+
+A timer or a CEP pattern has nobody to ask, so a tool that needs a person is refused there.
+
+### Untrusted text
+
+A tool result goes into a prompt marked, between `<untrusted source="tool:<id>">` and `</untrusted>`,
+with any such tag inside it defused, and the system prompt says what the marking means. It helps a
+model and it is not a defence: nothing here can stop a model being talked into asking for a tool.
+The defence is that asking is not enough. A tool the policy denies is refused whatever the model read,
+and a tool that needs a person waits for one.
 

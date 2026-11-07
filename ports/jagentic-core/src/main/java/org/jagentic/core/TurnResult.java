@@ -103,7 +103,8 @@ public final class TurnResult implements Serializable {
     }
     LogEvent last = events.get(events.size() - 1);
     return last.is(EventType.TURN_SUSPENDED)
-        && ConversationState.UNKNOWN_OUTCOME.equals(last.payload().get("until"));
+        && (ConversationState.UNKNOWN_OUTCOME.equals(last.payload().get("until"))
+            || ConversationState.TOOL_APPROVAL.equals(last.payload().get("until")));
   }
 
   /** The same outcome re-reported for a redelivered {@code turn_id}: status {@code duplicate}, no events. */

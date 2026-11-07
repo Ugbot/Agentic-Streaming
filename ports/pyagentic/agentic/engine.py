@@ -45,9 +45,10 @@ from .journal import (
     model_intent_of,
 )
 from .opa import Both, from_environment
-from .policy import ALLOW, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
+from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
+from .untrusted import RULE, mark
 from .tools import ToolCall, ToolRegistry, ToolSpec, idempotency_key
 from .workflow_timers import WorkflowTimers
 
@@ -218,12 +219,14 @@ class _TurnContext:
 
 
 class _UnknownOutcome(Exception):
-    """A call has no answer and cannot be made again. The turn suspends for a person."""
+    """A call has no answer and cannot be made again, or needs a person first. The turn suspends
+    for a person, `until` saying which."""
 
-    def __init__(self, tool: str, index: int) -> None:
-        super().__init__(f"{tool} outcome unknown")
+    def __init__(self, tool: str, index: int, until: str = "unknown_outcome") -> None:
+        super().__init__(f"{tool} waits for a person")
         self.tool = tool
         self.index = index
+        self.until = until
 
 
 class _ToolEffect(EffectCall):
@@ -519,8 +522,15 @@ class Engine:
             problem = self._resolve(turn, suspended, events)
             if problem is not None:
                 return self.refused(turn.conversation_id, turn.turn_id, problem)
+        resumed = self._resumed_payload(turn)
+        if suspended.get("until") == "tool_approval":
+            approved = (turn.signal or {}).get("approved")
+            if not isinstance(approved, bool):
+                return self.refused(turn.conversation_id, turn.turn_id,
+                                    f"signal needs approved true or false, got {approved!r}")
+            resumed["approval"] = {"tool": suspended["tool"], "index": suspended["index"], "approved": approved}
         self._adopt(ctx, log, events, resuming_now=True)
-        self._append(ctx, "turn_resumed", self._resumed_payload(turn))
+        self._append(ctx, "turn_resumed", resumed)
         return self._continue(ctx, resuming=True)
 
     def _resolve(self, turn: Turn, suspended: Mapping[str, Any], events: Sequence[Event]) -> Optional[str]:
@@ -553,7 +563,7 @@ class Engine:
             return self._run(ctx, resuming)
         except _UnknownOutcome as exc:
             payload = {"turn_id": ctx.turn.turn_id, "path": ctx.path, "text": ctx.turn.text,
-                       "user_id": ctx.turn.user_id, "until": "unknown_outcome", "tool": exc.tool, "index": exc.index}
+                       "user_id": ctx.turn.user_id, "until": exc.until, "tool": exc.tool, "index": exc.index}
             self._append(ctx, "turn_suspended", payload)
             return self._finish(ctx, "suspended", ctx.path, None, None)
         except ValidationError as exc:
@@ -704,7 +714,7 @@ class Engine:
         tools = [{"name": s.id, "description": s.description} for s in self.tools.ids().values()
                  if s.id in declared]
         listing = ", ".join(f"{t['name']}: {t['description']}" for t in tools)
-        system = f"{spec.get('prompt', '')}\n{REACT_SYSTEM}{listing}".strip()
+        system = f"{spec.get('prompt', '')}\n{REACT_SYSTEM}{listing}\n{RULE}".strip()
         messages = [{"role": "system", "content": system}]
         messages += [{"role": m.role, "content": m.text} for m in transcript(ctx.history, self.context)]
         messages.append({"role": "user", "content": ctx.text})
@@ -715,7 +725,9 @@ class Engine:
                 return f"[{path}] {answer.get('text', '')}"
             tool_id, args = str(answer["tool"]), answer.get("args") or {}
             messages.append({"role": "assistant", "content": json.dumps({"tool": tool_id, "args": args})})
-            messages.append({"role": "user", "content": f"Result of {tool_id}: {self._invoke(ctx, tool_id, args)}"})
+            result = self._invoke(ctx, tool_id, args)
+            observed = mark("tool:" + tool_id, str(result))
+            messages.append({"role": "user", "content": f"Result of {tool_id}: {observed}"})
         return f"[{path}] (stopped after {limit} steps)"
 
     def _chat(self, client: ChatClient, messages: List[Dict[str, str]], tools: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -906,10 +918,29 @@ class Engine:
         known = self.tools.ids().get(tool_id)
         effect = known.effect if known is not None else None
         decision = self.policy.decide(ToolRequest(tool_id, origin, ctx.path, effect, args, ctx.turn.principal))
-        if decision.verdict != ALLOW:
-            self._append(ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path,
-                                               "reason": decision.reason, **_principal_of(ctx.turn)})
-            raise ToolRefused(decision.reason)
+        if decision.verdict == DENY:
+            self._refuse(ctx, tool_id, origin, decision.reason)
+        if decision.verdict == ASK_A_PERSON:
+            self._gate(ctx, tool_id, origin)
+
+    def _refuse(self, ctx: _TurnContext, tool_id: str, origin: str, reason: str) -> None:
+        self._append(ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path,
+                                           "reason": reason, **_principal_of(ctx.turn)})
+        raise ToolRefused(reason)
+
+    def _gate(self, ctx: _TurnContext, tool_id: str, origin: str) -> None:
+        """A tool that needs a person waits for one. A timer or a pattern has nobody to ask."""
+        if origin in ("timer", "cep"):
+            self._refuse(ctx, tool_id, origin, f"tool {tool_id} needs a person and {origin} has nobody to ask")
+        index = ctx.next_index
+        answers = [e.payload["approval"] for e in self.log.read(ctx.turn.conversation_id)
+                   if e.type == "turn_resumed" and e.turn_id == ctx.turn.turn_id
+                   and (e.payload.get("approval") or {}).get("index") == index
+                   and e.payload["approval"]["tool"] == tool_id]
+        if not answers:
+            raise _UnknownOutcome(tool_id, index, "tool_approval")
+        if not answers[-1]["approved"]:
+            self._refuse(ctx, tool_id, origin, f"an approver refused tool {tool_id}")
 
     def _invoke(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any],
                 event: Optional[str] = None, strict: bool = False, origin: str = "brain") -> Any:

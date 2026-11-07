@@ -76,7 +76,8 @@ public final class FlinkConformanceHarness {
           "crash_recovery",
           "effect_journal",
           "tool_policy",
-          "principal");
+          "principal",
+          "tool_approval");
 
   /**
    * Operator parallelism of every fixture job; more than one subtask is what {@code parallelism}
