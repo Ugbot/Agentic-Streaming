@@ -141,6 +141,11 @@ enough.
   asks the model again and gets another call at that index waits for a new approval.
 - Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
   the system prompt says what that means. This helps a model. It is not a boundary.
+- An MCP server writes its own tool descriptions, which go into the system prompt. Each one is marked
+  the same way, as `<untrusted source="mcp:<tool>">`, and cut at 1024 characters, in Java and in the
+  older Python engine (the canonical Python engine has no MCP client). A tool description in the
+  document is the document's, and is not marked. `McpDescriptionAttackTest` and
+  `test_mcp_description_attack.py` prove it.
 
 Left out: the LLM brain puts no retrieved text in a prompt, so nothing marks it there. A custom brain
 that does should use `Untrusted.mark`, or `agentic.untrusted.mark` in Python. A reply can still repeat

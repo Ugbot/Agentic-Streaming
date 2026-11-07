@@ -119,7 +119,9 @@ public final class McpStdioClient implements AutoCloseable {
     for (Map<String, String> spec : specs) {
       String name = spec.get("name");
       String id = p + name;
-      reg.registerKeyed(id, spec.getOrDefault("description", ""), null, effect,
+      // The server wrote the description, and it goes into a prompt: it is text from outside.
+      reg.registerKeyed(id, org.jagentic.core.Untrusted.describe("mcp:" + name, spec.getOrDefault("description", "")),
+          null, effect,
           Deadlines.boundKeyed(id, timeoutMs,
               (params, call) -> callTool(name, params, call.idempotencyKey()), process::destroyForcibly));
       ids.add(id);

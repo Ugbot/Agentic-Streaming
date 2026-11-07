@@ -10,6 +10,8 @@ import asyncio
 import threading
 from typing import Any, Dict, List, Optional
 
+from agentic.untrusted import describe
+
 from .tools import ToolRegistry
 
 
@@ -79,7 +81,9 @@ class McpClient:
         for spec in self._tool_specs:
             tool_id = prefix + spec["name"]
             name = spec["name"]
-            registry.register(tool_id, spec["description"], lambda params, n=name: self._call(n, params))
+            # The server wrote the description, and it goes into a prompt: it is text from outside.
+            registry.register(tool_id, describe("mcp:" + name, spec["description"]),
+                              lambda params, n=name: self._call(n, params))
             ids.append(tool_id)
         return ids
 
