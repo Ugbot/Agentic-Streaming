@@ -153,12 +153,15 @@ class WorkflowTimers:
             out["processing_time_ms"] = self.clock()
         return out
 
-    def fire_due(self, turn: Turn, prior: Sequence[Event], append: Append, invoke: Invoke) -> List[str]:
-        """Fire the timers due at the head of this turn; returns their ids in firing order."""
+    def fire_due(self, turn: Turn, prior: Sequence[Event], append: Append, invoke: Invoke,
+                 recorded_ms: Optional[int] = None) -> List[str]:
+        """Fire the timers due at the head of this turn; returns their ids in firing order. A re-run
+        passes the time its `turn_received` recorded, so it sees the timers the first run saw and its
+        calls keep their indices, however long the clock ran on in between."""
         if not self.active or not prior:
             return []
         state = TimerState.fold(prior)
-        now = self.clock()
+        now = self.clock() if recorded_ms is None else recorded_ms
         watermark = state.watermark_after(event_time_of(turn))
         due = sorted((t for t in state.pending.values() if _reading(t.clock, now, watermark) >= t.due_ms),
                      key=lambda t: (t.due_ms, t.timer_id))

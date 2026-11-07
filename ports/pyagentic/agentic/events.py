@@ -49,7 +49,8 @@ class Event:
 
     def normalized(self) -> Dict[str, Any]:
         """The shape `spec/v1/result.schema.json` uses for `events[]`."""
-        return {"type": self.type, "sequence": self.sequence, "payload": dict(self.payload)}
+        return {"type": self.type, "sequence": self.sequence, "payload": dict(self.payload),
+                "timestamp": self.timestamp, "metadata": dict(self.metadata)}
 
 
 @dataclass(frozen=True)

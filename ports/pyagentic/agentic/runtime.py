@@ -20,6 +20,7 @@ from .bindings import Bindings
 from .engine import Clock, Engine, Sleep, wall_clock_ms
 from .errors import CapabilityError, RuntimeNotAvailableError, ValidationError
 from .events import EventLog, FileEventLog, InMemoryEventLog, Turn
+from .journal import EffectJournal, InMemoryEffectJournal
 from .tools import ToolRegistry, ToolSpec, ToolWorld
 from .workflow_timers import ManualClock
 
@@ -260,6 +261,7 @@ class LocalRuntime(Runtime):
         self.log: Optional[EventLog] = None
         self.engine: Optional[Engine] = None
         self.world = ToolWorld()
+        self.journal: EffectJournal = InMemoryEffectJournal()
         self.tools = ToolRegistry(self.world)
         self.doc: Optional[Dict[str, Any]] = None
         self.bindings = Bindings()
@@ -296,7 +298,7 @@ class LocalRuntime(Runtime):
             self.tools.bind_peer(name, fn)
         self.doc = doc
         self.bindings = bindings
-        self.engine = Engine(doc, self.tools, self.log, bindings, self.clock, self.sleep, self.rng)
+        self.engine = Engine(doc, self.tools, self.log, bindings, self.clock, self.sleep, self.rng, self.journal)
         self.engine.recover()
 
     def _open_log(self, doc: Mapping[str, Any]) -> EventLog:
@@ -407,6 +409,7 @@ class LocalRuntime(Runtime):
         fresh = LocalRuntime(log=self.log, clock=clock, sleep=self.sleep)
         fresh.rng = self.rng
         fresh.world = self.world
+        fresh.journal = self.journal
         fresh.deploy(_Deployable(self.doc, self.bindings))
         return fresh
 

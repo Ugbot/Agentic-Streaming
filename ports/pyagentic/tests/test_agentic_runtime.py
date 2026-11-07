@@ -353,7 +353,7 @@ def test_retry_attempts_and_delays_follow_the_policy():
     assert result["status"] == "completed"
     assert [(c["attempt"], "error" in c) for c in result["tool_calls"]] == [(1, True), (2, True), (3, False)]
     tool_events = [e["type"] for e in result["events"] if e["type"].startswith("tool")]
-    assert tool_events == ["tool_failed", "tool_failed", "tool_called"]
+    assert tool_events == ["tool_intent", "tool_failed", "tool_failed", "tool_called"]
     assert [e["type"] for e in result["events"]].count("turn_received") == 1
     assert slept == [0.1, 0.15]
 
@@ -508,6 +508,7 @@ def test_output_guardrail_rejects_the_draft():
 
 def test_saga_compensates_completed_steps_in_reverse_order():
     order: List[str] = []
+    undone: List[Any] = []
 
     def step(name: str):
         def fn() -> str:
@@ -515,9 +516,16 @@ def test_saga_compensates_completed_steps_in_reverse_order():
             return name
         return fn
 
+    def undo(name: str):
+        def fn(forward_args: Dict[str, Any], forward_result: Any) -> str:
+            order.append(name)
+            undone.append((forward_args, forward_result))
+            return name
+        return fn
+
     spec = (Agent(rid("a")).path("main")
-            .use_tool("s1", step("s1"), compensation="u1").use_tool("u1", step("u1"))
-            .use_tool("s2", step("s2")).use_tool("u2", step("u2"))
+            .use_tool("s1", step("s1"), compensation="u1").use_tool("u1", undo("u1"))
+            .use_tool("s2", step("s2")).use_tool("u2", undo("u2"))
             .tool("s3", "failing")
             .saga({"name": "one", "tool": "s1"}, {"name": "two", "tool": "s2", "compensate_with": "u2"},
                   {"name": "three", "tool": "s3"})
@@ -527,6 +535,7 @@ def test_saga_compensates_completed_steps_in_reverse_order():
     result = rt.submit(Turn(rid("c"), "t", "go"))
     assert result["status"] == "failed" and result["error"]["class"] == "tool"
     assert order == ["s1", "s2", "u2", "u1"]
+    assert undone == [({}, "s2"), ({}, "s1")]
     assert [c["tool"] for c in result["tool_calls"]] == ["s1", "s2", "s3", "u2", "u1"]
     types = [e["type"] for e in result["events"]]
     phases = ("compensation_started", "compensation_step", "compensation_completed")
