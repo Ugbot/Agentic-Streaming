@@ -20,6 +20,7 @@ import json
 import math
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import deque
 from dataclasses import dataclass, field
@@ -956,6 +957,8 @@ class ReferenceRuntime:
         return len(seen)
 
     def _http(self, tool_id: str, spec: Dict[str, Any], ikey: str) -> Any:
+        if urllib.parse.urlsplit(spec["url"]).hostname != "127.0.0.1":  # the egress policy: only the local stub
+            raise ToolError(f"{tool_id} failed: blocked by egress policy")
         request = urllib.request.Request(spec["url"], data=b"{}", method="POST", headers={
             "Content-Type": "application/json", "Idempotency-Key": ikey})
         try:

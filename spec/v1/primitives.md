@@ -666,3 +666,12 @@ A conversation belongs to the tenant of its first `turn_received`. A turn with a
 with no principal, is refused with class `policy` and nothing appended. A conversation started with no
 tenant has no such check.
 
+### Egress
+
+An HTTP tool, an HTTP peer and a model call check their URL against the operator's egress policy
+before anything is sent: `http` and `https` only, no credentials in the URL, and no private, loopback,
+link-local or metadata address unless the operator allows it. The settings belong to the runtime's
+deployment, not to the document. A refused attempt is a definite failure with the error `<tool>
+failed: blocked by egress policy`, so a `non_idempotent` tool is not left unknown. Redirects are not
+followed. A binding allows its own local stub and nothing else, so a fixture can prove the refusals.
+

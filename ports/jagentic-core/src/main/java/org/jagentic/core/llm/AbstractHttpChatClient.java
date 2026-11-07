@@ -43,6 +43,7 @@ abstract class AbstractHttpChatClient implements ChatClient {
 
   @Override
   public ChatResult chat(java.util.List<Map<String, String>> messages, java.util.List<Map<String, String>> tools) {
+    org.jagentic.core.net.Egress.check(uri.toString());
     try {
       String body = MAPPER.writeValueAsString(buildBody(messages));
       HttpRequest.Builder b = HttpRequest.newBuilder(uri)

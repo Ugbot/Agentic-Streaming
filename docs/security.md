@@ -89,9 +89,12 @@ See [Guarantees](../README.md#guarantees) and the [Flink runtime page](runtimes/
 
 ## Egress policy
 
-`org.jagentic.core.net.OutboundUrlPolicy` is in the core and nothing calls it yet. The Flink web
-toolkit that used it is gone. It is there for the first tool that takes a URL from a model. `kind:
-http` tools and A2A peers do not use it: those URLs are operator supplied and are trusted.
+Every `kind: http` and `kind: agent` tool, every A2A peer over HTTP and every model call checks its
+URL before sending anything: `org.jagentic.core.net.Egress` over `OutboundUrlPolicy` in Java,
+`agentic.egress` in Python. The check runs on every call. A refused call is a definite failure,
+`<tool> failed: blocked by egress policy`, so a `non_idempotent` tool does not wait for a person. A
+refused model call fails the turn. The fixtures `egress-metadata-address`, `egress-not-http` and
+`egress-private-address` prove it on all five runtimes.
 
 The policy:
 
@@ -100,13 +103,26 @@ The policy:
 - resolves the host and checks every returned address, not just the first;
 - rejects loopback, link-local, RFC 1918 and other private ranges, the cloud metadata address
   `169.254.169.254`, unspecified and multicast addresses, IPv6 unique-local addresses, and
-  IPv4 addresses embedded in IPv6 (mapped, NAT64 and 6to4 forms);
-- optionally restricts hosts to an allowlist of exact names or `*.suffix` patterns, set with
-  `OutboundUrlPolicy.fromAllowlist(...)`.
+  IPv4 addresses embedded in IPv6 (mapped, NAT64 and 6to4 forms).
 
-A caller must not let its HTTP client follow redirects on its own: validate each location against
-the same policy, and stop after five hops by default. `OutboundUrlPolicy.allowingPrivateAddresses()`
-turns the private-address check off and is for development only.
+**This denies local services by default.** The settings are the operator's, and a document cannot
+change them:
+
+| Setting | Meaning |
+| --- | --- |
+| `AGENTIC_EGRESS_ALLOW_HOSTS` | exact names or `*.suffix`, comma separated. Empty means any public host |
+| `AGENTIC_EGRESS_ALLOW_PRIVATE=true` | turns the private-address check off, for an Ollama or a peer on this network. Pair it with an allowlist |
+
+On Flink these go in the TaskManager's environment. In Java the system properties
+`agentic.egress.allow_hosts` and `agentic.egress.allow_private` do the same.
+
+What it does not cover:
+
+- A check resolves the host and the client resolves it again to connect, so a name that changes
+  between the two gets through.
+- Redirects are not followed at all: a 3xx is a definite failure.
+- `LangChain4jChatClient`, embedders, vector stores and the journal connect to what the operator
+  configured. They do not go through this check.
 
 ## Compose stacks
 

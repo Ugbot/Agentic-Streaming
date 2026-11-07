@@ -408,6 +408,11 @@ public final class GraphBuilder {
     HttpClient http = HttpClient.newBuilder().connectTimeout(timeout).build();
     return (params, call) -> {
       try {
+        org.jagentic.core.net.Egress.check(url);
+      } catch (org.jagentic.core.net.Egress.Blocked e) {
+        throw new IllegalStateException(id + " failed: blocked by egress policy", e);
+      }
+      try {
         String body = JSON.writeValueAsString(params == null ? Map.of() : params);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
             .timeout(timeout)

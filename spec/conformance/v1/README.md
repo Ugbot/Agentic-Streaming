@@ -79,6 +79,7 @@ Python owners.
 | `unauthorised-approver`, `no-approvers-means-none`, `unauthenticated-signal`, `wrong-tenant-approver` | who cannot answer a suspended turn, and that the attempt is on the log |
 | `unauthorised-settlement` | someone who is not an approver cannot settle an unknown outcome |
 | `wrong-tenant-turn` | a conversation belongs to the tenant that started it |
+| `egress-metadata-address`, `egress-not-http`, `egress-private-address` | a URL the egress policy refuses sends nothing and is a definite failure |
 
 Run them against the reference runtime:
 

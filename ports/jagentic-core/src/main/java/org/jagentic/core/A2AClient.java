@@ -45,6 +45,7 @@ public final class A2AClient {
   /** As above under {@code idempotencyKey}, the same on every retry so the peer can deduplicate. */
   @SuppressWarnings("unchecked")
   public Map<String, Object> send(String conversationId, String text, String userId, String idempotencyKey) {
+    org.jagentic.core.net.Egress.check(base);
     Exception last = null;
     for (int attempt = 0; attempt <= retries; attempt++) {
       try {

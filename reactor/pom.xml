@@ -221,6 +221,14 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.plugin.surefire.version}</version>
+                    <configuration>
+                        <!-- Tests talk to local stubs. Nothing else is allowed, so the conformance
+                             fixtures can still prove the refusals. -->
+                        <systemPropertyVariables>
+                            <agentic.egress.allow_private>true</agentic.egress.allow_private>
+                            <agentic.egress.allow_hosts>127.0.0.1,localhost</agentic.egress.allow_hosts>
+                        </systemPropertyVariables>
+                    </configuration>
                 </plugin>
                 <!-- Integration tests live in *IT.java classes and run through failsafe only, so
                      the default surefire run (whose include pattern does not match *IT.java)

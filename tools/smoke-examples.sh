@@ -12,6 +12,8 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# The peer the multi-agent examples call is on this machine.
+export AGENTIC_EGRESS_ALLOW_PRIVATE=true
 SMOKE_TIMEOUT="${SMOKE_TIMEOUT:-300}"
 PEER_PORT="${SMOKE_PEER_PORT:-8085}"
 PYTHON="${PYTHON:-python3}"

@@ -1,0 +1,29 @@
+id: egress-metadata-address
+description: 'The cloud metadata address is refused before anything is sent.'
+requires: [tool_policy, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: fetcher
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [fetch]
+        tool_triggers: {fetch: fetch}
+    verifier: {kind: none}
+  tools:
+  - {id: fetch, kind: http, effect: idempotent, url: 'http://169.254.169.254/latest/meta-data/'}
+turns:
+- {conversation_id: c1, turn_id: t1, text: fetch it}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: tool
+  tool_calls:
+  - {tool: fetch, index: 0, attempt: 1, failed: true}
+  events_exclude: [unknown_outcome]
+  event_payloads:
+  - type: tool_failed
+    payload: {error: 'fetch failed: blocked by egress policy'}
