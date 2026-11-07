@@ -2,9 +2,11 @@ package org.agentic.flink.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.ServerSocket;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -124,6 +126,65 @@ class EffectJournalStoresIT {
       Config config = admin.describeConfigs(List.of(resource)).all().get().get(resource);
       assertEquals("compact", config.get("cleanup.policy").value());
     }
+  }
+
+  /** A conversation that moved here finds what its last owner wrote, with nothing reopened. */
+  @Test
+  void aKafkaJournalOpenedBeforeAWriteSeesIt() {
+    String topic = "effects-" + UUID.randomUUID();
+    try (EffectJournal here = new KafkaEffectJournal(bootstrap, topic);
+        EffectJournal there = new KafkaEffectJournal(bootstrap, topic)) {
+      assertTrue(here.get(KEY).isEmpty());
+      there.put(
+          EffectJournal.Entry.pending(KEY, "pay:1", ToolEffect.NON_IDEMPOTENT).succeeded("paid"));
+      assertEquals("paid", here.get(KEY).orElseThrow().result());
+      assertEquals(
+          EffectJournal.State.SUCCEEDED,
+          here.putIfAbsent(EffectJournal.Entry.pending(KEY, "pay:1", ToolEffect.NON_IDEMPOTENT))
+              .orElseThrow()
+              .state());
+    }
+  }
+
+  @Test
+  void twoPostgresWritersOnOneKeyAreExcludedByThePrimaryKey() {
+    EffectJournal.Key key =
+        new EffectJournal.Key("race", UUID.randomUUID().toString(), EffectJournal.TOOL, 0);
+    try (EffectJournal one = postgres();
+        EffectJournal two = postgres()) {
+      EffectJournal.Entry pending =
+          EffectJournal.Entry.pending(key, "pay:1", ToolEffect.NON_IDEMPOTENT);
+      assertTrue(one.putIfAbsent(pending).isEmpty());
+      assertTrue(two.putIfAbsent(pending).isPresent());
+    }
+  }
+
+  /** A broker that goes away: the call waits on the intent and never runs without one. */
+  @Test
+  void aJournalWhoseBrokerIsGoneRefusesToOpenInBoundedTime() throws Exception {
+    int closed;
+    try (ServerSocket free = new ServerSocket(0)) {
+      closed = free.getLocalPort();
+    }
+    long start = System.nanoTime();
+    assertThrows(
+        EffectJournal.Unavailable.class,
+        () -> new KafkaEffectJournal("localhost:" + closed, "effects-" + UUID.randomUUID()));
+    assertTrue(Duration.ofNanos(System.nanoTime() - start).toSeconds() < 120, "bounded");
+  }
+
+  @Test
+  void aRescaleOverAKafkaJournalPaysOnce() throws Exception {
+    JournalRescaleTest.restoreAtAnotherParallelism(
+        "{\"kind\": \"kafka\", \"url\": \"%s\", \"topic\": \"effects-%s\"}"
+            .formatted(bootstrap, UUID.randomUUID()));
+  }
+
+  @Test
+  void aRescaleOverAPostgresJournalPaysOnce() throws Exception {
+    JournalRescaleTest.restoreAtAnotherParallelism(
+        "{\"kind\": \"postgres\", \"jdbc_url\": \"%s\", \"user\": \"postgres\", \"password\": \"journal\"}"
+            .formatted(jdbcUrl()));
   }
 
   private static void paysOnce(String journal) throws Exception {

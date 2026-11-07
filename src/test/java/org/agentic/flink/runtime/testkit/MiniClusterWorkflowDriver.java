@@ -78,7 +78,7 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
   private final Duration timeout;
   private final boolean strictTypes;
   private final boolean checkpointing;
-  private final int parallelism;
+  private int parallelism;
   private JobClient job;
   private int consumed = 0;
 
@@ -156,6 +156,24 @@ public final class MiniClusterWorkflowDriver implements AutoCloseable {
   public void restart() throws Exception {
     String savepoint = stopWithSavepoint();
     job = null;
+    POISONED.get(driverId).set(false);
+    startFrom(savepoint);
+  }
+
+  /** A savepoint of the running job, which keeps running. */
+  public String savepoint() throws Exception {
+    return job.triggerSavepoint(savepointDir.toUri().toString(), SavepointFormatType.CANONICAL)
+        .get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Cancels the job, so whatever it did since {@code savepoint} is lost, and starts it from there
+   * at {@code newParallelism}, which moves key groups between subtasks.
+   */
+  public void rollBackTo(String savepoint, int newParallelism) throws Exception {
+    job.cancel().get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+    job = null;
+    parallelism = newParallelism;
     POISONED.get(driverId).set(false);
     startFrom(savepoint);
   }
