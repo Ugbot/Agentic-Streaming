@@ -342,7 +342,10 @@ class LocalRuntime(Runtime):
         if effects is None:
             return FileEffectJournal(beside) if beside else InMemoryEffectJournal()
         kind = effects.get("kind", "file" if beside else "memory")
-        degrade = effects.get("on_unavailable", "fail") == "degrade"
+        # Degrading is for tools that can stand to run again. A call that must happen once does not
+        # run with nothing durable behind it, whatever the block says.
+        degrade = effects.get("on_unavailable", "fail") == "degrade" and not any(
+            t.get("effect") == "non_idempotent" for t in doc.get("tools") or [])
         if kind == "memory":
             return InMemoryEffectJournal()
         if kind == "file":

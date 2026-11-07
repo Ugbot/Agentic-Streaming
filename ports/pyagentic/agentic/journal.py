@@ -57,7 +57,7 @@ class Attempt:
 
 @dataclass(frozen=True)
 class Entry:
-    """One call. `intent` is the tool and a hash of its arguments, and is empty for a model call.
+    """One call. `intent` is what the call was, as `intent_of` and `model_intent_of` write it.
     `released` means a person said an unknown call did not land and may be made once more. `error`
     is the final error of a failed call, and why the outcome is not known of an unknown one."""
 
@@ -99,9 +99,9 @@ class JournalDivergence(AgenticError):
     """A re-run asked for a different call under a recorded key: the turn did not replay, for
     instance because the workflow changed under it. Nothing is called. Error class `fatal`."""
 
-    def __init__(self, key: JournalKey, recorded: str, asked: str) -> None:
-        super().__init__(f"call {key.index} of turn {key.turn_id} was recorded as {recorded} "
-                         f"but this run asked for {asked}")
+    def __init__(self, key: JournalKey, recorded: str, asked: Optional[str]) -> None:
+        super().__init__(f"call {key.index} of turn {key.turn_id} was recorded as {recorded} but this "
+                         + (f"run asked for {asked}" if asked else "run ended before it"))
 
 
 class EffectCall(ABC):
@@ -168,7 +168,8 @@ class EffectJournal(ABC):
             return entry
         first = len(entry.attempts) + 1
         budget = call.budget()
-        if effect == NON_IDEMPOTENT:
+        once = NON_IDEMPOTENT in (effect, entry.effect)  # what a run recorded outranks a later declaration
+        if once:
             budget = first
             if existing is not None and not entry.released:
                 entry = entry.unknown("no recorded result")
@@ -181,7 +182,7 @@ class EffectJournal(ABC):
             try:
                 result = call.attempt(attempt)
             except ToolError as exc:
-                if isinstance(exc, OutcomeUnknown) and effect == NON_IDEMPOTENT:
+                if isinstance(exc, OutcomeUnknown) and once:
                     entry = entry.unknown(str(exc))
                     self.put(entry)
                     return entry
@@ -206,13 +207,27 @@ class EffectJournal(ABC):
         if entry is None:
             entry = Entry.pending(key, intent, effect).succeeded(call.attempt(1))
             self.put(entry)
+        elif entry.intent != intent:
+            raise JournalDivergence(key, entry.intent, intent)
         return entry
 
 
-def intent_of(tool_id: str, args: Mapping[str, Any]) -> str:
-    """The tool and a hash of its arguments: what a re-run must ask for again under the same key."""
-    canonical = json.dumps(args, sort_keys=True, default=str)
-    return f"{tool_id}:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
+def _digest(scope: str, body: str) -> str:
+    return hashlib.sha256(f"{scope}\0{body}".encode("utf-8")).hexdigest()
+
+
+def intent_of(tool_id: str, args: Mapping[str, Any], scope: str = "") -> str:
+    """The tool, then a hash of the workflow and its arguments: what a re-run must ask for again
+    under the same key. `scope` is the agent id, so a store two workflows share cannot answer one
+    with the other's call."""
+    return f"{tool_id}:{_digest(scope, json.dumps(args, sort_keys=True, default=str))}"
+
+
+def model_intent_of(scope: str, request: str) -> str:
+    """As `intent_of` for a model call. `request` is what identifies the call across runs, the
+    brain's instructions and the turn's text. The transcript is not part of it, since a log that
+    kept part of the turn shows more of it than the first run saw."""
+    return f"llm:{_digest(scope, request)}"
 
 
 class InMemoryEffectJournal(EffectJournal):

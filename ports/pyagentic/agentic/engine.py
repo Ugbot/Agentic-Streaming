@@ -40,7 +40,9 @@ from .journal import (
     Entry,
     InMemoryEffectJournal,
     JournalKey,
+    JournalDivergence,
     intent_of,
+    model_intent_of,
 )
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
@@ -281,6 +283,7 @@ class Engine:
         self.tools = tools
         self.log = log
         self.journal = journal if journal is not None else InMemoryEffectJournal()
+        self._scope = str((doc.get("agent") or {}).get("id", ""))
         self.bindings = bindings or Bindings()
         self.clock = clock
         self.sleep = sleep
@@ -645,7 +648,7 @@ class Engine:
             return self._draft_react(ctx, path, self.chat_client)
         allowed = set(self.paths[path].get("tools") or [])
         for i, step in enumerate(self.llm.get("script") or []):
-            answer = self._ask_model(ctx, partial(self._scripted_answer, i, step))
+            answer = self._ask_model(ctx, self.paths[path].get("prompt", ""), partial(self._scripted_answer, i, step))
             if "tool" in answer:
                 if allowed and answer["tool"] not in allowed:
                     raise ValidationError(f"scripted tool {answer['tool']!r} is not in the path's tools",
@@ -671,7 +674,7 @@ class Engine:
         messages.append({"role": "user", "content": ctx.text})
         limit = max(1, int(spec.get("max_iterations", DEFAULT_MAX_ITERATIONS)))
         for _ in range(limit):
-            answer = self._ask_model(ctx, partial(self._chat, client, messages, tools))
+            answer = self._ask_model(ctx, system, partial(self._chat, client, messages, tools))
             if "tool" not in answer:
                 return f"[{path}] {answer.get('text', '')}"
             tool_id, args = str(answer["tool"]), answer.get("args") or {}
@@ -699,12 +702,13 @@ class Engine:
                     self.sleep(delay / 1000.0)
         raise AssertionError("unreachable")
 
-    def _ask_model(self, ctx: _TurnContext, ask: Callable[[], Mapping[str, Any]]) -> Mapping[str, Any]:
+    def _ask_model(self, ctx: _TurnContext, request: str, ask: Callable[[], Mapping[str, Any]]) -> Mapping[str, Any]:
         """One model call, journaled by its own index in the turn: a recorded reply is reused, so a
-        re-run takes the same path."""
+        re-run takes the same path. A reply recorded for a different `request` is a divergence."""
         index = ctx.take_llm_index()
         key = JournalKey(ctx.turn.conversation_id, ctx.turn.turn_id, LLM, index)
-        entry = self.journal.record_or_get(key, "", READ, _ModelCall(ask))
+        intent = model_intent_of(self._scope, f"{request}\0{ctx.text}")
+        entry = self.journal.record_or_get(key, intent, READ, _ModelCall(ask))
         answer: Mapping[str, Any] = entry.result
         model = {"model": self.llm["model"]} if self.llm.get("model") else {}
         self._append(ctx, "llm_called", {"index": index, **model, **answer})
@@ -868,7 +872,7 @@ class Engine:
         index = ctx.take_index()
         key = JournalKey(turn.conversation_id, turn.turn_id, TOOL, index)
         ikey = idempotency_key(turn.conversation_id, turn.turn_id, index)
-        intent = intent_of(tool_id, args)
+        intent = intent_of(tool_id, args, self._scope)
         if ctx.prior is not None and ctx.prior.peek("tool_intent", index) is not None:
             # The log says this call was begun, so a journal that lost it must not read as a first call.
             self.journal.put_if_absent(Entry.pending(key, intent, spec.effect))
@@ -910,6 +914,10 @@ class Engine:
         return event
 
     def _complete(self, ctx: _TurnContext, path: str, reply: str) -> Dict[str, Any]:
+        turn = ctx.turn
+        ahead = self.journal.get(JournalKey(turn.conversation_id, turn.turn_id, TOOL, ctx.next_index))
+        if ahead is not None:  # a recorded effect must not vanish behind a success
+            raise JournalDivergence(ahead.key, ahead.intent, None)
         self._append(ctx, "memory_written", {"messages": [{"role": "user", "text": ctx.text},
                                                           {"role": "assistant", "text": reply}]})
         return self._finish(ctx, "completed", path, reply, None, event=("turn_completed", {"reply": reply}))

@@ -83,8 +83,16 @@ def idempotency_key(conversation_id: str, turn_id: str, index: int) -> str:
     return hashlib.sha256(material).hexdigest()
 
 
-def intent_of(tool_id: str, args: Dict[str, Any]) -> str:
-    return tool_id + ":" + hashlib.sha256(json.dumps(args, sort_keys=True).encode()).hexdigest()
+def _digest(scope: str, body: str) -> str:
+    return hashlib.sha256(f"{scope}\0{body}".encode()).hexdigest()
+
+
+def intent_of(tool_id: str, args: Dict[str, Any], scope: str = "") -> str:
+    return f"{tool_id}:{_digest(scope, json.dumps(args, sort_keys=True))}"
+
+
+def model_intent_of(scope: str, request: str) -> str:
+    return f"llm:{_digest(scope, request)}"
 
 
 def embed(text: str, dim: int) -> List[float]:
@@ -175,6 +183,7 @@ class ReferenceRuntime:
             self.tools[name] = {"id": name, "kind": "agent", "peer": peer}
         self.guardrails = workflow.get("guardrails", [])
         self.llm: Dict[str, Any] = workflow.get("llm") or {}
+        self._scope = str((workflow.get("agent") or {}).get("id", ""))
         self.context: Dict[str, Any] = workflow.get("context") or {}
         if self.context.get("compaction", "none") not in ("none", "window"):
             raise SpecError(f"the reference runtime implements context compaction none|window only, "
@@ -504,7 +513,7 @@ class ReferenceRuntime:
         spec = self.paths[path]
         brain = spec.get("brain", "rule")
         if brain == "llm":
-            return self._draft_scripted(conv, ctx)
+            return self._draft_scripted(conv, ctx, spec.get("prompt", ""))
         if brain != "rule":
             raise SpecError(f"the reference runtime does not implement the {brain} brain")
         low = ctx.turn.text.lower()
@@ -523,7 +532,7 @@ class ReferenceRuntime:
                 return f"[{path}] {scored[0][1]['text']}"
         return f'[{path}] I can help with {path} questions. You said: "{ctx.turn.text}"'
 
-    def _draft_scripted(self, conv: Conversation, ctx: "_TurnContext") -> str:
+    def _draft_scripted(self, conv: Conversation, ctx: "_TurnContext", prompt: str) -> str:
         """The `stub` LLM provider: replay `llm.script` from the top on every turn."""
         if self.llm.get("provider", "stub") != "stub":
             raise SpecError(f"the reference runtime implements the stub LLM provider only, got {self.llm['provider']}")
@@ -531,18 +540,23 @@ class ReferenceRuntime:
         if not script:
             raise SpecError("an llm brain needs llm.script under the stub provider")
         for index, step in enumerate(script):
-            answer = self._ask_model(conv, ctx, index, step)
+            answer = self._ask_model(conv, ctx, index, step, prompt)
             if "tool" in answer:
                 self._invoke(conv, ctx, answer["tool"], dict(answer.get("args", {})))
             else:
                 return answer["text"]
         raise SpecError("llm.script ended without a final text")
 
-    def _ask_model(self, conv: Conversation, ctx: "_TurnContext", step_index: int, step: Dict[str, Any]) -> Dict[str, Any]:
-        """One model call, journaled by its index in the turn: a recorded reply is reused."""
+    def _ask_model(self, conv: Conversation, ctx: "_TurnContext", step_index: int, step: Dict[str, Any],
+                   request: str) -> Dict[str, Any]:
+        """One model call, journaled by its index in the turn: a recorded reply is reused. `request`
+        is what the brain was told; a reply recorded for another request is a divergence."""
         index = ctx.next_llm_index()
         key = (ctx.turn.conversation_id, ctx.turn.turn_id, "llm", index)
+        intent = model_intent_of(self._scope, f"{request}\0{ctx.turn.text}")
         entry = self.journal.get(key)
+        if entry is not None and entry["intent"] != intent:
+            raise JournalDivergence(f"model call {index} of turn {ctx.turn.turn_id} was {entry['intent']}, now {intent}")
         if entry is None:
             self._call_model(step_index, step)
             answer = {k: step[k] for k in ("tool", "args", "text") if k in step}
@@ -550,7 +564,7 @@ class ReferenceRuntime:
                 seen = self._world.get(("llm", step_index), 0) + 1
                 self._world[("llm", step_index)] = seen
                 answer["text"] = f"{answer['text']} #{seen}"
-            entry = self.journal[key] = {"state": "succeeded", "result": answer}
+            entry = self.journal[key] = {"intent": intent, "state": "succeeded", "result": answer}
         self._append(conv, ctx, "llm_called", {"index": index, **entry["result"]})
         return entry["result"]
 
@@ -747,7 +761,7 @@ class ReferenceRuntime:
         effect = spec.get("effect", "idempotent")
         ikey = idempotency_key(turn.conversation_id, turn.turn_id, index)
         kind = event or ("delegated" if spec.get("kind") == "agent" else "tool_called")
-        intent = intent_of(tool_id, args)
+        intent = intent_of(tool_id, args, self._scope)
         entry = self.journal.get(key)
         fresh = entry is None
         if fresh:
@@ -760,7 +774,8 @@ class ReferenceRuntime:
         for attempt in entry["attempts"]:
             self._record_failure(conv, ctx, tool_id, index, args, attempt["attempt"], attempt["error"])
 
-        if entry["state"] == "pending" and effect == "non_idempotent" and not fresh and not entry.pop("released", False):
+        once = "non_idempotent" in (effect, entry["effect"])  # what a run recorded outranks a later declaration
+        if entry["state"] == "pending" and once and not fresh and not entry.pop("released", False):
             entry["state"] = "unknown"
         if entry["state"] == "unknown":
             self._append(conv, ctx, "unknown_outcome", {"tool": tool_id, "index": index, "args": args,
@@ -773,14 +788,14 @@ class ReferenceRuntime:
 
         retry = self.policies.get("retry", {})
         max_attempts = retry.get("max_attempts", 1) if retry.get("kind", "none") != "none" else 1
-        if effect == "non_idempotent":
+        if once:
             max_attempts = 1
         for attempt in range(len(entry["attempts"]) + 1, max_attempts + 1):
             self._hit("call", tool_id, "before")
             try:
                 result = self._execute(tool_id, spec, turn.conversation_id, ikey)
             except ToolError as exc:
-                if exc.unknown and effect == "non_idempotent":
+                if exc.unknown and once:
                     entry["state"] = "unknown"
                     self._append(conv, ctx, "unknown_outcome", {"tool": tool_id, "index": index, "args": args,
                                                                 "idempotency_key": ikey, "reason": str(exc)})
@@ -898,6 +913,9 @@ class ReferenceRuntime:
         self._hit("event", kind, "after")
 
     def _complete(self, conv: Conversation, ctx: "_TurnContext", path: str, reply: str) -> Dict[str, Any]:
+        ahead = (ctx.turn.conversation_id, ctx.turn.turn_id, "tool", ctx._tool_index)
+        if ahead in self.journal:
+            raise JournalDivergence(f"call {ctx._tool_index} of turn {ctx.turn.turn_id} is recorded but this run ended before it")
         self._append(conv, ctx, "memory_written",
                      {"messages": [{"role": "user", "text": ctx.turn.text},
                                    {"role": "assistant", "text": reply}]})

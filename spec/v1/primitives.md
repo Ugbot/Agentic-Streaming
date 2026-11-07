@@ -469,13 +469,19 @@ log back. One entry per call:
 
 ```
 key      : (conversation_id, turn_id, kind, index)    # kind is tool or llm
-intent   : tool id and a hash of the arguments         # empty for llm
+intent   : see below
 effect   : read | idempotent | non_idempotent
 state    : pending | succeeded | failed | unknown
 attempts : [{attempt, error}]                          # the failed attempts, in order
 result   : the recorded result, or the reply for llm
 error    : the final error, when failed
 ```
+
+`intent` says what the call was: the tool id and a SHA-256 of the workflow's `agent.id` and the
+arguments as canonical JSON, with map keys sorted at any depth. For a model call it is a SHA-256 of
+`agent.id`, the brain's instructions and the turn's text. The transcript is left out, because a log
+that kept part of a turn shows more of it than the first run saw. A hash no longer than this does not
+do: a 32-bit one lets two different calls pass for one.
 
 `record_or_get(key, intent, call)` is the only way a tool or model is reached:
 
@@ -488,19 +494,26 @@ error    : the final error, when failed
 4. Call, then write the outcome durably before anything else happens.
 
 An entry is written whole, so a store only needs a keyed upsert: a table with a primary key or a
-compacted topic. Writes are synchronous. An entry whose intent differs from the call now being made
-means the turn did not replay deterministically, for instance because the workflow changed under
-it. Nothing is called and the turn ends `failed` with class `fatal`.
+compacted topic. Writes are synchronous and bounded in time: a store that stops answering is a store
+that cannot be written. An entry whose intent differs from the call now being made means the turn
+did not replay deterministically, for instance because the workflow changed under it. Nothing is
+called and the turn ends `failed` with class `fatal`. A run that would complete with a recorded call
+still ahead of its last index ends the same way, so a recorded effect does not vanish behind a
+success. If either the entry or the current declaration says `non_idempotent`, the call is treated
+as `non_idempotent`: what a run recorded outranks what a later version of the workflow declares. A
+call the log shows as begun and the journal does not hold is `pending`, never a first call.
 
 Model calls use the same entry shape with `kind: llm`, counted by their own index within the turn.
 They are recorded when they answer; no `pending` is written, because asking again costs money but
-changes nothing. Retrieval is not journaled, since section 2 makes it deterministic for a fixed
+changes nothing. A recorded reply whose intent differs is the same divergence as for a tool. Retrieval is not journaled, since section 2 makes it deterministic for a fixed
 index.
 
 A journal is declared as `stores.effects`. Implementations: `memory` (a process-wide store for
 tests and local use), `file` (Python), `postgres` and `kafka` (JVM; a compacted topic). A runtime
 whose log rolls back must not run a `non_idempotent` tool without a journal that outlives the
-rollback: it rejects the workflow at build time. Retention must outlast the longest rollback or
+rollback: it rejects the workflow at build time. `on_unavailable: degrade` on `stores.effects` falls
+back to memory only for a workflow with no `non_idempotent` tool; with one, the journal failing to
+open stops the workflow. Retention must outlast the longest rollback or
 redelivery a deployment allows, and an entry dropped sooner re-opens that turn to repeat calls.
 
 ### New events
