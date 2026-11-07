@@ -12,10 +12,12 @@ import java.util.Map;
 import java.util.Set;
 
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.jwk.source.JWKSourceBuilder;
 import com.nimbusds.jose.proc.BadJOSEException;
+import com.nimbusds.jose.proc.DefaultJOSEObjectTypeVerifier;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -51,6 +53,9 @@ public final class OidcAuthenticator implements Authenticator {
   /** As above with a key source of the caller's. */
   public OidcAuthenticator(Settings settings, JWKSource<SecurityContext> keys) {
     this.settings = settings;
+    // An access token is a JWT, or an RFC 9068 at+jwt; an ID token or a DPoP proof is neither.
+    processor.setJWSTypeVerifier(new DefaultJOSEObjectTypeVerifier<>(JOSEObjectType.JWT,
+        new JOSEObjectType("at+jwt"), new JOSEObjectType("application/at+jwt"), null));
     processor.setJWSKeySelector(new JWSVerificationKeySelector<>(
         Set.of(JWSAlgorithm.RS256, JWSAlgorithm.PS256, JWSAlgorithm.ES256), keys));
     processor.setJWTClaimsSetVerifier(new DefaultJWTClaimsVerifier<>(

@@ -52,7 +52,7 @@ A token is checked against the issuer's JWKS, then for issuer, audience, expiry 
 RS256, PS256 and ES256 are accepted, so `alg: none` and an HMAC made with the public key both fail.
 `OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403,
 and so does one whose tenant claim is not a string. Expiry and not-before allow 60 seconds of clock
-skew. A `typ` other than `JWT` is refused, which includes RFC 9068's `at+jwt`.
+skew. A `typ` of `JWT`, RFC 9068's `at+jwt` (or `application/at+jwt`), or none is accepted, and any other, such as a DPoP proof's, is refused.
 
 **A request body cannot say who is calling.** `user_id`, `principal` and `tenant` in a body are not
 read. The principal comes from the token.

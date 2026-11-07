@@ -1,5 +1,6 @@
 package org.jagentic.gateway;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -8,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -52,5 +54,29 @@ class OidcAttackTest {
     assertNull(oidc.authenticate(signed(key, claims().claim("tenant", List.of("acme", "beta")).build())).tenant());
     assertNull(oidc.authenticate(signed(key, claims().claim("tenant", Map.of("id", "acme")).build())).tenant());
     assertThrows(Unauthenticated.class, () -> oidc.authenticate(signed(key, claims().subject(" ").build())));
+  }
+
+  /**
+   * RFC 9068 access tokens say {@code typ: at+jwt}, which is what Keycloak and others can issue, and
+   * they were refused because only {@code JWT} was accepted. They are accepted now; a token of some
+   * other type, such as an ID token's or a DPoP proof's, still is not.
+   */
+  @Test
+  void anRfc9068AccessTokenIsAccepted() throws Exception {
+    RSAKey key = new RSAKeyGenerator(2048).keyID("k1").generate();
+    OidcAuthenticator oidc = new OidcAuthenticator(
+        new OidcAuthenticator.Settings(ISSUER, "gw", "", "tenant", "realm_access.roles"),
+        new ImmutableJWKSet<>(new JWKSet(key.toPublicJWK())));
+    for (String typ : List.of("at+jwt", "application/at+jwt", "JWT")) {
+      assertEquals("alice", oidc.authenticate(typed(key, typ)).subject(), typ);
+    }
+    assertThrows(Unauthenticated.class, () -> oidc.authenticate(typed(key, "dpop+jwt")));
+  }
+
+  private static String typed(RSAKey key, String typ) throws Exception {
+    SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(key.getKeyID())
+        .type(new JOSEObjectType(typ)).build(), claims().build());
+    jwt.sign(new RSASSASigner(key));
+    return jwt.serialize();
   }
 }
