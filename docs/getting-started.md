@@ -115,10 +115,10 @@ tools: [get_balance]
 ### The specification behind the file
 
 The workflow documents are instances of the `agentic/v1` specification. Its reference runtime
-is pure Python and its 24 conformance fixtures run in about a second, also without a model:
+is pure Python and its 31 conformance fixtures run in about a second, also without a model:
 
 ```bash
-python spec/tools/validate_spec.py        # checked 33 document(s), 0 failure(s)
+python spec/tools/validate_spec.py        # checked 40 document(s), 0 failure(s)
 python spec/tools/run_conformance.py      # 31 passed, 0 failed, 0 skipped
 ```
 

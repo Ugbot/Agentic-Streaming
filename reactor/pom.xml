@@ -82,7 +82,6 @@
              nearest declaration would otherwise win, so the BOM below pins the whole family. -->
         <jackson.version>2.22.4</jackson.version>
         <postgresql.version>42.7.14</postgresql.version>
-        <hikaricp.version>5.0.1</hikaricp.version>
         <!-- SLF4J 2.x API line; the matching log4j binding is log4j-slf4j2-impl (log4j 2.19+). -->
         <slf4j.version>2.0.17</slf4j.version>
         <log4j.version>2.26.1</log4j.version>
@@ -206,11 +205,6 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.zaxxer</groupId>
-                <artifactId>HikariCP</artifactId>
-                <version>${hikaricp.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
