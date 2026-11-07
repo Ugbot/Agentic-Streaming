@@ -142,3 +142,48 @@ def test_the_common_names_and_shapes_of_a_credential_are_redacted() -> None:
     for leaked in ("opaque-", "ghp_", "xoxb-", "sk_live_", "AIzaSy"):
         assert leaked not in out, out
     assert "'max_tokens': 100" in out and "'tokens_per_day': 7" in out
+
+
+def test_a_rerun_cannot_call_a_tool_the_document_denies_at_an_index_another_tool_began() -> None:
+    """With a policy outside the process, a call already begun was not asked about again, and the
+    document's own policy was skipped with it. A re-run whose journal is gone asks the model again,
+    which can want another tool at that index, and that tool ran under no policy at all."""
+    from agentic.engine import _Prior, _TurnContext
+    from agentic.errors import ToolRefused
+    from agentic.events import InMemoryEventLog, Turn
+    from agentic.journal import InMemoryEffectJournal
+    from agentic.policy import ALLOW, Decision, DocumentToolPolicy
+    from agentic.opa import Both
+    from agentic.runtime import LocalRuntime, _Deployable
+    from agentic.bindings import Bindings
+
+    class Outside:
+        outside_this_process = True
+
+        def decide(self, request: Any) -> Decision:
+            return Decision(ALLOW)
+
+    called: List[str] = []
+    doc = {"spec_version": "agentic/v1",
+           "agent": {"id": "a", "router": {"kind": "static", "default": "main"}, "verifier": {"kind": "none"},
+                     "paths": {"main": {"brain": "rule", "tools": ["look"]}}},
+           "tools": [{"id": "look", "kind": "function", "effect": "idempotent"},
+                     {"id": "wire", "kind": "function", "effect": "idempotent"}]}
+    bindings = Bindings()
+    bindings.tools["look"] = lambda args: called.append("look") or "ok"
+    bindings.tools["wire"] = lambda args: called.append("wire") or "sent"
+    log = InMemoryEventLog()
+    runtime = LocalRuntime(log=log)
+    runtime.deploy(_Deployable(doc, bindings))
+    engine = runtime.engine
+    engine.policy = Both(DocumentToolPolicy(doc), Outside())
+
+    turn = Turn("c", "t", "go")
+    engine._invoke(_TurnContext(turn, "go", 0, path="main"), "look", {})
+    assert called == ["look"]
+
+    engine.journal = InMemoryEffectJournal()  # the process is gone, and the journal with it
+    rerun = _TurnContext(turn, "go", 0, path="main", prior=_Prior(log.read("c")))
+    with pytest.raises(ToolRefused):
+        engine._invoke(rerun, "wire", {})
+    assert called == ["look"], "wire is not in the path's tools and must never run"

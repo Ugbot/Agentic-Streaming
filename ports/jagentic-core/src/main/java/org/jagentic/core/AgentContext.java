@@ -316,19 +316,38 @@ public final class AgentContext {
     return invoke(ToolOrigin.COMPENSATION, toolId, forward, EventType.COMPENSATION_STEP, false);
   }
 
-  /** The call about to get the next index was allowed when it began, on the log or in the journal. */
-  private boolean alreadyBegun() {
+  /**
+   * This very call, the same tool with the same arguments at the next index, was allowed when it
+   * began, on the log or in the journal. Another call at that index was not: a re-run whose journal
+   * is gone asks the model again, and the model can want something else.
+   */
+  private boolean alreadyBegun(String toolId, Map<String, Object> args) {
+    String intent = EffectJournal.intentOf(journalScope, toolId, redactor.apply(args));
     java.util.ArrayDeque<LogEvent> begun = kept.get(EventType.TOOL_INTENT.wire() + "/" + nextToolIndex + "/null");
-    return begun != null && !begun.isEmpty() || journal.get(nextToolKey()).isPresent();
+    if (begun != null) {
+      for (LogEvent e : begun) {
+        if (e.payload().get("args") instanceof Map<?, ?> was && intent.equals(EffectJournal.intentOf(journalScope,
+            String.valueOf(e.payload().get("tool")), castArgs(was)))) {
+          return true;
+        }
+      }
+    }
+    return journal.get(nextToolKey()).map(entry -> intent.equals(entry.intent())).orElse(false);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> castArgs(Map<?, ?> args) {
+    return (Map<String, Object>) args;
   }
 
   /** Refuses what the policy refuses: on the log first, then the turn ends. */
   private void authorise(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
     boolean outside = policy.outsideThisProcess();
-    if (!outside || !alreadyBegun()) {
+    boolean begun = alreadyBegun(toolId, args);
+    if (!outside || !begun) {
       decide(origin, toolId, tool, args);
     }
-    enforce(limits.admitTool(who(), now(), toolId, limits.hasQuota(toolId) && alreadyBegun()));
+    enforce(limits.admitTool(who(), now(), toolId, limits.hasQuota(toolId) && begun));
   }
 
   private void decide(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {

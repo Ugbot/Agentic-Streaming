@@ -925,19 +925,26 @@ class Engine:
                                         "scores": [round(p.score, 6) for p in passages]})
         return passages
 
-    def _already_begun(self, ctx: _TurnContext) -> bool:
+    def _already_begun(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any]) -> bool:
+        """This very call, the same tool and arguments at the next index, was allowed when it began.
+        Another call at that index was not: a re-run whose journal is gone asks the model again."""
         turn = ctx.turn
-        if ctx.prior is not None and ctx.prior.peek("tool_intent", ctx.next_index) is not None:
+        intent = intent_of(tool_id, self.redactor.apply(dict(args)), self._scope)
+        begun = ctx.prior.peek("tool_intent", ctx.next_index) if ctx.prior is not None else None
+        if begun is not None and intent == intent_of(str(begun.payload.get("tool")),
+                                                     begun.payload.get("args") or {}, self._scope):
             return True
-        return self.journal.get(JournalKey(turn.conversation_id, turn.turn_id, TOOL, ctx.next_index)) is not None
+        entry = self.journal.get(JournalKey(turn.conversation_id, turn.turn_id, TOOL, ctx.next_index))
+        return entry is not None and entry.intent == intent
 
     def _authorise(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any], origin: str) -> None:
         """The one check every tool call passes (`primitives.md` section 11), whatever asked for it.
         A refusal is on the log before the turn ends, and the turn does end: nothing offers it back."""
         # A call already begun was allowed then: a re-run takes the path the first run took.
-        if not (getattr(self.policy, "outside_this_process", False) and self._already_begun(ctx)):
+        begun = self._already_begun(ctx, tool_id, args)
+        if not (getattr(self.policy, "outside_this_process", False) and begun):
             self._decide(ctx, tool_id, args, origin)
-        begun = self.limits.has_quota(tool_id) and self._already_begun(ctx)
+        begun = self.limits.has_quota(tool_id) and begun
         self._enforce(ctx, self.limits.admit_tool(who(ctx.turn), self.clock(), tool_id, begun))
 
     def _enforce(self, ctx: _TurnContext, violation: Optional[Violation]) -> None:
