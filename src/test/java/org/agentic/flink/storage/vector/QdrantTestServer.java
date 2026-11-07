@@ -22,7 +22,7 @@ import org.testcontainers.utility.DockerImageName;
 public final class QdrantTestServer implements AutoCloseable {
 
   public static final String IMAGE =
-      System.getProperty("agentic.test.qdrant.image", "qdrant/qdrant:v1.13.2");
+      System.getProperty("agentic.test.qdrant.image", "qdrant/qdrant:v1.20.0");
 
   private static final int REST_PORT = 6333;
   private static final int GRPC_PORT = 6334;

@@ -87,8 +87,8 @@ All versions are taken from the build files listed in the second column.
 | Maven | `reactor/pom.xml` enforcer rule; `.mvn/wrapper/maven-wrapper.properties` | 3.9 or newer required; wrapper 3.9.16 |
 | Apache Flink | `reactor/pom.xml` `flink.version` | 2.2.1 |
 | Flink Kafka connector | root `pom.xml` | 5.0.0-2.2 |
-| LangChain4J | `reactor/pom.xml` `langchain4j.version` (via `langchain4j-bom`) | 1.16.3 |
-| Apache Pekko | `agentic-pekko/pom.xml` `pekko.version`, Scala binary `2.13` | 1.1.3 |
+| LangChain4J | `reactor/pom.xml` `langchain4j.version` (via `langchain4j-bom`) | 1.23.0 |
+| Apache Pekko | `agentic-pekko/pom.xml` `pekko.version`, Scala binary `2.13` | 1.7.1 |
 | JUnit | `reactor/pom.xml` `junit.version` | 5.10.2 |
 | Testcontainers | `reactor/pom.xml` `testcontainers.version` | 1.21.4 |
 | Python, `pyagentic` (`ports/pyagentic`) | `requires-python` | `>=3.9`; classifiers 3.9 to 3.13 |

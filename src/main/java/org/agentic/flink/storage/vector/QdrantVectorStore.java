@@ -6,10 +6,12 @@ import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
 import io.qdrant.client.QueryFactory;
 import io.qdrant.client.ValueFactory;
+import io.qdrant.client.VectorOutputHelper;
 import io.qdrant.client.VectorsFactory;
 import io.qdrant.client.WithPayloadSelectorFactory;
 import io.qdrant.client.WithVectorsSelectorFactory;
 import io.qdrant.client.grpc.Collections;
+import io.qdrant.client.grpc.Common;
 import io.qdrant.client.grpc.JsonWithInt;
 import io.qdrant.client.grpc.Points;
 import java.util.ArrayList;
@@ -178,7 +180,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     return runQuery(queryEmbedding, topK, buildFilter(metadataFilter));
   }
 
-  private List<VectorSearchResult> runQuery(float[] queryEmbedding, int topK, Points.Filter filter)
+  private List<VectorSearchResult> runQuery(float[] queryEmbedding, int topK, Common.Filter filter)
       throws Exception {
     if (queryEmbedding == null)
       throw new IllegalArgumentException("queryEmbedding must not be null");
@@ -221,7 +223,9 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     Points.RetrievedPoint point = retrieve(id, true);
     if (point == null) return null;
     if (!point.getVectors().hasVector()) return null;
-    List<Float> data = point.getVectors().getVector().getDataList();
+    // Current servers fill the `dense` variant and leave the deprecated `data` field empty.
+    List<Float> data =
+        VectorOutputHelper.getDenseVector(point.getVectors().getVector()).getDataList();
     float[] out = new float[data.size()];
     for (int i = 0; i < out.length; i++) {
       out[i] = data.get(i);
@@ -256,8 +260,8 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
 
   @Override
   public void deleteByFlowId(String flowId) throws Exception {
-    Points.Filter filter =
-        Points.Filter.newBuilder().addMust(ConditionFactory.matchKeyword("flowId", flowId)).build();
+    Common.Filter filter =
+        Common.Filter.newBuilder().addMust(ConditionFactory.matchKeyword("flowId", flowId)).build();
     client().deleteAsync(collection, filter).get();
   }
 
@@ -354,16 +358,16 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     return b.build();
   }
 
-  private Points.Filter buildFilter(Map<String, Object> metadataFilter) {
+  private Common.Filter buildFilter(Map<String, Object> metadataFilter) {
     if (metadataFilter == null || metadataFilter.isEmpty()) return null;
-    Points.Filter.Builder fb = Points.Filter.newBuilder();
+    Common.Filter.Builder fb = Common.Filter.newBuilder();
     for (Map.Entry<String, Object> e : metadataFilter.entrySet()) {
       fb.addMust(toCondition(e.getKey(), e.getValue()));
     }
     return fb.build();
   }
 
-  private static Points.Condition toCondition(String key, Object value) {
+  private static Common.Condition toCondition(String key, Object value) {
     if (value instanceof Boolean) {
       return ConditionFactory.match(key, (Boolean) value);
     }
@@ -434,7 +438,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     }
   }
 
-  private static String resolveOriginalId(Map<String, Object> payload, Points.PointId pointId) {
+  private static String resolveOriginalId(Map<String, Object> payload, Common.PointId pointId) {
     Object original = payload.get(ORIGINAL_ID_KEY);
     if (original != null) {
       return String.valueOf(original);
@@ -442,7 +446,7 @@ public final class QdrantVectorStore extends ReopenableStore implements VectorSt
     return pointId.hasUuid() ? pointId.getUuid() : String.valueOf(pointId.getNum());
   }
 
-  private static Points.PointId pointId(String id) {
+  private static Common.PointId pointId(String id) {
     return PointIdFactory.id(UUID.nameUUIDFromBytes(id.getBytes()));
   }
 

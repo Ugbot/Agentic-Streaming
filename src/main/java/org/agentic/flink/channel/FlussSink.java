@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.agentic.flink.annotation.Public;
 import org.agentic.flink.channel.sink.ForEachSink;
+import org.agentic.flink.config.FlussClient;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -219,6 +220,7 @@ public final class FlussSink<T> {
     }
 
     public ForEachSink<T> build() {
+      FlussClient.require();
       return new ForEachSink<>(new FlussWriteFn<>(this));
     }
   }

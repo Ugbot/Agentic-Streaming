@@ -35,7 +35,7 @@ dependencies = [
 
 [project.optional-dependencies]
 redis = ["redis>=5,<7"]
-test = ["pytest>=7,<9"]
+test = ["pytest>=7,<10"]
 
 [project.scripts]
 agentic-pipeline = "agentic_pipeline.__main__:main"
@@ -46,11 +46,17 @@ Documentation = "https://github.com/Ugbot/Agentic-Streaming/blob/main/ports/agen
 
 # Dev and test installs: `uv sync` in this directory (a dev tool only; nothing here needs it to run).
 [dependency-groups]
-dev = ["pytest>=7,<9", "build>=1.2", "twine>=5"]
+dev = ["pytest>=7,<10", "build>=1.2", "twine>=5"]
 
 # The name `pyagentic` on PyPI is an unrelated project; uv resolves the core from the checkout.
 [tool.uv.sources]
 pyagentic = { path = "../pyagentic", editable = true }
+
+# The lock serves contributors, who run 3.10 or later (CONTRIBUTING.md). Python 3.9 is left out of it
+# because the dev tools have no patched release there (urllib3 2.7, requests 2.33, pytest 9.0.3 all
+# need 3.10), so a 3.9 fork would pin known advisories. The package itself still declares >=3.9.
+[tool.uv]
+environments = ["python_version >= '3.10'"]
 
 [tool.setuptools_scm]
 root = "../.."

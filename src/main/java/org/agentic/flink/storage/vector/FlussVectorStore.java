@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.agentic.flink.annotation.Public;
+import org.agentic.flink.config.FlussClient;
 import org.agentic.flink.context.core.ContextItem;
 import org.agentic.flink.storage.ReopenableStore;
 import org.agentic.flink.storage.StorageTier;
@@ -113,6 +114,7 @@ public final class FlussVectorStore extends ReopenableStore implements VectorSto
 
   @Override
   protected void open(Map<String, String> config) throws Exception {
+    FlussClient.require();
     this.bootstrapServers = config.getOrDefault("fluss.bootstrap.servers", "localhost:9123");
     this.database = config.getOrDefault("fluss.database", "agentic_flink");
     this.table = config.getOrDefault("fluss.table", "vectors");

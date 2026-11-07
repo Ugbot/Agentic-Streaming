@@ -12,7 +12,7 @@ reference, jvm-core, flink, pekko and python. Everything else moved out of this 
 as it stood is at tag `pre-cornerstone`.
 
 This main module is the Flink adapter plus the deprecated legacy DSL. Java 21 target, Flink 2.2.1
-(native FLIP-27 sources / FLIP-143 sinks), LangChain4J 1.16.3 (managed via the langchain4j-bom).
+(native FLIP-27 sources / FLIP-143 sinks), LangChain4J 1.23.0 (managed via the langchain4j-bom).
 
 `ports/` holds the conformance tested cores (`ports/jagentic-core`, `ports/pyagentic`) and the
 portable pipeline CLI (`ports/agentic-pipeline`, whose only backend is `local`; see

@@ -94,6 +94,20 @@ exists.
 
 ### Fixed
 
+- Dependencies: no open OSV advisory in the resolved trees of the kept modules or either `uv.lock`.
+  Jackson and pgjdbc are one version across the reactor, Milvus 2.6 sheds the Hadoop closure, and
+  Tika, DJL, jsoup, LangChain4j, Qdrant, Pekko, Netty and the rest move forward. What Flink and the
+  Fluss client shade is listed in `docs/security.md` (#101).
+- The Fluss client is out of the default uber jar, which loses about 64 MB and the client's old
+  relocated Netty, Jackson, Guava and lz4. `-P fluss` puts it back. Selecting a Fluss backend
+  without the client now fails with a message rather than falling back to the in-JVM store (#101).
+- The Milvus SDK is out of the default uber jar too, which loses about 15 MB, the SDK's relocated
+  gRPC and Netty 4.1, and the okhttp, okio, Kotlin and commons-text only it brought. `-P milvus` puts
+  them back. Selecting Milvus without the SDK fails with a message (#101).
+- `QdrantVectorStore` reads vectors back from a current Qdrant server, which returns them in the
+  `dense` variant, and the tests, CI and compose example move to Qdrant v1.20.0 (#101).
+- gRPC moves to 1.84.2, which takes the relocated Netty 4.1.127 out of the Qdrant client's path in
+  the uber jar. The Milvus SDK's own relocated copy is opt-in, as `docs/security.md` records (#101).
 - Flink storage and inference correctness: PostgreSQL `ON CONFLICT` upserts, reopenable stores,
   exact VALID/INVALID verdicts and nested tool-argument JSON (#22).
 - Build, conformance gate and stale documentation fixes from review: nested `Entry` type in
