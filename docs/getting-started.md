@@ -204,10 +204,10 @@ MiniCluster with the test classpath.
 ./mvnw -q test -Dtest=FlinkConformanceTest
 ```
 
-Result on 2026-11-06 (the class runs the 72 fixtures plus two checks of its own):
+Result on 2026-11-06 (the class runs the 74 fixtures plus two checks of its own):
 
 ```
-Tests run: 74, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 76, Failures: 0, Errors: 0, Skipped: 0
 ```
 
 A skip, when there is one, is never a pass.

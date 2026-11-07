@@ -261,11 +261,19 @@ class ReferenceRuntime:
                 return self._refused(conv, turn, f"no suspended turn {turn.turn_id!r} to resume")
             if state == "resuming":
                 return self._run(conv, turn, resuming=True)
+            if retryable and self._reached_non_idempotent(conv, turn.turn_id):
+                ctx = self._context(conv, turn, rerun=False)
+                self._append(conv, ctx, "turn_resumed", {"turn_id": turn.turn_id, "signal": turn.signal,
+                                                         "signal_sender": turn.user_id})
+                return self._continue(conv, turn, ctx, resuming=True)
             if retryable:
                 return self._rerun_resumed(conv, turn)
             return self._duplicate(conv, turn)
         if state in ("running", "resuming"):
             return self._run(conv, turn, resuming=state == "resuming")
+        if retryable and self._reached_non_idempotent(conv, turn.turn_id):
+            resumed = any(e["type"] == "turn_resumed" for e in self._events_of(conv, turn.turn_id))
+            return self._run(conv, turn, resuming=resumed)
         if retryable:
             return self._run(conv, turn, rerun=True)
         if state != "absent" and idempotent:
@@ -275,6 +283,11 @@ class ReferenceRuntime:
     @staticmethod
     def _events_of(conv: Conversation, turn_id: str) -> List[Dict[str, Any]]:
         return [e for e in conv.log if e["turn_id"] == turn_id]
+
+    def _reached_non_idempotent(self, conv: Conversation, turn_id: str) -> bool:
+        """Such a run is replayed, not run again: that tool is never called twice."""
+        return any(e["type"] == "tool_intent" and e["payload"].get("effect") == "non_idempotent"
+                   for e in self._events_of(conv, turn_id))
 
     def _turn_state(self, conv: Conversation, turn_id: str) -> str:
         state = "absent"
@@ -361,6 +374,8 @@ class ReferenceRuntime:
         resolution = (turn.signal or {}).get("resolution")
         key = (turn.conversation_id, turn.turn_id, "tool", pending["index"])
         entry = self.journal[key]
+        if resolution in ("applied", "not_applied", "failed") and entry["state"] != "unknown":
+            return None  # a redelivered signal: this entry has been answered
         if resolution == "applied":
             entry.update(state="succeeded", result=(turn.signal or {}).get("result"))
         elif resolution == "not_applied":
@@ -918,8 +933,10 @@ class _Prior:
         self.events = events
         self._kept: Dict[Any, deque] = {}
         self.resumes = [e for e in events if e["type"] == "turn_resumed"]
+        last_resume = self.resumes[-1]["sequence"] if self.resumes else -1
         for event in events:
-            if event["type"] != "turn_resumed":  # each resume is its own: a second is not a repeat
+            answered = event["type"] in ("turn_suspended", "unknown_outcome") and event["sequence"] < last_resume
+            if event["type"] != "turn_resumed" and not answered:  # each resume and each wait is its own
                 self._kept.setdefault(self._key(event["type"], event["payload"]), deque()).append(event)
 
     @staticmethod

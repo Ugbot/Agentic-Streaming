@@ -19,7 +19,7 @@ exists.
   `effect: read`, `idempotent` or `non_idempotent` and receive a deterministic `Idempotency-Key`. A
   `non_idempotent` call with no recorded result becomes `unknown_outcome` and waits for a person.
 - Events `llm_called`, `tool_intent`, `compensation_failed` and `unknown_outcome`, and fixtures 32 to
-  72 with a `crash_at` harness verb. Every runtime now goes through one comparator, on the whole event
+  74 with a `crash_at` harness verb. Every runtime now goes through one comparator, on the whole event
   sequence.
 - One resume state machine in the spec. Undoes receive the forward args and result, compensate on any
   failure class, and carry on from the log after a crash.

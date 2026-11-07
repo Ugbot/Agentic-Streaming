@@ -104,10 +104,18 @@ public final class AgentContext {
    * the turn gets every event again. Each {@code turn_resumed} is its own, so none is matched.
    */
   public void replayOver(List<LogEvent> earlier) {
+    long lastResume = -1;
     for (LogEvent e : earlier) {
       if (e.is(EventType.TURN_RESUMED)) {
+        lastResume = e.sequence();
+      }
+    }
+    for (LogEvent e : earlier) {
+      boolean answered = (e.is(EventType.TURN_SUSPENDED) || e.is(EventType.UNKNOWN_OUTCOME))
+          && e.sequence() < lastResume;
+      if (e.is(EventType.TURN_RESUMED)) {
         events.add(e);
-      } else {
+      } else if (!answered) {
         kept.computeIfAbsent(replayKey(e.type(), e.payload()), k -> new java.util.ArrayDeque<>()).add(e);
       }
     }
@@ -146,11 +154,15 @@ public final class AgentContext {
     }
   }
 
-  /** As above for a transient re-run's model calls, which have their own index. */
-  public void continueLlmIndexAfter(List<LogEvent> earlier) {
+  /** As above from the log, which also shows a call that had an intent and no outcome. */
+  public void continueIndicesAfter(List<LogEvent> earlier) {
     for (LogEvent e : earlier) {
-      if (e.is(EventType.LLM_CALLED) && e.payload().get("index") instanceof Number n) {
-        nextLlmIndex = Math.max(nextLlmIndex, n.intValue() + 1);
+      if (e.payload().get("index") instanceof Number n) {
+        if (e.is(EventType.LLM_CALLED)) {
+          nextLlmIndex = Math.max(nextLlmIndex, n.intValue() + 1);
+        } else {
+          nextToolIndex = Math.max(nextToolIndex, n.intValue() + 1);
+        }
       }
     }
   }

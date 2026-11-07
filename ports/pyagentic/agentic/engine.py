@@ -109,11 +109,18 @@ def _is_transient(event: Event) -> bool:
     return event.type == "turn_failed" and event.payload.get("error_class") == "transient"
 
 
+def _reached_non_idempotent(events: Sequence[Event]) -> bool:
+    return any(e.type == "tool_intent" and e.payload.get("effect") == "non_idempotent" for e in events)
+
+
 def _split_runs(events: Sequence[Event]) -> Tuple[Sequence[Event], Sequence[Event]]:
     """The events of runs that are over, and those of the current run. A run that ended `failed`
     with class `transient` is spent: section 10 says it is not replayed, and the next run takes the
     next free indices. Everything after it is one run, which a crash or a suspension may have cut
-    short and which replays like any other."""
+    short and which replays like any other. A run that reached a `non_idempotent` tool is never
+    spent, because that tool must not be called twice: the whole turn replays."""
+    if _reached_non_idempotent(events):
+        return (), events
     for i in range(len(events) - 1, -1, -1):
         if _is_transient(events[i]):
             return events[:i + 1], events[i + 1:]
@@ -409,7 +416,8 @@ class Engine:
         if state in (RUNNING, RESUMING):
             return self._replay(ctx, log, events, resuming=state == RESUMING)
         if retryable:
-            return self._replay(ctx, log, events, resuming=False)
+            resumed = _reached_non_idempotent(events) and any(e.type == "turn_resumed" for e in events)
+            return self._replay(ctx, log, events, resuming=resumed)
         if state != ABSENT and idempotent:
             return self._duplicate(turn, log, events)
         self._adopt(ctx, log, events, fresh=not idempotent)

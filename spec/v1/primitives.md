@@ -122,7 +122,9 @@ A turn ends in exactly one terminal status:
   not spent. A redelivery runs the turn again rather than answering `duplicate`, and does not
   append a second `turn_received`, so it is not counted twice. A redelivered resume signal runs
   the brain of that turn again. Tools the first run called are called again, under the next
-  free indices, so `(turn_id, index)` still names one call. Every other failed turn is applied.
+  free indices, so `(turn_id, index)` still names one call. A run that reached a
+  `non_idempotent` tool is the exception: it is replayed from the journal instead, because that
+  tool is never called twice (section 10). Every other failed turn is applied.
 - Tool calls are idempotent per `(turn_id, call_index)`. A retried turn must not double-apply
   a tool whose result is already recorded. The effect journal of section 10 is what makes this
   true, including after a rollback that loses the log's own record of the call.
@@ -525,7 +527,8 @@ A turn's `events` in a result are its events from the start, or from its last `t
 
 Timers are evaluated against the log as it stood before the turn's first event, so a re-run gives
 the same tool indices. A turn that ended `failed` with class `transient` is not replayed: section 4
-says what its redelivery does, and its calls take the next free indices.
+says what its redelivery does, and its calls take the next free indices, unless the run reached a
+`non_idempotent` tool, in which case it is replayed like a crashed turn.
 
 ### Sagas
 
@@ -570,6 +573,8 @@ into the saga if the workflow declares one, otherwise into the brain.
 | `failed` | it failed | the entry becomes `failed` and the turn fails as if the tool had; a saga compensates |
 
 An unknown outcome is never retried without one of these. Redelivering the turn answers `duplicate`.
+A resolution is spent durably before the call it allows, so a crash during that call is unknown
+again, and a redelivered signal changes nothing about an entry that is no longer `unknown`.
 
 A `non_idempotent` call also becomes `unknown` when its one attempt ends without a definite answer:
 a timeout, a lost connection, or an HTTP 5xx, which may have landed. A 4xx or a tool that raises is

@@ -170,7 +170,12 @@ public interface EffectJournal extends AutoCloseable {
     if (entry.isFinal() || entry.state() == State.UNKNOWN) {
       return entry;
     }
-    if (existing.isPresent() && !entry.released() && ToolEffect.NON_IDEMPOTENT.equals(effect)) {
+    if (entry.released()) {
+      // The person's permission covers one call, so it is spent before the call is made: a crash
+      // during it leaves a pending entry, which is unknown again.
+      entry = new Entry(key, entry.intent(), entry.effect(), State.PENDING, entry.attempts(), null, null, false);
+      put(entry);
+    } else if (existing.isPresent() && ToolEffect.NON_IDEMPOTENT.equals(effect)) {
       entry = entry.unknown();
       put(entry);
       return entry;

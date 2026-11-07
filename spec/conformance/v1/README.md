@@ -48,6 +48,8 @@ Python owners.
 | `unknown-outcome-applied`, `unknown-outcome-not-applied`, `unknown-outcome-failed` | each way a person can resolve an unknown outcome |
 | `unknown-outcome-never-retries` | redelivery never retries an unknown outcome, before or after a restart |
 | `unknown-outcome-bad-signal` | a signal that does not answer the question is refused and changes nothing |
+| `unknown-outcome-twice` | a resolution is spent before its call, so a crash during that call is unknown again |
+| `transient-after-non-idempotent` | a transient failure after a `non_idempotent` call does not repeat it |
 | `llm-reused-after-crash` | a recorded model answer is reused by index, so a re-run takes the same path |
 | `redelivery-mid-turn` | a partial turn is finished once, and everything after is a duplicate |
 | `compensation-failed-event` | a failed undo is on the log, the others run, the turn ends fatal |

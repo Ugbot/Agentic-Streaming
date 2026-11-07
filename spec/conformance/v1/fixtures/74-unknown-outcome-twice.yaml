@@ -1,0 +1,49 @@
+id: unknown-outcome-twice
+description: A resolution is spent before the call it allows, so a crash during that call is unknown again, not
+  a licence for a third call. The redelivered signal changes nothing, and a new answer is needed.
+requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: rule
+        prompt: You move money.
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+turns:
+- conversation_id: c1
+  turn_id: t1
+  text: pay the invoice
+  crash_at: {call: pay, when: during}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: not_applied}
+  crash_at: {call: pay, when: during}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: not_applied}
+- conversation_id: c1
+  turn_id: t1
+  signal: {resolution: applied, result: paid}
+expect:
+- {turn_id: t1, status: crashed}
+- {turn_id: t1, status: suspended}
+- {turn_id: t1, status: crashed}
+- turn_id: t1
+  status: suspended
+  events: [turn_resumed, unknown_outcome, turn_suspended]
+- turn_id: t1
+  status: completed
+  reply: '[main] pay returned paid'
+  state_includes: {turn_count: 1}

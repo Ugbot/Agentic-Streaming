@@ -24,7 +24,7 @@ against the [reference spec](spec/v1/primitives.md).
 | Apache Pekko | `ports/jagentic-core`, in `agentic-pekko` | One event-sourced, cluster-sharded actor per conversation | [Pekko](docs/runtimes/pekko.md) |
 
 The contract is the `agentic/v1` spec under [`spec/v1`](spec/v1/primitives.md), its reference runtime
-and the 72 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
+and the 74 fixtures under [`spec/conformance/v1`](spec/conformance/v1/README.md). The fixtures are
 mostly rule brains and scripted stubs. They crash turns at every event and around every call, but
 they do not cover a real model, so a pass is a narrow claim; see
 [conformance results](docs/runtimes/README.md#conformance-results).
@@ -57,12 +57,17 @@ entries for longer than the longest rollback or redelivery you allow.
 
 ## Known failures
 
-- **A turn run again after a transient model failure calls its tools again**, under the next free
-  indices, as section 4 of the spec says. It is the one re-run the journal does not reuse.
-- **A real model has only been exercised against a local stand-in server on Flink.** A document can
-  declare `provider: ollama` or `openai` there. In the `agentic` Python package only a scripted stub
-  runs. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) still sits on the older `pyagentic`
-  package, which has real model clients but no event log.
+- **A turn run again after a transient model failure calls its `read` and `idempotent` tools again**,
+  under the next free indices, as section 4 of the spec says. It is the one re-run that does not reuse
+  the journal. A run that reached a `non_idempotent` tool is replayed instead, so that tool is not
+  repeated.
+- **A real model has only been exercised against a local stand-in server.** A document can declare
+  `provider: ollama` or `openai` on Flink and in the `agentic` Python package.
+- **The `pipeline.yaml` CLI is only partly on the conformance semantics.** `ports/agentic-pipeline`
+  runs a document on the `agentic` core when the core can run all of it. A document that needs MCP,
+  remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing
+  embeddings falls back to the older `pyagentic` engine, which has no event log, no `turn_id` and no
+  journal, and the CLI says so on stderr.
 - **The tool allowlist is not a security control, and the canonical path has no authentication.** See
   [security](docs/security.md).
 

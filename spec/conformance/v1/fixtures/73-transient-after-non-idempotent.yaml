@@ -1,0 +1,43 @@
+id: transient-after-non-idempotent
+description: A transient model failure after a non_idempotent call does not repeat the call on redelivery. The run
+  is replayed from the journal, so the tool answers once, under its first index.
+requires: [llm_brain, effect_journal, tools, idempotency]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router:
+      kind: keyword
+      default: main
+      rules:
+        main: [pay, refund, hello]
+    paths:
+      main:
+        brain: llm
+        prompt: You move money.
+        tools: [pay]
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: non_idempotent}
+  llm:
+    provider: stub
+    script:
+    - tool: pay
+      args: {order: '77'}
+    - {text: paid, x-fail-attempts: 1}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+- {conversation_id: c1, turn_id: t1, text: pay the invoice}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: transient
+  tool_calls:
+  - {tool: pay, index: 0, result: 1}
+- turn_id: t1
+  status: completed
+  reply: paid
+  tool_calls:
+  - {tool: pay, index: 0, attempt: 1, result: 1}
+  state_includes: {turn_count: 1}

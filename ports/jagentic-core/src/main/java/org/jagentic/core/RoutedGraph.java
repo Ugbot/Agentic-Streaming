@@ -290,6 +290,14 @@ public final class RoutedGraph {
       if (running && prior.resumed()) {
         return replay(event, ctx, prior, true);
       }
+      if (retryable && reachedNonIdempotent(prior)) {
+        ctx.replayOver(prior.events());
+        Event turn = original(event, prior, ctx);
+        ctx.metadata = turn.metadata();
+        ctx.record(EventType.TURN_RESUMED, resumedPayload(event));
+        ctx.keepIndicesOfTimers(prior.events());
+        return run(turn, ctx, TimerState.fold(List.of()), false, true, false);
+      }
       if (retryable) {
         return rerunResumed(event, ctx, prior);
       }
@@ -301,15 +309,27 @@ public final class RoutedGraph {
     if (running) {
       return replay(event, ctx, prior, prior.resumed());
     }
+    if (retryable && reachedNonIdempotent(prior)) {
+      return replay(event, ctx, prior, prior.resumed());
+    }
     if (retryable) {
-      ctx.continueToolIndexAfter(prior.calls());
-      ctx.continueLlmIndexAfter(prior.events());
+      ctx.continueIndicesAfter(prior.events());
       return run(event, ctx, before.timers(), before.nextSequence() == 0, false, true);
     }
     if (applied && idempotent) {
       return recorded(ctx, prior).asDuplicate(before.reduced());
     }
     return run(event, ctx, before.timers(), before.nextSequence() == 0, false, false);
+  }
+
+  /** Such a run is replayed, not run again: that tool is never called twice (spec section 4). */
+  private static boolean reachedNonIdempotent(ConversationState.TurnRecord prior) {
+    for (LogEvent e : prior.events()) {
+      if (e.is(EventType.TOOL_INTENT) && ToolEffect.NON_IDEMPOTENT.equals(e.payload().get("effect"))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Status {@code failed}, class {@code validation}, nothing appended: the turn id stays unspent. */
@@ -378,6 +398,11 @@ public final class RoutedGraph {
     if (entry == null) {
       return "the journal holds no call " + parked.index() + " for this turn";
     }
+    boolean answers = "applied".equals(resolution) || "not_applied".equals(resolution)
+        || "failed".equals(resolution);
+    if (answers && entry.state() != EffectJournal.State.UNKNOWN) {
+      return null; // a redelivered signal: this entry has been answered
+    }
     if ("applied".equals(resolution)) {
       ctx.journal.put(entry.succeeded(signal.signal().get("result")));
     } else if ("not_applied".equals(resolution)) {
@@ -393,8 +418,7 @@ public final class RoutedGraph {
 
   /** A resumed turn that failed transiently runs again on its signal, under the next free indices. */
   private TurnResult rerunResumed(Event signal, AgentContext ctx, ConversationState.TurnRecord prior) {
-    ctx.continueToolIndexAfter(prior.calls());
-    ctx.continueLlmIndexAfter(prior.events());
+    ctx.continueIndicesAfter(prior.events());
     Event turn = original(signal, prior, ctx);
     ctx.metadata = turn.metadata();
     for (AgentListener l : listeners) {

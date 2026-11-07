@@ -67,6 +67,29 @@ class EffectJournalTest {
   }
 
   @Test
+  void aPersonsPermissionCoversOneCallEvenIfThatCallCrashes() {
+    journal.put(EffectJournal.Entry.pending(KEY, "pay:1", ToolEffect.NON_IDEMPOTENT).unknown().release());
+    Error crash = new Error("died during the approved call");
+    assertThrows(Error.class, () -> journal.recordOrGet(KEY, "pay:1", ToolEffect.NON_IDEMPOTENT,
+        new EffectJournal.Call() {
+          @Override public void onIntent(EffectJournal.Entry entry) {}
+
+          @Override public void onFailedAttempt(EffectJournal.Attempt failed) {}
+
+          @Override public int budget() {
+            return 1;
+          }
+
+          @Override public Object attempt(int attempt) {
+            throw crash;
+          }
+        }));
+    assertEquals(EffectJournal.State.UNKNOWN,
+        journal.recordOrGet(KEY, "pay:1", ToolEffect.NON_IDEMPOTENT, call(1, null)).state());
+    assertEquals(List.of(), attempts);
+  }
+
+  @Test
   void aNonIdempotentCallHasOneAttemptWhateverTheBudget() {
     EffectJournal.Entry e = journal.recordOrGet(KEY, "pay:1", ToolEffect.NON_IDEMPOTENT,
         call(3, new IllegalStateException("declined")));
