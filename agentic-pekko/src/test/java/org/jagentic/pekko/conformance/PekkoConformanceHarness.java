@@ -52,7 +52,7 @@ public final class PekkoConformanceHarness {
       "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
       "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay", "suspend_resume",
       "saga", "a2a", "parallelism", "durable_store", "cep", "event_time", "timers", "checkpoint_recovery",
-      "crash_recovery", "effect_journal");
+      "crash_recovery", "effect_journal", "tool_policy");
 
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
   private static final Duration TIMEOUT = Duration.ofSeconds(30);

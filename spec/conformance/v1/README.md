@@ -69,6 +69,11 @@ Python owners.
 | `two-writers` | the same turn delivered twice at once is applied once |
 | `allow-rail`, `path-guardrail`, `output-rail-after-verifier` | guardrails the two cores used to read differently |
 | `argument-schema`, `router-static`, `missing-turn-id` | the rest of the differences between the cores |
+| `rule-tool-outside-path`, `tools-empty-means-none`, `tools-absent-means-none` | deny by default, at the tool boundary, for a rule brain and an llm brain |
+| `llm-refusal-ends-the-turn` | a refused tool is recorded and not offered back to the model |
+| `timer-tool-refused`, `cep-tool-refused` | what runs outside any path needs `policies.unattended_tools` |
+| `saga-step-refused`, `compensation-refused` | a refused step compensates; a refused undo ends the turn `fatal` |
+| `refusal-survives-a-crash` | a crash around a refusal changes nothing |
 
 Run them against the reference runtime:
 

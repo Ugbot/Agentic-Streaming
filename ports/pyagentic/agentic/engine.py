@@ -26,7 +26,7 @@ from jsonschema import Draft202012Validator
 
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
-from .errors import CorruptLog, LogUnavailable, ToolError, TransientError, ValidationError
+from .errors import CorruptLog, LogUnavailable, ToolError, ToolRefused, TransientError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
 from .journal import (
     LLM,
@@ -44,6 +44,7 @@ from .journal import (
     intent_of,
     model_intent_of,
 )
+from .policy import ALLOW, DocumentToolPolicy, ToolPolicy, ToolRequest
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
 from .tools import ToolCall, ToolRegistry, ToolSpec, idempotency_key
@@ -278,6 +279,7 @@ class Engine:
         sleep: Sleep = time.sleep,
         rng: Optional[random.Random] = None,
         journal: Optional[EffectJournal] = None,
+        policy: Optional[ToolPolicy] = None,
     ) -> None:
         self.doc = doc
         self.tools = tools
@@ -301,6 +303,7 @@ class Engine:
         if self.llm.get("provider", "stub") != "stub" and any(
                 p.get("brain") == "llm" and "x-brain" not in p for p in self.paths.values()):
             self.chat_client = make_chat_client(self.llm)
+        self.policy: ToolPolicy = policy if policy is not None else DocumentToolPolicy(doc)
         self.guardrails: Sequence[Mapping[str, Any]] = doc.get("guardrails") or []
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
         self.global_guardrails = [g for g in self.guardrails if g.get("name") not in path_scoped]
@@ -518,7 +521,7 @@ class Engine:
             self._append(ctx, "turn_suspended", payload)
             return self._finish(ctx, "suspended", ctx.path, None, None)
         except ValidationError as exc:
-            return self._fail(ctx, ctx.path, "validation", str(exc))
+            return self._fail(ctx, ctx.path, exc.error_class, str(exc))
 
     def _run(self, ctx: _TurnContext, resuming: bool) -> Dict[str, Any]:
         turn = ctx.turn
@@ -532,7 +535,7 @@ class Engine:
         received = prior.peek("turn_received") if prior is not None else None
         recorded_ms = received.payload.get("processing_time_ms") if received is not None else None
         try:
-            self.timers.fire_due(turn, ctx.history, append, lambda tool_id, args: self._invoke(ctx, tool_id, args),
+            self.timers.fire_due(turn, ctx.history, append, lambda tool_id, args: self._invoke(ctx, tool_id, args, origin="timer"),
                                  recorded_ms)
         except ToolError as exc:
             return self._fail(ctx, None, "tool", str(exc))
@@ -612,7 +615,7 @@ class Engine:
         for pattern in self.cep:
             if pattern.completes_on(turns):
                 try:
-                    self._invoke(ctx, pattern.tool, pattern.match_args(ctx.turn.conversation_id))
+                    self._invoke(ctx, pattern.tool, pattern.match_args(ctx.turn.conversation_id), origin="cep")
                 except ToolError as exc:
                     return self._fail(ctx, path, "tool", str(exc))
         return None
@@ -646,13 +649,9 @@ class Engine:
     def _draft_llm(self, ctx: _TurnContext, path: str) -> str:
         if self.chat_client is not None:
             return self._draft_react(ctx, path, self.chat_client)
-        allowed = set(self.paths[path].get("tools") or [])
         for i, step in enumerate(self.llm.get("script") or []):
             answer = self._ask_model(ctx, self.paths[path].get("prompt", ""), partial(self._scripted_answer, i, step))
             if "tool" in answer:
-                if allowed and answer["tool"] not in allowed:
-                    raise ValidationError(f"scripted tool {answer['tool']!r} is not in the path's tools",
-                                          f"/llm/script/{i}/tool")
                 self._invoke(ctx, answer["tool"], answer.get("args") or {})
             else:
                 return str(answer["text"])
@@ -660,13 +659,12 @@ class Engine:
 
     def _draft_react(self, ctx: _TurnContext, path: str, client: ChatClient) -> str:
         """The bounded loop a real provider drives: the model picks a tool or answers. A tool outside
-        the path's list is refused in the loop, so the model can correct itself. The model's view is
-        the log as it stood before this run, which a re-run sees the same. An observation goes back
+        the policy is refused at the tool boundary and ends the turn. The model's view is the log as it stood before this run, which a re-run sees the same. An observation goes back
         as a user message, because the `tool` role needs a tool_calls id this protocol does not have."""
         spec = self.paths[path]
-        declared = spec.get("tools")
+        declared = DocumentToolPolicy(self.doc).tools_of(path)
         tools = [{"name": s.id, "description": s.description} for s in self.tools.ids().values()
-                 if not declared or s.id in declared]
+                 if s.id in declared]
         listing = ", ".join(f"{t['name']}: {t['description']}" for t in tools)
         system = f"{spec.get('prompt', '')}\n{REACT_SYSTEM}{listing}".strip()
         messages = [{"role": "system", "content": system}]
@@ -679,11 +677,7 @@ class Engine:
                 return f"[{path}] {answer.get('text', '')}"
             tool_id, args = str(answer["tool"]), answer.get("args") or {}
             messages.append({"role": "assistant", "content": json.dumps({"tool": tool_id, "args": args})})
-            if declared and tool_id not in declared:
-                observation = f"error: tool {tool_id} is not permitted for this agent"
-            else:
-                observation = f"Result of {tool_id}: {self._invoke(ctx, tool_id, args)}"
-            messages.append({"role": "user", "content": observation})
+            messages.append({"role": "user", "content": f"Result of {tool_id}: {self._invoke(ctx, tool_id, args)}"})
         return f"[{path}] (stopped after {limit} steps)"
 
     def _chat(self, client: ChatClient, messages: List[Dict[str, str]], tools: List[Dict[str, str]]) -> Dict[str, Any]:
@@ -750,7 +744,7 @@ class Engine:
         for step in self.saga["steps"]:
             args = dict(step.get("args") or {})
             try:
-                result = self._invoke(ctx, step["tool"], args)
+                result = self._invoke(ctx, step["tool"], args, origin="saga")
             except (ToolError, ValidationError) as exc:
                 self._append(ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
                 compensated, failed_undos = self._compensate(ctx, done)
@@ -773,7 +767,7 @@ class Engine:
                 continue
             forward = {"forward_args": args, "forward_result": result}
             try:
-                self._invoke(ctx, undo, forward, event="compensation_step", strict=True)
+                self._invoke(ctx, undo, forward, event="compensation_step", strict=True, origin="compensation")
                 compensated += 1
             except (ToolError, ValidationError) as exc:
                 failed.append(undo)
@@ -860,11 +854,23 @@ class Engine:
                                         "scores": [round(p.score, 6) for p in passages]})
         return passages
 
+    def _authorise(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any], origin: str) -> None:
+        """The one check every tool call passes (`primitives.md` section 11), whatever asked for it.
+        A refusal is on the log before the turn ends, and the turn does end: nothing offers it back."""
+        known = self.tools.ids().get(tool_id)
+        effect = known.effect if known is not None else None
+        decision = self.policy.decide(ToolRequest(tool_id, origin, ctx.path, effect, args))
+        if decision.verdict != ALLOW:
+            self._append(ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path,
+                                               "reason": decision.reason})
+            raise ToolRefused(decision.reason)
+
     def _invoke(self, ctx: _TurnContext, tool_id: str, args: Mapping[str, Any],
-                event: Optional[str] = None, strict: bool = False) -> Any:
+                event: Optional[str] = None, strict: bool = False, origin: str = "brain") -> Any:
         """`record_or_get` for one tool call. Arguments are checked before the call is journaled or
         given an index. `strict` raises when the budget is spent whatever `on_tool_error` says: a saga
         undo that failed must never read as compensated."""
+        self._authorise(ctx, tool_id, args, origin)
         spec: ToolSpec = self.tools.spec(tool_id)
         self.tools.validate_args(tool_id, args)
         args = dict(args)
@@ -1025,9 +1031,6 @@ class _BrainView:
         return self._engine.transcript(self._ctx.turn.conversation_id)
 
     def invoke(self, tool_id: str, args: Mapping[str, Any]) -> Any:
-        allowed = self._engine.paths[self._path].get("tools")
-        if allowed and tool_id not in allowed:
-            raise ValidationError(f"tool {tool_id!r} is not in path {self._path!r} tools {sorted(allowed)}")
         return self._engine._invoke(self._ctx, tool_id, args)
 
     def retrieve(self, query: str, k: int = 0) -> List[Passage]:

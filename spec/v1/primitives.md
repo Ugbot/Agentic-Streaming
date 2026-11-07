@@ -59,9 +59,10 @@ Event {
 `tool_failed`, `retrieved`, `reply_drafted`, `verification_failed`, `memory_written`,
 `turn_completed`, `turn_failed`, `turn_suspended`, `turn_resumed`, `timer_scheduled`,
 `timer_fired`, `compensation_started`, `compensation_step`, `compensation_completed`,
-`delegated`, `llm_called`, `tool_intent`, `compensation_failed`, `unknown_outcome`.
+`delegated`, `llm_called`, `tool_intent`, `compensation_failed`, `unknown_outcome`, `tool_refused`.
 
-The last four were added under section 7 and are defined in section 10.
+`llm_called`, `tool_intent`, `compensation_failed` and `unknown_outcome` were added under section 7
+and are defined in section 10. `tool_refused` is defined in section 11.
 
 Unknown event types must be preserved on replay and ignored by reducers, so a runtime on
 an older spec version can still rebuild state written by a newer one.
@@ -145,6 +146,7 @@ Error classes:
 | `guardrail` | input or output blocked | terminal status `rejected`, no retry |
 | `verification` | verifier rejected the reply | retry the brain up to `policies.verification.max_attempts`, then `unverified` |
 | `tool` | tool raised or timed out | retry per `policies.retry`, then `turn_failed` unless the path declares a fallback |
+| `policy` | a tool refused by the tool policy (section 11) | fail the turn, no retry; a saga compensates |
 | `transient` | model unreachable, timed out, rate limited or a server error; store or network failure | retry per `policies.retry`, then `turn_failed`; a redelivery runs the turn again (section 4) |
 | `fatal` | serialization failure, corrupt state | fail the turn and surface; never silently degrade |
 
@@ -251,7 +253,8 @@ the list of those tests is kept in the repository README under Runtimes.
 Capability ids in v1: `routing`, `rule_brain`, `llm_brain`, `tools`, `structured_tool_args`,
 `guardrails`, `verifier`, `ordering`, `idempotency`, `retry`, `memory`, `retrieval`,
 `context_window`, `replay`, `suspend_resume`, `timers`, `saga`, `a2a`, `cep`, `event_time`,
-`checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`.
+`checkpoint_recovery`, `parallelism`, `durable_store`, `crash_recovery`, `effect_journal`,
+`tool_policy`.
 
 ## 7. Versioning
 
@@ -597,3 +600,29 @@ A `non_idempotent` call also becomes `unknown` when its one attempt ends without
 a timeout, a lost connection, or an HTTP 5xx, which may have landed. A 4xx or a tool that raises is
 a definite failure. The turn appends `unknown_outcome`, then `turn_suspended` with `until:
 unknown_outcome` and the `tool` and `index` in question.
+
+## 11. Authorisation
+
+Section 10 says a call happens once. This section says whether it may happen at all.
+
+### The tool boundary
+
+Every tool call passes one check, before it is validated, journaled or given an index, whatever asked
+for it. The check denies by default.
+
+| Origin | What it may call |
+|---|---|
+| `brain` (rule, llm or custom) | the routed path's `tools`, plus the tools of the path's `skills` |
+| `saga`, `compensation` | the same: a saga runs on the routed path |
+| `timer`, `cep` | `policies.unattended_tools`: they run outside any path, so no path covers them |
+
+`tools: []` means none, and a path with no `tools` has none. A `tool_triggers` entry, a saga step, a
+timer's `tool` and a pattern's `on_match.tool` each say what to call; none of them grants it.
+
+A refused call appends `tool_refused {tool, origin, path, reason}` and nothing else: no index, no
+`tool_intent`, no journal entry. The turn then ends `failed` with class `policy`. A refused tool is
+not offered back to a model, which sees only the tools the policy grants its path, so a model
+that asks for another gets no second try in that turn. In a saga a refused step is a failed step: what
+ran before it compensates. A refused undo is a failed undo: `compensation_failed`, and the turn ends
+`fatal`. `on_tool_error: continue` does not apply to a refusal.
+

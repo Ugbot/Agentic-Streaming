@@ -1,6 +1,5 @@
 id: crash-after-resumed
-description: 'A crash after turn_resumed does not lose the approval: the redelivered signal finishes the turn, with
-  one turn_resumed on the log.'
+description: 'A crash after turn_resumed does not lose the approval: the redelivered signal finishes the turn, with one turn_resumed on the log.'
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -18,6 +17,7 @@ workflow:
         prompt: You move money.
         tool_triggers: {pay: pay}
         x-suspend-until: approval
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

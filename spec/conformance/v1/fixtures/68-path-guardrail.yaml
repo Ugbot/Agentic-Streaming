@@ -18,10 +18,12 @@ workflow:
         prompt: You move money.
         tool_triggers: {pay: pay}
         guardrails: [vip_only]
+        tools: [pay]
       open:
         brain: rule
         prompt: Open.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

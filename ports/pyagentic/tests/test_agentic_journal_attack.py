@@ -80,7 +80,7 @@ def pay_runtime(journal: Any, log: Any = None, trigger: str = "pay", effect: str
         calls.append(1)
         return f"paid {len(calls)}"
 
-    spec = (Agent(name).path("main", tool_triggers={trigger: "pay"}).use_tool("pay", pay, effect=effect)
+    spec = (Agent(name).path("main", tools=["pay"], tool_triggers={trigger: "pay"}).use_tool("pay", pay, effect=effect)
             .verifier("none").build())
     rt = LocalRuntime(journal=journal, log=log if log is not None else InMemoryEventLog())
     rt.deploy(spec)
@@ -188,7 +188,8 @@ def test_an_outage_inside_a_saga_is_an_outage_not_a_step_failure():
     doc: Dict[str, Any] = {
         "spec_version": "agentic/v1",
         "agent": {"id": rid("a"), "router": {"kind": "static", "default": "p"},
-                  "paths": {"p": {"brain": "rule"}}, "verifier": {"kind": "none"}},
+                  "paths": {"p": {"brain": "rule", "tools": ["reserve", "post", "release"]}},
+                  "verifier": {"kind": "none"}},
         "tools": [{"id": "reserve", "kind": "constant", "value": "r", "effect": "idempotent", "compensation": "release"},
                   {"id": "post", "kind": "constant", "value": "p", "effect": "non_idempotent"},
                   {"id": "release", "kind": "constant", "value": "x", "effect": "idempotent"}],
@@ -206,7 +207,7 @@ def test_an_outage_inside_a_saga_is_an_outage_not_a_step_failure():
 def test_a_journal_that_cannot_open_is_not_degraded_under_a_non_idempotent_tool(tmp_path):
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("x")
-    spec = (Agent(rid("a")).path("main", tool_triggers={"pay": "pay"}).use_tool("pay", lambda **_: "ok", effect="non_idempotent")
+    spec = (Agent(rid("a")).path("main", tools=["pay"], tool_triggers={"pay": "pay"}).use_tool("pay", lambda **_: "ok", effect="non_idempotent")
             .with_journal("file", url=str(blocked), on_unavailable="degrade").verifier("none").build())
     with pytest.raises((LogUnavailable, ValidationError)):
         LocalRuntime().deploy(spec)
@@ -215,7 +216,7 @@ def test_a_journal_that_cannot_open_is_not_degraded_under_a_non_idempotent_tool(
 def test_a_journal_may_degrade_when_every_tool_is_safe_to_repeat(tmp_path):
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("x")
-    spec = (Agent(rid("a")).path("main", tool_triggers={"look": "look"}).use_tool("look", lambda **_: "ok", effect="read")
+    spec = (Agent(rid("a")).path("main", tools=["look"], tool_triggers={"look": "look"}).use_tool("look", lambda **_: "ok", effect="read")
             .with_journal("file", url=str(blocked), on_unavailable="degrade").verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)

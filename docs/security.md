@@ -22,17 +22,20 @@ the Java and Python cores, and the Pekko entity.
 The bearer-token model that earlier versions of this page described belonged to the A2A gateway and
 the tool services, which have moved out of this repository.
 
-## The tool allowlist is only enforced in `LlmBrain`
+## The tool boundary
 
-A path's `tools` list is checked in one place: the LLM brain (`LlmBrain` in `ports/jagentic-core`,
-the scripted LLM path of `ports/pyagentic/agentic/engine.py` in Python). It is not checked at the
-tool boundary, so it is not a security control:
+Every tool call passes one deny-by-default check in `AgentContext.invoke` (the Java core, so Flink and
+Pekko too) and `Engine._invoke` (Python), whether a brain, a saga, a timer or a CEP pattern asked for
+it. `spec/v1/primitives.md`, section 11, is the rule. The conformance fixtures `rule-tool-outside-path`
+to `refusal-survives-a-crash` prove it on the reference, Java core, Flink, Pekko and Python runtimes.
 
-- The rule brain ignores `tools` entirely. A `tool_triggers` entry can run a tool the path does not
-  list.
-- `tools: []` means allow all, in both cores.
-- Timer, CEP and saga calls bypass the check.
-- Outside scripted mode, a refused tool is fed back to the model, which may try again.
+- A path gets what its `tools` lists and nothing else. `tools: []` means none, and so does leaving it
+  out. `tool_triggers`, saga steps and timers name a tool; they do not grant it.
+- Timers and CEP patterns run outside any path, so what they may call is `policies.unattended_tools`.
+- A refused call is recorded as `tool_refused` and ends the turn with class `policy`. It is not
+  offered back to the model.
+- Java code that builds a `RoutedGraph` itself has to give it a `ToolPolicy`. Without one every call
+  is refused. `ToolPolicy.ALLOW_ALL` exists for such code and a document cannot reach it.
 
 ## Workflow documents are trusted input
 

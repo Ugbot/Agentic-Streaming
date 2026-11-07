@@ -8,7 +8,7 @@ workflow:
     id: sagas
     router: {kind: keyword, default: main, rules: {main: [refund]}}
     paths:
-      main: {brain: rule, prompt: You handle refunds.}
+      main: {brain: rule, prompt: You handle refunds., tools: [reserve_a, release_a, reserve_b, release_b, post_ledger]}
     verifier: {kind: none}
   policies:
     on_tool_error: fail

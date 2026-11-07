@@ -56,6 +56,7 @@ public final class RoutedGraph {
   private final List<TimerSpec> timers;
   private final Map<String, List<Guardrail>> pathGuardrails;
   private final String agentId;
+  private final ToolPolicy toolPolicy;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -133,10 +134,12 @@ public final class RoutedGraph {
     this.timers = List.of();
     this.pathGuardrails = Map.of();
     this.agentId = "";
+    this.toolPolicy = ToolPolicy.DENY_ALL;
   }
 
   private RoutedGraph(RoutedGraph base, List<TimerSpec> timers,
-                      Map<String, List<Guardrail>> pathGuardrails, String agentId) {
+                      Map<String, List<Guardrail>> pathGuardrails, String agentId,
+                      ToolPolicy toolPolicy) {
     this.router = base.router;
     this.paths = base.paths;
     this.verifier = base.verifier;
@@ -151,6 +154,7 @@ public final class RoutedGraph {
     this.timers = List.copyOf(timers == null ? List.of() : timers);
     this.pathGuardrails = Map.copyOf(pathGuardrails);
     this.agentId = agentId;
+    this.toolPolicy = toolPolicy;
   }
 
   /**
@@ -160,17 +164,22 @@ public final class RoutedGraph {
    * for event time.
    */
   public RoutedGraph withTimers(List<TimerSpec> timers) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy);
+  }
+
+  /** The same graph under this policy. Without one every tool call is refused. */
+  public RoutedGraph withToolPolicy(ToolPolicy policy) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy);
   }
 
   /** The same graph with rails that apply to one path alone, after routing. */
   public RoutedGraph withPathGuardrails(Map<String, List<Guardrail>> rails) {
-    return new RoutedGraph(this, timers, rails, agentId);
+    return new RoutedGraph(this, timers, rails, agentId, toolPolicy);
   }
 
   /** The same graph under the workflow's {@code agent.id}, which scopes its journal entries. */
   public RoutedGraph withAgentId(String id) {
-    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id);
+    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -221,6 +230,7 @@ public final class RoutedGraph {
     ctx.listeners = listeners; // so callTool can fire tool-call hooks
     ctx.contextWindow = contextWindow;
     ctx.journalScope = agentId;
+    ctx.policy = toolPolicy;
     if (event.turnId() == null || event.turnId().isBlank()) {
       return refused(event, "a turn needs a non-empty turn_id; it is the idempotency key",
           ctx.conversationState());
@@ -462,6 +472,8 @@ public final class RoutedGraph {
         return fail(ctx, null, TurnError.ErrorClass.TOOL, e);
       } catch (ToolRegistry.UnknownTool e) {
         return fail(ctx, null, TurnError.ErrorClass.VALIDATION, e);
+      } catch (ToolRefused e) {
+        return fail(ctx, null, TurnError.ErrorClass.POLICY, e);
       }
     }
     Map<String, Object> received = org.jagentic.core.cep.EventTime.annotate(
@@ -491,6 +503,7 @@ public final class RoutedGraph {
     }
     ctx.store.putAttribute(ctx.conversationId, PATH_ATTR, path);
     ctx.store.putAttribute(ctx.conversationId, PHASE_ATTR, "path:" + path);
+    ctx.path = path;
     ctx.record(EventType.ROUTED, map("path", path));
     for (AgentListener l : listeners) {
       l.onRouted(path, ctx);
@@ -500,6 +513,8 @@ public final class RoutedGraph {
         org.jagentic.core.cep.TurnPatterns.evaluate(cep, ctx);
       } catch (ToolFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
+      } catch (ToolRefused e) {
+        return fail(ctx, path, TurnError.ErrorClass.POLICY, e);
       } catch (IllegalArgumentException e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
       }
@@ -541,6 +556,7 @@ public final class RoutedGraph {
 
   /** The saga if the workflow declares one, otherwise the brain. Both can stop on an unknown outcome. */
   private TurnResult afterRouting(Event event, AgentContext ctx, String path) {
+    ctx.path = path;
     try {
       return saga != null ? runSaga(event, ctx, path) : runBrain(event, ctx, path);
     } catch (TurnSuspendedOnUnknown e) {
@@ -570,8 +586,10 @@ public final class RoutedGraph {
         reply = agent.brain.turn(event.text(), ctx);
       } catch (ToolFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TOOL, e);
-      } catch (ToolRegistry.UnknownTool | ToolNotPermitted | ToolArgumentsRejected e) {
+      } catch (ToolRegistry.UnknownTool | ToolArgumentsRejected e) {
         return fail(ctx, path, TurnError.ErrorClass.VALIDATION, e);
+      } catch (ToolRefused e) {
+        return fail(ctx, path, TurnError.ErrorClass.POLICY, e);
       } catch (TransientFailure e) {
         return fail(ctx, path, TurnError.ErrorClass.TRANSIENT, e);
       } catch (LogUnavailable | TurnSuspendedOnUnknown e) {
@@ -623,8 +641,8 @@ public final class RoutedGraph {
     for (SagaPlan.Step step : saga.steps()) {
       Object result;
       try {
-        result = ctx.invoke(step.tool(), step.args(), null);
-      } catch (ToolFailure | ToolRegistry.UnknownTool | ToolArgumentsRejected e) {
+        result = ctx.callAs(ToolOrigin.SAGA, step.tool(), step.args());
+      } catch (ToolFailure | ToolRegistry.UnknownTool | ToolArgumentsRejected | ToolRefused e) {
         ctx.record(EventType.COMPENSATION_STARTED, map("failed_step", step.name()));
         List<String> failedUndos = compensate(done, ctx);
         if (!failedUndos.isEmpty()) {
@@ -633,7 +651,7 @@ public final class RoutedGraph {
         }
         ctx.record(EventType.COMPENSATION_COMPLETED, map("steps", done.size()));
         return fail(ctx, path, e instanceof ToolFailure ? TurnError.ErrorClass.TOOL
-            : TurnError.ErrorClass.VALIDATION, e);
+            : e instanceof ToolRefused ? TurnError.ErrorClass.POLICY : TurnError.ErrorClass.VALIDATION, e);
       }
       done.add(new CompletedStep(step, result));
     }

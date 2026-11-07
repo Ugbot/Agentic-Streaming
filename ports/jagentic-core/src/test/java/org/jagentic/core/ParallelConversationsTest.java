@@ -41,7 +41,7 @@ class ParallelConversationsTest {
     agent.put("id", "a-" + rnd());
     agent.put("router", Map.of("kind", "keyword", "default", "main", "rules", Map.of("main", List.of("charge"))));
     agent.put("paths", Map.of("main", Map.of("brain", "rule", "prompt", "p",
-        "tool_triggers", Map.of("rendezvous", MEET, "charge", PROBE))));
+        "tools", List.of(MEET, PROBE), "tool_triggers", Map.of("rendezvous", MEET, "charge", PROBE))));
     agent.put("verifier", Map.of("kind", "none"));
     Map<String, Object> s = new LinkedHashMap<>();
     s.put("spec_version", "agentic/v1");

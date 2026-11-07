@@ -172,6 +172,7 @@ def _workflow(within: int) -> Dict[str, Any]:
             "paths": {"monitor": {"brain": "rule", "prompt": "You acknowledge signals."}},
         },
         "tools": [{"id": "open_ticket", "kind": "constant", "value": "TICKET-OPENED"}],
+        "policies": {"unattended_tools": ["open_ticket"]},
         "cep": [{
             "name": "host_incident",
             "key": "conversation_id",

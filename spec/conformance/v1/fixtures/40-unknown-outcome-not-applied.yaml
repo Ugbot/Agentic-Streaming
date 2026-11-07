@@ -1,6 +1,5 @@
 id: unknown-outcome-not-applied
-description: A person says the call did not land. That is a decision, so the call runs again under the same key;
-  the counter shows the first attempt had in fact landed, which is the risk the person took.
+description: A person says the call did not land. That is a decision, so the call runs again under the same key; the counter shows the first attempt had in fact landed, which is the risk the person took.
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}

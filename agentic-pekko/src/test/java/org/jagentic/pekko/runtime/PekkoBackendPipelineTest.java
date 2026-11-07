@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -96,7 +97,7 @@ class PekkoBackendPipelineTest {
         "agent", Map.of(
             "router", Map.of("default", "general", "rules", Map.of("payments", java.util.List.of("balance"))),
             "paths", Map.of(
-                "payments", Map.of("brain", "rule", "tool_triggers", Map.of("balance", "get_balance")),
+                "payments", Map.of("brain", "rule", "tools", List.of("get_balance"), "tool_triggers", Map.of("balance", "get_balance")),
                 "general", Map.of("brain", "rule"))),
         "tools", java.util.List.of(Map.of("id", "get_balance", "kind", "constant", "effect", "read", "value", "1234.56"))),
         null);

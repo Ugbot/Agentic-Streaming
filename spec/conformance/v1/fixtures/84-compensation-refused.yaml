@@ -1,0 +1,32 @@
+id: compensation-refused
+description: 'An undo is held to the path too. One outside it is refused, recorded as a failed compensation, and the
+  turn ends fatal: a refused undo must never read as a compensated step.'
+requires: [tool_policy, saga, tools]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: a
+    router: {kind: static, default: main}
+    paths:
+      main: {brain: rule, tools: [reserve, boom]}
+    verifier: {kind: none}
+  saga:
+    steps:
+    - {name: hold, tool: reserve, compensate_with: release}
+    - {name: fail, tool: boom}
+  tools:
+  - {id: reserve, kind: constant, effect: idempotent, value: held}
+  - {id: release, kind: constant, effect: idempotent, value: released}
+  - {id: boom, kind: failing, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: go}
+expect:
+- turn_id: t1
+  status: failed
+  error_class: fatal
+  events_include: [tool_failed, compensation_started, tool_refused, compensation_failed, turn_failed]
+  events_exclude: [compensation_step, compensation_completed]
+  event_payloads:
+  - type: tool_refused
+    payload: {tool: release, origin: compensation}

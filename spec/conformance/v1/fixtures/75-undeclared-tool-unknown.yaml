@@ -1,6 +1,5 @@
 id: undeclared-tool-unknown
-description: A tool that declares no effect is non_idempotent. A crash during it is unknown, it is never called
-  again on its own, and a person says what happened.
+description: A tool that declares no effect is non_idempotent. A crash during it is unknown, it is never called again on its own, and a person says what happened.
 requires: [crash_recovery, effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting}

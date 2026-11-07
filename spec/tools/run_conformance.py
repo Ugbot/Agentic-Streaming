@@ -37,7 +37,7 @@ REFERENCE_CAPABILITIES = {
     "routing", "rule_brain", "llm_brain", "tools", "structured_tool_args", "guardrails", "verifier",
     "ordering", "idempotency", "retry", "memory", "retrieval", "context_window", "replay",
     "suspend_resume", "timers", "saga", "a2a", "cep", "event_time", "checkpoint_recovery",
-    "parallelism", "durable_store", "crash_recovery", "effect_journal",
+    "parallelism", "durable_store", "crash_recovery", "effect_journal", "tool_policy",
 }
 
 

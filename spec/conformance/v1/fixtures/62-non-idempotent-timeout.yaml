@@ -1,6 +1,5 @@
 id: non-idempotent-timeout
-description: A timeout on a non_idempotent tool says the answer did not arrive, not that nothing happened, so it
-  is an unknown outcome.
+description: A timeout on a non_idempotent tool says the answer did not arrive, not that nothing happened, so it is an unknown outcome.
 requires: [effect_journal, suspend_resume, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: hanging, effect: non_idempotent, timeout_ms: 50}

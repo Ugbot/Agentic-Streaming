@@ -22,7 +22,7 @@
           "guardrails", "verifier", "ordering", "idempotency", "retry", "memory",
           "retrieval", "context_window", "replay", "suspend_resume", "timers",
           "saga", "a2a", "cep", "event_time", "checkpoint_recovery", "parallelism",
-          "durable_store", "crash_recovery", "effect_journal"
+          "durable_store", "crash_recovery", "effect_journal", "tool_policy"
         ]
       }
     },
@@ -146,7 +146,7 @@
           },
           "events_exclude": { "type": "array", "items": { "type": "string" } },
           "state_includes": { "type": "object" },
-          "error_class": { "enum": ["validation", "guardrail", "verification", "tool", "transient", "fatal"] }
+          "error_class": { "enum": ["validation", "guardrail", "verification", "tool", "policy", "transient", "fatal"] }
         },
         "additionalProperties": false
       }

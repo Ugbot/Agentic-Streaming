@@ -1,6 +1,5 @@
 id: redelivery-mid-turn
-description: A partial turn redelivered is finished once. Later deliveries are duplicates, including after a restart,
-  and turn_received is counted once.
+description: A partial turn redelivered is finished once. Later deliveries are duplicates, including after a restart, and turn_received is counted once.
 requires: [crash_recovery, effect_journal, tools, idempotency, durable_store]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

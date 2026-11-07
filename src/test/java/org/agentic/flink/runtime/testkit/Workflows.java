@@ -14,6 +14,7 @@ public final class Workflows {
     Map<String, Object> billing = new LinkedHashMap<>();
     billing.put("brain", "rule");
     billing.put("prompt", "You answer billing questions.");
+    billing.put("tools", List.of("lookup_charge"));
     billing.put("tool_triggers", Map.of("balance", "lookup_charge"));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "support");
@@ -57,6 +58,7 @@ public final class Workflows {
     Map<String, Object> main = new LinkedHashMap<>();
     main.put("brain", "rule");
     main.put("prompt", "You answer charge questions.");
+    main.put("tools", List.of("broken_tool"));
     main.put("tool_triggers", Map.of("charge", "broken_tool"));
     Map<String, Object> agent = new LinkedHashMap<>();
     agent.put("id", "failing");
@@ -113,6 +115,27 @@ public final class Workflows {
   }
 
   /** Adds a {@code runtime.flink} block to a workflow. */
+  /** The same workflow with these tools on every path, for a saga that runs whichever path a turn takes. */
+  @SuppressWarnings("unchecked")
+  public static Map<String, Object> onEveryPath(Map<String, Object> wf, String... tools) {
+    Map<String, Object> agent = new java.util.LinkedHashMap<>((Map<String, Object>) wf.get("agent"));
+    Map<String, Object> paths = new java.util.LinkedHashMap<>();
+    ((Map<String, Object>) agent.get("paths"))
+        .forEach(
+            (name, spec) -> {
+              Map<String, Object> path = new java.util.LinkedHashMap<>((Map<String, Object>) spec);
+              List<Object> granted =
+                  new java.util.ArrayList<>((List<Object>) path.getOrDefault("tools", List.of()));
+              granted.addAll(List.of(tools));
+              path.put("tools", granted);
+              paths.put(name, path);
+            });
+    agent.put("paths", paths);
+    Map<String, Object> out = new java.util.LinkedHashMap<>(wf);
+    out.put("agent", agent);
+    return out;
+  }
+
   public static Map<String, Object> withFlink(Map<String, Object> wf, Map<String, Object> flink) {
     Map<String, Object> copy = new LinkedHashMap<>(wf);
     copy.put("runtime", Map.of("flink", flink));

@@ -63,7 +63,7 @@ class SpecSemanticsTest {
   @Test
   void duplicateTurnReturnsRecordedResultAndRunsNothing() {
     AtomicInteger toolRuns = new AtomicInteger();
-    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tool_triggers", Map.of("charge", "t"));
+    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tools", List.of("t"), "tool_triggers", Map.of("charge", "t"));
     GraphBuilder.Built built = GraphBuilder.build(spec(null,
         List.of(Map.of("id", "t", "kind", "constant", "value", "v")), path, Map.of()), null);
     built.tools().register("t", "counting", args -> "v" + toolRuns.incrementAndGet());
@@ -90,7 +90,7 @@ class SpecSemanticsTest {
 
   @Test
   void structuredToolArgumentsAreRecordedAsTypedMaps() {
-    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tool_triggers", Map.of("charge", "t"));
+    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tools", List.of("t"), "tool_triggers", Map.of("charge", "t"));
     LocalRuntime rt = runtime(spec(null, List.of(Map.of("id", "t", "kind", "constant", "value", 42.5,
         "parameters", Map.of("type", "object", "properties", Map.of("user", Map.of("type", "string"))))),
         path, Map.of()));
@@ -109,7 +109,7 @@ class SpecSemanticsTest {
   @Test
   void retryPolicyNumbersAttemptsAndOnlyTheLastOneSucceeds() {
     int failures = ThreadLocalRandom.current().nextInt(1, 4);
-    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tool_triggers", Map.of("charge", "flaky"));
+    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tools", List.of("flaky"), "tool_triggers", Map.of("charge", "flaky"));
     Map<String, Object> flaky = new HashMap<>(Map.of("id", "flaky", "kind", "failing", "effect", "idempotent", "value", "ok"));
     flaky.put("x-fail-attempts", failures);
     LocalRuntime rt = runtime(spec(
@@ -131,7 +131,7 @@ class SpecSemanticsTest {
 
   @Test
   void exhaustedRetriesFailTheTurnWithToolErrorClass() {
-    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tool_triggers", Map.of("charge", "dead"));
+    Map<String, Object> path = Map.of("brain", "rule", "prompt", "p", "tools", List.of("dead"), "tool_triggers", Map.of("charge", "dead"));
     LocalRuntime rt = runtime(spec(Map.of("retry", Map.of("kind", "none", "max_attempts", 1)),
         List.of(Map.of("id", "dead", "kind", "failing")), path, Map.of()));
     TurnResult r = rt.submit(Event.turn("c", "t1", "u", "charge"));
@@ -268,7 +268,8 @@ class SpecSemanticsTest {
         Map.of("name", "s2", "tool", "b", "compensate_with", "undo_b"),
         Map.of("name", "s3", "tool", "boom")));
     LocalRuntime rt = runtime(spec(Map.of("on_tool_error", "fail"), tools,
-        Map.of("brain", "rule", "prompt", "p"), Map.of("saga", saga)));
+        Map.of("brain", "rule", "prompt", "p",
+            "tools", List.of("a", "undo_a", "b", "undo_b", "boom")), Map.of("saga", saga)));
     TurnResult r = rt.submit(Event.turn("c", "t1", "u", "charge"));
     assertEquals(TurnStatus.FAILED, r.status);
     assertEquals(List.of("a", "b", "boom", "undo_b", "undo_a"), r.calls.stream().map(ToolCall::tool).toList());

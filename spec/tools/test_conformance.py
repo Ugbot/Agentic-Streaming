@@ -53,7 +53,7 @@ def test_reference_rejects_semantics_it_does_not_implement(extra) -> None:
 
 
 def test_reference_rejects_non_stub_llm_provider_and_scripts_without_text() -> None:
-    llm_path = {"agent": {"paths": {"main": {"brain": "llm"}}, "router": {"default": "main"}, "verifier": {"kind": "none"}}}
+    llm_path = {"agent": {"paths": {"main": {"brain": "llm", "tools": ["x"]}}, "router": {"default": "main"}, "verifier": {"kind": "none"}}}
     with pytest.raises(SpecError):
         ReferenceRuntime(_workflow(llm={"provider": "openai"}, **llm_path)).submit(Turn("c", "t", "hi"))
     with pytest.raises(SpecError):

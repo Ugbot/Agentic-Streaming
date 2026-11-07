@@ -75,7 +75,8 @@ class FeaturesTest {
     Agent pay = new Agent("payments", "p", new LlmBrain(new StubChatClient(List.of(
         ChatResult.toolCall("get_balance", Map.of()), ChatResult.text("done"))), "payments"));
     RoutedGraph graph = new RoutedGraph((ev, c) -> "payments", Map.of("payments", pay), null,
-        List.of(), List.of(composite));
+        List.of(), List.of(composite))
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL);
     graph.handle(new Event("c1", "u", "balance?"), ctx(tools));
     for (MetricsListener m : List.of(m1, m2)) {
       assertEquals(1, m.turns.get());
@@ -91,7 +92,8 @@ class FeaturesTest {
     Agent pay = new Agent("payments", "p", new LlmBrain(new StubChatClient(List.of(
         ChatResult.toolCall("boom", Map.of()), ChatResult.text("x"))), "payments"));
     RoutedGraph graph = new RoutedGraph((ev, c) -> "payments", Map.of("payments", pay), null,
-        List.of(), List.of(m));
+        List.of(), List.of(m))
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL);
     try {
       graph.handle(new Event("c1", "u", "go"), ctx(tools));
     } catch (RuntimeException ignore) {

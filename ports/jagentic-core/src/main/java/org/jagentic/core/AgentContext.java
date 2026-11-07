@@ -54,6 +54,10 @@ public final class AgentContext {
   public Map<String, String> metadata = Map.of();
   /** The model's label on {@code llm_called}, where the workflow names one. */
   public String model = null;
+  /** The one check every tool call passes; set by RoutedGraph. */
+  public ToolPolicy policy = ToolPolicy.DENY_ALL;
+  /** The path this turn was routed to, once it has been. */
+  public String path = null;
 
   private int nextToolIndex = 0;
   private int nextLlmIndex = 0;
@@ -270,6 +274,11 @@ public final class AgentContext {
     return invoke(toolId, params, null);
   }
 
+  /** As above for what is not a brain: a timer, a CEP pattern or a saga step. */
+  public Object callAs(ToolOrigin origin, String toolId, Map<String, Object> params) {
+    return invoke(origin, toolId, params, null, policies.onToolError() == Policies.OnToolError.CONTINUE);
+  }
+
   /**
    * Invokes a registered tool through the effect journal, under {@code policies.retry}. What is
    * already recorded for this {@code (turn_id, index)} is reused and nothing is called. Every attempt
@@ -281,7 +290,8 @@ public final class AgentContext {
    *     ({@code delegated} for peer tools, {@code tool_called} otherwise)
    */
   public Object invoke(String toolId, Map<String, Object> params, EventType successEvent) {
-    return invoke(toolId, params, successEvent, policies.onToolError() == Policies.OnToolError.CONTINUE);
+    return invoke(ToolOrigin.BRAIN, toolId, params, successEvent,
+        policies.onToolError() == Policies.OnToolError.CONTINUE);
   }
 
   /**
@@ -292,17 +302,34 @@ public final class AgentContext {
     Map<String, Object> forward = new LinkedHashMap<>();
     forward.put("forward_args", forwardArgs == null ? Map.of() : forwardArgs);
     forward.put("forward_result", forwardResult);
-    return invoke(toolId, forward, EventType.COMPENSATION_STEP, false);
+    return invoke(ToolOrigin.COMPENSATION, toolId, forward, EventType.COMPENSATION_STEP, false);
   }
 
-  private Object invoke(String toolId, Map<String, Object> params, EventType successEvent,
-                        boolean swallowFailure) {
+  /** Refuses what the policy refuses: on the log first, then the turn ends. */
+  private void authorise(ToolOrigin origin, String toolId, ToolRegistry.Tool tool, Map<String, Object> args) {
+    ToolPolicy.Decision decision = policy.decide(new ToolPolicy.Request(toolId, origin, path,
+        tool == null ? null : tool.effect(), args));
+    if (decision.allowed()) {
+      return;
+    }
+    Map<String, Object> p = new LinkedHashMap<>();
+    p.put("tool", toolId);
+    p.put("origin", origin.wire());
+    p.put("path", path);
+    p.put("reason", decision.reason());
+    record(EventType.TOOL_REFUSED, p);
+    throw new ToolRefused(toolId, decision.reason());
+  }
+
+  private Object invoke(ToolOrigin origin, String toolId, Map<String, Object> params,
+                        EventType successEvent, boolean swallowFailure) {
     ToolRegistry.Tool tool = tools.get(toolId);
+    Map<String, Object> args = params == null ? Map.of()
+        : Collections.unmodifiableMap(new LinkedHashMap<>(params));
+    authorise(origin, toolId, tool, args);
     if (tool == null) {
       throw new ToolRegistry.UnknownTool(toolId);
     }
-    Map<String, Object> args = params == null ? Map.of()
-        : Collections.unmodifiableMap(new LinkedHashMap<>(params));
     if (tool.inputSchema() != null) {
       List<String> problems = org.jagentic.core.structured.Structured.validate(args, tool.inputSchema());
       if (!problems.isEmpty()) {

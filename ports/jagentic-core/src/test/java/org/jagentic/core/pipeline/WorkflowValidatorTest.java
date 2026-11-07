@@ -30,7 +30,7 @@ class WorkflowValidatorTest {
         "rules", new LinkedHashMap<>(Map.of("main", List.of("charge"), "other", List.of("card"))))));
     agent.put("paths", new LinkedHashMap<>(Map.of(
         "main", new LinkedHashMap<>(Map.of("brain", "rule", "prompt", "p",
-            "tool_triggers", new LinkedHashMap<>(Map.of("charge", "lookup")))),
+            "tools", List.of("lookup"), "tool_triggers", new LinkedHashMap<>(Map.of("charge", "lookup")))),
         "other", new LinkedHashMap<>(Map.of("brain", "rule", "prompt", "p")))));
     agent.put("verifier", new LinkedHashMap<>(Map.of("kind", "none")));
     Map<String, Object> s = new LinkedHashMap<>();

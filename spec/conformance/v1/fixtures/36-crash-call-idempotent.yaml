@@ -1,7 +1,5 @@
 id: crash-call-idempotent
-description: 'An idempotent call that crashed before its result was recorded is made again under the same key, so
-  a server counting calls sees two. Once the result is recorded it is reused and there is one. Exactly one effect
-  needs the tool to honour the key: fixture crash-at-every-event counts by key and sees one.'
+description: 'An idempotent call that crashed before its result was recorded is made again under the same key, so a server counting calls sees two. Once the result is recorded it is reused and there is one. Exactly one effect needs the tool to honour the key: fixture crash-at-every-event counts by key and sees one.'
 requires: [crash_recovery, effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -18,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent}

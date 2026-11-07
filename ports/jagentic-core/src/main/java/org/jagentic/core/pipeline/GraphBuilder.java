@@ -39,6 +39,7 @@ import org.jagentic.core.RoutedGraph;
 import org.jagentic.core.Runtime;
 import org.jagentic.core.SagaPlan;
 import org.jagentic.core.TimerSpec;
+import org.jagentic.core.ToolPolicy;
 import org.jagentic.core.ToolRegistry;
 import org.jagentic.core.TurnResult;
 import org.jagentic.core.VectorStore;
@@ -155,6 +156,7 @@ public final class GraphBuilder {
     Map<String, Agent> paths = new LinkedHashMap<>();
     Map<String, String> suspendUntil = new LinkedHashMap<>();
     Map<String, RoutedGraph.Verifier> pathVerifiers = new LinkedHashMap<>();
+    Map<String, java.util.Set<String>> pathGrants = new LinkedHashMap<>();
     for (Map.Entry<String, Object> e : pathSpecs.entrySet()) {
       String name = e.getKey();
       Map<String, Object> ps = (Map<String, Object>) e.getValue();
@@ -171,6 +173,14 @@ public final class GraphBuilder {
       if (!expanded.promptFragment().isBlank()) {
         prompt = prompt + "\n" + expanded.promptFragment();
       }
+      List<String> pathTools = new ArrayList<>();
+      if (ps.get("tools") instanceof List<?> declared) {
+        for (Object t : declared) pathTools.add(String.valueOf(t));
+      }
+      for (String t : expanded.tools()) {
+        if (!pathTools.contains(t)) pathTools.add(t);
+      }
+      pathGrants.put(name, java.util.Set.copyOf(pathTools));
       String brainKind = (String) ps.getOrDefault("brain", "rule");
       Brain brain;
       if ("llm".equals(brainKind)) {
@@ -182,14 +192,7 @@ public final class GraphBuilder {
         ChatClient client = scripted ? ScriptedChatClient.fromSpec(llmSpec)
             : Deadlines.bound("model call", Deadlines.timeoutOf(llmSpec, Deadlines.DEFAULT_MODEL_TIMEOUT_MS),
                 chatClientFactory.create(llmSpec));
-        List<String> pathTools = new ArrayList<>();
-        if (ps.get("tools") instanceof List<?> declared) {
-          for (Object t : declared) pathTools.add(String.valueOf(t));
-        }
-        for (String t : expanded.tools()) {
-          if (!pathTools.contains(t)) pathTools.add(t);
-        }
-        LlmBrain lb = new LlmBrain(client, name, prompt, pathTools.isEmpty() ? null : pathTools,
+        LlmBrain lb = new LlmBrain(client, name, prompt, pathTools,
             ((Number) ps.getOrDefault("max_iterations", 6)).intValue());
         if (ps.get("output_schema") instanceof Map<?, ?> os) {
           lb.withOutputSchema((Map<String, Object>) os);
@@ -198,7 +201,7 @@ public final class GraphBuilder {
           lb.withContextManager(contextManager);
         }
         if (scripted) {
-          lb.withVerbatimReply().withStrictTools();
+          lb.withVerbatimReply();
         }
         brain = lb;
       } else if ("rule".equals(brainKind)) {
@@ -253,7 +256,8 @@ public final class GraphBuilder {
     if (!timers.isEmpty()) {
       graph = graph.withTimers(timers);
     }
-    graph = graph.withAgentId(String.valueOf(agent.get("id")));
+    graph = graph.withAgentId(String.valueOf(agent.get("id")))
+        .withToolPolicy(ToolPolicy.of(pathGrants, unattendedTools((Map<String, Object>) spec.get("policies"))));
     return new Built(graph, tools, retriever, availability.degradations(), EffectJournals.open(spec));
   }
 
@@ -282,6 +286,14 @@ public final class GraphBuilder {
         throw new WorkflowValidator.WorkflowValidationException(where + ".kind",
             "verifier kind " + kind + " is not implemented by this runtime (prefix|regex|none)");
     }
+  }
+
+  private static java.util.Set<String> unattendedTools(Map<String, Object> policies) {
+    java.util.Set<String> out = new java.util.LinkedHashSet<>();
+    if (policies != null && policies.get("unattended_tools") instanceof List<?> listed) {
+      listed.forEach(t -> out.add(String.valueOf(t)));
+    }
+    return out;
   }
 
   private static Map<String, String> compensations(List<Map<String, Object>> specs) {

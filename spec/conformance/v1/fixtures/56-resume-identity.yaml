@@ -1,6 +1,5 @@
 id: resume-identity
-description: 'The original user keeps the turn: a signal sent by someone else runs alice''s tool as alice, and the
-  sender is recorded separately.'
+description: 'The original user keeps the turn: a signal sent by someone else runs alice''s tool as alice, and the sender is recorded separately.'
 requires: [suspend_resume, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -18,6 +17,7 @@ workflow:
         prompt: You move money.
         tool_triggers: {pay: pay}
         x-suspend-until: approval
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

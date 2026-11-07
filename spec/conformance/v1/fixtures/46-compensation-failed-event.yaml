@@ -1,6 +1,5 @@
 id: compensation-failed-event
-description: A failed undo is on the log as compensation_failed, the other undo still runs, and the turn ends fatal.
-  The full sequence shows the order.
+description: A failed undo is on the log as compensation_failed, the other undo still runs, and the turn ends fatal. The full sequence shows the order.
 requires: [saga, effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -13,7 +12,7 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main: {brain: rule, prompt: You move money.}
+      main: {brain: rule, prompt: You move money., tools: [a, undo_a, b, undo_b, post]}
     verifier: {kind: none}
   tools:
   - {id: a, kind: constant, value: a, compensation: undo_a}
@@ -33,8 +32,7 @@ expect:
 - turn_id: t1
   status: failed
   error_class: fatal
-  events: [turn_received, routed, tool_intent, tool_called, tool_intent, tool_called, tool_intent, tool_failed,
-    compensation_started, tool_intent, tool_failed, compensation_failed, tool_intent, compensation_step, turn_failed]
+  events: [turn_received, routed, tool_intent, tool_called, tool_intent, tool_called, tool_intent, tool_failed, compensation_started, tool_intent, tool_failed, compensation_failed, tool_intent, compensation_step, turn_failed]
   event_payloads:
   - type: compensation_failed
     payload: {tool: undo_b, index: 3, step: second}

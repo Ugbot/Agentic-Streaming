@@ -17,6 +17,7 @@ workflow:
         prompt: You move money.
         tool_triggers: {pay: pay}
         x-suspend-until: approval
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

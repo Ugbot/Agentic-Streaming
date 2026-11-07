@@ -1,6 +1,5 @@
 id: unknown-outcome-twice
-description: A resolution is spent before the call it allows, so a crash during that call is unknown again, not
-  a licence for a third call. The redelivered signal changes nothing, and a new answer is needed.
+description: A resolution is spent before the call it allows, so a crash during that call is unknown again, not a licence for a third call. The redelivered signal changes nothing, and a new answer is needed.
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}

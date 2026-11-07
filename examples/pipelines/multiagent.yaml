@@ -40,6 +40,7 @@ agent:
     escalations:
       brain: rule
       prompt: You escalate to a specialist agent.
+      tools: [ask_specialist]
       tool_triggers: {escalate: ask_specialist}
   verifier: {kind: prefix}
 

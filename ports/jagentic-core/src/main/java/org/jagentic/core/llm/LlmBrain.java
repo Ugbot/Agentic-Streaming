@@ -13,7 +13,6 @@ import org.jagentic.core.ChatMessage;
 import org.jagentic.core.ContextItem;
 import org.jagentic.core.ContextWindowManager;
 import org.jagentic.core.Priority;
-import org.jagentic.core.ToolNotPermitted;
 
 /**
  * A {@link Brain} that drives a bounded ReAct loop over a {@link ChatClient} (thought →
@@ -34,12 +33,11 @@ public final class LlmBrain implements Brain {
   private final ChatClient client;
   private final String name;
   private final String systemPrompt;
-  private final Set<String> allowedTools; // null => all
+  private final Set<String> offeredTools; // null => all; what the model is told about, not a permission
   private final int maxIterations;
   private Map<String, Object> outputSchema; // optional structured-output contract
   private ContextWindowManager contextManager; // optional transcript compaction (MoSCoW)
   private boolean verbatimReply; // final text as the reply, without the "[name] " prefix
-  private boolean strictTools; // an undeclared tool fails the turn instead of being refused in-loop
 
   public LlmBrain(ChatClient client, String name) {
     this(client, name, "", null, 6);
@@ -50,7 +48,7 @@ public final class LlmBrain implements Brain {
     this.client = client;
     this.name = name;
     this.systemPrompt = systemPrompt == null ? "" : systemPrompt;
-    this.allowedTools = tools == null ? null : Set.copyOf(tools);
+    this.offeredTools = tools == null ? null : Set.copyOf(tools);
     this.maxIterations = Math.max(1, maxIterations);
   }
 
@@ -76,20 +74,10 @@ public final class LlmBrain implements Brain {
     return this;
   }
 
-  /**
-   * Fail the turn with {@link ToolNotPermitted} (error class {@code validation}) when the model
-   * calls a tool outside the declared set, instead of answering the model with an error
-   * observation and continuing the loop. Returns this for chaining.
-   */
-  public LlmBrain withStrictTools() {
-    this.strictTools = true;
-    return this;
-  }
-
   @Override
   public String turn(String userText, AgentContext ctx) {
     List<Map<String, String>> specs = ctx.tools.specs().stream()
-        .filter(s -> allowedTools == null || allowedTools.contains(s.get("name")))
+        .filter(s -> offeredTools == null || offeredTools.contains(s.get("name")))
         .toList();
     String toolList = specs.stream()
         .map(s -> s.get("name") + ": " + s.get("description"))
@@ -116,14 +104,6 @@ public final class LlmBrain implements Brain {
     for (int i = 0; i < maxIterations; i++) {
       ChatResult r = ctx.chat(request, () -> client.chat(messages, specs));
       if (r.isToolCall()) {
-        if (allowedTools != null && !allowedTools.contains(r.tool())) {
-          if (strictTools) {
-            throw new ToolNotPermitted(r.tool(), name, allowedTools);
-          }
-          messages.add(asked(r));
-          messages.add(observed(r, "error: tool " + r.tool() + " is not permitted for this agent"));
-          continue;
-        }
         Object observation = ctx.callTool(r.tool(), r.args());
         messages.add(asked(r));
         messages.add(observed(r, String.valueOf(observation)));

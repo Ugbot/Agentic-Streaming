@@ -15,7 +15,8 @@ class PolicyTest {
     RoutedGraph base = Banking.buildGraph();
     RoutedGraph graph = new RoutedGraph(Banking::router, pathsOf(base),
         (reply, ctx) -> new RoutedGraph.Verifier.Result(reply != null && reply.startsWith("["), reply),
-        guardrails, listeners);
+        guardrails, listeners)
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL);
     return new LocalRuntime(graph, new ConversationStore.InMemory(), new KeyedStateStore.InMemory(),
         Banking.defaultTools(), Banking.retriever());
   }

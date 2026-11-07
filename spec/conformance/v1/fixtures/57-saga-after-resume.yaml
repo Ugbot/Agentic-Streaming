@@ -12,7 +12,7 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main: {brain: rule, prompt: You move money., x-suspend-until: approval}
+      main: {brain: rule, prompt: You move money., x-suspend-until: approval, tools: [a]}
     verifier: {kind: none}
   tools:
   - {id: a, kind: constant, value: a}

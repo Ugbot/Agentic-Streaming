@@ -1,7 +1,5 @@
 id: crash-call-non-idempotent
-description: A non_idempotent call with no recorded result is never made again. Crashed before or during the call
-  the two cases look the same, and the turn suspends for a person. Crashed after the result was recorded, the result
-  is reused.
+description: A non_idempotent call with no recorded result is never made again. Crashed before or during the call the two cases look the same, and the turn suspends for a person. Crashed after the result was recorded, the result is reused.
 requires: [crash_recovery, effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -18,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: non_idempotent}

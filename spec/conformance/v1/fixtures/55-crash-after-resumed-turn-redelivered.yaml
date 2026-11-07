@@ -1,7 +1,5 @@
 id: crash-after-resumed-turn-redelivered
-description: After a crash past turn_resumed, a plain redelivery of the turn finishes it on a log that kept the
-  resume. A log that rolled back is suspended again, answers duplicate, and needs the signal, which its source redelivers
-  too. Both end the same.
+description: After a crash past turn_resumed, a plain redelivery of the turn finishes it on a log that kept the resume. A log that rolled back is suspended again, answers duplicate, and needs the signal, which its source redelivers too. Both end the same.
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -19,6 +17,7 @@ workflow:
         prompt: You move money.
         tool_triggers: {pay: pay}
         x-suspend-until: approval
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

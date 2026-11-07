@@ -58,7 +58,8 @@ class ExtensibilityTest {
     };
     RoutedGraph.Verifier verifier =
         (reply, ctx) -> new RoutedGraph.Verifier.Result(reply != null && reply.startsWith("["), reply);
-    return new RoutedGraph(router, paths, verifier);
+    return new RoutedGraph(router, paths, verifier)
+        .withToolPolicy(org.jagentic.core.ToolPolicy.ALLOW_ALL);
   }
 
   private LocalRuntime runtime() {

@@ -1,6 +1,5 @@
 id: tool-http-5xx
-description: An HTTP 500 from a tool is a failed attempt, never a result. Attempts are numbered under one key and
-  the turn fails with class tool.
+description: An HTTP 500 from a tool is a failed attempt, never a result. Attempts are numbered under one key and the turn fails with class tool.
 requires: [retry, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: http, effect: idempotent, url: '{{http}}/status/500'}

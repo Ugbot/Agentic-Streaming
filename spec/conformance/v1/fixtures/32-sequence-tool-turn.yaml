@@ -1,6 +1,5 @@
 id: sequence-tool-turn
-description: 'The whole event sequence of a tool turn, not a subsequence: intent before the call, the key on the
-  intent, the user on turn_received, and a timestamp and metadata on every event.'
+description: 'The whole event sequence of a tool turn, not a subsequence: intent before the call, the key on the intent, the user on turn_received, and a timestamp and metadata on every event.'
 requires: [effect_journal, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

@@ -24,6 +24,7 @@ def _doc(timers: List[Dict[str, Any]]) -> Dict[str, Any]:
            .verifier("prefix")
            .document())
     doc["timers"] = timers
+    doc.setdefault("policies", {})["unattended_tools"] = [t["tool"] for t in timers if t.get("tool")]
     return doc
 
 

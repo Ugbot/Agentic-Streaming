@@ -19,7 +19,7 @@ DOC = {
         "id": "a",
         "router": {"kind": "static", "default": "p"},
         "verifier": {"kind": "none"},
-        "paths": {"p": {"brain": "rule", "tool_triggers": {"pay": "charge"}}},
+        "paths": {"p": {"brain": "rule", "tools": ["charge"], "tool_triggers": {"pay": "charge"}}},
     },
     "tools": [{"id": "charge", "kind": "constant", "value": "ok"}],
 }

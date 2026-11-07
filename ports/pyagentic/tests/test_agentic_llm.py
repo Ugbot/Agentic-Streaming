@@ -156,11 +156,12 @@ def test_the_model_sees_the_transcript_of_earlier_turns(server):
     assert roles == [("user", "first"), ("assistant", "[main] One."), ("user", "second")]
 
 
-def test_a_tool_outside_the_path_is_refused_in_the_loop(server):
+def test_a_tool_outside_the_path_ends_the_turn_and_goes_back_to_no_model(server):
     server.script = [tool("transfer", to="x"), text("Sorry.")]
     result = deployed(agent(server)).submit(Turn("c1", "t1", "move it"))
-    assert (result["status"], result["reply"], result["tool_calls"]) == ("completed", "[main] Sorry.", [])
-    assert "not permitted" in server.requests[1]["messages"][-1]["content"]
+    assert (result["status"], result["error"]["class"], result["tool_calls"]) == ("failed", "policy", [])
+    assert [e["type"] for e in result["events"]].count("tool_refused") == 1
+    assert len(server.requests) == 1
 
 
 def test_the_loop_is_bounded(server):

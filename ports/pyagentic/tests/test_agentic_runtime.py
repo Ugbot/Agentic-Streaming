@@ -161,7 +161,7 @@ def test_event_types_are_closed_and_sequences_dense():
     with pytest.raises(ValidationError, match="closed set"):
         log.append(cid, "t1", "made_up_event", {}, 0)
     assert [e.sequence for e in log.read(cid)] == [0, 1, 2, 3, 4]
-    assert len(EVENT_TYPES) == 24
+    assert len(EVENT_TYPES) == 25
 
 
 def test_state_is_a_fold_over_the_log():
@@ -205,7 +205,7 @@ def test_turns_on_one_conversation_are_serialized_in_arrival_order():
         calls.append(user)
         return user
 
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "slow"}).use_tool("slow", slow).verifier("none").build())
+    spec = (Agent(rid("a")).path("main", tools=["slow"], tool_triggers={"go": "slow"}).use_tool("slow", slow).verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
     cid = rid("c")
@@ -241,7 +241,7 @@ def test_different_conversations_do_not_block_each_other():
             release.wait(2)
         return user
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "b"}).use_tool("b", blocker).verifier("none").build()
+    spec = Agent(rid("a")).path("main", tools=["b"], tool_triggers={"go": "b"}).use_tool("b", blocker).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     done = threading.Event()
@@ -260,7 +260,7 @@ def test_duplicate_turn_returns_recorded_result_and_runs_nothing():
         executions.append(user)
         return "done"
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
+    spec = Agent(rid("a")).path("main", tools=["c"], tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid, tid = rid("c"), rid("t")
@@ -293,7 +293,7 @@ def test_restart_rebuilds_from_the_log_without_re_executing():
         executions.append(user)
         return "x"
 
-    spec = Agent(rid("a")).path("main", tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
+    spec = Agent(rid("a")).path("main", tools=["c"], tool_triggers={"go": "c"}).use_tool("c", counted).verifier("none").build()
     rt = LocalRuntime()
     rt.deploy(spec)
     cid = rid("c")
@@ -342,7 +342,7 @@ def test_unavailable_store_fails_unless_degrade_is_configured():
 
 def test_retry_attempts_and_delays_follow_the_policy():
     slept: List[float] = []
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "flaky"})
+    spec = (Agent(rid("a")).path("main", tools=["flaky"], tool_triggers={"go": "flaky"})
             .tool("flaky", "failing", value="ok", effect="idempotent", **{"x-fail-attempts": 2})
             .policies(retry={"kind": "exponential", "max_attempts": 4, "initial_delay_ms": 100, "multiplier": 2.0,
                              "max_delay_ms": 150})
@@ -369,7 +369,7 @@ def test_retry_delay_math():
 
 
 def test_retry_exhaustion_fails_with_tool_error_class():
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing", effect="idempotent")
+    spec = (Agent(rid("a")).path("main", tools=["broken"], tool_triggers={"go": "broken"}).tool("broken", "failing", effect="idempotent")
             .policies(retry="fixed", max_attempts=2).verifier("none").build())
     rt = LocalRuntime(sleep=lambda _: None)
     rt.deploy(spec)
@@ -379,7 +379,7 @@ def test_retry_exhaustion_fails_with_tool_error_class():
 
 
 def test_on_tool_error_continue_keeps_going():
-    spec = (Agent(rid("a")).path("main", tool_triggers={"go": "broken"}).tool("broken", "failing")
+    spec = (Agent(rid("a")).path("main", tools=["broken"], tool_triggers={"go": "broken"}).tool("broken", "failing")
             .policies(on_tool_error="continue").verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)
@@ -523,7 +523,7 @@ def test_saga_compensates_completed_steps_in_reverse_order():
             return name
         return fn
 
-    spec = (Agent(rid("a")).path("main")
+    spec = (Agent(rid("a")).path("main", tools=["s1", "u1", "s2", "u2", "s3"])
             .use_tool("s1", step("s1"), compensation="u1").use_tool("u1", undo("u1"))
             .use_tool("s2", step("s2")).use_tool("u2", undo("u2"))
             .tool("s3", "failing")
@@ -551,7 +551,7 @@ def test_a2a_peer_receives_the_idempotency_key():
         seen.append(delegation)
         return f"handled {args['user']}"
 
-    spec = (Agent(rid("a")).path("main", tool_triggers={"escalate": "specialist"})
+    spec = (Agent(rid("a")).path("main", tools=["specialist"], tool_triggers={"escalate": "specialist"})
             .use_peer("specialist", peer).verifier("none").build())
     rt = LocalRuntime()
     rt.deploy(spec)

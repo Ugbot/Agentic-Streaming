@@ -13,6 +13,8 @@ workflow:
       main: {brain: rule, prompt: You chat.}
   tools:
     - {id: escalate, kind: constant, value: "escalated"}
+  policies:
+    unattended_tools: [escalate]
 turns:
   - {conversation_id: c1, turn_id: t1, text: "open", metadata: {event_time_ms: "1000"}}
   - {conversation_id: c1, turn_id: t2, text: "update", metadata: {event_time_ms: "1200"}}

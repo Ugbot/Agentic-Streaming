@@ -146,7 +146,12 @@
           },
           "additionalProperties": false
         },
-        "on_tool_error": { "enum": ["fail", "continue"], "default": "fail" }
+        "on_tool_error": { "enum": ["fail", "continue"], "default": "fail" },
+        "unattended_tools": {
+          "description": "What a timer or a CEP pattern may call. They run outside any path, so a path's tools do not cover them. Deny by default: a tool not listed here is refused.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
       },
       "patternProperties": { "^x-": {} },
       "additionalProperties": false

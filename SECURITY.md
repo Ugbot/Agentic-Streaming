@@ -44,6 +44,5 @@ this code (report those upstream; a dependency bump here is welcome as a pull re
 ## Security posture
 
 `docs/security.md` states what the code does today. In short: the canonical path has no
-authentication, the Pekko HTTP front door has none either, the tool allowlist is only enforced in
-`LlmBrain`, and workflow documents are trusted input that can start processes. Do not expose any of
+authentication, the Pekko HTTP front door has none either, and workflow documents are trusted input that can start processes. Do not expose any of
 this to untrusted callers.

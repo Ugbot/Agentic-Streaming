@@ -13,6 +13,8 @@ workflow:
       main: {brain: rule, prompt: You chat.}
   tools:
     - {id: send_nudge, kind: constant, value: "nudged"}
+  policies:
+    unattended_tools: [send_nudge]
 turns:
   - {conversation_id: c1, turn_id: t1, text: "start"}
   - {conversation_id: c1, turn_id: t2, text: "still here", advance_time_ms: 600}

@@ -1,6 +1,5 @@
 id: signal-while-running
-description: A signal for a turn that crashed before it suspended is refused, whether the log kept the partial turn
-  or lost it. Redelivery reaches the suspension, and the signal then resumes it.
+description: A signal for a turn that crashed before it suspended is refused, whether the log kept the partial turn or lost it. Redelivery reaches the suspension, and the signal then resumes it.
 requires: [crash_recovery, effect_journal, tools, idempotency, suspend_resume]
 workflow:
   spec_version: agentic/v1
@@ -18,6 +17,7 @@ workflow:
         prompt: You move money.
         tool_triggers: {pay: pay}
         x-suspend-until: approval
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: counting, effect: idempotent, x-count-by: keys}

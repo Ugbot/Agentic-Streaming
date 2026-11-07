@@ -87,7 +87,9 @@ class WorkflowTurnBoundaryTest {
 
   /** A saga whose second step always fails and whose undo for the first always fails too. */
   private static Map<String, Object> sagaWithFailingUndo(Map<String, Object> firstStepTool) {
-    Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
+    Map<String, Object> wf =
+        new LinkedHashMap<>(
+            Workflows.onEveryPath(Workflows.billing(), "reserve", "post", "release"));
     wf.put(
         "tools",
         List.of(
@@ -147,7 +149,8 @@ class WorkflowTurnBoundaryTest {
 
   @Test
   void aSagaTurnWithNoUserIdRunsTheSaga() throws Exception {
-    Map<String, Object> wf = new LinkedHashMap<>(Workflows.billing());
+    Map<String, Object> wf =
+        new LinkedHashMap<>(Workflows.onEveryPath(Workflows.billing(), "reserve"));
     wf.put(
         "tools",
         List.of(LOOKUP, Map.of("id", "reserve", "kind", "constant", "effect", "read", "value", 1)));
@@ -168,6 +171,7 @@ class WorkflowTurnBoundaryTest {
     wf.put(
         "tools", List.of(LOOKUP, Map.of("id", "nudge", "kind", "failing", "effect", "idempotent")));
     wf.put("timers", List.of(Map.of("id", "followup", "after_ms", 10, "tool", "nudge")));
+    wf.put("policies", Map.of("unattended_tools", List.of("nudge")));
     String clock = rnd("clock");
     FlinkRuntimeOptions options = FlinkRuntimeOptions.fromSpec(wf).withManualClock(clock);
     String cid = rnd("c");

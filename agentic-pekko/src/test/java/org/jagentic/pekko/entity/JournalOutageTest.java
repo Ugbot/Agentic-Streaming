@@ -49,7 +49,7 @@ class JournalOutageTest {
     Map<String, Object> workflow = Map.of(
         "spec_version", "agentic/v1",
         "agent", Map.of("id", "a", "router", Map.of("kind", "static", "default", "p"),
-            "paths", Map.of("p", Map.of("brain", "rule", "tool_triggers", Map.of("pay", "pay"))),
+            "paths", Map.of("p", Map.of("brain", "rule", "tools", List.of("pay"), "tool_triggers", Map.of("pay", "pay"))),
             "verifier", Map.of("kind", "none")),
         "tools", List.of(Map.of("id", "pay", "kind", "counting", "effect", "non_idempotent",
             "x-world", "outage-" + UUID.randomUUID())));

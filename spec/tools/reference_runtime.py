@@ -44,6 +44,10 @@ class ValidationFailure(RuntimeError):
     """Bad arguments or an unknown tool inside a turn. Error class `validation`."""
 
 
+class ToolRefused(ValidationFailure):
+    """The tool policy said no. Error class `policy`: nothing ran, and no retry can change that."""
+
+
 class UnknownOutcome(Exception):
     """A non_idempotent call has no recorded result. The turn suspends for a person."""
 
@@ -429,6 +433,8 @@ class ReferenceRuntime:
                 self._fire_due_timers(conv, ctx)
             except ToolError as exc:
                 return self._fail(conv, ctx, None, "tool", str(exc))
+            except ToolRefused as exc:
+                return self._fail(conv, ctx, None, "policy", str(exc))
         received: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id}
         if event_time is not None:
             received["event_time_ms"] = event_time
@@ -445,11 +451,14 @@ class ReferenceRuntime:
             return self._finish(conv, ctx, "rejected", None, None, {"class": "guardrail", "message": blocked})
 
         path = self._route(turn.text)
+        ctx.path = path
         self._append(conv, ctx, "routed", {"path": path})
         try:
             self._match_patterns(conv, ctx)
         except ToolError as exc:
             return self._fail(conv, ctx, path, "tool", str(exc))
+        except ToolRefused as exc:
+            return self._fail(conv, ctx, path, "policy", str(exc))
         blocked = self._check_guardrails(self._path_rails(path), "input", turn.text)
         if blocked is not None:
             self._append(conv, ctx, "guardrail_rejected", {"reason": blocked, "path": path})
@@ -464,6 +473,7 @@ class ReferenceRuntime:
         return self._after_routing(conv, ctx, path)
 
     def _after_routing(self, conv: Conversation, ctx: "_TurnContext", path: str) -> Dict[str, Any]:
+        ctx.path = path
         try:
             if self.saga is not None:
                 return self._run_saga(conv, ctx, path)
@@ -477,7 +487,7 @@ class ReferenceRuntime:
             conv.suspended[ctx.turn.turn_id] = payload
             return self._finish(conv, ctx, "suspended", path, None, None)
         except (ValidationFailure, JournalDivergence) as exc:
-            cls = "validation" if isinstance(exc, ValidationFailure) else "fatal"
+            cls = "fatal" if isinstance(exc, JournalDivergence) else _class_of(exc)
             return self._fail(conv, ctx, path, cls, str(exc))
 
     def _fail(self, conv: Conversation, ctx: "_TurnContext", path: Optional[str], cls: str,
@@ -605,7 +615,7 @@ class ReferenceRuntime:
             self._append(conv, ctx, "timer_fired", {"timer_id": pending["timer_id"], "due_ms": pending["due_ms"]})
             spec = next(t for t in self.timers if t["id"] == pending["timer_id"])
             if spec.get("tool"):
-                self._invoke(conv, ctx, spec["tool"], dict(spec.get("payload") or {}))
+                self._invoke(conv, ctx, spec["tool"], dict(spec.get("payload") or {}), origin="timer")
 
     def _match_patterns(self, conv: Conversation, ctx: "_TurnContext") -> None:
         """Sequence CEP over this conversation's turns; a match completing on this turn fires on_match."""
@@ -616,7 +626,7 @@ class ReferenceRuntime:
                 if "tool" not in on_match:
                     raise SpecError(f"cep pattern {pattern['name']} has on_match.kind tool without a tool id")
                 self._invoke(conv, ctx, on_match["tool"],
-                             {"pattern": pattern["name"], "key": ctx.turn.conversation_id})
+                             {"pattern": pattern["name"], "key": ctx.turn.conversation_id}, origin="cep")
 
     @staticmethod
     def _matches_on_last_turn(pattern: Dict[str, Any], turns: List[Dict[str, Any]]) -> bool:
@@ -663,9 +673,9 @@ class ReferenceRuntime:
         for step in self.saga["steps"]:
             args = step.get("args", {})
             try:
-                result = self._invoke(conv, ctx, step["tool"], args)
+                result = self._invoke(conv, ctx, step["tool"], args, origin="saga")
             except (ToolError, ValidationFailure) as exc:
-                cls = "tool" if isinstance(exc, ToolError) else "validation"
+                cls = _class_of(exc)
                 self._append(conv, ctx, "compensation_started", {"failed_step": step.get("name", step["tool"])})
                 failed_undos = self._compensate(conv, ctx, done)
                 if failed_undos:
@@ -685,7 +695,7 @@ class ReferenceRuntime:
                 continue
             forward = {"forward_args": args, "forward_result": result}
             try:
-                self._invoke(conv, ctx, undo, forward, event="compensation_step", strict=True)
+                self._invoke(conv, ctx, undo, forward, event="compensation_step", strict=True, origin="compensation")
             except (ToolError, ValidationFailure) as exc:
                 failed.append(undo)
                 last = ctx.tool_calls[-1] if ctx.tool_calls else {"index": None}
@@ -746,11 +756,24 @@ class ReferenceRuntime:
             return re.search(verifier["pattern"], reply) is not None
         raise SpecError(f"the reference runtime does not implement the {kind} verifier")
 
+    def _authorise(self, conv: Conversation, ctx: "_TurnContext", tool_id: str, origin: str) -> None:
+        """The one check every tool call passes (primitives.md section 11). Deny by default: what is
+        not listed is refused, and a refusal is on the log before the turn ends."""
+        unattended = origin in ("timer", "cep")
+        allowed = self.policies.get("unattended_tools") if unattended else self.paths[ctx.path].get("tools")
+        if tool_id in (allowed or []):
+            return
+        scope = "policies.unattended_tools" if unattended else f"the tools of path {ctx.path}"
+        reason = f"tool {tool_id} is not in {scope}"
+        self._append(conv, ctx, "tool_refused", {"tool": tool_id, "origin": origin, "path": ctx.path, "reason": reason})
+        raise ToolRefused(reason)
+
     def _invoke(self, conv: Conversation, ctx: "_TurnContext", tool_id: str,
-                args: Dict[str, Any], event: str = None, strict: bool = False) -> Any:
+                args: Dict[str, Any], event: str = None, strict: bool = False, origin: str = "brain") -> Any:
         """`record_or_get` for one tool call (primitives.md section 10). `strict` raises when the
         budget is spent whatever `on_tool_error` says: a saga undo that failed must never read as
         compensated."""
+        self._authorise(conv, ctx, tool_id, origin)
         spec = self.tools.get(tool_id)
         if spec is None:
             raise ValidationFailure(f"unknown tool {tool_id}")
@@ -946,6 +969,12 @@ class ReferenceRuntime:
         return result
 
 
+def _class_of(exc: Exception) -> str:
+    if isinstance(exc, ToolRefused):
+        return "policy"
+    return "validation" if isinstance(exc, ValidationFailure) else "tool"
+
+
 class _Prior:
     """What an earlier run of this turn left on the log, by (type, index, attempt)."""
 
@@ -982,6 +1011,7 @@ class _TurnContext:
     events: List[Dict[str, Any]] = field(default_factory=list)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
     prior: Optional[_Prior] = None
+    path: Optional[str] = None
     _tool_index: int = 0
     _llm_index: int = 0
 

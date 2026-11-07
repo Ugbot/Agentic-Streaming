@@ -12,6 +12,7 @@ workflow:
         brain: rule
         prompt: You answer charge questions.
         tool_triggers: {charge: broken_tool}
+        tools: [broken_tool]
     verifier: {kind: none}
   policies:
     on_tool_error: fail

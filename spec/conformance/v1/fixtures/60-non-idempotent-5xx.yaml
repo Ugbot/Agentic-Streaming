@@ -1,6 +1,5 @@
 id: non-idempotent-5xx
-description: 'A 5xx from a non_idempotent tool may have landed, so it is an unknown outcome: one attempt whatever
-  the retry policy says, and the turn waits for a person.'
+description: 'A 5xx from a non_idempotent tool may have landed, so it is an unknown outcome: one attempt whatever the retry policy says, and the turn waits for a person.'
 requires: [effect_journal, retry, suspend_resume, tools, idempotency]
 workflow:
   spec_version: agentic/v1
@@ -17,6 +16,7 @@ workflow:
         brain: rule
         prompt: You move money.
         tool_triggers: {pay: pay}
+        tools: [pay]
     verifier: {kind: none}
   tools:
   - {id: pay, kind: http, effect: non_idempotent, url: '{{http}}/status/503'}
