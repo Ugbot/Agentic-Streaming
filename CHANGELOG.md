@@ -13,6 +13,22 @@ exists.
 
 ### Changed
 
+- **Behaviour change: deny by default at the tool boundary.** A path may call only what its `tools`
+  lists, plus its skills' tools, and leaving `tools` out means none, where before it meant all. Timers
+  and CEP patterns need `policies.unattended_tools`. A refused tool is `tool_refused` and ends the turn
+  with the new error class `policy`; the LLM brain no longer offers a refusal back to the model, and
+  `LlmBrain.withStrictTools` is gone. Java code that builds a `RoutedGraph` must give it a `ToolPolicy`.
+- **Behaviour change: nobody may resume a turn unless `policies.approvers` names them,** and a signal
+  must carry an authenticated principal. A refused signal is `signal_refused`. Beside a principal,
+  `user_id` is the principal's subject.
+- **Behaviour change: egress is refused to private and metadata addresses** for HTTP tools, peers and
+  model calls unless `AGENTIC_EGRESS_ALLOW_PRIVATE=true`. Redirects are not followed.
+- **Behaviour change: `mcp[].command` starts only what `AGENTIC_MCP_ALLOWED_COMMANDS` lists.**
+- **The Pekko HTTP routes are replaced by `agentic-gateway`,** which needs a token and does not start
+  without authentication configured.
+- New: `policies.tool_approval`, `policies.limits`, `policies.redact`, `tools[].auth` and `a2a[].auth`
+  by reference, an OPA adapter, crypto-shredding with `AGENTIC_KEY_VAULT_DIR`, an OSV scan and SBOMs.
+
 - **Behaviour change: a tool that declares no `effect` is now `non_idempotent`, not `idempotent`.**
   It is never called twice: `policies.retry` gives it one attempt, and a call with no recorded result
   becomes `unknown_outcome` and suspends for a person, where before it was made again under its key.

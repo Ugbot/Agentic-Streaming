@@ -29,7 +29,7 @@ event journal gives durability + recovery; Cluster Sharding gives one live entit
 | Durable timers | `ScheduleTimer` journals `timer_scheduled` with the event to deliver (typically a resume signal); expiry journals `timer_fired` and processes it as an ordinary turn. Pending timers are re-armed from the fold after recovery. |
 | `cluster/ConversationSharding` | Cluster Sharding wiring, the distributed single-writer (one entity per id across nodes, migrated on failover). |
 | `runtime/PekkoRuntime` | Implements the core `Runtime` SPI; `PekkoBackendProvider` makes **`backend: pekko`** work in any `pipeline.yaml` (via a core `BackendProvider` ServiceLoader hook). |
-| `runtime/TurnWire` | The one JSON codec for both front doors: input carries `conversation_id`, explicit `turn_id`, `user_id`, `text`, structured `metadata`/`signal`; output is the normalized `spec/v1/result.schema.json` document. |
+| `runtime/TurnWire` | The JSON codec of the Kafka front door, which alone may carry a `principal` (`parseVouched`): input carries `conversation_id`, explicit `turn_id`, `user_id`, `text`, structured `metadata`/`signal`; output is the normalized `spec/v1/result.schema.json` document. |
 | `http/` | `PekkoBackend` puts these entities behind the gateway (`agentic-gateway`), the one HTTP front door; `HttpMain` runs the two together. There is no other HTTP route. |
 | `kafka/AgentStream` + `KafkaStreamApp` | Pekko Streams: a backpressured `mapAsync` ask-the-entity flow; Kafka ingress/egress (committable source → ask → producer sink, at-least-once + `turn_id` dedupe, so redelivery yields `duplicate`). |
 | `durability/` | Pluggable durability (see below). |
