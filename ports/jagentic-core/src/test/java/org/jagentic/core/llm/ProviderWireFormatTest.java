@@ -38,7 +38,7 @@ class ProviderWireFormatTest {
       Map.of("role", "system", "content", "be brief"),
       Map.of("role", "user", "content", "hello"),
       Map.of("role", "assistant", "content", "{\"tool\":\"look\"}"),
-      Map.of("role", "user", "content", "Result of look: <untrusted source=\"tool:look\">\n42\n</untrusted>"));
+      Map.of("role", "user", "content", "Result of look: 42"));
 
   private HttpServer server;
   private final List<JsonNode> bodies = new ArrayList<>();
@@ -179,6 +179,6 @@ class ProviderWireFormatTest {
     assertTrue(reply.contains("done"), reply);
     Map<String, String> last = seen.get(1).get(seen.get(1).size() - 1);
     assertEquals("user", last.get("role"));
-    assertEquals("Result of look: 42", last.get("content"));
+    assertEquals("Result of look: <untrusted source=\"tool:look\">\n42\n</untrusted>", last.get("content"));
   }
 }
