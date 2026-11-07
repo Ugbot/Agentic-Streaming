@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.jagentic</groupId>
+    <artifactId>agentic-streaming-reactor</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../reactor/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>agentic-gateway</artifactId>
+  <packaging>jar</packaging>
+  <name>Agentic Gateway</name>
+  <description>The one HTTP front door of the canonical path: authenticates a caller, scopes the
+    conversation to its tenant, and hands a turn to a runtime.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.jagentic</groupId>
+      <artifactId>jagentic-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.nimbusds</groupId>
+      <artifactId>nimbus-jose-jwt</artifactId>
+      <version>10.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
+      <version>4.1.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

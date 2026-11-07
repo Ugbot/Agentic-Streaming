@@ -1,8 +1,8 @@
 # Security model
 
 This page states what the code does today, including where it does nothing. The project is
-experimental. **Do not expose any of it to untrusted callers, and do not use it for real payments:
-the effect journal below stops repeated calls, but nothing here authenticates who asked for one.**
+experimental and has had no outside security review. **Do not expose it to untrusted callers, and do
+not use it for real payments.**
 
 ## Who is calling
 
@@ -16,14 +16,59 @@ an unknown outcome. Nobody can if the block is absent. A refused signal is `sign
 and changes nothing. A resumed turn keeps the principal that started it, and the approver is recorded
 apart. The fixtures `principal-on-the-log` to `wrong-tenant-turn` prove this on all five runtimes.
 
-- The Pekko HTTP front door has no authentication. `POST /agent` runs a turn, and
-  `GET /conversations/{id}` returns the whole event log, tool results included, to anyone who can
-  reach the port. A request body cannot carry a principal, so it cannot resume anything.
-  `HttpMain` binds `0.0.0.0` unless `AGENTIC_PEKKO_HTTP_HOST` says otherwise. Set it to `127.0.0.1` on
-  any machine you do not fully control.
 - The Flink JobManager REST API in `docker-compose-session.yml` has no authentication and accepts jar
   uploads and job submission. It is published on `127.0.0.1` only and must never be exposed beyond
   the host.
+
+## The gateway
+
+`agentic-gateway` is the one HTTP front door. The Pekko routes are gone. It serves `POST /agent` (run a
+turn), `GET /conversations/{id}` (read the log) and `POST /conversations/{id}/turns/{turn}/resume`
+(answer a suspended turn), and it runs in front of Flink over Kafka (`GatewayMain`), Pekko (`HttpMain`)
+or a `LocalRuntime`. `GET /healthz` and the Agent Card are the only routes open without a token.
+Python has no HTTP front door.
+
+**It fails closed.** With no authentication configured it does not start. It binds `127.0.0.1` unless
+`AGENTIC_GATEWAY_HOST` says otherwise, and it speaks plain HTTP, so it refuses any other address
+unless you also set `AGENTIC_GATEWAY_BEHIND_TLS_PROXY=true`.
+
+**TLS.** Terminate it in front of the gateway, with a reverse proxy or a mesh sidecar on the same host
+or network segment, and bind the gateway to an address only that proxy can reach. The gateway does not
+read `X-Forwarded-*`, so nothing a proxy passes on changes who it thinks is calling.
+
+**Authentication.** A bearer token on every call:
+
+| Setting | Meaning |
+| --- | --- |
+| `AGENTIC_OIDC_ISSUER` | the exact `iss`. Setting it selects OIDC |
+| `AGENTIC_OIDC_AUDIENCE` | the `aud` a token must name. Required |
+| `AGENTIC_OIDC_JWKS_URL` | default `<issuer>/protocol/openid-connect/certs` |
+| `AGENTIC_OIDC_TENANT_CLAIM` | default `tenant` |
+| `AGENTIC_OIDC_ROLES_CLAIM` | default `realm_access.roles`, dotted for a nested claim |
+| `AGENTIC_GATEWAY_STATIC_TOKENS` | `token=subject\|tenant\|role,role;...`, local development only. Needs `AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true`, works on loopback only, and refuses a token under 16 characters |
+| `AGENTIC_GATEWAY_READER_ROLES` | roles that may read any conversation of their tenant |
+
+A token is checked against the issuer's JWKS, then for issuer, audience, expiry and not-before. Only
+RS256, PS256 and ES256 are accepted, so `alg: none` and an HMAC made with the public key both fail.
+`OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403.
+
+**A request body cannot say who is calling.** `user_id`, `principal` and `tenant` in a body are not
+read. The principal comes from the token.
+
+**Tenancy.** The runtime's conversation key is `<tenant>/<conversation_id>`, each part encoded, so
+another tenant cannot name a conversation at all. Within a tenant, only the subject that started a
+conversation can add a turn or read it, and a reader role can read it. Everyone else gets the 404 that
+a conversation with no turns gets, every read.
+
+**Approvals.** A resume comes with the approver's token, and the runtime checks it against
+`policies.approvers`. A refusal is a 403 and `signal_refused` on the log.
+
+**In front of Flink** the gateway writes turns to the input topic with the verified principal and
+reads answers from the results topic. A conversation is read from that topic, so it shows no further
+back than the topic's retention, and an answer the job does not give in time is a 504: redeliver the
+same `turn_id`. Anything else that can write the input topic can claim any principal.
+`GatewayOverFlinkTest` proves the path over a real Flink job, through a stop-with-savepoint, using the
+in-process session in place of topics. `KafkaBackend` itself is proved against Kafka's mock client.
 
 ## The tool boundary
 

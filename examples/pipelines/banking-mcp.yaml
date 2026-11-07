@@ -7,8 +7,9 @@
 #
 #   MCP server: mcp_util_server.py next to this file, spawned as a subprocess from the repository
 #   root. The python3 on PATH needs the MCP SDK (pip install "mcp<2").
-#   Peer agent: any A2A front door; here the Agentic Pekko HTTP front door on port 8085.
-#     AGENTIC_PEKKO_HTTP_PORT=8085 ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
+#   Peer agent: any A2A front door; here the gateway in front of Agentic Pekko on port 8085.
+#     AGENTIC_GATEWAY_PORT=8085 AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true \
+#     AGENTIC_GATEWAY_STATIC_TOKENS="$AGENTIC_PEER_TOKEN=agent|local" ./mvnw -q -f agentic-pekko/pom.xml compile exec:java \
 #       -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
 #
 # Prerequisite: AGENTIC_PEER_AGENT_URL must point at the peer. The jvm-core loader rejects the

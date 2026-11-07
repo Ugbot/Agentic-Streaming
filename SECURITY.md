@@ -56,6 +56,5 @@ this code (report those upstream; a dependency bump here is welcome as a pull re
 
 ## Security posture
 
-`docs/security.md` states what the code does today. In short: the canonical path has no
-authentication, the Pekko HTTP front door has none either. Do not expose any of this to untrusted
-callers.
+`docs/security.md` states what the code does today. The project is experimental and has had no
+outside security review, so do not expose it to untrusted callers.

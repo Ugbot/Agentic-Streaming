@@ -30,7 +30,7 @@ event journal gives durability + recovery; Cluster Sharding gives one live entit
 | `cluster/ConversationSharding` | Cluster Sharding wiring, the distributed single-writer (one entity per id across nodes, migrated on failover). |
 | `runtime/PekkoRuntime` | Implements the core `Runtime` SPI; `PekkoBackendProvider` makes **`backend: pekko`** work in any `pipeline.yaml` (via a core `BackendProvider` ServiceLoader hook). |
 | `runtime/TurnWire` | The one JSON codec for both front doors: input carries `conversation_id`, explicit `turn_id`, `user_id`, `text`, structured `metadata`/`signal`; output is the normalized `spec/v1/result.schema.json` document. |
-| `http/` | Pekko HTTP front door: Agent Card (`/.well-known/agent-card.json`), `POST /agent` (normalized result), `GET /conversations/{id}` (folded state + journal), `/healthz`. Malformed input is a 400, never an invented turn. |
+| `http/` | `PekkoBackend` puts these entities behind the gateway (`agentic-gateway`), the one HTTP front door; `HttpMain` runs the two together. There is no other HTTP route. |
 | `kafka/AgentStream` + `KafkaStreamApp` | Pekko Streams: a backpressured `mapAsync` ask-the-entity flow; Kafka ingress/egress (committable source → ask → producer sink, at-least-once + `turn_id` dedupe, so redelivery yields `duplicate`). |
 | `durability/` | Pluggable durability (see below). |
 
@@ -93,11 +93,13 @@ mvn -f agentic-pekko/pom.xml package
 # console demo (banking graph, in-memory journal)
 mvn -f agentic-pekko/pom.xml exec:java
 
-# HTTP front door
+# Behind the gateway. It refuses to start with no authentication: this is the local-only token.
+AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true \
+AGENTIC_GATEWAY_STATIC_TOKENS='local-dev-token-0123=alice|acme' \
 mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
 curl localhost:8080/.well-known/agent-card.json
-curl -XPOST localhost:8080/agent -H 'content-type: application/json' \
-  -d '{"conversation_id":"c1","user_id":"u","text":"what is my balance?"}'
+curl -XPOST localhost:8080/agent -H 'authorization: Bearer local-dev-token-0123' \
+  -d '{"conversation_id":"c1","text":"what is my balance?"}'
 
 # run ANY shared pipeline.yaml on the actor runtime (backend: pekko, via the BackendProvider SPI)
 mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.PipelineMain \

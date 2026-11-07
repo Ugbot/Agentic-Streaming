@@ -2,28 +2,26 @@ package org.jagentic.pekko.http;
 
 import java.time.Duration;
 
+import org.jagentic.gateway.Gateway;
+import org.jagentic.gateway.GatewayOptions;
 import org.jagentic.pekko.runtime.AgentDeps;
 import org.jagentic.pekko.runtime.PekkoSystem;
 
-/** Boots the Pekko system + HTTP front door over the banking graph. Run with
- * {@code mvn -f agentic-pekko/pom.xml exec:java -Dexec.mainClass=org.jagentic.pekko.http.HttpMain}.
- * Then: {@code curl localhost:8080/.well-known/agent-card.json} and
- * {@code curl -XPOST localhost:8080/agent -d '{"conversation_id":"c1","user_id":"u","text":"what is my balance?"}'}. */
+/**
+ * Boots a Pekko system behind the gateway, over the banking graph. The gateway's own settings decide
+ * how it binds and who gets in, and it refuses to start with no authentication configured: see {@code
+ * docs/security.md}.
+ */
 public final class HttpMain {
 
   private HttpMain() {}
 
-  public static void main(String[] args) {
-    String host = env("AGENTIC_PEKKO_HTTP_HOST", "0.0.0.0");
-    int port = Integer.parseInt(env("AGENTIC_PEKKO_HTTP_PORT", "8080"));
+  public static void main(String[] args) throws Exception {
+    GatewayOptions options = GatewayOptions.fromEnvironment(System.getenv());
     PekkoSystem sys = new PekkoSystem(AgentDeps.banking());
-    HttpFrontDoor.start(sys.system(), host, port,
-        AgentCard.defaultCard("http://" + host + ":" + port), Duration.ofSeconds(20));
-    System.out.println("agentic-pekko HTTP front door on " + host + ":" + port);
-  }
-
-  private static String env(String key, String fallback) {
-    String v = System.getenv(key);
-    return v == null || v.isBlank() ? fallback : v;
+    Duration ask = Duration.ofSeconds(20);
+    String url = "http://" + options.host() + ":" + options.port();
+    Gateway gateway = Gateway.start(options, new PekkoBackend(sys.system(), ask), AgentCard.defaultCard(url).toJson());
+    System.out.println("agentic-pekko gateway on " + options.host() + ":" + gateway.port());
   }
 }

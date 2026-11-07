@@ -63,6 +63,7 @@
 
     <modules>
         <module>../ports/jagentic-core</module>
+        <module>../agentic-gateway</module>
         <module>..</module>
         <module>../agentic-pekko</module>
     </modules>

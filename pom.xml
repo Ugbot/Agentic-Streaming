@@ -113,6 +113,13 @@
             <groupId>org.jagentic</groupId>
             <artifactId>jagentic-core</artifactId>
         </dependency>
+        <!-- The front door in front of this runtime. It runs apart from the job, so test scope. -->
+        <dependency>
+            <groupId>org.jagentic</groupId>
+            <artifactId>agentic-gateway</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
           <groupId>org.jagentic</groupId>
           <artifactId>jagentic-core</artifactId>

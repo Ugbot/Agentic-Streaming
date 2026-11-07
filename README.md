@@ -81,8 +81,8 @@ session cluster, and Pekko's journal outage is tested only on one node.
   remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing
   embeddings falls back to the older `pyagentic` engine, which has no event log, no `turn_id` and no
   journal, and the CLI says so on stderr.
-- **The canonical path has no authentication.** See
-  [security](docs/security.md).
+- **Nothing here has had an outside security review.** See [security](docs/security.md) for what is
+  proved and what is left out.
 
 ## Quick start
 
