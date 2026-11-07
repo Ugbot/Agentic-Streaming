@@ -13,10 +13,7 @@ workflow:
       rules:
         main: [pay, refund, hello]
     paths:
-      main:
-        brain: rule
-        prompt: You move money.
-        tool_triggers: {pay: pay}
+      main: {brain: rule, prompt: You move money.}
     verifier: {kind: none}
   tools:
   - {id: a, kind: counting, x-count-by: keys, compensation: undo_a}
