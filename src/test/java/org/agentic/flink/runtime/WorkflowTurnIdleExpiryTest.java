@@ -252,7 +252,8 @@ class WorkflowTurnIdleExpiryTest {
                       WorkflowTurnFunction.LOG_STATE, JsonTypeInfo.of(LogEvent.class)));
       next =
           getRuntimeContext()
-              .getState(new ValueStateDescriptor<>(WorkflowTurnFunction.SEQUENCE_STATE, Types.LONG));
+              .getState(
+                  new ValueStateDescriptor<>(WorkflowTurnFunction.SEQUENCE_STATE, Types.LONG));
       timers =
           getRuntimeContext()
               .getMapState(
@@ -266,8 +267,7 @@ class WorkflowTurnIdleExpiryTest {
       p.put("turn_id", e.turnId());
       p.put("path", "general");
       p.put("text", e.text());
-      log.add(
-          new LogEvent(e.conversationId(), 6, e.turnId(), EventType.TURN_SUSPENDED.wire(), p));
+      log.add(new LogEvent(e.conversationId(), 6, e.turnId(), EventType.TURN_SUSPENDED.wire(), p));
       next.update(7L);
       timers.put(fireAt, e.turnId());
       ctx.timerService().registerProcessingTimeTimer(fireAt);
