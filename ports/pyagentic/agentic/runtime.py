@@ -304,6 +304,7 @@ class LocalRuntime(Runtime):
             raise ValidationError("the workflow references Python bindings the spec did not carry:\n"
                                   + "\n".join(f"  - {m}" for m in missing))
         self._release_stores()
+        self._check_other_stores(doc)
         self.log = self._open_log(doc)
         self.journal = self._open_journal(doc)
         self.tools = ToolRegistry(self.world)
@@ -346,6 +347,22 @@ class LocalRuntime(Runtime):
             for pointer, tool in ir.named_tools(doc):
                 if tool not in known:
                     raise ValidationError(f"{tool!r} is not a tool any server or declaration offers", pointer)
+
+    def _check_other_stores(self, doc: Mapping[str, Any]) -> None:
+        """The event log holds a conversation's memory, so `long_term`, `keyed_state` and `vector` stores
+        have nothing here to back: memory is taken, anything else is refused unless it may degrade."""
+        stores = doc.get("stores") or {}
+        for name in ("long_term", "keyed_state", "vector"):
+            store = stores.get(name)
+            kind = (store or {}).get("kind", "memory")
+            if store is None or kind == "memory":
+                continue
+            if store.get("on_unavailable", "fail") == "degrade":
+                self.degradations.append(f"stores.{name} kind {kind!r} is not used by the local runtime; using memory")
+                continue
+            raise ValidationError(f"stores.{name} kind {kind!r} is not available in the local runtime, which keeps "
+                                  f"conversations on its event log; use memory, or set on_unavailable: degrade",
+                                  f"/stores/{name}/kind")
 
     def _open_log(self, doc: Mapping[str, Any]) -> EventLog:
         if self._explicit_log is not None:
