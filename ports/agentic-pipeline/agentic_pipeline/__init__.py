@@ -10,9 +10,9 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _distribution_version
 
 from .backends import Event, TurnResult
-from .loader import PipelineSystem, build_system, legacy_features, load
+from .loader import PipelineSystem, build_system, load
 
-__all__ = ["load", "build_system", "legacy_features", "PipelineSystem", "Event", "TurnResult"]
+__all__ = ["load", "build_system", "PipelineSystem", "Event", "TurnResult"]
 try:
     __version__ = _distribution_version("agentic-pipeline")
 except PackageNotFoundError:  # imported from a checkout that was never installed

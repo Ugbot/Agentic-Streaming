@@ -1,12 +1,10 @@
-"""Hot-swappable external store: the SAME pipeline persists to Redis/Valkey when the
-YAML `stores:` section selects it — proving the durable backing is behind an interface
-and swappable by a connection link."""
+"""The stores a pipeline names: the event log and the journal, in memory or in files. A store the
+local runtime does not have is refused, not quietly replaced."""
 
 from __future__ import annotations
 
 import copy
 import os
-import uuid
 
 import pytest
 import yaml
@@ -25,7 +23,7 @@ _SPEC = yaml.safe_load(
     agent:
       router: {kind: keyword, default: general, rules: {payments: [balance], cards: [card]}}
       paths:
-        payments: {brain: rule, prompt: pay, tool_triggers: {balance: get_balance}}
+        payments: {brain: rule, prompt: pay, tools: [get_balance], tool_triggers: {balance: get_balance}}
         cards: {brain: rule, prompt: cards}
         general: {brain: rule, prompt: gen}
       verifier: {kind: prefix}
@@ -35,33 +33,18 @@ _SPEC = yaml.safe_load(
 )
 
 
-def _redis_or_skip():
-    try:
-        import redis
-    except ImportError:
-        pytest.skip("redis-py not installed")
-    try:
-        redis.from_url(REDIS_URL, socket_connect_timeout=1).ping()
-    except Exception as exc:  # no server
-        pytest.skip(f"no Redis/Valkey at {REDIS_URL}: {exc}")
-
-
-def test_redis_store_hot_swap_persists():
-    _redis_or_skip()
+def test_a_redis_conversation_store_is_refused_rather_than_ignored():
+    """The local runtime keeps conversations on its event log, in memory or in files. A Redis store
+    the document names is refused when it loads, unless the document says it may degrade."""
     spec = copy.deepcopy(_SPEC)
     spec["stores"] = {"conversation": {"kind": "redis", "url": REDIS_URL}}
+    with pytest.raises(ValueError, match="redis"):
+        build_system(spec, backend="local")
+    spec["stores"]["conversation"]["on_unavailable"] = "degrade"
     system = build_system(spec, backend="local")
-
-    cid = "c-" + uuid.uuid4().hex[:8]
-    res = system.submit(Event(cid, "what is my balance?", "alice"))
-    assert res.path == "payments" and "get_balance" in res.tool_calls
-
-    # The backend's store is the Redis one; the transcript is durable in Redis/Valkey.
-    store = system.backend.store
-    assert type(store).__name__ == "RedisConversationStore"
-    assert store.message_count(cid) == 2  # user + assistant
-    assert cid in store.conversations_for_user("alice")
-    store.clear(cid)
+    res = system.submit(Event("c1", "what is my balance?", "alice"))
+    assert res.ok and any("redis" in d for d in res.result["runtime_detail"]["degraded"])
+    system.backend.close()
 
 
 def test_memory_store_is_the_default():

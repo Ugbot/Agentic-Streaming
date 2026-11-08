@@ -147,27 +147,3 @@ def test_condition_mini_language() -> None:
     tc = {"text_contains": ["anomaly", "alert"]}
     assert _fire_single_stage(tc, Event("c", "anomaly cpu high")) is True
     assert _fire_single_stage(tc, Event("c", "all clear")) is False
-
-
-def test_integration_incident_yaml_escalates_host() -> None:
-    from agentic_pipeline.loader import load
-    from pyagentic.core import PATH_ATTR  # the attribute the RoutedGraph writes the chosen path to
-
-    assert INCIDENT_YAML.exists(), f"missing example: {INCIDENT_YAML}"
-    system = load(str(INCIDENT_YAML))
-    assert system.cep, "incident.yaml should compile a cep wiring"
-
-    host = "host-7"
-    for ts in (0, 60_000, 120_000):
-        system.submit(Event(conversation_id=host, text="anomaly: cpu high",
-                            user_id="monitor", metadata={"ts": str(ts)}))
-
-    # The 3rd anomaly fires the CEP submit action -> a derived "incident: ..." event that
-    # routes through the keyword router to the escalate path. The chosen path is persisted
-    # to the conversation store under PATH_ATTR ("graph.path").
-    store = system.backend.store
-    assert store.get_attribute(host, PATH_ATTR) == "escalate"
-
-    # And the derived escalate turn lands in the host's transcript.
-    transcript = " ".join(m.content for m in store.history(host))
-    assert "incident: 3 anomalies on host-7" in transcript

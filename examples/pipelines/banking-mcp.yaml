@@ -13,8 +13,8 @@
 #       -Dexec.mainClass=org.jagentic.pekko.http.HttpMain
 #
 # Prerequisite: AGENTIC_PEER_AGENT_URL must point at the peer. The jvm-core loader rejects the
-# document at load time when it is unset ("http peers need a url"); the Python loader loads it
-# and fails on the first delegation.
+# document at load time when it is unset ("http peers need a url"); the Python core loads it
+# and fails the first delegation, naming the variable.
 #
 #   export AGENTIC_PEER_AGENT_URL=http://localhost:8085
 #   python -m agentic_pipeline run examples/pipelines/banking-mcp.yaml --text "what is my balance?"

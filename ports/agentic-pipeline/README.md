@@ -1,13 +1,12 @@
 # agentic-pipeline: declarative YAML to a running agentic system
 
-Describe the agentic system in a `pipeline.yaml` and the loader builds it. The core
-`GraphBuilder` compiles the spec into the engine-agnostic `RoutedGraph` + tools + retriever,
-and the `local` backend hosts that graph in-process.
+Describe the agentic system in a `pipeline.yaml` and the loader runs it on the `agentic` core, the
+local runtime the conformance fixtures hold to account.
 
 ## Install
 
-`agentic-pipeline` is a regular package. It depends on `pyagentic` (the pure core, not on
-PyPI) and `PyYAML`, so install the core from the checkout first:
+`agentic-pipeline` is a regular package. It depends on the `pyagentic` distribution, which holds the
+`agentic` core (not on PyPI), and `PyYAML`, so install the core from the checkout first:
 
 ```bash
 pip install -e ports/pyagentic -e ports/agentic-pipeline
@@ -18,25 +17,27 @@ No `PYTHONPATH` is needed for the package itself. Tests run with
 
 ```bash
 python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
-# backend=local path=payments ok=True
+# backend=local path=payments ok=True status=completed
 # reply: [payments] get_balance returned 1234.56
 # tools: ['get_balance']
 ```
 
 ## What the YAML expresses
 
-See [`examples/pipelines/banking.yaml`](../../examples/pipelines/banking.yaml) (rule
-brains) and [`banking-llm.yaml`](../../examples/pipelines/banking-llm.yaml) (an LLM
-ReAct path). Sections: `backend`, optional `llm` (`provider` plus a required `model` for `ollama` and
-`openai`; there is no default model name, and `stub` for offline runs),
-`agent.router` (keyword rules), `agent.paths` (per-path brain `rule|llm`, prompt, tools,
-`tool_triggers`), `agent.verifier`, `tools` (`constant`/`http`), `retrieval` (hashing
-embedder + KB), `guardrails` (regex deny-lists).
+The examples in [`examples/pipelines/`](../../examples/pipelines/) cover it: `banking.yaml` (rule
+brains), `banking-llm.yaml` (a model drives the tools), `banking-rag.yaml` (an HNSW knowledge base, a
+classifier guardrail, skills and a token budget), `tools-mcp.yaml` and `banking-mcp.yaml` (tools from
+an MCP server), `multiagent.yaml` (a peer agent over A2A) and `incident.yaml` (a `cep` pattern that
+injects a turn). Sections: `backend`, `llm` (`provider` `ollama`, `openai`, `anthropic`, `gemini` or
+`stub`; `model` is required except for `anthropic`, which defaults to `claude-sonnet-5-5`),
+`agent.router`, `agent.paths`, `agent.verifier`, `tools`, `mcp`, `a2a`, `skills`, `retrieval`,
+`guardrails`, `context`, `cep`, `policies` and `stores`. The schema is
+[`spec/v1/workflow.schema.json`](../../spec/v1/workflow.schema.json).
 
-## Which engine runs a pipeline
+## Every pipeline runs on the core
 
-A pipeline runs on the `agentic` core, the one the conformance fixtures hold to account. A turn is on
-the event log, deduplicated by `turn_id`, and its effects are journaled:
+A turn is on the event log, deduplicated by `turn_id`, under the tool policy, and its effects are
+journaled:
 
 ```bash
 python -m agentic_pipeline run examples/pipelines/banking.yaml --store-dir state --turn t1 --text "what is my balance?"
@@ -45,25 +46,32 @@ python -m agentic_pipeline run examples/pipelines/banking.yaml --store-dir state
 ```
 
 Without `--turn` every run is a new turn. `--store-dir` keeps the log and the journal on disk.
+`--meta key=value` sets turn metadata, such as the event time `incident.yaml` reads:
 
-The core does not have everything. A document that declares any of these runs on the legacy
-`pyagentic` engine instead, which has no event log, no `turn_id` and no effect journal, and the CLI
-says so on standard error: `mcp`, an `a2a` peer that is not `inproc`, a conversation store other than
-`memory` or `file`, `stores.long_term`, `stores.keyed_state`, `stores.vector`, a guardrail other than
-`regex` or one with `check_outputs`, `skills`, `retrieval.vector_store`, embeddings other than
-`hashing`, context compaction other than `none` or `window`, `context.max_tokens`, an `output_schema`
-on a model path, tools of kind `agent` or `mcp`, and a `cep` rule that does anything but call a tool
-on plain text conditions. `agentic_pipeline.legacy_features(spec)` lists what a document needs. Of the
-examples, `banking` and `banking-llm` run on the core; `banking-rag`, `banking-mcp`, `tools-mcp`,
-`multiagent` and `incident` do not.
+```bash
+for n in 0 1 2; do
+  python -m agentic_pipeline run examples/pipelines/incident.yaml --store-dir state --conv host-7 \
+    --turn a$n --meta ts=$((n * 60000)) --text "anomaly: cpu high"
+done
+# the third prints derived=a2/cep/host_incident:completed: the injected turn opened a ticket
+```
+
+A document that names something the core cannot do is refused when it loads, with the reason: a
+conversation store other than `memory` or `file`, a `long_term`, `keyed_state` or `vector` store other
+than `memory`, an embedder other than `hashing`, a vector store other than `memory` or `hnsw`, a
+classifier other than `lexicon`, an MCP transport other than `stdio`. `on_unavailable: degrade` on a
+store takes memory instead, and says so in the result.
+
+An `mcp:` server starts only if the operator lists its command in `AGENTIC_MCP_ALLOWED_COMMANDS`. An
+`a2a` peer over `http` is called at `<url>/agent`; a `${NAME}` url is expanded at the call, so a turn
+that never delegates needs no peer.
 
 ## Pieces
 
 | Module | Role |
 |--------|------|
-| `agentic_pipeline.backends` | `CoreBackend`, the `agentic` local runtime, and `make_backend(name, graph, tools, retriever)` for the legacy engine |
-| `agentic_pipeline.loader` | `load(path)` / `build_system(spec)` → a `PipelineSystem` with `submit(Event)`; `legacy_features(spec)` |
-| `pyagentic.builder` | `build(spec, chat_client_factory) -> (graph, tools, retriever)`, the legacy GraphBuilder |
+| `agentic_pipeline.backends` | `CoreBackend`, the `agentic` local runtime, and the backend registry |
+| `agentic_pipeline.loader` | `load(path)` / `build_system(spec)` → a `PipelineSystem` with `submit(Event)` |
 | `agentic_pipeline.__main__` | the `run` CLI |
 
 ## Backends

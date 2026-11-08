@@ -1,9 +1,6 @@
-"""Backend registry: `local` (in-process, always available) is the only backend. The experimental
-adapters (celery, nats, ray and the others) have moved out of this repository; the code as it stood
-is at tag ``pre-cornerstone``. Any other name raises ``ValueError`` saying so.
-
-A pipeline runs on `CoreBackend`, the `agentic` local runtime, unless it needs something only the
-legacy engine has, when it runs on `_LocalBackend` (see `loader.legacy_features`).
+"""Backend registry: `local`, `CoreBackend` on the `agentic` local runtime, is the only backend. The
+experimental adapters (celery, nats, ray and the others) have moved out of this repository; the code as
+it stood is at tag ``pre-cornerstone``. Any other name raises ``ValueError`` saying so.
 """
 
 from __future__ import annotations
@@ -32,7 +29,7 @@ class Event:
 @dataclass
 class TurnResult:
     """A normalized result (`spec/v1/result.schema.json`) with the fields the CLI prints. `result`
-    is the whole of it."""
+    is the whole of it; `derived_turns` are the turns a `cep` pattern injected after it."""
 
     conversation_id: str
     reply: Optional[str]
@@ -42,6 +39,7 @@ class TurnResult:
     status: str = "completed"
     error: Optional[Mapping[str, Any]] = None
     result: Mapping[str, Any] = field(default_factory=dict)
+    derived_turns: List[Mapping[str, Any]] = field(default_factory=list)
 
 
 class CoreBackend:
@@ -60,10 +58,11 @@ class CoreBackend:
                     dict(getattr(event, "metadata", None) or {}))
         result = self.runtime.submit(turn)
         error = result.get("error")
+        derived = list((result.get("runtime_detail") or {}).get("derived_turns") or [])
         return TurnResult(result["conversation_id"], result.get("reply"), result.get("path"),
                           result["status"] in ("completed", "duplicate") and error is None,
                           [call["tool"] for call in result.get("tool_calls", []) if "error" not in call],
-                          result["status"], error, result)
+                          result["status"], error, result, derived)
 
     @property
     def tools(self) -> Any:
@@ -73,30 +72,8 @@ class CoreBackend:
         self.runtime.close()
 
 
-class _LocalBackend:
-    """The legacy `pyagentic` engine: no event log, no `turn_id`, no journal."""
-
-    name = "local"
-    capability = "online"
-
-    def __init__(self, graph, tools, retriever, store=None):
-        from pyagentic.runtime import LocalRuntime as LegacyRuntime
-
-        self._rt = LegacyRuntime(graph, store=store, tools=tools, retriever=retriever)
-
-    def submit(self, event):
-        return self._rt.submit(event)
-
-    @property
-    def store(self):
-        return self._rt.store
-
-    def close(self):
-        """In-process; holds no connection or worker to release."""
-
-
-_BACKENDS: Dict[str, Callable[..., Any]] = {
-    "local": _LocalBackend,
+_BACKENDS: Dict[str, Callable[..., CoreBackend]] = {
+    "local": CoreBackend,
 }
 
 
@@ -110,12 +87,6 @@ def resolve(name: Optional[str]) -> str:
             "The experimental adapters (celery, nats, ray and the others) have moved out of "
             "this repository; the old code is at tag pre-cornerstone")
     return key
-
-
-def make_backend(name: str, graph, tools, retriever, store=None):
-    """Construct a legacy backend by name from a built graph/tools/retriever. ``store`` is an
-    optional hot-swapped ConversationStore (e.g. Redis)."""
-    return _BACKENDS[resolve(name)](graph, tools, retriever, store=store)
 
 
 def backend_names():

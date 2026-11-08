@@ -3,15 +3,16 @@
 # and a durable long-term store. The same spec builds on every backend / language core.
 #
 # All defaults are model-free and offline (hashing embedder, in-process HNSW, lexicon
-# classifier, in-memory long-term). Swap `embeddings` to a real provider and `vector_store`
-# to qdrant, or `stores` to postgres/redis, by changing a few lines — see docs/portability/pipelines.md.
+# classifier, in-memory long-term). Which embedders, vector stores and stores each runtime takes is
+# in docs/portability/pipelines.md; one a runtime lacks is refused, not replaced.
 #
 #   python -m agentic_pipeline run examples/pipelines/banking-rag.yaml --text "how do I dispute a charge?"
 
 backend: local
 
-# Embeddings: default is the deterministic FNV hashing embedder. To use a real model:
+# Embeddings: the deterministic FNV hashing embedder. On the JVM a real model can embed instead:
 #   embeddings: {provider: ollama, model: nomic-embed-text, base_url: http://localhost:11434}
+# The Python core embeds with hashing only and refuses any other provider.
 embeddings:
   provider: hashing
   dim: 256
@@ -52,7 +53,6 @@ tools:
 retrieval:
   dim: 256
   # In-process HNSW cold tier — a real ANN index, no external vector DB.
-  # Change kind to qdrant (url: ...) or duckdb (Python) to swap the backend.
   vector_store:
     kind: hnsw
     m: 16
@@ -68,7 +68,7 @@ context:
   max_tokens: 512
   compaction: moscow
 
-# Durable stores behind SPIs. Defaults are in-memory; point at postgres/redis via a link.
+# Durable stores behind SPIs. Defaults are in-memory; the JVM also takes postgres and redis.
 stores:
   conversation: {kind: memory}
   long_term: {kind: memory}

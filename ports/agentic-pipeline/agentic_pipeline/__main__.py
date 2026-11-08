@@ -5,7 +5,8 @@
     python -m agentic_pipeline run banking.yaml --store-dir state --conv c1 --turn t1 --text "hi"
 
 `--turn` is the idempotency key: delivering it again answers `duplicate`. Without one, every run is
-a new turn. `--store-dir` keeps the event log and the effect journal on disk between runs.
+a new turn. `--store-dir` keeps the event log and the effect journal on disk between runs. `--meta
+key=value`, repeatable, sets the turn's metadata, such as the event time a `cep` pattern reads.
 """
 
 from __future__ import annotations
@@ -34,7 +35,16 @@ def main(argv=None) -> int:
     run.add_argument("--user", default="demo", help="user id")
     run.add_argument("--turn", default=None, help="turn id, the idempotency key (default: a new one)")
     run.add_argument("--store-dir", default=None, help="keep the event log and journal in this directory")
+    run.add_argument("--meta", action="append", default=[], metavar="KEY=VALUE",
+                     help="turn metadata, repeatable (for example ts=60000 for a cep pattern's event time)")
     args = parser.parse_args(argv)
+    metadata = {}
+    for item in args.meta:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            print(f"agentic_pipeline: --meta takes KEY=VALUE, got {item!r}", file=sys.stderr)
+            return 2
+        metadata[key] = value
 
     try:
         system = load(args.pipeline, backend=args.backend, store_dir=args.store_dir)
@@ -42,30 +52,18 @@ def main(argv=None) -> int:
         print(f"agentic_pipeline: {exc}", file=sys.stderr)
         return 2
     try:
-        if system.legacy_features:
-            print(f"agentic_pipeline: this pipeline needs {', '.join(system.legacy_features)}, so it runs on the "
-                  "legacy engine: no event log, no turn_id, no effect journal", file=sys.stderr)
-            if args.turn is not None:
-                print("agentic_pipeline: --turn needs the core, and this pipeline is on the legacy engine",
-                      file=sys.stderr)
-                return 2
-            res = system.submit(_legacy_event(args))
-            print(f"backend={system.backend_name} path={res.path} ok={res.ok}")
-        else:
-            res = system.submit(Event(args.conv, args.text, args.user, turn_id=args.turn))
-            print(f"backend={system.backend_name} path={res.path} ok={res.ok} status={res.status}")
+        res = system.submit(Event(args.conv, args.text, args.user, metadata, turn_id=args.turn))
+        print(f"backend={system.backend_name} path={res.path} ok={res.ok} status={res.status}")
         print(f"reply: {res.reply}")
         if res.tool_calls:
             print(f"tools: {res.tool_calls}")
+        if res.error:
+            print(f"error: {res.error['class']}: {res.error['message']}")
+        for derived in res.derived_turns:
+            print(f"derived={derived['turn_id']}:{derived['status']}")
     finally:
         system.backend.close()
     return 0
-
-
-def _legacy_event(args):
-    from pyagentic.core import Event as LegacyEvent
-
-    return LegacyEvent(conversation_id=args.conv, text=args.text, user_id=args.user)
 
 
 if __name__ == "__main__":  # pragma: no cover

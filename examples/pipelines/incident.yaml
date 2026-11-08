@@ -2,10 +2,14 @@
 # rule detects 3 anomalies on one host within 5 minutes and escalates to an agent path that opens a
 # ticket. The same spec runs on every core (portable CEP) and on Flink (native CEP via CepSpecTranslator).
 #
-# All model-free/offline: rule brains + a constant tool. Feed anomaly events keyed by host:
-#   python -m agentic_pipeline run examples/pipelines/incident.yaml --text "anomaly: cpu high"
+# All model-free/offline: rule brains + a constant tool. Feed anomaly events keyed by host, with their
+# event time, into one log:
+#   for n in 0 1 2; do
+#     python -m agentic_pipeline run examples/pipelines/incident.yaml --store-dir state --conv host-7 \
+#       --turn a$n --meta ts=$((n * 60000)) --text "anomaly: cpu high"
+#   done
 #
-# (CEP is event-driven: feed several anomalies for one conversation/host to trigger the incident.)
+# The third anomaly completes the pattern; the injected turn, a2/cep/host_incident, opens the ticket.
 
 backend: local
 
