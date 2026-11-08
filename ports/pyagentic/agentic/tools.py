@@ -13,6 +13,7 @@ import inspect
 import json
 import queue
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,6 +29,7 @@ ToolFn = Callable[..., Any]
 
 DEFAULT_TOOL_TIMEOUT_MS = 10_000
 DEFAULT_PEER_TIMEOUT_MS = 30_000
+PEER_BACKOFF_MS = 200  # before a peer's own retry, doubling, as the JVM client waits
 
 
 def idempotency_key(conversation_id: str, turn_id: str, index: int) -> str:
@@ -264,8 +266,67 @@ class ToolRegistry:
                 raise ToolError(f"{spec.id} failed: {exc}") from exc
         if transport == "inproc":
             return f"[{spec.id}] delegated"
+        if transport == "http" and peer.get("url"):
+            return self._execute_http_peer(spec, args, call)
         raise ValidationError(f"peer {spec.id!r} uses transport {transport!r} and no in-process handler is "
                               f"bound; this runtime delegates in-process only (Agent.use_peer)")
+
+    def _execute_http_peer(self, spec: ToolSpec, args: Mapping[str, Any], call: ToolCall) -> Any:
+        """One delegation to a peer's A2A front door, `POST <url>/agent`, under the call's key. The url
+        may be a `${NAME}` link, expanded now under the operator's list; the bearer is a reference,
+        resolved now. A 4xx, a redirect or a refusal before sending is a definite failure; a 5xx, a
+        timeout or a lost connection may have landed, so it is `OutcomeUnknown`."""
+        peer = spec.peer or {}
+        try:
+            base = secret_refs.expand(str(peer["url"])).rstrip("/")
+        except ValueError as exc:
+            raise ToolError(f"{spec.id} failed: {exc}") from exc
+        if not base:
+            raise ToolError(f"{spec.id} failed: its url {peer['url']} is empty; set it in the environment")
+        target = base + "/agent"
+        try:
+            pin = egress.check(target)
+        except egress.EgressBlocked as exc:
+            raise ToolError(f"{spec.id} failed: blocked by egress policy: {exc}") from exc
+        headers = {"Content-Type": "application/json", "Idempotency-Key": call.idempotency_key}
+        auth = peer.get("auth")
+        if auth is not None:
+            try:
+                headers["Authorization"] = f"Bearer {secret_refs.resolve(auth['bearer'])}"
+            except secret_refs.SecretUnresolved as exc:
+                raise ToolError(f"{spec.id} failed: {exc}") from exc
+        body = {"conversation_id": str(args.get("conversation_id", call.conversation_id)),
+                "text": str(args.get("text", call.text)),
+                "user_id": str(args.get("user_id", args.get("user", "anonymous")))}
+        # The client's own retries, under one key, so the peer can deduplicate: what is sent again is
+        # what may not have landed. A non_idempotent peer gets none (`primitives.md` section 10).
+        retries = 0 if spec.effect == "non_idempotent" else int(peer.get("retries", 0))
+        for attempt in range(retries + 1):
+            try:
+                return self._post_to_peer(spec, target, pin, headers, body)
+            except OutcomeUnknown:
+                if attempt >= retries:
+                    raise
+                time.sleep(PEER_BACKOFF_MS * 2 ** attempt / 1000.0)
+        raise AssertionError("unreachable")
+
+    def _post_to_peer(self, spec: ToolSpec, target: str, pin: egress.Pin, headers: Mapping[str, str],
+                      body: Mapping[str, Any]) -> Any:
+        request = urllib.request.Request(target, data=json.dumps(body).encode("utf-8"), method="POST",
+                                         headers=dict(headers))
+        timeout = (spec.timeout_ms or DEFAULT_PEER_TIMEOUT_MS) / 1000.0
+        try:
+            with egress.urlopen(request, timeout, pin) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            failure = OutcomeUnknown if exc.code >= 500 else ToolError
+            raise failure(f"{spec.id} failed: HTTP {exc.code}") from exc
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
+            raise OutcomeUnknown(f"{spec.id} failed: {type(exc).__name__}") from exc
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
 
     def _execute_http(self, spec: ToolSpec, args: Mapping[str, Any], call: ToolCall) -> Any:
         """A 2xx is the result. A 4xx is a definite failure. A 5xx, a timeout or a lost connection
