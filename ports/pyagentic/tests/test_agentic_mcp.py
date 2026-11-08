@@ -196,3 +196,12 @@ def test_the_document_still_dumps_as_it_was_given(server):
     before = json.dumps(doc, sort_keys=True)
     deployed(doc).close()
     assert json.dumps(doc, sort_keys=True) == before
+
+
+def test_a_deploy_that_fails_after_a_server_started_stops_it(server):
+    doc = document(server, ["stub_add"])
+    doc["guardrails"] = [{"kind": "classifier", "classifier": "embedding"}]
+    rt = LocalRuntime()
+    with pytest.raises(ValidationError, match="classifier"):
+        rt.deploy(doc)
+    assert rt._mcp_servers == []  # type: ignore[attr-defined]

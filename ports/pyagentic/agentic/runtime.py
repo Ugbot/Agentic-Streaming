@@ -304,6 +304,21 @@ class LocalRuntime(Runtime):
             raise ValidationError("the workflow references Python bindings the spec did not carry:\n"
                                   + "\n".join(f"  - {m}" for m in missing))
         self._release_stores()
+        closed = (self.log, self.journal)
+        try:
+            self._open(doc, bindings)
+        except BaseException:
+            # What a failed deploy opened or started, a log, a journal or an MCP server, goes with it.
+            servers, self._mcp_servers = self._mcp_servers, []
+            for server in servers:
+                server.close()
+            for store, explicit, before in ((self.log, self._explicit_log, closed[0]),
+                                            (self.journal, self._explicit_journal, closed[1])):
+                if store is not None and store is not explicit and store is not before:
+                    store.close()
+            raise
+
+    def _open(self, doc: Dict[str, Any], bindings: Bindings) -> None:
         self._check_other_stores(doc)
         self.log = self._open_log(doc)
         self.journal = self._open_journal(doc)
