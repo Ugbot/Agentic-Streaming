@@ -130,6 +130,9 @@ class ToolSpec:
             fail_attempts=entry.get("x-fail-attempts"),
             extensions={k: v for k, v in entry.items() if k.startswith("x-")},
             auth=entry.get("auth"),
+            # `kind: agent` is another agent's front door: a peer over HTTP, as an `a2a` entry is.
+            peer=({"transport": "http", "url": entry.get("url"), "auth": entry.get("auth")}
+                  if entry.get("kind") == "agent" else None),
         )
 
     @classmethod
@@ -297,7 +300,7 @@ class ToolRegistry:
             raise ToolError(f"{spec.id} failed: blocked by egress policy: {exc}") from exc
         headers = {"Content-Type": "application/json", "Idempotency-Key": call.idempotency_key}
         auth = peer.get("auth")
-        if auth is not None:
+        if auth:
             try:
                 headers["Authorization"] = f"Bearer {secret_refs.resolve(auth['bearer'])}"
             except secret_refs.SecretUnresolved as exc:

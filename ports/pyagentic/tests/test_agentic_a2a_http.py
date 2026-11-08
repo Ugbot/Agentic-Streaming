@@ -178,3 +178,14 @@ def test_a_journaled_answer_is_reused_after_a_crash(peer):
     rt = rt.restart()
     result = rt.submit(Turn("c1", "t1", "escalate"))
     assert result["status"] == "completed" and len(peer.requests) == 1
+
+
+def test_a_tool_of_kind_agent_is_a_peer_over_http(peer):
+    doc = document()
+    entry = doc.pop("a2a")[0]
+    doc["tools"] = [{"id": "specialist", "kind": "agent", "effect": "idempotent", "url": entry["url"],
+                     "auth": entry["auth"]}]
+    result = deployed(doc).submit(Turn("c1", "t1", "please escalate", "alice"))
+    assert result["status"] == "completed" and "[specialist] on it" in result["reply"]
+    assert peer.requests[0]["path"] == "/agent"
+    assert peer.requests[0]["headers"]["Authorization"] == f"Bearer {TOKEN}"
