@@ -144,10 +144,10 @@ enough.
 - Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
   the system prompt says what that means. This helps a model. It is not a boundary.
 - An MCP server writes its own tool descriptions, which go into the system prompt. Each one is marked
-  the same way, as `<untrusted source="mcp:<tool>">`, and cut at 1024 characters, in Java and in the
-  older Python engine (the canonical Python engine has no MCP client). A tool description in the
+  the same way, as `<untrusted source="mcp:<tool>">`, and cut at 1024 characters, in Java and in
+  Python. A server may not register a tool under an id already taken. A tool description in the
   document is the document's, and is not marked. `McpDescriptionAttackTest` and
-  `test_mcp_description_attack.py` prove it.
+  `test_agentic_mcp.py` prove it.
 
 Left out: the LLM brain puts no retrieved text in a prompt, so nothing marks it there. A custom brain
 that does should use `Untrusted.mark`, or `agentic.untrusted.mark` in Python. A reply can still repeat
@@ -248,8 +248,8 @@ checked, keeping the host name for `Host`, SNI and the certificate check, so a n
 changes after the check cannot move the call. Java does it with `PinnedHttp`, an HTTP/1.1 client
 (the JDK's `HttpClient` cannot be told an address) used by HTTP tools, A2A peers, models and the
 gateway's JWKS fetch, whose plain-http loopback exception is now checked at every fetch rather than
-once at start. Python does it in `agentic.egress`, for HTTP tools, models and the older engine's
-peers, and those calls do not use an environment proxy, which would resolve the name again.
+once at start. Python does it in `agentic.egress`, for HTTP tools, models and peers, and those calls
+do not use an environment proxy, which would resolve the name again.
 `AGENTIC_HTTP_CONNECT_TIMEOUT_MS` (default 10000) caps a Java connect. `DnsRebindingAttackTest`,
 `JwksRebindingAttackTest` and `test_dns_rebinding_attack.py` prove it.
 
@@ -267,8 +267,8 @@ document that writes the secret itself is rejected when loaded. A reference must
 `AGENTIC_SECRET_REFS` (comma-separated prefixes), whose default is `env:AGENTIC_,file:/run/secrets/,file:/var/run/secrets/`,
 so a document cannot read `env:HOME` or `file:/etc/passwd`. A `${NAME}` connection link in a URL or
 a store setting is under the same list, as `env:NAME`. A file path is normalised before the check, and
-a symbolic link inside a listed directory is followed, so keep none there. A `kind: http` tool, a Java A2A peer and
-the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
+a symbolic link inside a listed directory is followed, so keep none there. A `kind: http` tool and an A2A peer use
+it, in Java and Python, and Python expands a peer's `${NAME}` url at the call under the same list.
 
 **Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are
 always covered: a field with `password`, `secret`, `token`, `api_key`, `authorization`, `cookie` or the

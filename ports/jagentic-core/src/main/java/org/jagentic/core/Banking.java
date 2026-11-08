@@ -7,7 +7,7 @@ import java.util.Set;
 
 /**
  * The banking {@code router -> path -> verifier} worked example, engine-agnostic and
- * model-free — the Java mirror of {@code pyagentic.banking} / the Flink
+ * model-free, the Java side of {@code examples/pipelines/banking.yaml} / the Flink
  * {@code BankingAgentGraph}. Every JVM engine port reuses this to demonstrate the
  * same workflow on its runtime.
  */

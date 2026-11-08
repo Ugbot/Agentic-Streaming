@@ -9,8 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * Extensibility guard for jagentic-core — the Java mirror of
- * {@code pyagentic/tests/test_extensibility.py}.
+ * Extensibility guard for jagentic-core.
  *
  * <p>Every JVM adapter consumes the
  * core factories ({@code Banking.buildGraph()/defaultTools()/retriever()}) and runs
