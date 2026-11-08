@@ -12,14 +12,27 @@ import java.util.Set;
  * its first {@code turn_received}, its tenant and its subject. {@code policies.sharing} lets others
  * of the same tenant in: every one of them with {@code tenant: true}, or those with one of {@code
  * roles}. Nobody outside the tenant, and no turn without a principal, is ever let in.
+ *
+ * <p>With a {@code verifier}, a principal is believed only with the gateway's proof for that very
+ * turn ({@link org.jagentic.core.identity.PrincipalSeal}).
  */
-public record Admission(boolean tenantWide, Set<String> roles) implements Serializable {
+public record Admission(boolean tenantWide, Set<String> roles,
+                        org.jagentic.core.identity.PrincipalSeal.Verifier verifier) implements Serializable {
 
   /** Only the principal that started a conversation. */
-  public static final Admission OWNER_ONLY = new Admission(false, Set.of());
+  public static final Admission OWNER_ONLY = new Admission(false, Set.of(), null);
 
   public Admission {
     roles = roles == null ? Set.of() : Set.copyOf(roles);
+  }
+
+  public Admission(boolean tenantWide, Set<String> roles) {
+    this(tenantWide, roles, null);
+  }
+
+  /** The same rule, believing a principal only with a proof these keys verify; null for none. */
+  public Admission withVerifier(org.jagentic.core.identity.PrincipalSeal.Verifier v) {
+    return new Admission(tenantWide, roles, v);
   }
 
   /** Reads {@code policies.sharing}; owner only when the block is absent. */

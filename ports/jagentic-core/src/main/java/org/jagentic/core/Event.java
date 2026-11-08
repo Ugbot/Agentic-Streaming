@@ -17,9 +17,14 @@ import java.util.UUID;
  *
  * <p>{@code principal} is who the event is authenticated as; null means nobody has vouched for it.
  * Beside a principal, {@code userId} is the principal's subject, whatever the caller claimed.</p>
+ *
+ * <p>{@code principalProof} is the gateway's signature over the principal and this turn
+ * ({@link org.jagentic.core.identity.PrincipalSeal}), or null. A runtime configured with the
+ * gateway's keys believes a principal only with one.</p>
  */
 public record Event(String conversationId, String turnId, String userId, String text,
-                    Map<String, String> metadata, Map<String, Object> signal, Principal principal)
+                    Map<String, String> metadata, Map<String, Object> signal, Principal principal,
+                    String principalProof)
     implements Serializable {
 
   public Event {
@@ -28,13 +33,23 @@ public record Event(String conversationId, String turnId, String userId, String 
   }
 
   public Event(String conversationId, String turnId, String userId, String text,
-               Map<String, String> metadata, Map<String, Object> signal) {
-    this(conversationId, turnId, userId, text, metadata, signal, null);
+               Map<String, String> metadata, Map<String, Object> signal, Principal principal) {
+    this(conversationId, turnId, userId, text, metadata, signal, principal, null);
   }
 
-  /** The same event, authenticated as {@code who}. */
+  public Event(String conversationId, String turnId, String userId, String text,
+               Map<String, String> metadata, Map<String, Object> signal) {
+    this(conversationId, turnId, userId, text, metadata, signal, null, null);
+  }
+
+  /** The same event, authenticated as {@code who}. A proof for someone else would not hold, so it goes. */
   public Event withPrincipal(Principal who) {
-    return new Event(conversationId, turnId, userId, text, metadata, signal, who);
+    return new Event(conversationId, turnId, userId, text, metadata, signal, who, null);
+  }
+
+  /** The same event with the gateway's proof of its principal. */
+  public Event withPrincipalProof(String proof) {
+    return new Event(conversationId, turnId, userId, text, metadata, signal, principal, proof);
   }
 
   public Event(String conversationId, String userId, String text) {

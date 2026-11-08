@@ -257,7 +257,8 @@ public final class GraphBuilder {
     graph = graph.withAgentId(String.valueOf(agent.get("id")))
         .withToolPolicy(toolPolicy(pathGrants, (Map<String, Object>) spec.get("policies")))
         .withApprovers(Approvers.fromPolicies((Map<String, Object>) spec.get("policies")))
-        .withAdmission(org.jagentic.core.Admission.fromPolicies((Map<String, Object>) spec.get("policies")))
+        .withAdmission(org.jagentic.core.Admission.fromPolicies((Map<String, Object>) spec.get("policies"))
+            .withVerifier(org.jagentic.core.identity.Identity.forGraph(spec)))
         .withLimits(org.jagentic.core.Limits.fromPolicies((Map<String, Object>) spec.get("policies")))
         .withRedactor(org.jagentic.core.Redactor.fromPolicies((Map<String, Object>) spec.get("policies")));
     org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();

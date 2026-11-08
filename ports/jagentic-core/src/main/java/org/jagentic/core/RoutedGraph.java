@@ -347,6 +347,18 @@ public final class RoutedGraph {
     boolean running = prior != null && prior.running();
     boolean retryable = idempotent && applied && prior.retryable();
 
+    if (admission.verifier() != null && !ctx.runtimeSignal) {
+      // Whoever can deliver an event could write any principal on it: only the gateway's proof for
+      // this very turn makes one true. A turn already on the log, delivered again, is that turn.
+      String unsigned = admission.verifier().problem(event, java.time.Instant.now(),
+          !event.isResume() && prior != null);
+      if (unsigned == null && event.isResume() && parked != null && answeredWith(ctx, event)) {
+        unsigned = "this signal was already answered";
+      }
+      if (unsigned != null) {
+        return refused(event, TurnError.ErrorClass.POLICY, unsigned, before);
+      }
+    }
     Principal owner = ownerOf(ctx);
     String tenant = owner == null ? null : owner.tenant();
     if (!event.isResume()) {
@@ -445,6 +457,20 @@ public final class RoutedGraph {
         new TurnError(TurnError.ErrorClass.POLICY, problem), List.of(), ctx.segment(), stateOrEmpty(ctx));
   }
 
+  /** True when this signal's proof already resumed this turn: an old answer to a new question. */
+  private static boolean answeredWith(AgentContext ctx, Event signal) {
+    String id = org.jagentic.core.identity.PrincipalSeal.idOf(signal.principalProof());
+    if (id == null) {
+      return false;
+    }
+    for (LogEvent e : ctx.log.events(ctx.conversationId)) {
+      if (e.is(EventType.TURN_RESUMED) && signal.turnId().equals(e.turnId()) && id.equals(e.payload().get("proof_id"))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** True when this turn already has a {@code signal_refused} from this signal's sender. */
   private static boolean refusedBefore(Event signal, AgentContext ctx) {
     List<String> sender = senderOf(signal.principal());
@@ -534,6 +560,10 @@ public final class RoutedGraph {
     p.put("signal_sender", signal.userId() == null ? "anonymous" : signal.userId());
     if (signal.principal() != null) {
       p.put("signal_principal", signal.principal().toMap());
+    }
+    String proof = org.jagentic.core.identity.PrincipalSeal.idOf(signal.principalProof());
+    if (proof != null) {
+      p.put("proof_id", proof); // so the same signed answer cannot answer a later question
     }
     return p;
   }
