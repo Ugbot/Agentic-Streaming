@@ -358,6 +358,11 @@ class Engine:
             if rail.get("kind") == "classifier" and "x-python" not in rail:
                 classifier.check_rail(rail, f"/guardrails/{i}")
         retrieval = doc.get("retrieval") or {}
+        provider = (doc.get("embeddings") or {}).get("provider", "hashing")
+        if provider != "hashing":
+            raise ValidationError(f"embeddings provider {provider!r} is not available in this runtime, which embeds "
+                                  f"with hashing; a document is not run with another embedder than it names",
+                                  "/embeddings/provider")
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
         self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4),
                                 retrieval.get("vector_store"))

@@ -77,3 +77,15 @@ def test_a_turn_retrieves_through_the_index():
 def test_a_store_this_runtime_lacks_is_refused_at_deploy(kind):
     with pytest.raises(ValidationError, match="hnsw"):
         LocalRuntime().deploy(document({"kind": kind}))
+
+
+@pytest.mark.parametrize("embeddings", [{"provider": "ollama", "model": "nomic-embed-text"},
+                                        {"provider": "openai", "model": "text-embedding-3-small"}])
+def test_an_embedder_this_runtime_lacks_is_refused_rather_than_replaced(embeddings):
+    doc = {**document({"kind": "hnsw"}), "embeddings": embeddings}
+    with pytest.raises(ValidationError, match="hashing"):
+        LocalRuntime().deploy(doc)
+
+
+def test_the_hashing_embedder_is_taken():
+    LocalRuntime().deploy({**document({"kind": "hnsw"}), "embeddings": {"provider": "hashing", "dim": 256}})
