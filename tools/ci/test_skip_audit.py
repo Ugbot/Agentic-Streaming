@@ -60,7 +60,6 @@ def test_allowlist_file_parses_and_every_block_starts_with_a_reason():
     f"requires ['{_word()}'], declared unsupported",
     "Ollama not reachable / model not pulled: connect refused",
     "Requires running Ollama instance with qwen2.5:latest",
-    "could not import 'litellm': No module named 'litellm'",
     "Environment variable [AGENTIC_PEKKO_INTEGRATION] does not exist",
 ])
 def test_declared_capability_and_documented_skips_are_allowed(tmp_path: Path, message: str):

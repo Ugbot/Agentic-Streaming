@@ -42,9 +42,5 @@ def test_what_the_operator_lists_is_read(tmp_path: Path, monkeypatch: pytest.Mon
 
 
 def test_a_connection_link_off_the_list_is_not_expanded() -> None:
-    from pyagentic.builder import _resolve_env
-    from pyagentic.stores import _resolve as store_env
-
-    for expand in (_resolve_env, store_env):
-        with pytest.raises(ValueError, match="AGENTIC_SECRET_REFS"):
-            expand("${PATH}")
+    with pytest.raises(ValueError, match="AGENTIC_SECRET_REFS"):
+        secret_refs.expand("${PATH}")

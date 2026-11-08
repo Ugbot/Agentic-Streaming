@@ -8,7 +8,7 @@
 # Knobs (all optional):
 #   SMOKE_TIMEOUT   seconds per example (default 300)
 #   SMOKE_PEER_PORT port for the A2A peer the multi-agent examples call (default 8085)
-#   PYTHON          interpreter with pyagentic and agentic_pipeline installed (default python3)
+#   PYTHON          interpreter with the agentic core and agentic_pipeline installed (default python3)
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -73,8 +73,8 @@ on_flink() {
 export -f on_python on_jvm on_pekko on_flink
 export PYTHON
 
-"$PYTHON" -c 'import pyagentic, agentic_pipeline' \
-  || { echo "error: $PYTHON cannot import pyagentic and agentic_pipeline; pip install -e ports/pyagentic -e ports/agentic-pipeline" >&2; exit 1; }
+"$PYTHON" -c 'import agentic, agentic_pipeline' \
+  || { echo "error: $PYTHON cannot import agentic and agentic_pipeline; pip install -e ports/pyagentic -e ports/agentic-pipeline" >&2; exit 1; }
 HAVE_MCP=0
 python3 -c 'import mcp' 2>/dev/null && HAVE_MCP=1
 

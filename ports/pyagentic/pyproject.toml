@@ -63,11 +63,10 @@ root = "../.."
 local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
-include = ["agentic*", "pyagentic*"]
+include = ["agentic*"]
 
 [tool.setuptools.package-data]
 agentic = ["py.typed", "schemas/*.json"]
-pyagentic = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

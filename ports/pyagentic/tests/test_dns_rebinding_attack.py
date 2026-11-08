@@ -25,7 +25,6 @@ from agentic import egress  # noqa: E402
 from agentic.events import Turn  # noqa: E402
 from agentic.llm import OpenAIChatClient, TransientError  # noqa: E402
 from agentic.runtime import LocalRuntime  # noqa: E402
-from pyagentic.a2a import A2AClient  # noqa: E402
 
 PUBLIC = "8.8.8.8"  # what the rebinding name says first: a public address, which passes the check
 _real_getaddrinfo = socket.getaddrinfo
@@ -102,12 +101,16 @@ def test_a_model_call_does_not_reach_loopback_through_a_rebinding_name(internal:
 
 
 def test_a_peer_does_not_reach_loopback_through_a_rebinding_name(internal: int, rebinding: List[str]) -> None:
-    client = A2AClient(f"http://rebind.test:{internal}", retries=0, timeout=1.5)
-    with pytest.raises(Exception):
-        client.send("c", "hi")
-    with pytest.raises(Exception):
-        A2AClient(f"http://rebind.test:{internal}", retries=0, timeout=1.5).card()
-    assert _Recorder.seen == []
+    doc = _tool_doc("http://unused.test/")
+    del doc["tools"]
+    doc["a2a"] = [{"name": "call", "transport": "http", "effect": "idempotent", "timeout_ms": 1500,
+                   "url": f"http://rebind.test:{internal}"}]
+    rt = LocalRuntime()
+    rt.deploy(doc)
+    result = rt.submit(Turn("c", "t", "go"))
+    assert _Recorder.seen == [], "the internal service was reached"
+    assert result["status"] != "completed"
+    assert len(rebinding) == 1, "the name is resolved once"
 
 
 # A pinned connection still speaks to the name: Host, SNI and the certificate are the host's.

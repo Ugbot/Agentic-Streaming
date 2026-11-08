@@ -162,26 +162,6 @@ jobs:
     timeout-minutes: 20
     env:
       CI: "true"
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: agentic
-          POSTGRES_PASSWORD: agentic
-          POSTGRES_DB: agentic
-        ports: ["5434:5432"]
-        options: >-
-          --health-cmd "pg_isready -U agentic -d agentic"
-          --health-interval 5s --health-timeout 5s --health-retries 20
-      qdrant:
-        image: qdrant/qdrant:v1.20.0
-        ports: ["6333:6333"]
-      redis:
-        image: redis:7-alpine
-        ports: ["6380:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v4
 
@@ -200,17 +180,10 @@ jobs:
             ports/pyagentic/pyproject.toml
             ports/agentic-pipeline/pyproject.toml
 
-      - name: Wait for services without a health check
-        run: tools/ci/wait-for-ports.sh localhost:6333
-
-      # The optional backends the service-backed tests importorskip on: qdrant-client and
-      # psycopg for test_rag_memory, duckdb for test_hnsw, mcp 1.x for test_mcp (its stub
-      # server uses the FastMCP API). litellm is not installed: the only test that needs it
-      # also needs a live Ollama, which CI does not provide (see the allowlist).
+      # mcp 1.x for the MCP tests and examples (their stub servers use the FastMCP API).
       - name: Install
         run: >-
-          python -m pip install -e "ports/pyagentic[test]" -e "ports/agentic-pipeline[test,redis]"
-          "mcp<2" qdrant-client "psycopg[binary]" duckdb
+          python -m pip install -e "ports/pyagentic[test]" -e "ports/agentic-pipeline[test]" "mcp<2"
 
       - name: pyagentic
         run: python -m pytest ports/pyagentic/tests -q -ra --junitxml build/junit/pyagentic.xml

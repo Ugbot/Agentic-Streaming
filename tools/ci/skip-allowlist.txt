@@ -10,10 +10,8 @@
 ^requires \[  # pyagentic conformance runner
 
 # A live Ollama with a pulled model is the only backing service not provisioned in CI: the model
-# download alone is several gigabytes per run. litellm is only imported by the pyagentic test
-# that talks to Ollama (test_embeddings.py), so it is not installed and importorskip reports it.
+# download alone is several gigabytes per run. The JVM's live embedding test skips without one.
 Ollama
-^could not import 'litellm'
 
 # The two agentic-pekko tests behind @EnabledIfEnvironmentVariable(AGENTIC_PEKKO_INTEGRATION)
 # fail for reasons unrelated to service availability (see the core job in

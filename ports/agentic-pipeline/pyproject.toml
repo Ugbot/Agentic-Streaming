@@ -34,7 +34,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-redis = ["redis>=5,<7"]
 test = ["pytest>=7,<10"]
 
 [project.scripts]
