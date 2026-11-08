@@ -123,7 +123,15 @@ public final class KafkaPipelineJob {
   /** Builds the whole job onto {@code env}; the caller runs {@code env.execute}. */
   public static void assemble(
       StreamExecutionEnvironment env, Map<String, Object> document, Options options) {
-    Map<String, Object> spec = identity(document, System.getenv(), options.inputTopic());
+    assemble(env, document, options, System.getenv());
+  }
+
+  static void assemble(
+      StreamExecutionEnvironment env,
+      Map<String, Object> document,
+      Options options,
+      Map<String, String> environment) {
+    Map<String, Object> spec = identity(document, environment, options.inputTopic());
     KafkaSource<String> source =
         KafkaSource.<String>builder()
             .setBootstrapServers(options.bootstrap())
@@ -250,10 +258,22 @@ public final class KafkaPipelineJob {
     return value.asText();
   }
 
+  /**
+   * A result as it goes on the results topic. With a key vault ({@code AGENTIC_KEY_VAULT_DIR} on
+   * the TaskManagers) it is sealed under the conversation's key, so an erasure reaches the topic
+   * too.
+   */
   private static Tuple2<String, String> encodeResult(TurnResult r) {
     try {
-      return Tuple2.of(
-          r.conversationId, new String(TurnResultCodec.encode(r), StandardCharsets.UTF_8));
+      byte[] encoded = TurnResultCodec.encode(r);
+      org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+      if (vault != null) {
+        return Tuple2.of(
+            r.conversationId,
+            JSON.writeValueAsString(
+                org.jagentic.core.privacy.SealedResults.seal(vault, r, encoded)));
+      }
+      return Tuple2.of(r.conversationId, new String(encoded, StandardCharsets.UTF_8));
     } catch (IOException e) {
       return Tuple2.of(r.conversationId, unencodable(r, e));
     }
@@ -262,11 +282,24 @@ public final class KafkaPipelineJob {
   private static Tuple2<String, String> encodeFailure(TurnResult r) {
     Map<String, Object> failure = new LinkedHashMap<>();
     failure.put("kind", "turn_failure");
-    failure.put("result", r.toMap());
+    org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+    failure.put(
+        "result",
+        vault == null
+            ? r.toMap()
+            : org.jagentic.core.privacy.SealedResults.seal(vault, r, encodedOrEmpty(r)));
     try {
       return Tuple2.of(r.conversationId, JSON.writeValueAsString(failure));
     } catch (IOException e) {
       return Tuple2.of(r.conversationId, unencodable(r, e));
+    }
+  }
+
+  private static byte[] encodedOrEmpty(TurnResult r) {
+    try {
+      return TurnResultCodec.encode(r);
+    } catch (IOException e) {
+      return unencodable(r, e).getBytes(StandardCharsets.UTF_8);
     }
   }
 

@@ -52,7 +52,8 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
   private final Producer<String, byte[]> producer;
   private final Consumer<String, byte[]> consumer;
   private final String inputTopic;
-  private final ConversationView view = new ConversationView();
+  private final org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+  private final ConversationView view = new ConversationView(vault);
   private final Map<String, CompletableFuture<TurnResult>> waiting = new ConcurrentHashMap<>();
   private final Thread reader;
   private volatile boolean running = true;
@@ -100,11 +101,20 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
   private void accept(byte[] value) {
     TurnResult result;
     try {
-      result = TurnResult.fromMap(JSON.readValue(value, OBJECT));
+      Map<String, Object> record = JSON.readValue(value, OBJECT);
+      if (org.jagentic.core.privacy.SealedResults.isSealed(record)) {
+        // Kept sealed in the view; what the caller waiting for it gets is opened once, now.
+        view.addSealed(String.valueOf(record.get("conversation_id")), record);
+        result = org.jagentic.core.privacy.SealedResults.open(vault, record)
+            .map(ConversationView.TurnResults::decode)
+            .orElseGet(() -> TurnResult.fromMap(record));
+      } else {
+        result = TurnResult.fromMap(record);
+        view.add(result);
+      }
     } catch (IOException | RuntimeException notAResult) {
       return;
     }
-    view.add(result);
     CompletableFuture<TurnResult> answer = waiting.remove(waitKey(result.conversationId, result.turnId));
     if (answer != null) {
       answer.complete(result);

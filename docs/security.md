@@ -309,12 +309,20 @@ started, and those fields read as `[erased]` from then on, with the log still fo
 per conversation, so a turn after an erasure gets a new key that cannot open the old data.
 `SealingTest` proves this on the Java core and `WorkflowTurnSealedTest` on Flink, through a restore.
 
+The Flink job's results and failures topics are sealed too: with the vault on the TaskManagers, a
+result goes out as its ids, status and error class beside the whole result sealed under the
+conversation's key (a turn refused before anything was logged has no key, and goes out as that
+reference alone). The gateway keeps those records sealed in its view and opens them only when a
+conversation is read, with the same vault (`AGENTIC_KEY_VAULT_DIR` on the gateway). After `Erase`, the
+records on the topic cannot be opened and the gateway shows the conversation as empty, also when it
+rebuilds its view from the topic. `SealedResultsKafkaTest` proves it against a real broker. The ids
+and status stay readable on the topic.
+
 What this leaves out, plainly:
 
 - **Pekko's log and Python are not sealed.** On Pekko only the journal is. Crypto-shredding is the Java
   core and Flink.
-- **The Flink results and failures topics are not sealed.** A result carries the turn's open events, so a
-  deletion request is not honoured there. Keep those topics on a short retention.
+- **Pekko's results topic is not sealed,** like its log.
 - **What stays readable:** the owner's identifier, tenant, tool ids, paths, event types and times. That
   is how ownership works, and it is personal data if a subject is. Use an opaque subject.
 - **A turn's `metadata` is not sealed,** because timers and patterns read it. A caller's `metadata`
