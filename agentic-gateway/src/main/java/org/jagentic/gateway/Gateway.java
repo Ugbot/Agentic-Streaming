@@ -195,7 +195,7 @@ public final class Gateway implements AutoCloseable {
     }
     TurnResult result;
     try {
-      result = await(backend.submit(new Event(key, turnId, who.subject(), text, metadata, null, who)));
+      result = await(backend.submit(signed(new Event(key, turnId, who.subject(), text, metadata, null, who))));
     } catch (Refusal r) {
       if (claimed && r.status != 504) {
         claims.remove(key, who); // nothing is running, so nothing is claimed; a 504 may still land
@@ -206,6 +206,12 @@ public final class Gateway implements AutoCloseable {
       claims.remove(key, who); // the backend shows the turn now, or it left nothing behind
     }
     answer(x, conversationId, result);
+  }
+
+  /** The event with the gateway's signature over its principal and this turn, when it has a key. */
+  private Event signed(Event event) {
+    return options.signer() == null ? event
+        : event.withPrincipalProof(options.signer().sign(event, java.time.Instant.now()));
   }
 
   private static boolean sameOwner(Principal a, Principal b) {
@@ -220,7 +226,7 @@ public final class Gateway implements AutoCloseable {
     if (events.stream().noneMatch(e -> turnId.equals(e.turnId()))) {
       throw new Refusal(404, NOT_FOUND); // no such turn says no more than no such conversation
     }
-    TurnResult result = await(backend.submit(new Event(key, turnId, who.subject(), "", Map.of(), signal, who)));
+    TurnResult result = await(backend.submit(signed(new Event(key, turnId, who.subject(), "", Map.of(), signal, who))));
     Principal owner = ownerOf(events);
     boolean insider = owner != null && sameOwner(owner, who)
         || who.roles().stream().anyMatch(options.readerRoles()::contains);

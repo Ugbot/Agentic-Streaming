@@ -45,6 +45,11 @@ import org.jagentic.core.TurnResult;
  *  "metadata": {"k": "v"}}
  * {"conversation_id": "c1", "turn_id": "t1", "signal": {"approved": true}}</pre>
  *
+ * <p>A record may carry {@code principal} and {@code principal_proof}, the gateway's signature over
+ * that principal and that turn. With the gateway's keys configured ({@link #identity}) a principal
+ * without a valid proof is a turn failed with class {@code policy}, and the job carries on. Kafka
+ * ACLs on the input topic are still required: without them anyone can write turns, signed or not.
+ *
  * <p>{@code turn_id} is required rather than minted: it is what makes a redelivered record a {@code
  * duplicate}. A record that cannot be a turn goes to the failures topic and the job carries on; so
  * does a turn that ends {@code fatal} or {@code transient}, as well as appearing on the results
@@ -117,7 +122,16 @@ public final class KafkaPipelineJob {
 
   /** Builds the whole job onto {@code env}; the caller runs {@code env.execute}. */
   public static void assemble(
-      StreamExecutionEnvironment env, Map<String, Object> spec, Options options) {
+      StreamExecutionEnvironment env, Map<String, Object> document, Options options) {
+    assemble(env, document, options, System.getenv());
+  }
+
+  static void assemble(
+      StreamExecutionEnvironment env,
+      Map<String, Object> document,
+      Options options,
+      Map<String, String> environment) {
+    Map<String, Object> spec = identity(document, environment, options.inputTopic());
     KafkaSource<String> source =
         KafkaSource.<String>builder()
             .setBootstrapServers(options.bootstrap())
@@ -140,6 +154,17 @@ public final class KafkaPipelineJob {
         .sinkTo(sink(options.bootstrap(), options.failuresTopic()))
         .name("failures")
         .uid("agentic-kafka-failures");
+  }
+
+  /**
+   * Who may claim a principal on {@code topic}: with {@code AGENTIC_PRINCIPAL_KEYS} the gateway's
+   * public keys go into the job, so every TaskManager checks each record's {@code principal_proof}
+   * with them; with {@code AGENTIC_IDENTITY=unauthenticated} the principal on a record is believed,
+   * which is logged; with neither the job does not start.
+   */
+  static Map<String, Object> identity(
+      Map<String, Object> spec, Map<String, String> environment, String topic) {
+    return org.jagentic.core.identity.Identity.forTopic(spec, environment, topic);
   }
 
   /** The job between raw record values and encoded results; everything but the connectors. */
@@ -221,7 +246,8 @@ public final class KafkaPipelineJob {
       // Thrown out of the decoder it would fail the task on every restart: a poison pill.
       throw new MalformedRecord("principal: " + e.getMessage());
     }
-    return new Event(conversationId, turnId, user, text, metadata, signal, principal);
+    String proof = node.hasNonNull("principal_proof") ? node.get("principal_proof").asText() : null;
+    return new Event(conversationId, turnId, user, text, metadata, signal, principal, proof);
   }
 
   private static String required(JsonNode node, String field) throws MalformedRecord {
@@ -232,10 +258,22 @@ public final class KafkaPipelineJob {
     return value.asText();
   }
 
+  /**
+   * A result as it goes on the results topic. With a key vault ({@code AGENTIC_KEY_VAULT_DIR} on
+   * the TaskManagers) it is sealed under the conversation's key, so an erasure reaches the topic
+   * too.
+   */
   private static Tuple2<String, String> encodeResult(TurnResult r) {
     try {
-      return Tuple2.of(
-          r.conversationId, new String(TurnResultCodec.encode(r), StandardCharsets.UTF_8));
+      byte[] encoded = TurnResultCodec.encode(r);
+      org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+      if (vault != null) {
+        return Tuple2.of(
+            r.conversationId,
+            JSON.writeValueAsString(
+                org.jagentic.core.privacy.SealedResults.seal(vault, r, encoded)));
+      }
+      return Tuple2.of(r.conversationId, new String(encoded, StandardCharsets.UTF_8));
     } catch (IOException e) {
       return Tuple2.of(r.conversationId, unencodable(r, e));
     }
@@ -244,11 +282,24 @@ public final class KafkaPipelineJob {
   private static Tuple2<String, String> encodeFailure(TurnResult r) {
     Map<String, Object> failure = new LinkedHashMap<>();
     failure.put("kind", "turn_failure");
-    failure.put("result", r.toMap());
+    org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+    failure.put(
+        "result",
+        vault == null
+            ? r.toMap()
+            : org.jagentic.core.privacy.SealedResults.seal(vault, r, encodedOrEmpty(r)));
     try {
       return Tuple2.of(r.conversationId, JSON.writeValueAsString(failure));
     } catch (IOException e) {
       return Tuple2.of(r.conversationId, unencodable(r, e));
+    }
+  }
+
+  private static byte[] encodedOrEmpty(TurnResult r) {
+    try {
+      return TurnResultCodec.encode(r);
+    } catch (IOException e) {
+      return unencodable(r, e).getBytes(StandardCharsets.UTF_8);
     }
   }
 

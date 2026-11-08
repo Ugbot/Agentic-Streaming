@@ -38,8 +38,10 @@ import org.jagentic.core.TurnResult;
  * topic. The results topic read from its start is also how a conversation is read, so a conversation
  * shows no further back than that topic's retention.
  *
- * <p>The gateway is the only thing that should be able to write the input topic: whatever does can
- * claim any principal. A turn the job has not answered in time is a 504, and redelivering the same
+ * <p>With {@code AGENTIC_PRINCIPAL_SIGNING_KEY} each record carries {@code principal_proof}, the
+ * gateway's signature over its principal and that turn, and a job given the public key believes no
+ * principal without one. Without it, whatever can write the input topic can claim any principal, so
+ * Kafka ACLs on that topic are required either way. A turn the job has not answered in time is a 504, and redelivering the same
  * {@code turn_id} is safe.
  */
 public final class KafkaBackend implements TurnBackend, AutoCloseable {
@@ -50,7 +52,8 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
   private final Producer<String, byte[]> producer;
   private final Consumer<String, byte[]> consumer;
   private final String inputTopic;
-  private final ConversationView view = new ConversationView();
+  private final org.jagentic.core.privacy.KeyVault vault = org.jagentic.core.privacy.Vaults.fromEnvironment();
+  private final ConversationView view = new ConversationView(vault);
   private final Map<String, CompletableFuture<TurnResult>> waiting = new ConcurrentHashMap<>();
   private final Thread reader;
   private volatile boolean running = true;
@@ -98,11 +101,20 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
   private void accept(byte[] value) {
     TurnResult result;
     try {
-      result = TurnResult.fromMap(JSON.readValue(value, OBJECT));
+      Map<String, Object> record = JSON.readValue(value, OBJECT);
+      if (org.jagentic.core.privacy.SealedResults.isSealed(record)) {
+        // Kept sealed in the view; what the caller waiting for it gets is opened once, now.
+        view.addSealed(String.valueOf(record.get("conversation_id")), record);
+        result = org.jagentic.core.privacy.SealedResults.open(vault, record)
+            .map(ConversationView.TurnResults::decode)
+            .orElseGet(() -> TurnResult.fromMap(record));
+      } else {
+        result = TurnResult.fromMap(record);
+        view.add(result);
+      }
     } catch (IOException | RuntimeException notAResult) {
       return;
     }
-    view.add(result);
     CompletableFuture<TurnResult> answer = waiting.remove(waitKey(result.conversationId, result.turnId));
     if (answer != null) {
       answer.complete(result);
@@ -116,21 +128,21 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
   @Override
   public CompletionStage<TurnResult> submit(Event event) {
     String wait = waitKey(event.conversationId(), event.turnId());
-    CompletableFuture<TurnResult> answer = new CompletableFuture<>();
-    waiting.put(wait, answer);
+    // Callers of one turn share one answer: a second must not take the first one's place.
+    CompletableFuture<TurnResult> answer = waiting.computeIfAbsent(wait, k -> new CompletableFuture<>());
     try {
       producer.send(new ProducerRecord<>(inputTopic, event.conversationId(), JSON.writeValueAsBytes(record(event))),
           (meta, failed) -> {
             if (failed != null) {
-              waiting.remove(wait);
+              waiting.remove(wait, answer);
               answer.completeExceptionally(failed);
             }
           });
     } catch (IOException e) {
-      waiting.remove(wait);
+      waiting.remove(wait, answer);
       answer.completeExceptionally(e);
     }
-    return answer.whenComplete((r, e) -> waiting.remove(wait));
+    return answer.whenComplete((r, e) -> waiting.remove(wait, answer));
   }
 
   private static Map<String, Object> record(Event event) {
@@ -145,6 +157,9 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
     }
     if (event.principal() != null) {
       m.put("principal", event.principal().toMap());
+    }
+    if (event.principalProof() != null) {
+      m.put("principal_proof", event.principalProof());
     }
     return m;
   }

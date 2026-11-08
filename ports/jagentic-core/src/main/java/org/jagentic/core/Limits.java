@@ -28,6 +28,7 @@ public final class Limits {
   private final UnaryOperator<String> environment;
   private final Map<List<Object>, Double> counts = new ConcurrentHashMap<>();
   private final Map<List<Object>, java.util.Set<String>> turns = new java.util.HashMap<>();
+  private long day = -1;
 
   private Limits(Map<String, Object> settings, UnaryOperator<String> environment) {
     this.settings = settings;
@@ -99,10 +100,29 @@ public final class Limits {
   /** What a model call came to, by its size. */
   public void chargeModel(String who, long nowMs, int characters) {
     long tokens = Math.max(1, characters / 4);
-    counts.merge(List.of("tokens", who, nowMs / DAY), (double) tokens, Double::sum);
+    long today = today(nowMs);
+    counts.merge(List.of("tokens", who, today), (double) tokens, Double::sum);
     if (settings.get("cost_per_1k_tokens") instanceof Number rate) {
-      counts.merge(List.of("cost", who, nowMs / DAY), tokens / 1000.0 * rate.doubleValue(), Double::sum);
+      counts.merge(List.of("cost", who, today), tokens / 1000.0 * rate.doubleValue(), Double::sum);
     }
+  }
+
+  /**
+   * The day of {@code nowMs}. When it is a new one, the counters of days that are over are dropped,
+   * so they do not grow with every principal that ever called.
+   */
+  private synchronized long today(long nowMs) {
+    long now = nowMs / DAY;
+    if (now > day) {
+      day = now;
+      counts.keySet().removeIf(slot -> (long) slot.get(slot.size() - 1) < now);
+    }
+    return now;
+  }
+
+  /** How many counters are kept, for a test. */
+  int counters() {
+    return counts.size();
   }
 
   /** A tool call that has not begun counts against the quota. */
@@ -111,7 +131,7 @@ public final class Limits {
       return new Violation("kill_switch", detail(tool, null));
     }
     Object quota = settings.get("tool_calls_per_day") instanceof Map<?, ?> m ? m.get(tool) : null;
-    if (!begun && quota instanceof Number max && !take(List.of("tool", who, tool, nowMs / DAY), max.doubleValue())) {
+    if (!begun && quota instanceof Number max && !take(List.of("tool", who, tool, today(nowMs)), max.doubleValue())) {
       return new Violation("tool_calls_per_day", detail(tool, max));
     }
     return null;

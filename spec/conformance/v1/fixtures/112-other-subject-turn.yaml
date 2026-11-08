@@ -1,0 +1,31 @@
+id: other-subject-turn
+description: 'A conversation belongs to the principal that started it, subject as well as tenant. Another subject of the same tenant is refused with nothing appended, and the owner carries on.'
+requires: [principal, tools, rule_brain]
+workflow:
+  spec_version: agentic/v1
+  backend: local
+  agent:
+    id: pay
+    router: {kind: static, default: main}
+    paths:
+      main:
+        brain: rule
+        tools: [pay]
+        tool_triggers: {pay: pay}
+    verifier: {kind: none}
+  tools:
+  - {id: pay, kind: counting, effect: idempotent}
+turns:
+- {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice, tenant: acme}}
+- {conversation_id: c1, turn_id: t2, text: pay it, principal: {subject: bob, tenant: acme}}
+- {conversation_id: c1, turn_id: t2, text: pay it, principal: {subject: bob, tenant: acme, roles: [admin]}}
+- {conversation_id: c1, turn_id: t3, text: pay it, principal: {subject: alice, tenant: acme}}
+- {conversation_id: c2, turn_id: t1, text: pay it, principal: {subject: carol}}
+- {conversation_id: c2, turn_id: t2, text: pay it, principal: {subject: dave}}
+expect:
+- {turn_id: t1, status: completed}
+- {turn_id: t2, status: failed, error_class: policy, tool_calls: [], events: []}
+- {turn_id: t2, status: failed, error_class: policy, tool_calls: [], events: []}
+- {turn_id: t3, status: completed, tool_calls: [{tool: pay, index: 0, args: {user: alice}}]}
+- {turn_id: t1, status: completed}
+- {turn_id: t2, status: failed, error_class: policy, tool_calls: [], events: []}

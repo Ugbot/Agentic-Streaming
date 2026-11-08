@@ -23,6 +23,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
 
+from agentic.untrusted import RULE
+
 from .core import AgentContext
 
 
@@ -90,7 +92,7 @@ class LlmBrain:
 
     def turn(self, user_text: str, ctx: AgentContext) -> str:
         specs = [s for s in ctx.tools.specs() if self.allowed_tools is None or s["name"] in self.allowed_tools]
-        sys_prompt = (self.system_prompt + "\n" + _REACT_SYSTEM + json.dumps(specs)).strip()
+        sys_prompt = (self.system_prompt + "\n" + _REACT_SYSTEM + json.dumps(specs) + "\n" + RULE).strip()
         if self.output_schema is not None:
             from .structured import schema_instruction
             sys_prompt += "\n" + schema_instruction(self.output_schema)

@@ -47,7 +47,7 @@ from .journal import (
 from .limits import Limits, Violation, who
 from .opa import Both, from_environment
 from .redact import Redactor
-from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem
+from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem, owner_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
 from .retrieval import KnowledgeBase, Passage
 from .untrusted import RULE, mark
@@ -116,6 +116,24 @@ def _tenant_of(log: Sequence[Event]) -> Optional[str]:
     """The tenant a conversation belongs to: the one that started it (`primitives.md` section 11)."""
     first = next((e for e in log if e.type == "turn_received"), None)
     return (first.payload.get("principal") or {}).get("tenant") if first is not None else None
+
+
+def _owner_of(log: Sequence[Event]) -> Optional[Dict[str, Any]]:
+    """The principal that started a conversation, or None when it started with none."""
+    first = next((e for e in log if e.type == "turn_received"), None)
+    return first.payload.get("principal") if first is not None else None
+
+
+def _sender(principal: Optional[Mapping[str, Any]]) -> Optional[tuple]:
+    """Who sent a signal, for counting refusals: tenant and subject, or None for everyone unauthenticated."""
+    return (principal.get("tenant"), principal.get("subject")) if principal else None
+
+
+def _refused_before(log: Sequence[Event], turn: Turn) -> bool:
+    """True when this turn already has a `signal_refused` from this signal's sender."""
+    sender = _sender(turn.principal)
+    return any(e.type == "signal_refused" and e.turn_id == turn.turn_id
+               and _sender(e.payload.get("signal_principal")) == sender for e in log)
 
 
 def _principal_of(turn: Turn) -> Dict[str, Any]:
@@ -435,9 +453,10 @@ class Engine:
         retryable = state == TRANSIENT and idempotent
 
         tenant = _tenant_of(log)
-        if turn.signal is None and tenant is not None and (turn.principal or {}).get("tenant") != tenant:
-            return self.refused(turn.conversation_id, turn.turn_id,
-                                f"conversation {turn.conversation_id} belongs to another tenant", "policy")
+        if turn.signal is None:
+            foreign = owner_problem(self.doc, turn.conversation_id, _owner_of(log), turn.principal)
+            if foreign is not None:
+                return self.refused(turn.conversation_id, turn.turn_id, foreign, "policy")
         if turn.signal is not None and state != ABSENT:
             problem = approver_problem(self.doc, turn.principal, tenant)
             if problem is not None:
@@ -467,6 +486,9 @@ class Engine:
     def _refuse_signal(self, ctx: _TurnContext, problem: str) -> Dict[str, Any]:
         """Status `failed`, class `policy`. The turn is untouched, and the attempt is on the log."""
         turn = ctx.turn
+        if _refused_before(self.log.read(turn.conversation_id), turn):
+            # Once per sender and turn: a sender who keeps trying cannot grow the log.
+            return self.refused(turn.conversation_id, turn.turn_id, problem, "policy")
         payload = {"turn_id": turn.turn_id, "signal_sender": turn.user_id, "reason": problem}
         if turn.principal is not None:
             payload["signal_principal"] = dict(turn.principal)

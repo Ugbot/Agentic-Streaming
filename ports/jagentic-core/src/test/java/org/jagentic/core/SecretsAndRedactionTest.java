@@ -57,6 +57,7 @@ class SecretsAndRedactionTest {
       }
     });
     server.start();
+    System.setProperty("agentic.secret_refs", "file:" + dir + "/");
     try {
       GraphBuilder.Built built = GraphBuilder.build(
           workflow("http://127.0.0.1:" + server.getAddress().getPort() + "/", "file:" + file), null);
@@ -70,6 +71,7 @@ class SecretsAndRedactionTest {
       assertFalse(r.toMap().toString().contains(VALUE));
       assertFalse(journal.get(new EffectJournal.Key("c", "t", EffectJournal.TOOL, 0)).orElseThrow().toString().contains(VALUE));
     } finally {
+      System.clearProperty("agentic.secret_refs");
       server.stop(0);
     }
   }

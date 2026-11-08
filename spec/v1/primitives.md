@@ -634,8 +634,12 @@ ran before it compensates. A refused undo is a failed undo: `compensation_failed
 
 A `Principal` is who a turn or a signal is authenticated as: `subject`, and optionally `tenant`,
 `roles` and `issuer`. Whatever puts it on the event vouches for it: a gateway from a verified token,
-a topic only trusted producers can write to, or the program embedding the runtime. A runtime
-cannot tell a true one from a false one, so the boundary is whoever may deliver events.
+a topic only trusted producers can write to, or the program embedding the runtime. Without more, a
+runtime cannot tell a true one from a false one, so the boundary is whoever may deliver events. A
+binding may be given its gateway's public keys: then it believes a principal only with the gateway's
+signature over it, the conversation, the turn id and a digest of what the turn says, and refuses
+anything else with class `policy` and nothing appended. The Java bindings do; the conformance
+fixtures run without keys.
 
 Beside a principal, `user_id` is the principal's `subject`, whatever the caller claimed, so a name in
 a request body never reaches the log, a tool's arguments or a brain. Without a principal, `user_id` is
@@ -654,18 +658,25 @@ or settle an unknown outcome, and a signal with a `user_id` and no principal is 
 A signal for a turn that is on the log is checked before the resume state machine, so the same rule
 covers a resume, a resolution and a redelivered signal. Refusal appends `signal_refused {turn_id,
 signal_sender, signal_principal, reason}` and nothing else. The result is status `failed`, class
-`policy`. The turn stays as it was and the journal is not touched, so the approver can still answer.
+`policy`. The turn stays as it was and the journal is not touched, so the approver can still answer. A sender's refusal is on the log once per turn: the same principal again, or
+any signal with no principal once one without has been refused, is refused the same way with nothing
+appended, so a sender who keeps trying cannot grow the log.
 A signal for a turn that is not on the log is refused as section 10 says, with nothing appended, so
 it cannot grow a log.
 
 A timer the runtime set for itself resumes the turn without an approver: it is not a signal from
 outside, and no event can claim to be one.
 
-### Tenancy on the log
+### Ownership on the log
 
-A conversation belongs to the tenant of its first `turn_received`. A turn with any other tenant, or
-with no principal, is refused with class `policy` and nothing appended. A conversation started with no
-tenant has no such check.
+A conversation belongs to the principal of its first `turn_received`: its tenant and its subject. A
+turn from any other subject, from another tenant, or with no principal, is refused with class `policy`
+and nothing appended, so a turn id it names stays unspent. A conversation started with no principal
+has no such check. The runtime owns this rule, so it holds however many gateways deliver turns.
+
+`policies.sharing` is how a conversation has several users. `tenant: true` admits every principal of
+the conversation's tenant, and `roles` admits one of its tenant with one of those roles. Nothing admits
+a principal of another tenant. A signal is not a turn: who may answer one is the approver rule above.
 
 ### Egress
 
@@ -674,7 +685,8 @@ before anything is sent: `http` and `https` only, no credentials in the URL, and
 link-local or metadata address unless the operator allows it. The settings belong to the runtime's
 deployment, not to the document. A refused attempt is a definite failure with the error `<tool>
 failed: blocked by egress policy`, so a `non_idempotent` tool is not left unknown. Redirects are not
-followed. A binding allows its own local stub and nothing else, so a fixture can prove the refusals.
+followed. The check resolves the host once and the call connects to an address it checked, so a name
+whose answer changes in between (DNS rebinding) cannot move the call. A binding allows its own local stub and nothing else, so a fixture can prove the refusals.
 
 ### Tools that need a person
 
@@ -711,7 +723,7 @@ a recorded answer costs nothing. The turn is spent, so retrying needs a new `tur
 
 Tokens are an estimate of four characters each over what went in and came out, because the clients
 read no provider usage. Counters belong to one runtime process. A binding need not keep them across a
-restart or share them between processes.
+restart or share them between processes. A day's counters are dropped once the day is over.
 
 ### What is recorded
 

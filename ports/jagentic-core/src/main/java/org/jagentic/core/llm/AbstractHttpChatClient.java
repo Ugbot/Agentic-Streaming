@@ -2,9 +2,6 @@ package org.jagentic.core.llm;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,13 +25,14 @@ abstract class AbstractHttpChatClient implements ChatClient {
   protected final String model;
   protected final URI uri;
   protected final Map<String, String> headers;
-  private final HttpClient http;
+  private final Duration timeout;
 
   protected AbstractHttpChatClient(String model, String url, Map<String, String> headers, Duration timeout) {
     this.model = model;
     this.uri = URI.create(url);
     this.headers = headers == null ? Map.of() : headers;
-    this.http = HttpClient.newBuilder().connectTimeout(timeout).build();
+    // The connect timeout of the old client; a call as a whole is bounded as before, at 60 seconds.
+    this.timeout = Duration.ofSeconds(60);
   }
 
   protected abstract Map<String, Object> buildBody(java.util.List<Map<String, String>> messages);
@@ -43,26 +41,23 @@ abstract class AbstractHttpChatClient implements ChatClient {
 
   @Override
   public ChatResult chat(java.util.List<Map<String, String>> messages, java.util.List<Map<String, String>> tools) {
-    org.jagentic.core.net.Egress.check(uri.toString());
     try {
       String body = MAPPER.writeValueAsString(buildBody(messages));
-      HttpRequest.Builder b = HttpRequest.newBuilder(uri)
-          .timeout(Duration.ofSeconds(60))
-          .header("Content-Type", "application/json")
-          .POST(HttpRequest.BodyPublishers.ofString(body));
-      headers.forEach(b::header);
-      HttpResponse<String> resp = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
-      if (resp.statusCode() / 100 != 2) {
-        String message = "chat HTTP " + resp.statusCode() + ": " + shortened(resp.body());
-        throw transientStatus(resp.statusCode()) ? new TransientFailure(message)
+      Map<String, String> all = new LinkedHashMap<>();
+      all.put("Content-Type", "application/json");
+      all.putAll(headers);
+      // Resolved once, checked, and connected to as checked: a rebinding name cannot move it.
+      org.jagentic.core.net.PinnedHttp.Response resp = org.jagentic.core.net.PinnedHttp.send("POST", uri, all,
+          body.getBytes(java.nio.charset.StandardCharsets.UTF_8), timeout,
+          org.jagentic.core.net.PinnedHttp.egress());
+      if (resp.status() / 100 != 2) {
+        String message = "chat HTTP " + resp.status() + ": " + shortened(resp.text());
+        throw transientStatus(resp.status()) ? new TransientFailure(message)
             : new RuntimeException(message);
       }
-      return parseChatJson(extractContent(MAPPER.readTree(resp.body())));
+      return parseChatJson(extractContent(MAPPER.readTree(resp.text())));
     } catch (RuntimeException e) {
       throw e;
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException("chat call interrupted", e);
     } catch (IOException e) {
       throw new TransientFailure("chat call failed: " + e.getMessage(), e);
     } catch (Exception e) {

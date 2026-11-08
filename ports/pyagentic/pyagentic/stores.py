@@ -103,7 +103,7 @@ def make_conversation_store(spec: Optional[Dict[str, Any]]) -> ConversationStore
 
 
 def _resolve(value: str) -> str:
-    """Expand a ``${ENV}`` connection link."""
-    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-        return os.environ.get(value[2:-1], "")
-    return value
+    """Expand a ``${ENV}`` connection link, if the operator lists it."""
+    from agentic.secret_refs import expand
+
+    return expand(value)

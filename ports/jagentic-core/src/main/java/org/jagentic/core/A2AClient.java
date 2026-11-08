@@ -1,14 +1,13 @@
 package org.jagentic.core;
 
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 import java.util.function.BiFunction;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.jagentic.core.net.PinnedHttp;
 
 /** A2A (Agent-to-Agent) client — call a peer agent's HTTP gateway (/agent +
  * /.well-known/agent-card.json) with bounded retries. {@link #peerTool} wraps a peer as a
@@ -20,7 +19,6 @@ public final class A2AClient {
   private final String base;
   private final int retries;
   private final String bearer; // a reference; resolved on each call
-  private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
   public A2AClient(String baseUrl, int retries) {
     this(baseUrl, retries, null);
@@ -36,9 +34,9 @@ public final class A2AClient {
   @SuppressWarnings("unchecked")
   public Map<String, Object> card() {
     try {
-      HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(base + "/.well-known/agent-card.json"))
-          .timeout(Duration.ofSeconds(10)).GET().build(), HttpResponse.BodyHandlers.ofString());
-      return MAPPER.readValue(r.body(), Map.class);
+      PinnedHttp.Response r = PinnedHttp.send("GET", URI.create(base + "/.well-known/agent-card.json"), Map.of(),
+          null, Duration.ofSeconds(10), PinnedHttp.egress());
+      return MAPPER.readValue(r.text(), Map.class);
     } catch (Exception e) {
       throw new RuntimeException("A2A card: " + e.getMessage(), e);
     }
@@ -58,18 +56,21 @@ public final class A2AClient {
       try {
         String body = MAPPER.writeValueAsString(
             Map.of("conversation_id", conversationId, "text", text, "user_id", userId));
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(base + "/agent"))
-            .header("Content-Type", "application/json").header("Idempotency-Key", idempotencyKey)
-            .timeout(Duration.ofSeconds(30))
-            .POST(HttpRequest.BodyPublishers.ofString(body));
+        Map<String, String> headers = new java.util.LinkedHashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Idempotency-Key", idempotencyKey);
         if (bearer != null) {
-          request.header("Authorization", "Bearer " + Secrets.resolve(bearer));
+          headers.put("Authorization", "Bearer " + Secrets.resolve(bearer));
         }
-        HttpResponse<String> r = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
-        if (r.statusCode() >= 500) {
-          throw new java.io.IOException("HTTP " + r.statusCode());
+        // Resolved once, checked, and connected to as checked: a rebinding name cannot move it.
+        PinnedHttp.Response r = PinnedHttp.send("POST", URI.create(base + "/agent"), headers,
+            body.getBytes(java.nio.charset.StandardCharsets.UTF_8), Duration.ofSeconds(30), PinnedHttp.egress());
+        if (r.status() >= 500) {
+          throw new java.io.IOException("HTTP " + r.status());
         }
-        return MAPPER.readValue(r.body(), Map.class);
+        return MAPPER.readValue(r.text(), Map.class);
+      } catch (org.jagentic.core.net.Egress.Blocked e) {
+        throw e; // nothing was sent, so it is a definite failure, not an unknown one
       } catch (Exception e) {
         last = e;
         if (attempt == retries) {

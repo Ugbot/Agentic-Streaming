@@ -60,6 +60,7 @@ public final class RoutedGraph {
   private final Approvers approvers;
   private final Limits limits;
   private final Redactor redactor;
+  private final Admission admission;
 
   public RoutedGraph(Router router, Map<String, Agent> paths, Verifier verifier) {
     this(router, paths, verifier, List.of(), List.of());
@@ -141,12 +142,13 @@ public final class RoutedGraph {
     this.approvers = Approvers.NONE;
     this.limits = Limits.NONE;
     this.redactor = Redactor.DEFAULT;
+    this.admission = Admission.OWNER_ONLY;
   }
 
   private RoutedGraph(RoutedGraph base, List<TimerSpec> timers,
                       Map<String, List<Guardrail>> pathGuardrails, String agentId,
                       ToolPolicy toolPolicy, Approvers approvers, Limits limits,
-                      Redactor redactor) {
+                      Redactor redactor, Admission admission) {
     this.router = base.router;
     this.paths = base.paths;
     this.verifier = base.verifier;
@@ -165,6 +167,7 @@ public final class RoutedGraph {
     this.approvers = approvers;
     this.limits = limits;
     this.redactor = redactor;
+    this.admission = admission;
   }
 
   /**
@@ -174,37 +177,42 @@ public final class RoutedGraph {
    * for event time.
    */
   public RoutedGraph withTimers(List<TimerSpec> timers) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor, admission);
   }
 
   /** The same graph under this policy. Without one every tool call is refused. */
   public RoutedGraph withToolPolicy(ToolPolicy policy) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, policy, approvers, limits, redactor, admission);
   }
 
   /** The same graph under these approvers. Without them nobody can resume a turn. */
   public RoutedGraph withApprovers(Approvers who) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, who, limits, redactor, admission);
   }
 
   /** The same graph under these limits. */
   public RoutedGraph withLimits(Limits l) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, l, redactor, admission);
   }
 
   /** The same graph under this redactor. Credentials are covered without one. */
   public RoutedGraph withRedactor(Redactor r) {
-    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, r);
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, r, admission);
+  }
+
+  /** The same graph under this sharing rule. Without one only a conversation's owner adds turns. */
+  public RoutedGraph withAdmission(Admission a) {
+    return new RoutedGraph(this, timers, pathGuardrails, agentId, toolPolicy, approvers, limits, redactor, a);
   }
 
   /** The same graph with rails that apply to one path alone, after routing. */
   public RoutedGraph withPathGuardrails(Map<String, List<Guardrail>> rails) {
-    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, rails, agentId, toolPolicy, approvers, limits, redactor, admission);
   }
 
   /** The same graph under the workflow's {@code agent.id}, which scopes its journal entries. */
   public RoutedGraph withAgentId(String id) {
-    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits, redactor);
+    return new RoutedGraph(this, timers, pathGuardrails, id == null ? "" : id, toolPolicy, approvers, limits, redactor, admission);
   }
 
   /** The sequence patterns this graph evaluates in-turn (empty when the workflow declares none). */
@@ -339,11 +347,25 @@ public final class RoutedGraph {
     boolean running = prior != null && prior.running();
     boolean retryable = idempotent && applied && prior.retryable();
 
-    String tenant = tenantOf(ctx);
-    if (!event.isResume() && tenant != null
-        && (event.principal() == null || !tenant.equals(event.principal().tenant()))) {
-      return refused(event, TurnError.ErrorClass.POLICY,
-          "conversation " + event.conversationId() + " belongs to another tenant", before);
+    if (admission.verifier() != null && !ctx.runtimeSignal) {
+      // Whoever can deliver an event could write any principal on it: only the gateway's proof for
+      // this very turn makes one true. A turn already on the log, delivered again, is that turn.
+      String unsigned = admission.verifier().problem(event, java.time.Instant.now(),
+          !event.isResume() && prior != null);
+      if (unsigned == null && event.isResume() && parked != null && answeredWith(ctx, event)) {
+        unsigned = "this signal was already answered";
+      }
+      if (unsigned != null) {
+        return refused(event, TurnError.ErrorClass.POLICY, unsigned, before);
+      }
+    }
+    Principal owner = ownerOf(ctx);
+    String tenant = owner == null ? null : owner.tenant();
+    if (!event.isResume()) {
+      String foreign = admission.problem(event.conversationId(), owner, event.principal());
+      if (foreign != null) {
+        return refused(event, TurnError.ErrorClass.POLICY, foreign, before);
+      }
     }
     if (event.isResume() && prior != null && !ctx.runtimeSignal) {
       String problem = approvers.problem(event.principal(), tenant);
@@ -408,12 +430,11 @@ public final class RoutedGraph {
         List.of(), List.of(), state == null ? Map.of() : state.reduced());
   }
 
-  /** The tenant a conversation belongs to: the one that started it (spec section 11). */
-  private static String tenantOf(AgentContext ctx) {
+  /** The principal a conversation belongs to: the one that started it (spec section 11). */
+  private static Principal ownerOf(AgentContext ctx) {
     for (LogEvent e : ctx.log.events(ctx.conversationId)) {
       if (e.is(EventType.TURN_RECEIVED)) {
-        Principal first = Principal.fromMap(e.payload().get("principal"));
-        return first == null ? null : first.tenant();
+        return Principal.fromMap(e.payload().get("principal"));
       }
     }
     return null;
@@ -421,6 +442,10 @@ public final class RoutedGraph {
 
   /** Status {@code failed}, class {@code policy}. The turn is untouched, and the attempt is on the log. */
   private static TurnResult refuseSignal(Event signal, AgentContext ctx, String problem) {
+    if (refusedBefore(signal, ctx)) {
+      // Once per sender and turn: a sender who keeps trying cannot grow the log.
+      return refused(signal, TurnError.ErrorClass.POLICY, problem, ctx.conversationState());
+    }
     ctx.metadata = signal.metadata();
     Map<String, Object> p = map("turn_id", signal.turnId(), "reason", problem);
     p.put("signal_sender", signal.userId() == null ? "anonymous" : signal.userId());
@@ -430,6 +455,37 @@ public final class RoutedGraph {
     ctx.record(EventType.SIGNAL_REFUSED, p);
     return new TurnResult(ctx.conversationId, ctx.turnId, TurnStatus.FAILED, null, null,
         new TurnError(TurnError.ErrorClass.POLICY, problem), List.of(), ctx.segment(), stateOrEmpty(ctx));
+  }
+
+  /** True when this signal's proof already resumed this turn: an old answer to a new question. */
+  private static boolean answeredWith(AgentContext ctx, Event signal) {
+    String id = org.jagentic.core.identity.PrincipalSeal.idOf(signal.principalProof());
+    if (id == null) {
+      return false;
+    }
+    for (LogEvent e : ctx.log.events(ctx.conversationId)) {
+      if (e.is(EventType.TURN_RESUMED) && signal.turnId().equals(e.turnId()) && id.equals(e.payload().get("proof_id"))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** True when this turn already has a {@code signal_refused} from this signal's sender. */
+  private static boolean refusedBefore(Event signal, AgentContext ctx) {
+    List<String> sender = senderOf(signal.principal());
+    for (LogEvent e : ctx.log.events(ctx.conversationId)) {
+      if (e.is(EventType.SIGNAL_REFUSED) && signal.turnId().equals(e.turnId())
+          && java.util.Objects.equals(sender, senderOf(Principal.fromMap(e.payload().get("signal_principal"))))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Who sent a signal, for counting refusals: tenant and subject, or null for everyone unauthenticated. */
+  private static List<String> senderOf(Principal p) {
+    return p == null ? null : java.util.Arrays.asList(p.tenant(), p.subject());
   }
 
   /** A turn as first received, rebuilt from the log: a re-run never trusts the delivery. */
@@ -504,6 +560,10 @@ public final class RoutedGraph {
     p.put("signal_sender", signal.userId() == null ? "anonymous" : signal.userId());
     if (signal.principal() != null) {
       p.put("signal_principal", signal.principal().toMap());
+    }
+    String proof = org.jagentic.core.identity.PrincipalSeal.idOf(signal.principalProof());
+    if (proof != null) {
+      p.put("proof_id", proof); // so the same signed answer cannot answer a later question
     }
     return p;
   }

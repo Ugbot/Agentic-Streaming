@@ -20,8 +20,10 @@
 #     -Dexec.args="examples/pipelines/multiagent.yaml --text 'please escalate this'"
 #
 # What the peer receives: the rule brain's tool trigger passes {user: <user id>} to the
-# peer tool, and the A2A client fills the turn envelope defaults, so the peer sees
-# {conversation_id: a2a, text: "", user_id: anonymous} and answers on its default path.
+# peer tool, and the A2A client fills the turn envelope defaults. A peer refuses a turn
+# with no text, so a call without one sends its arguments as the text: on the Python core
+# the peer sees {conversation_id: a2a, text: '{"user": ...}', user_id: <user id>} and
+# answers on its default path.
 # The example demonstrates the delegation wiring and the peer's reply flowing back into
 # the triage agent's answer, not a content hand-off. A non-escalating turn such as
 # "what time do you open?" never contacts the peer and answers on the triage path.

@@ -35,6 +35,10 @@ services:
       - "127.0.0.1:8081:8081"
     environment:
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:29092}
+      # This lab writes turns straight to the topic, with no gateway, so nothing signs a principal:
+      # the job says in its log that identity is unauthenticated. Behind a gateway, set
+      # AGENTIC_PRINCIPAL_KEYS to its public keys instead (docs/security.md).
+      AGENTIC_IDENTITY: ${AGENTIC_IDENTITY:-unauthenticated}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
         parallelism.default: 1

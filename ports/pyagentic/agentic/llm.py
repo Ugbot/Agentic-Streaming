@@ -108,13 +108,13 @@ class _HttpChatClient:
 
     def _post(self, messages: Messages) -> Answer:
         try:
-            egress.check(self.url)
+            pin = egress.check(self.url)
         except egress.EgressBlocked as exc:
             raise ModelRefused(f"model call blocked by egress policy: {exc}") from exc
         request = urllib.request.Request(self.url, data=json.dumps(self._body(messages)).encode("utf-8"),
                                          headers=self.headers, method="POST")
         try:
-            with egress.urlopen(request, self.timeout_ms / 1000.0) as response:
+            with egress.urlopen(request, self.timeout_ms / 1000.0, pin) as response:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:_ERROR_BODY_LIMIT]

@@ -8,8 +8,30 @@ not use it for real payments.**
 
 An event can carry a `Principal` (`subject`, `tenant`, `roles`, `issuer`). Beside one, `user_id` means
 nothing: the turn runs as the principal, and it is recorded on `turn_received`, `tool_intent` and
-`tool_refused`. Whatever delivers the event vouches for it, so **anyone who can write to the input
-topic can claim any principal**. Keep that topic to trusted producers.
+`tool_refused`. Whatever delivers the event vouches for it, unless the runtime is given the gateway's
+keys, below.
+
+**Signed principals.** The gateway holds an Ed25519 private key (`AGENTIC_PRINCIPAL_SIGNING_KEY`, a
+PKCS#8 PEM) and signs every turn and signal it delivers: the principal, the conversation key and turn
+id, a SHA-256 digest of the text, metadata and signal, an expiry (`AGENTIC_PRINCIPAL_TTL_SECONDS`,
+default 300) and a random id. The proof travels as `principal_proof`. A runtime given the public keys
+(`AGENTIC_PRINCIPAL_KEYS`, a PEM file of one or more, so a new key can be added before the gateway
+uses it) refuses an unsigned, forged, expired, replayed or mismatched principal as a turn failed with
+class `policy`, nothing appended, and carries on; a signed approval cannot answer a later question on
+the same turn. Key distribution: make the pair with `openssl genpkey -algorithm ed25519 -out gw.pem`
+and `openssl pkey -in gw.pem -pubout -out gw.pub`; the private key goes only to gateway hosts, as a
+mounted secret, and the public key to every runtime. The Flink job puts the public keys into the job
+it submits, so every TaskManager checks with them. On Pekko the Kafka front door checks, and so does
+each node that has `AGENTIC_PRINCIPAL_KEYS` set; set it on every node. A turn already on the log that
+arrives again late is the same turn; a signal that arrives after its expiry is refused.
+
+**No gateway.** A Kafka front door (the Flink job, Pekko's `KafkaStreamApp`) will not start until told
+which it is: with `AGENTIC_IDENTITY=unauthenticated` it believes the principal on each record and says
+so in its log, and **anyone who can write to the input topic can claim any principal**. Either way,
+**Kafka ACLs on the input topic are still required**: a signature stops a writer claiming someone
+else, not writing turns at all. `SignedPrincipalAttackTest`, `GatewaySigningTest`,
+`KafkaPipelineJobTest#anUnsignedPrincipalOnTheTopicIsRefusedAndTheJobCarriesOn` and
+`SignedPrincipalKafkaTest` prove it. Python has no Kafka or HTTP front door, so it has no verifier.
 
 Only an authenticated principal named by `policies.approvers` can resume a suspended turn or settle
 an unknown outcome. Nobody can if the block is absent. A refused signal is `signal_refused` on the log
@@ -52,7 +74,7 @@ A token is checked against the issuer's JWKS, then for issuer, audience, expiry 
 RS256, PS256 and ES256 are accepted, so `alg: none` and an HMAC made with the public key both fail.
 `OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403,
 and so does one whose tenant claim is not a string. Expiry and not-before allow 60 seconds of clock
-skew. A `typ` other than `JWT` is refused, which includes RFC 9068's `at+jwt`.
+skew. A `typ` of `JWT`, RFC 9068's `at+jwt` (or `application/at+jwt`), or none is accepted, and any other, such as a DPoP proof's, is refused.
 
 **A request body cannot say who is calling.** `user_id`, `principal` and `tenant` in a body are not
 read. The principal comes from the token.
@@ -61,19 +83,24 @@ read. The principal comes from the token.
 another tenant cannot name a conversation at all. Within a tenant, only the subject that started a
 conversation can add a turn or read it, and a reader role can read it. Everyone else gets the 404 that
 a conversation with no turns gets, every read. A first turn still running, which a Flink job's log
-does not show yet, is held for its sender by the gateway. That hold is in one gateway process, so two
-gateways in front of one job can each let a different subject start the same conversation: the
-runtime checks the tenant, not the subject.
+does not show yet, is held for its sender by the gateway. That hold is in one gateway process, but the
+runtime owns the rule as well: a conversation belongs to the tenant and the subject of its first turn,
+so when two gateways each let a different subject start the same conversation, the runtime refuses the
+second one's turns with class `policy`. `policies.sharing` (`tenant: true`, or `roles`) is how a
+conversation is meant to have several users, all of its tenant.
 
 **Approvals.** A resume comes with the approver's token, and the runtime checks it against
-`policies.approvers`. A refusal is a 403 and `signal_refused` on the log. A resume of a turn the
+`policies.approvers`. A refusal is a 403 and `signal_refused` on the log, once per sender and turn:
+the same sender again, or any unauthenticated signal after one, is refused with nothing appended, so
+a non-approver cannot grow someone else's log (`refused-signal-once`). A resume of a turn the
 conversation does not have is the 404 of no conversation, and a refused signal from someone who is
 neither the owner nor a reader gets the refusal and nothing else of the conversation.
 
 **In front of Flink** the gateway writes turns to the input topic with the verified principal and
 reads answers from the results topic. A conversation is read from that topic, so it shows no further
 back than the topic's retention, and an answer the job does not give in time is a 504: redeliver the
-same `turn_id`. Anything else that can write the input topic can claim any principal.
+same `turn_id`. With the signing key set, each record carries the gateway's proof, and a job given
+the public key believes no other principal.
 `GatewayOverFlinkTest` proves the path over a real Flink job, through a stop-with-savepoint, using the
 in-process session in place of topics. `KafkaBackend` itself is proved against Kafka's mock client.
 
@@ -139,6 +166,11 @@ enough.
   asks the model again and gets another call at that index waits for a new approval.
 - Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
   the system prompt says what that means. This helps a model. It is not a boundary.
+- An MCP server writes its own tool descriptions, which go into the system prompt. Each one is marked
+  the same way, as `<untrusted source="mcp:<tool>">`, and cut at 1024 characters, in Java and in the
+  older Python engine (the canonical Python engine has no MCP client). A tool description in the
+  document is the document's, and is not marked. `McpDescriptionAttackTest` and
+  `test_mcp_description_attack.py` prove it.
 
 Left out: the LLM brain puts no retrieved text in a prompt, so nothing marks it there. A custom brain
 that does should use `Untrusted.mark`, or `agentic.untrusted.mark` in Python. A reply can still repeat
@@ -163,6 +195,8 @@ Three things to know:
 - **The counters are in memory.** They are per process and a restart clears them. On Flink that means
   per subtask, so with parallelism 4 one principal can get up to four times a limit, across
   conversations on different subtasks. A limit here slows a principal down. It is not a hard ceiling.
+  A day's counters are dropped once the day is over, so memory does not grow with every principal.
+  Windows are calendar minutes and days, so a burst across a boundary can reach twice a limit.
 - **Tokens are an estimate,** four characters each. The clients read no provider usage, so a budget is
   not what the provider will bill.
 - A turn stopped by a limit is spent, so retry with a new `turn_id`.
@@ -232,10 +266,18 @@ change them:
 On Flink these go in the TaskManager's environment. In Java the system properties
 `agentic.egress.allow_hosts` and `agentic.egress.allow_private` do the same.
 
+**DNS rebinding.** A call resolves its host once, checks every address, and connects to one it
+checked, keeping the host name for `Host`, SNI and the certificate check, so a name whose answer
+changes after the check cannot move the call. Java does it with `PinnedHttp`, an HTTP/1.1 client
+(the JDK's `HttpClient` cannot be told an address) used by HTTP tools, A2A peers, models and the
+gateway's JWKS fetch, whose plain-http loopback exception is now checked at every fetch rather than
+once at start. Python does it in `agentic.egress`, for HTTP tools, models and the older engine's
+peers, and those calls do not use an environment proxy, which would resolve the name again.
+`AGENTIC_HTTP_CONNECT_TIMEOUT_MS` (default 10000) caps a Java connect. `DnsRebindingAttackTest`,
+`JwksRebindingAttackTest` and `test_dns_rebinding_attack.py` prove it.
+
 What it does not cover:
 
-- A check resolves the host and the client resolves it again to connect, so a name that changes
-  between the two gets through.
 - Redirects are not followed at all: a 3xx is a definite failure.
 - `LangChain4jChatClient`, embedders, vector stores and the journal connect to what the operator
   configured. They do not go through this check.
@@ -244,7 +286,11 @@ What it does not cover:
 
 **Per-tool secrets are references.** `tools[].auth: {bearer: env:NAME}` or `file:/path`, and the same on
 `a2a[]`. It is resolved at the moment of the call, so it reaches the wire and nothing else, and a
-document that writes the secret itself is rejected when loaded. A `kind: http` tool, a Java A2A peer and
+document that writes the secret itself is rejected when loaded. A reference must also be on the operator's list,
+`AGENTIC_SECRET_REFS` (comma-separated prefixes), whose default is `env:AGENTIC_,file:/run/secrets/,file:/var/run/secrets/`,
+so a document cannot read `env:HOME` or `file:/etc/passwd`. A `${NAME}` connection link in a URL or
+a store setting is under the same list, as `env:NAME`. A file path is normalised before the check, and
+a symbolic link inside a listed directory is followed, so keep none there. A `kind: http` tool, a Java A2A peer and
 the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
 
 **Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are
@@ -263,12 +309,20 @@ started, and those fields read as `[erased]` from then on, with the log still fo
 per conversation, so a turn after an erasure gets a new key that cannot open the old data.
 `SealingTest` proves this on the Java core and `WorkflowTurnSealedTest` on Flink, through a restore.
 
+The Flink job's results and failures topics are sealed too: with the vault on the TaskManagers, a
+result goes out as its ids, status and error class beside the whole result sealed under the
+conversation's key (a turn refused before anything was logged has no key, and goes out as that
+reference alone). The gateway keeps those records sealed in its view and opens them only when a
+conversation is read, with the same vault (`AGENTIC_KEY_VAULT_DIR` on the gateway). After `Erase`, the
+records on the topic cannot be opened and the gateway shows the conversation as empty, also when it
+rebuilds its view from the topic. `SealedResultsKafkaTest` proves it against a real broker. The ids
+and status stay readable on the topic.
+
 What this leaves out, plainly:
 
 - **Pekko's log and Python are not sealed.** On Pekko only the journal is. Crypto-shredding is the Java
   core and Flink.
-- **The Flink results and failures topics are not sealed.** A result carries the turn's open events, so a
-  deletion request is not honoured there. Keep those topics on a short retention.
+- **Pekko's results topic is not sealed,** like its log.
 - **What stays readable:** the owner's identifier, tenant, tool ids, paths, event types and times. That
   is how ownership works, and it is personal data if a subject is. Use an opaque subject.
 - **A turn's `metadata` is not sealed,** because timers and patterns read it. A caller's `metadata`

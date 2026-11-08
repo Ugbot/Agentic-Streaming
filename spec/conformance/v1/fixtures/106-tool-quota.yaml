@@ -20,7 +20,7 @@ workflow:
 turns:
 - {conversation_id: c1, turn_id: t1, text: pay it, principal: {subject: alice}}
 - {conversation_id: c1, turn_id: t2, text: pay it, principal: {subject: alice}}
-- {conversation_id: c1, turn_id: t3, text: pay it, principal: {subject: bob}}
+- {conversation_id: c2, turn_id: t3, text: pay it, principal: {subject: bob}}
 expect:
 - {turn_id: t1, status: completed, reply: '[main] pay returned 1'}
 - turn_id: t2
@@ -31,4 +31,4 @@ expect:
   event_payloads:
   - type: limit_exceeded
     payload: {limit: tool_calls_per_day, who: alice, tool: pay, max: 1}
-- {turn_id: t3, status: completed, reply: '[main] pay returned 2'}
+- {turn_id: t3, status: completed, reply: '[main] pay returned 1'}

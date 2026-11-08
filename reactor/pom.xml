@@ -227,6 +227,9 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven.plugin.surefire.version}</version>
                     <configuration>
+                        <!-- No cache in front of the name service, as an attacker's TTL of zero
+                             makes it: the DNS rebinding tests answer one name two ways. -->
+                        <argLine>-Dsun.net.inetaddr.ttl=0</argLine>
                         <!-- Tests talk to local stubs. Nothing else is allowed, so the conformance
                              fixtures can still prove the refusals. -->
                         <systemPropertyVariables>
