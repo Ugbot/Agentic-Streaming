@@ -49,6 +49,13 @@ def command_of(entry: Mapping[str, Any]) -> List[str]:
         raise ValidationError(str(exc), "/mcp") from exc
 
 
+def _first_cause(error: BaseException) -> str:
+    """What went wrong, out of the exception groups the SDK's task groups wrap it in, cut short."""
+    while getattr(error, "exceptions", None):  # an exception group, which 3.9 and 3.10 cannot name
+        error = error.exceptions[0]  # type: ignore[attr-defined]
+    return f"{type(error).__name__}: {str(error)[:200]}"
+
+
 class McpServer:
     """One stdio MCP server: started by the constructor, listed once, called by tool name, `close`d."""
 
@@ -68,7 +75,7 @@ class McpServer:
         self._error: Optional[BaseException] = None
         self._served = asyncio.run_coroutine_threadsafe(self._serve(), self._loop)
         if not self._ready.wait(timeout_s) or self._error is not None:
-            reason = "did not start in time" if self._error is None else type(self._error).__name__
+            reason = "it did not start in time" if self._error is None else _first_cause(self._error)
             self.close()
             raise ValidationError(f"mcp server {self.command[0]} failed to start: {reason}", "/mcp")
 

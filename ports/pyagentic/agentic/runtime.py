@@ -368,7 +368,8 @@ class LocalRuntime(Runtime):
         if self._explicit_log is not None:
             return self._explicit_log
         conversation = (doc.get("stores") or {}).get("conversation") or {}
-        kind = conversation.get("kind", "file" if self._store_dir else "memory")
+        # `store_dir` is the operator's say on where the log goes, over a document's `memory`.
+        kind = "file" if self._store_dir else conversation.get("kind", "memory")
         if kind == "file":
             directory = self._store_dir or conversation.get("url")
             if not directory:

@@ -10,6 +10,8 @@ import pytest
 
 from agentic import Turn
 from agentic.errors import ValidationError
+from agentic.events import FileEventLog
+from agentic.journal import FileEffectJournal
 from agentic.runtime import LocalRuntime
 
 
@@ -38,3 +40,17 @@ def test_degrade_takes_memory_and_says_so():
     result = rt.submit(Turn("c1", "t1", "hi"))
     assert result["status"] == "completed"
     assert any("stores.long_term" in d for d in result["runtime_detail"]["degraded"])
+
+
+def test_a_store_directory_holds_the_log_whatever_the_document_defaults_to(tmp_path):
+    """`store_dir` is the operator's say on where the log goes. A document that spelt out the default,
+    `conversation: {kind: memory}`, left the log in memory and lost it between runs."""
+    rt = LocalRuntime(store_dir=str(tmp_path))
+    rt.deploy(document(conversation={"kind": "memory"}))
+    assert isinstance(rt.log, FileEventLog) and isinstance(rt.journal, FileEffectJournal)
+    rt.submit(Turn("c1", "t1", "hi"))
+    rt.close()
+    again = LocalRuntime(store_dir=str(tmp_path))
+    again.deploy(document(conversation={"kind": "memory"}))
+    assert again.submit(Turn("c1", "t1", "hi"))["status"] == "duplicate"
+    again.close()
