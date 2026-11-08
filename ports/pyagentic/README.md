@@ -74,6 +74,22 @@ from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `GEMINI_API_KEY`, travel in a hea
 the log, the journal and any error. `temperature` and `max_tokens` are sent only when declared. All
 four are proven against a local HTTP server speaking the provider's format, not against a live model.
 
+Tools come from `tools:`, from `mcp:` servers and from `a2a:` peers, and every one goes through the
+same tool policy and journal:
+
+- An `mcp:` server (`agentic/mcp.py`) is started over stdio only if the operator lists its command in
+  `AGENTIC_MCP_ALLOWED_COMMANDS`. Its tools are registered as `<name>_<tool>`, may not take a
+  registered id, and their descriptions are marked as text from outside. Needs `pip install "mcp<2"`.
+- An `a2a:` peer with `transport: http` is sent `POST <url>/agent` with the call's `Idempotency-Key`
+  and its bearer resolved from a reference at the call; a `${NAME}` url is expanded then too.
+- `guardrails` take `regex` and `classifier` (`lexicon`); `skills` add tools and a prompt fragment;
+  `retrieval.vector_store: {kind: hnsw}` ranks the knowledge base through an in-process HNSW index;
+  `context.max_tokens` and `compaction: moscow` bound what the model sees; a `cep` pattern can call a
+  tool or inject a derived turn (`on_match.kind: submit`).
+
+A store, embedder, vector store, classifier or MCP transport the core does not have is refused at
+deploy, unless a store says `on_unavailable: degrade`.
+
 ## Layout
 
 - `agentic/ir.py` -- YAML/JSON loading, schema validation (bundled copies of `spec/v1/*.schema.json`,
@@ -87,23 +103,17 @@ four are proven against a local HTTP server speaking the provider's format, not 
 - `agentic/conformance.py` -- runs `spec/conformance/v1/fixtures/*.yaml` in place
   (`python -m agentic.conformance`); `matrix_binding` is the `agentic.conformance` entry point
   that `spec/tools/conformance_matrix.py` drives.
-- `pyagentic/` -- the earlier engine-agnostic essence.
 
-## Classes named `Agent`
+## Routing
 
-Several Python classes are called `Agent`. None is an alias of another; each has a distinct job,
-so they keep their names and are told apart by module.
+`agentic.Agent` (`agentic/spec.py`) is the fluent builder for a v1 workflow document: `build()` returns
+an `AgentSpec`, and `AgentSpec.run(...)` deploys it on a `Runtime`.
 
-| Class | What it is | Use it when |
-|---|---|---|
-| `agentic.Agent` (`agentic/spec.py`) | Fluent builder for a v1 workflow document. `build()` returns an `AgentSpec`; `AgentSpec.run(...)` deploys it on a `Runtime`. | You write a workflow in Python instead of YAML. This is the canonical API. |
-| `pyagentic.core.Agent` | A path handler: `agent_id`, `system_prompt`, a `Brain`. `RoutedGraph` maps each path name to one of these. | You build a `RoutedGraph` by hand or through `pyagentic.builder.build()`. |
-
-Routing is the same everywhere: `router.kind: keyword` matches `router.rules` case-insensitively as a
-substring of the turn text, the first path in declaration order wins, and no match goes to
-`router.default` (`agentic.engine.Engine._route`, `pyagentic.core.keyword_router`). `router.kind: static`
-sends every turn to `router.default`. The `llm` and `classifier` kinds are valid in the schema but no
-Python runtime implements them; both engines fail with a message that lists the supported kinds.
+`router.kind: keyword` matches `router.rules` case-insensitively as a substring of the turn text, the
+first path in declaration order wins, and no match goes to `router.default`
+(`agentic.engine.Engine._route`). `router.kind: static` sends every turn to `router.default`. The `llm`
+and `classifier` kinds are valid in the schema but the Python core does not implement them; a turn
+fails with a message that lists the supported kinds.
 
 ## Develop
 

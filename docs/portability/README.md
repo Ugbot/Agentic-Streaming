@@ -3,15 +3,19 @@
 What would this project be on a *different* engine? These notes name the
 engine-agnostic essence, the capabilities Flink was providing, and an honest
 per-engine mapping (what fits, what's awkward, what to drop). The essence is now
-implemented: two Flink-free cores (`pyagentic` · `jagentic-core`) + a declarative YAML
+implemented: two Flink-free cores (the `agentic` Python package in `ports/pyagentic`, and
+`jagentic-core`) + a declarative YAML
 pipeline. The supported runtimes are the Flink framework (the primary one), plain Python and
 [`agentic-pekko/`](../../agentic-pekko/) (actors). All of it is experimental; see the
 [README](../../README.md).
-The cores hold LLM/embedding clients, structured output, skills, MCP + A2A clients, saga/compensation, context-window
+The JVM core holds LLM/embedding clients, structured output, skills, MCP + A2A clients, saga/compensation, context-window
 management, an in-process **HNSW** vector index, vector/long-term/conversation store SPIs
-(Qdrant/Postgres/Redis reference impls), a web toolkit, a DL-inference SPI, and the
+(Qdrant/Postgres/Redis reference impls), a DL-inference SPI, and the
 **stream-stateful core** (CEP · timers · windows · replay · suspend/resume · tracing, see
-[`stream-stateful-core.md`](stream-stateful-core.md)), so you get the good parts without Flink.
+[`stream-stateful-core.md`](stream-stateful-core.md)), so you get the good parts without Flink. The
+Python core runs the same documents on its event log, with model clients for four providers, MCP and
+A2A tools, skills, the HNSW knowledge base, a classifier guardrail, a token budget and CEP; it refuses
+the stores and embedders it does not have.
 
 **Build & deploy (start here if you just want to use it):**
 - [`pipelines.md`](pipelines.md), define an agent in `pipeline.yaml` (prompts, tools,

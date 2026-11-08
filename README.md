@@ -97,11 +97,10 @@ Outside the fixtures, unit tests, the gateway tests and two live labs (`tools/ke
 - **Two live writers on one Kafka journal key are not excluded.** A topic has no compare-and-set, and
   a process that has been replaced but is still running can race its replacement. Postgres excludes
   them on the intent through the primary key, but later writes are plain upserts on both.
-- **The `pipeline.yaml` CLI is only partly on the conformance semantics.** `ports/agentic-pipeline`
-  runs a document on the `agentic` core when the core can run all of it. A document that needs MCP,
-  remote peers, Redis or other external stores, classifier guardrails, skills or non-hashing
-  embeddings falls back to the older `pyagentic` engine, which has no event log, no `turn_id` and no
-  journal, and the CLI says so on stderr.
+- **The Python core does less than the JVM in places, and says so.** Every `pipeline.yaml` example
+  runs on the `agentic` core, with the event log, `turn_id`, tool policy and journal. A document that
+  names what the Python core lacks, such as a Redis, Postgres or Qdrant store, an embedder other than
+  `hashing` or an MCP server over HTTP, is refused when it loads, with the reason.
 - **Nothing here has had an outside security review.** See [security](docs/security.md) for what is
   proved and what is left out.
 
@@ -194,7 +193,7 @@ cover.
 |---|---|
 | [`spec/`](spec/README.md) | `agentic/v1`: the primitives, schemas, fixtures, reference runtime and conformance runner |
 | [`ports/jagentic-core`](ports/jagentic-core/README.md) | The Java core |
-| [`ports/pyagentic`](ports/pyagentic/README.md) | The Python core: the conformance-tested `agentic` package and the older `pyagentic` package |
+| [`ports/pyagentic`](ports/pyagentic/README.md) | The Python core: the conformance-tested `agentic` package |
 | [`ports/agentic-pipeline`](ports/agentic-pipeline/README.md) | The `pipeline.yaml` CLI; `local` is its only backend |
 | Root module (`src/`, `pom.xml`) | The Flink adapter (`org.agentic.flink.runtime`, `pipeline`) |
 | [`agentic-pekko`](agentic-pekko/README.md) | The Pekko runtime |

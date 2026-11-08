@@ -72,21 +72,24 @@ python -m agentic_pipeline run examples/pipelines/banking.yaml --text "which car
 Output of the three runs:
 
 ```
-backend=local path=payments ok=True
+backend=local path=payments ok=True status=completed
 reply: [payments] get_balance returned 1234.56
 tools: ['get_balance']
 
-backend=local path=payments ok=True
-reply: [payments] Your balance is 1234.56.
+backend=local path=payments ok=True status=completed
+reply: Your balance is 1234.56.
 tools: ['get_balance']
 
-backend=local path=cards ok=True
+backend=local path=cards ok=True status=completed
 reply: [cards] We offer three card types: classic, gold, and platinum, each with different fees.
 ```
 
 The first reply comes from the `rule` brain firing the `balance` tool trigger; the second from
 the `llm` brain replaying the script (tool call, then text); the third from the retrieval block
-of the same file, answered from the in-memory hashing embedder.
+of the same file, answered from the in-memory hashing embedder. Each turn is on the `agentic` core's
+event log; add `--store-dir state --turn t1` to keep it, and the same command again answers
+`status=duplicate`. The other examples in `examples/pipelines/` run the same way; their headers say
+what each needs.
 
 ### On the JVM local runtime
 

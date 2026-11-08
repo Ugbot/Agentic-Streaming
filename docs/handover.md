@@ -50,8 +50,8 @@ identity. Kafka ACLs on that topic are required.**
 - Two live Kafka journal writers are not excluded. A rollback plus a due timer ends the turn fatal.
 - Limits are per Flink subtask, so not a hard ceiling. Crypto-shredding does not yet cover Pekko's
   log, Python or the results topics.
-- Python has no Claude or Gemini models, no HTTP front door, and its CLI runs five of seven examples
-  on the older engine with no journal.
+- Python has no HTTP front door. Its CLI runs all seven examples on the core; it refuses the stores
+  and embedders the JVM has and it does not (`feat/python-parity`).
 - Flink lost HTTP MCP with the legacy DSL, and ignores `stores:`.
 - Untested: any live model, `KafkaBackend` against a live broker, the Postgres journal on a session
   cluster, Milvus against a server, MCP OAuth, A2A 1.0.1.

@@ -3,15 +3,17 @@
 The project's thesis is *"an agent is a materialized view over an ordered log of events."* For a long
 time the portable cores only did single-turn `submit(event) → TurnResult`; everything stream-native,
 complex event processing, timers, windows, lived only on Flink. The **stream-stateful core** closes
-that: a small set of modules, present in both cores (`pyagentic` · `jagentic-core`), turns the event log into a first-class,
-ordered, replayable stream and layers the stream-native capabilities on top.
+that: a small set of modules in `jagentic-core` turns the event log into a first-class, ordered,
+replayable stream and layers the stream-native capabilities on top. The Python core, the `agentic`
+package, does the same jobs on its own event log rather than through these modules; see
+[on the Python core](#on-the-python-core).
 
 Everything below is **model-free by default** and composes with the runtimes: the portable
 implementation is the default, and the SPI seam lets an engine inject its native primitive
 (Flink timers/CEP, a Pekko scheduler + Pekko Streams) without touching agent
 code, exactly how the store SPIs already work.
 
-## The modules
+## The modules (JVM)
 
 | Module | What it adds | Key types |
 |--------|--------------|-----------|
@@ -26,7 +28,7 @@ code, exactly how the store SPIs already work.
 ## The headline: CEP, off Flink
 
 The canonical example. "**3 anomalies on one host within 5 minutes → open an incident**", now runs
-on every core, byte-identically (Java shown; the Python form mirrors it):
+on the JVM core and, from a `cep:` section, on Python and Flink too (Java shown):
 
 ```java
 Pattern incident = Pattern.begin("first",  Condition.any())
@@ -68,9 +70,10 @@ cep:
       # or  kind: tool, tool: open_ticket, args: {...}   (call any registered tool - incl. an A2A peer / MCP tool)
 ```
 
-`where`: `any` · `{text_contains: s|[..]}` · `{metadata_equals: {k: v}}` · `{metadata_gt: {k: n}}`.
+`where`: `any` · `{text_contains: s|[..]}` · `{metadata_equals: {k: v}}` · `{metadata_gt: {k: n}}` on
+the JVM; the schema, and so the Python core, take `{text_contains: s}`.
 
-**Run model.** The loader builds the rules and `PipelineSystem.submit` feeds every inbound event to
+**Run model (JVM).** The loader builds the rules and `PipelineSystem.submit` feeds every inbound event to
 them *after* the turn; a match fires its action through the **inner** runtime. `submit` actions inject
 a derived event tagged so CEP never re-matches it (no recursion); the stream path is a `StreamRuntime`
 over the system, so CEP fires **exactly once** on either entry point. The same spec runs on Pekko
@@ -96,9 +99,24 @@ SPIs where they have something native:
 So **"CEP everywhere" means**: the portable engine by default, the native engine where one exists,
 the agent definition is unchanged either way.
 
+## On the Python core
+
+The `agentic` package keeps a conversation as an event log and folds it, so the jobs above are done
+in the turn rather than by separate modules:
+
+- **CEP.** A `cep:` pattern is a fold over the conversation's `turn_received` events, evaluated on each
+  turn after routing. `on_match.kind: tool` calls the tool on the completing turn, under the tool
+  policy (`policies.unattended_tools`) and the journal. `on_match.kind: submit` injects a derived turn
+  with a `turn_id` of `<trigger>/cep/<pattern>`, run next as the conversation's single writer, before
+  any later turn; a redelivered trigger yields the same turn, which is then a duplicate. Derived turns
+  are left out of the fold, so nothing sets itself off again.
+- **Timers** are `timers:` in the workflow, fired on the next turn of the conversation that finds them
+  due; **replay** is reading the log again; **suspend and resume** are turn states with a signal.
+- There are no window, stream or tracing modules on the Python core.
+
 ## Verification
 
 Each module ships a cross-core parity test asserting byte-identical behaviour (the incident match,
 timer fire order, window counts, replay reproduction, suspend/resume, span trees) the way the FNV
 embedder and banking goldens already do. Run them with the usual per-core commands:
-`pytest ports/pyagentic` · `./mvnw -f ports/jagentic-core/pom.xml test`.
+`pytest ports/pyagentic/tests` · `./mvnw -f ports/jagentic-core/pom.xml test`.

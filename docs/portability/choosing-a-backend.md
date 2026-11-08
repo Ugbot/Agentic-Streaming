@@ -19,13 +19,14 @@ decides *how it runs*. Pick along three axes, in order.
 - **Local** keeps a lock per conversation in-process; durability comes from the store you
   configure.
 
-Whichever you choose, the durable store is **hot-swappable behind the SPI**
-(`stores.conversation: {kind: redis|memory, url: ...}`); bring it up with
+On the JVM, the durable store is **hot-swappable behind the SPI**
+(`stores.conversation: {kind: redis|memory, url: ...}`); the Python core keeps the event log in memory
+or in files. Bring the external stores up with
 [`examples/compose/externals.yml`](../../examples/compose/externals.yml).
 
 ## 3. Your stack / language
 
-- **Pure Python**: the in-process **Local** runtime (`pyagentic`).
+- **Pure Python**: the in-process **Local** runtime (the `agentic` package in `ports/pyagentic`).
 - **JVM**: Flink, Pekko, or **Local** (`jagentic-core`).
 
 ## Quick picks

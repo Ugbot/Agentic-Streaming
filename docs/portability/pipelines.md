@@ -6,9 +6,8 @@ retrieval, guardrails, and a hot-swappable durable store, from Python or the JVM
 locked to Flink.
 
 ```bash
-# Python
-PYTHONPATH=ports/agentic-pipeline:ports/pyagentic \
-  python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
+# Python (pip install -e ports/pyagentic -e ports/agentic-pipeline)
+python -m agentic_pipeline run examples/pipelines/banking.yaml --text "what is my balance?"
 
 # JVM (jagentic-core)
 mvn -q -f ports/jagentic-core/pom.xml exec:java \
@@ -16,7 +15,10 @@ mvn -q -f ports/jagentic-core/pom.xml exec:java \
   -Dexec.args="../../examples/pipelines/banking.yaml --text 'what is my balance?'"
 ```
 
-The Python loader has one backend, `local`, and raises `ValueError` for any other name. The JVM
+The Python loader has one backend, `local`, the `agentic` core, and raises `ValueError` for any other
+name. Every example runs on it with the event log, `turn_id`, tool policy and effect journal; a
+document naming something the Python core does not have is refused when it loads, with the reason.
+Where the two loaders differ, the schema below says so. The JVM
 loader ships `local` and resolves other names through the `BackendProvider` SPI, as
 [`agentic-pekko`](../../agentic-pekko/) does for `backend: pekko`.
 
@@ -26,13 +28,13 @@ loader ships `local` and resolves other names through the `BackendProvider` SPI,
 backend: local            # which engine runs it (Python: local; JVM: local, pekko)
 
 llm:                      # OPTIONAL - omit for model-free rule brains
-  provider: ollama        # ollama | openai | litellm | langchain4j | stub
-  model: qwen2.5:3b
+  provider: ollama        # ollama | openai | anthropic | gemini | stub
+  model: qwen2.5:3b       # required, except anthropic, which defaults to claude-sonnet-5-5
   base_url: http://localhost:11434     # connection link (or env)
   # script: [...]         # only for provider: stub - a scripted ReAct trace
 
 embeddings:               # OPTIONAL - default is the FNV hashing embedder (offline)
-  provider: hashing       # hashing | litellm | ollama | openai
+  provider: hashing       # hashing; the JVM also takes ollama | openai | langchain4j
   model: nomic-embed-text
   dim: 256
   # base_url: http://localhost:11434
@@ -51,7 +53,7 @@ agent:
       tools: [get_balance] # tools this path's LLM brain may call
       tool_triggers: {balance: get_balance}   # rule-brain: keyword -> tool
       skills: [card_help]  # expand into extra tools + a prompt fragment
-      output_schema:       # OPTIONAL - enforce a schema-validated final answer
+      output_schema:       # OPTIONAL - the schema a `kind: schema` verifier checks the reply against
         {type: object, properties: {answer: {type: string}}, required: [answer]}
     payments: { brain: llm, prompt: "You are a payments specialist.", tools: [get_balance] }
     general:  { brain: rule, prompt: "You answer general questions." }
@@ -72,7 +74,7 @@ tools:
 retrieval:
   dim: 256
   vector_store:            # OPTIONAL cold tier - default is the in-memory hot tier only
-    kind: hnsw             # memory | hnsw (in-process ANN) | duckdb (Python) | qdrant | pgvector (JVM)
+    kind: hnsw             # memory | hnsw (in-process ANN); the JVM also takes qdrant | pgvector
     m: 16                  # hnsw graph degree
     ef_search: 64
     # url: http://localhost:6333   # qdrant connection link
@@ -86,25 +88,27 @@ context:                   # OPTIONAL - compact the replayed transcript before t
 
 guardrails:
   - {kind: regex, deny: ["ignore (all|previous)"], reason: "prompt injection"}        # input screen
-  - {kind: regex, deny: ['\d{16}'], reason: "leaked PAN", check_outputs: true}        # output screen
+  - {kind: regex, deny: ['\d{16}'], reason: "leaked PAN", stage: output}              # output screen
   - kind: classifier       # a learned/lexicon screen instead of a regex catalogue
-    classifier: lexicon    # lexicon | embedding (nearest-centroid over the Embedder)
+    classifier: lexicon    # lexicon; the JVM also takes embedding (nearest-centroid over the Embedder)
     blocked: [toxic]
     threshold: 0.3
     lexicon: {toxic: [idiot, stupid, hate], ok: [please, thanks, help]}
 
 mcp:                       # OPTIONAL - register an external MCP server's tools
-  - {name: fs, transport: stdio, command: [python, mcp_server.py]}   # tools become fs_<name>
+  - {name: fs, transport: stdio, effect: read, command: [python, mcp_server.py]}   # tools become fs_<name>
+  # starts only if the operator lists the command in AGENTIC_MCP_ALLOWED_COMMANDS
 
 a2a:                       # OPTIONAL - register a peer agent as a tool (peer-as-tool)
-  - {id: specialist, url: "${SPECIALIST_URL}", retries: 2}
+  - {id: specialist, transport: http, effect: idempotent, url: "${AGENTIC_SPECIALIST_URL}", retries: 2,
+     auth: {bearer: "env:AGENTIC_PEER_TOKEN"}}   # the token is named, never written here
 
 stores:                    # OPTIONAL - hot-swap the durable backing (default: memory)
   conversation:
-    kind: redis            # memory | redis (Redis/Valkey)
+    kind: redis            # memory | file (Python); memory | redis (Redis/Valkey, JVM)
     url: "${AGENTIC_REDIS_URL}"   # connection link; ${ENV} is expanded
   long_term:
-    kind: postgres         # memory | postgres - resumption + fact archive (LongTermStore SPI)
+    kind: postgres         # memory; the JVM also takes postgres (LongTermStore SPI)
     url: "${AGENTIC_PG_URL}"
 ```
 
@@ -116,31 +120,32 @@ MCP + A2A sections.
 
 ### Calling other agents
 
-A `tool` of `kind: agent` (alias of `http`) POSTs `{conversation_id, text, user_id}` to
-another agent's HTTP gateway (`/agent`) and returns its reply, so a path's brain can
-delegate to a peer agent. That's portable multi-agent / A2A with no engine lock-in: the
+A `tool` of `kind: agent`, or an `a2a` peer with `transport: http`, POSTs `{conversation_id, text,
+user_id}` to another agent's HTTP gateway (`/agent`) and returns its reply, so a path's brain can
+delegate to a peer agent. The call carries its `Idempotency-Key`, and on the Python core a `${NAME}`
+url is expanded at the call, so a turn that never delegates needs no peer. That's portable multi-agent / A2A with no engine lock-in: the
 peer can be any backend's gateway. See [`examples/pipelines/multiagent.yaml`](../../examples/pipelines/multiagent.yaml).
 
 ### Prompts & LLM
 
 `brain: llm` runs a bounded ReAct loop (thought → tool → observation → final) over the
-`ChatClient` chosen in `llm:` (`ollama`/`openai` are real HTTP clients; `stub` is a
-scripted, offline client for tests/demos). `brain: rule` is model-free (keyword + tool
+`ChatClient` chosen in `llm:` (`ollama`, `openai`, `anthropic` and `gemini` are real HTTP clients,
+with their keys from the environment; `stub` is a scripted, offline client for tests and demos). `brain: rule` is model-free (keyword + tool
 triggers + retrieval) and needs no `llm:` section, the default everywhere.
 
 ## Hot-swappable externals
 
 Every external service sits **behind an interface**, selected by a **connection link**:
 
-- **Durable store**: `stores.conversation.{kind,url}` swaps the `ConversationStore`
-  implementation (`memory` → `redis`/Valkey) with no agent-code change. A Flink job ignores `stores:`: its log is
-  keyed state.
+- **Durable store**: on the JVM, `stores.conversation.{kind,url}` swaps the `ConversationStore`
+  implementation (`memory` → `redis`/Valkey) with no agent-code change. The Python core keeps a
+  conversation on its event log, in memory or in files (`--store-dir`), and refuses a Redis store
+  unless it says `on_unavailable: degrade`. A Flink job ignores `stores:`: its log is keyed state.
 - Bring the services up with Compose and point the links at them:
 
   ```bash
   podman compose -f examples/compose/externals.yml up -d valkey
-  AGENTIC_REDIS_URL=redis://localhost:6379/0 \
-    python -m agentic_pipeline run examples/pipelines/banking.yaml --backend local
+  export AGENTIC_REDIS_URL=redis://localhost:6379/0   # then run a spec naming it on the JVM loader
   ```
 
 ## What each backend supports
@@ -152,7 +157,7 @@ See the **[conformance results](../runtimes/README.md#conformance-results)** for
 
 | Language | Builder | Loader / CLI | YAML |
 |----------|---------|--------------|------|
-| Python | `pyagentic.builder.build` | `agentic_pipeline.load` / `python -m agentic_pipeline run` | PyYAML |
+| Python | `agentic.runtime.LocalRuntime` | `agentic_pipeline.load` / `python -m agentic_pipeline run` | PyYAML |
 | JVM | `org.jagentic.core.pipeline.GraphBuilder` | `PipelineLoader.load` / `PipelineCli` | Jackson-YAML |
 
 Both consume the **same schema** and the **same example files** under

@@ -9,9 +9,9 @@ at [tag `pre-cornerstone`](https://github.com/Ugbot/Agentic-Streaming/tree/pre-c
 
 ```
 ports/
-  pyagentic/         pure-Python essence + LocalRuntime, conformance tested
+  pyagentic/         the `agentic` package: the Python core and LocalRuntime, conformance tested
   jagentic-core/     pure-Java essence + LocalRuntime, conformance tested
-  agentic-pipeline/  declarative pipeline.yaml loader + backend registry (Python); Java in
+  agentic-pipeline/  pipeline.yaml loader and CLI on the `agentic` core (Python); Java in
                      jagentic-core/.../pipeline
 ```
 
@@ -23,26 +23,25 @@ retrieval, guardrails, hot-swappable stores) and run it on the local backend, on
 (Redis/Valkey, Kafka, Postgres) sit behind interfaces and come up via
 [`examples/compose/externals.yml`](../examples/compose/externals.yml).
 
-The cores implement the engine-agnostic abstractions once, `ConversationStore`,
-`KeyedStateStore`, `ToolRegistry`, `AgentContext`, `RoutedGraph`, hot+cold
-`Retrieval`, `Banking` example, and hold an LLM `ChatClient` SPI (litellm / LangChain4J + Ollama/OpenAI), an `Embedder`
-SPI, structured output, skills, regex **and** classifier guardrails, ≈9 listener hooks, a
-`VectorStore` SPI with an in-process **HNSW** index (+ Qdrant / DuckDB), a `LongTermStore` SPI
-(Postgres), Redis/Valkey conversations, an **MCP** client, an **A2A** peer-as-tool client,
-saga/compensation, context-window management, a web toolkit, and a DL-inference
-(`Classifier`/`Scorer`) SPI. Everything has a model-free default so the offline suites stay
-green; real providers/backends are opt-in.
+The Java core implements the engine-agnostic abstractions once (`ConversationStore`,
+`KeyedStateStore`, `ToolRegistry`, `RoutedGraph`, hot and cold `Retrieval`, an LLM `ChatClient` SPI,
+an `Embedder` SPI, skills, regex and classifier guardrails, a `VectorStore` SPI with an in-process
+HNSW index, MCP and A2A clients, saga and context-window management). The Python core, the `agentic`
+package, runs the same `agentic/v1` documents on its event log: model clients for OpenAI, Ollama,
+Claude and Gemini, MCP stdio tools, A2A peers over HTTP, an HNSW knowledge base, a lexicon classifier
+guardrail, skills, a token-budget transcript and CEP; it refuses what it does not have rather than
+run without it. Everything has a model-free default so the offline suites stay green; real
+providers and backends are opt-in.
 
 ---
 
 ## Run it
 
 ```bash
-# pure-Python core (no deps)
-cd ports/pyagentic && PYTHONPATH=. python -m pytest tests/ -q
-
-# declarative loader + backend registry
-cd ports/agentic-pipeline && PYTHONPATH=.:../pyagentic python -m pytest -q
+# the Python core and the pipeline CLI
+python -m pip install -e "ports/pyagentic[test]" -e "ports/agentic-pipeline[test]" "mcp<2"
+python -m pytest ports/pyagentic/tests -q
+python -m pytest ports/agentic-pipeline -q
 
 # pure-Java core
 ./mvnw -f ports/jagentic-core/pom.xml install -DskipTests
@@ -54,10 +53,8 @@ cd ports/agentic-pipeline && PYTHONPATH=.:../pyagentic python -m pytest -q
 
 ## Extending the essence (add it once)
 
-The **two cores are the single source of truth**. Add a tool (`ToolRegistry.register(...)`), a
-path (an `Agent` in the graph's paths), a router rule, or a retrieval source to `jagentic-core`
-(Java) or `pyagentic` (Python), and everything on that core picks it up with no other change.
-
-This is enforced by tests, not just convention: `pyagentic/tests/test_extensibility.py` and
-`jagentic-core` `ExtensibilityTest` add a brand-new `freeze_card` tool + `fraud` path **through
-the public API only** (no framework edits) and prove the core routes to and invokes them.
+The **two cores are the single source of truth**. Add a tool, a path, a router rule, or a retrieval
+source to `jagentic-core` (Java, `ToolRegistry.register(...)`) or to a workflow document the `agentic`
+core runs (Python, `Agent.use_tool(...)`), and everything on that core picks it up with no other
+change. `jagentic-core`'s `ExtensibilityTest` adds a new `freeze_card` tool and `fraud` path through
+the public API only and proves the core routes to and invokes them.

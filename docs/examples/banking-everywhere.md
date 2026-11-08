@@ -74,7 +74,7 @@ runners only. They need the MCP SDK on the `python3` on PATH and, for the A2A es
 
 | Runtime | How the spec runs | Delivery | Durability / ordering |
 |---------|-------------------|----------|-----------------------|
-| pyagentic (Python) | `agentic_pipeline run` (`--backend local`; nothing else is registered) | online | in-memory / Redis |
+| `agentic` (Python) | `agentic_pipeline run` (`--backend local`; nothing else is registered) | online | event log in memory or files (`--store-dir`), with the effect journal |
 | jvm-core (JVM) | `PipelineCli`, or `PipelineLoader.load(yaml, "local")` as a library | online | in-memory / Redis |
 | Agentic Pekko | `PipelineMain`, `backend: pekko` (BackendProvider SPI) | online / actor | event-sourced entity (memory, Postgres, Cassandra, Redis) |
 | Apache Flink | `FlinkPipelineRunner` (YAML to a MiniCluster job, driven from `FlinkPipelineRunnerTest`) and the legacy code-first Java DSL | streamed | checkpoints / keyed state |

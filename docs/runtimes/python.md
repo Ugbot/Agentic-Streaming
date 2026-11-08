@@ -27,7 +27,12 @@ alone: the runtime still deploys, and turns on that conversation end `failed` wi
 routing, the rule brain and the scripted `stub` LLM brain, verification bounds, structured tool
 calls and retry, saga compensation, memory, retrieval, suspend and resume, A2A delegation, CEP
 sequence patterns, the context window, idempotency and replay. It is the code the fixtures
-exercise, through `LocalRuntime`.
+exercise, through `LocalRuntime`. Beyond the fixtures it runs the real model clients
+(`agentic/llm.py`: OpenAI, Ollama, Claude and Gemini), tools from MCP stdio servers (`agentic/mcp.py`),
+peers over HTTP, the HNSW knowledge base (`agentic/hnsw.py`), the lexicon classifier guardrail
+(`agentic/classifier.py`), skill prompts, a token budget on what the model sees, and `cep` patterns
+that inject a derived turn. The `pipeline.yaml` CLI (`ports/agentic-pipeline`) runs every example on
+this engine.
 
 ## One writer per conversation
 
@@ -49,9 +54,9 @@ spelled out. The conformance verb `restart_runtime` maps onto it, so the `python
 
 `LocalRuntime.capabilities()` is the runtime's own declaration. `deploy(spec)` compares the
 workflow's requirements against it and raises `CapabilityError` listing every unsupported
-requirement instead of running a subset. The declaration says `llm_brain` is partial: only the
-scripted `stub` provider runs locally, and the one `llm_brain` fixture uses that stub, so a pass there
-says nothing about a real model. `timers` read the runtime's `clock` (wall time by default,
+requirement instead of running a subset. The declaration says `llm_brain` is partial: the one
+`llm_brain` fixture uses the scripted `stub` provider, so a pass there says nothing about a real model.
+The real clients are proven against local servers speaking each provider's format, not a live model. `timers` read the runtime's `clock` (wall time by default,
 or a `ManualClock` whose `advance(ms)` moves it) and the conversation watermark; pending timers
 and a manual clock's reading survive `restart()` because both are rebuilt from the log. What counts is fixture outcomes, not the
 declaration.

@@ -1,7 +1,7 @@
 # Using a real model (chat + embeddings): per language
 
-Every core ships **model-free defaults** so the test suites run offline: the `StubChatClient`
-(scripted ReAct), the FNV `HashingEmbedder` (deterministic), and a lexicon classifier. To go
+Every core ships **model-free defaults** so the test suites run offline: the `stub` provider
+(a scripted ReAct trace), the FNV hashing embedder (deterministic), and a lexicon classifier. To go
 live, swap the provider, the SPIs are the same, so nothing else in your agent changes.
 
 Secrets stay in a gitignored `.env`; never commit keys. Live tests run only when a key/server
@@ -26,32 +26,44 @@ Switch to a hosted provider by changing two fields and exporting the key:
 
 ```yaml
 llm:        {provider: openai, model: gpt-6-luna}
-embeddings: {provider: openai, model: text-embedding-3-small}
+embeddings: {provider: openai, model: text-embedding-3-small}   # the JVM; Python embeds with hashing
 ```
 ```bash
 export OPENAI_API_KEY=sk-...          # read from the environment, never the YAML
 ```
 
+Claude and Gemini are declared the same way, on both cores:
+
+```yaml
+llm: {provider: anthropic}                      # model defaults to claude-sonnet-5-5
+llm: {provider: gemini, model: gemini-3-flash}  # gemini needs a model
+```
+```bash
+export ANTHROPIC_API_KEY=...          # or GEMINI_API_KEY; each goes in a header, never the URL
+```
+
+`temperature` and `max_tokens` are sent only when declared. Every model call goes through the egress
+policy and the effect journal, a tool result is marked as untrusted before the model reads it, and a
+key never reaches the log, the journal or an error message.
+
 ## In code
 
-### Python (`pyagentic`): unified via litellm, or native SDKs
+### Python (the `agentic` core)
 
 ```python
-from pyagentic.llm import LiteLLMChatClient, OllamaChatClient, LlmBrain
-from pyagentic.embeddings import LiteLLMEmbedder, make_embedder
+from agentic import Agent
 
-chat = LiteLLMChatClient(model="ollama/qwen2.5:3b")          # one API across providers
-# chat = LiteLLMChatClient(model="gpt-6-luna")             # OpenAI (OPENAI_API_KEY)
-# chat = LiteLLMChatClient(model="anthropic/claude-...")     # Anthropic (ANTHROPIC_API_KEY)
-embed = make_embedder({"provider": "ollama", "model": "nomic-embed-text"})
-brain = LlmBrain(chat, name="assistant", system_prompt="You are helpful.")
+spec = (Agent("assistant")
+        .path("main", brain="llm", prompt="You are helpful.", tools=["get_balance"])
+        .use_tool("get_balance", lambda user: 1234.56, effect="read")
+        .with_llm("anthropic")                       # or "openai", "gemini", "ollama" with model=...
+        .build())
+result = spec.run(runtime="local", text="what is my balance?", conversation_id="c1", turn_id="t1")
 ```
-`model` is required for `OllamaChatClient`, `OpenAIChatClient` and `LiteLLMChatClient`, and for
-`llm.provider: ollama|openai` in a `pipeline.yaml`; there is no default model name, an empty or
-missing one raises `ValueError` before any request is made. Name a model you have actually pulled
-or been granted access to.
-`pip install litellm` (chat+embeddings across providers); `qdrant-client`, `psycopg`,
-`duckdb`, `mcp` are optional extras for the matching backends.
+`model` is required for `ollama`, `openai` and `gemini`; an empty or missing one raises
+`ValidationError` before any request is made. Name a model you have actually pulled or been granted
+access to. The clients are `urllib` and `json`, with no SDK; `pip install "mcp<2"` is the one optional
+extra, for `mcp:` servers.
 
 ### Java (`jagentic-core`): LangChain4J behind the ChatClient SPI
 
@@ -76,9 +88,8 @@ retrieval:  {vector_store: {kind: hnsw, m: 16, ef_search: 64}, kb: [...]}
 ## Verify it's live
 
 ```bash
-# Python
-PYTHONPATH=ports/agentic-pipeline:ports/pyagentic python -m agentic_pipeline run \
-  examples/pipelines/banking-rag.yaml --text "how do I dispute a charge?"
+# Python: a model-driven path
+python -m agentic_pipeline run examples/pipelines/banking-llm.yaml --text "what is my balance?"
 ```
-Swap `embeddings.provider` to `ollama` in the YAML first; with Ollama down it falls back to
-the hashing embedder (still routes, just lexical recall).
+Swap the `llm` block of `banking-llm.yaml` for a real provider first. Real embeddings are a JVM
+feature: the Python core refuses `embeddings.provider` other than `hashing` rather than fall back.

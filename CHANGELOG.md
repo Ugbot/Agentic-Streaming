@@ -13,6 +13,18 @@ exists.
 
 ### Changed
 
+- **Python: every `pipeline.yaml` example runs on the `agentic` core, and the legacy `pyagentic`
+  package is removed.** The CLI no longer falls back to an engine with no event log or journal. The
+  core gains `provider: anthropic` (default model `claude-sonnet-5-5`) and `provider: gemini`, MCP
+  stdio tools, A2A peers and `kind: agent` tools over HTTP, the HNSW knowledge base, the lexicon
+  classifier guardrail, skill prompts, `context.max_tokens` with `compaction: moscow`, and `cep`
+  `on_match.kind: submit`. A store, embedder, vector store or classifier it does not have is refused
+  at deploy instead of being ignored. Dropped with the legacy package: LiteLLM, Ollama and OpenAI
+  embedders, Qdrant and DuckDB vector stores, the Postgres long-term and Redis conversation stores,
+  the embedding classifier, structured output for model paths, listeners and tracing, windows, the
+  web toolkit, the stream runtime, and the A2A agent-card fetch. `agentic-pipeline` drops its `redis`
+  extra and takes `--meta key=value`.
+
 - **Behaviour change: deny by default at the tool boundary.** A path may call only what its `tools`
   lists, plus its skills' tools, and leaving `tools` out means none, where before it meant all. Timers
   and CEP patterns need `policies.unattended_tools`. A refused tool is `tool_refused` and ends the turn

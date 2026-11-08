@@ -88,12 +88,13 @@ suite green.
 ## Python packages
 
 Two distributions live in the repository. Install them editable from a checkout, in this order
-(the pipeline package depends on `pyagentic`):
+(the pipeline package depends on `pyagentic`, which ships the `agentic` package). The MCP tests and
+examples need the MCP SDK:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
 python -m pip install -e "ports/pyagentic[test]"
-python -m pip install -e "ports/agentic-pipeline[test]"
+python -m pip install -e "ports/agentic-pipeline[test]" "mcp<2"
 ```
 
 Run their tests from the repository root:
