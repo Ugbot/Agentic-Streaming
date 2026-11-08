@@ -224,7 +224,13 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
+            <!-- Replacing the configuration drops what the parent set, so the test egress
+                 settings are stated again; without them every fixture HTTP stub is refused. -->
             <configuration combine.self="override">
+              <systemPropertyVariables>
+                <agentic.egress.allow_private>${test.egress.allow_private}</agentic.egress.allow_private>
+                <agentic.egress.allow_hosts>${test.egress.allow_hosts}</agentic.egress.allow_hosts>
+              </systemPropertyVariables>
               <includes>
                 <include>**/*Test.java</include>
                 <include>**/*TckSpec.java</include>
