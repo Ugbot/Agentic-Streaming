@@ -167,9 +167,9 @@ def fit_tokens(messages: Sequence[T], context: Optional[Mapping[str, Any]]) -> L
     budget = (context or {}).get("max_tokens")
     if not budget:
         return list(messages)
-    ranks = [range(len(messages) - 1, -1, -1)]
+    newest = list(range(len(messages) - 1, -1, -1))
+    ranks: List[List[int]] = [newest]
     if (context or {}).get("compaction") == "moscow":
-        newest = list(ranks[0])
         ranks = [[i for i in newest if getattr(messages[i], "role", "") == "user"],
                  [i for i in newest if getattr(messages[i], "role", "") != "user"]]
     left = int(budget)
