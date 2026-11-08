@@ -59,18 +59,31 @@ class A2AClient:
         return self._get("/.well-known/agent-card.json")
 
     def send(self, conversation_id: str, text: str, user_id: str = "anonymous") -> Dict[str, Any]:
+        # A peer's front door refuses a turn with no text (400), so say so here and send nothing.
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("an A2A turn needs text")
         return self._post("/agent", {"conversation_id": conversation_id, "text": text, "user_id": user_id})
+
+
+def _turn_text(params: Dict[str, Any]) -> str:
+    """The text handed to the peer: ``text`` when the caller gave one, otherwise the call's
+    arguments as JSON, so a tool trigger that passes only ``{user}`` still sends a turn."""
+    text = params.get("text")
+    if isinstance(text, str) and text.strip():
+        return text
+    return json.dumps(params, sort_keys=True, default=str)
 
 
 def peer_tool(base_url: str, **client_kwargs) -> Callable[[Dict[str, Any]], Any]:
     """A ToolRegistry tool that delegates a turn to a peer agent. Params:
-    ``{conversation_id, text, user_id}`` (sensible defaults); returns the peer reply."""
+    ``{conversation_id, text, user_id}``, each with a default (``user`` stands in for
+    ``user_id``, and the arguments themselves for a missing ``text``); returns the peer reply."""
     client = A2AClient(base_url, **client_kwargs)
 
     def call(params: Dict[str, Any]) -> Any:
         return client.send(
             conversation_id=str(params.get("conversation_id", "a2a")),
-            text=str(params.get("text", "")),
-            user_id=str(params.get("user_id", "anonymous")))
+            text=_turn_text(params),
+            user_id=str(params.get("user_id", params.get("user", "anonymous"))))
 
     return call

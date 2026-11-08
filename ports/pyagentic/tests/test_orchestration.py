@@ -104,6 +104,41 @@ def test_peer_tool_delegates(stub_agent):
     assert out["reply"] == "echo: delegate this"
 
 
+class _StrictAgent(_StubAgent):
+    """A front door like the gateway's: a turn with no text is a 400."""
+
+    seen: list = []
+
+    def do_POST(self):
+        import json as _j
+        body = _j.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        if not isinstance(body.get("text"), str) or not body["text"].strip():
+            self.send_response(400)
+            self.end_headers()
+            return
+        _StrictAgent.seen.append(body)
+        self._json({"reply": "echo: " + body["text"], "ok": True})
+
+
+def test_peer_tool_sends_a_turn_when_the_trigger_passes_no_text():
+    _StrictAgent.seen = []
+    server = HTTPServer(("127.0.0.1", 0), _StrictAgent)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        tool = peer_tool(f"http://127.0.0.1:{server.server_address[1]}", retries=0)
+        # What the rule brain's tool trigger passes: the user and nothing else.
+        out = tool({"user": "alice"})
+    finally:
+        server.shutdown()
+    assert out["ok"]
+    assert _StrictAgent.seen == [{"conversation_id": "a2a", "text": '{"user": "alice"}', "user_id": "alice"}]
+
+
+def test_a2a_client_refuses_a_blank_turn_before_sending(stub_agent):
+    with pytest.raises(ValueError, match="needs text"):
+        A2AClient(stub_agent).send("c1", "  ")
+
+
 @pytest.mark.parametrize("key", ["name", "id"])
 def test_builder_registers_declared_a2a_peers_as_tools(stub_agent, key):
     from pyagentic.builder import build
