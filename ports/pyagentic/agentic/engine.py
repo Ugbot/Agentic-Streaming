@@ -26,7 +26,7 @@ from jsonschema import Draft202012Validator
 
 from . import classifier
 from .bindings import Bindings
-from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
+from .cep import DERIVED_KEY, SUBMIT_KIND, TOOL_KIND, SequencePattern, compile_patterns, event_time_ms, turns_of
 from .errors import CorruptLog, LogUnavailable, ToolError, ToolRefused, TransientError, ValidationError
 from .events import ChatMessage, Event, EventLog, Turn, fit_tokens, reduce_state, transcript
 from .journal import (
@@ -359,7 +359,8 @@ class Engine:
                 classifier.check_rail(rail, f"/guardrails/{i}")
         retrieval = doc.get("retrieval") or {}
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
-        self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4), retrieval.get("vector_store"))
+        self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4),
+                                retrieval.get("vector_store"))
         self.timers = WorkflowTimers(doc.get("timers") or [], self.clock)
         self._schema_validators: Dict[int, Draft202012Validator] = {}
         # A test seam: called as (`event`, type, before|after) around every append and as
@@ -693,19 +694,41 @@ class Engine:
         """Sequence CEP over this conversation's turns up to this one; a pattern completing on this
         turn invokes its tool (recorded on this turn). A turn replayed after others arrived sees what
         it saw the first time. Returns the failed result when that tool fails, else None."""
-        if not self.cep:
-            return None
+        if not self.cep or DERIVED_KEY in ctx.turn.metadata:
+            return None  # a turn a pattern injected is not one the patterns see
         log = self.log.read(ctx.turn.conversation_id)
         last = next((e.sequence for e in log if e.turn_id == ctx.turn.turn_id and e.type == "turn_received"),
                     len(log))
         turns = turns_of(log[:last + 1])
         for pattern in self.cep:
+            if pattern.action != TOOL_KIND:
+                continue
             if pattern.completes_on(turns):
                 try:
                     self._invoke(ctx, pattern.tool, pattern.match_args(ctx.turn.conversation_id), origin="cep")
                 except ToolError as exc:
                     return self._fail(ctx, path, "tool", str(exc))
         return None
+
+    def derived_turns(self, turn: Turn) -> List[Turn]:
+        """The turns `on_match.kind: submit` patterns inject after `turn`: one per pattern that completed
+        on it, once it was routed. The runtime runs them next, before any later turn of the conversation.
+        A trigger delivered again yields the same turns, which are then duplicates, so a crash between the
+        two loses nothing. A derived turn yields none."""
+        if not any(p.action == SUBMIT_KIND for p in self.cep):
+            return []
+        log = self.log.read(turn.conversation_id)
+        mine = [e for e in log if e.turn_id == turn.turn_id]
+        received = next((e for e in mine if e.type == "turn_received"), None)
+        if received is None or DERIVED_KEY in dict(received.metadata or {}):
+            return []
+        if not any(e.type == "routed" for e in mine):
+            return []
+        turns = turns_of(log[:received.sequence + 1])
+        trigger = self._turn_as_received(turn.conversation_id, turn.turn_id, received)
+        return [Turn(turn.conversation_id, p.derived_turn_id(turn.turn_id), p.derived_text(turn.conversation_id),
+                     trigger.user_id, None, {**trigger.metadata, DERIVED_KEY: p.name}, trigger.principal)
+                for p in self.cep if p.action == SUBMIT_KIND and p.completes_on(turns)]
 
     def _received_payload(self, turn: Turn) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"turn_id": turn.turn_id, "text": turn.text, "user_id": turn.user_id}

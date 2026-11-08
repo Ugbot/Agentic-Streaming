@@ -29,6 +29,10 @@ from .events import Event
 
 EVENT_TIME_KEY = "event_time_ms"
 TOOL_KIND = "tool"
+SUBMIT_KIND = "submit"
+# The metadata key a derived turn carries: the pattern that injected it. The fold leaves such turns out,
+# so a derived turn can never set a pattern off again.
+DERIVED_KEY = "cep_pattern"
 
 
 def event_time_ms(metadata: Optional[Mapping[str, Any]]) -> Optional[int]:
@@ -77,6 +81,8 @@ class SequencePattern:
     tool: str
     ts_key: Optional[str] = None
     within_ms: Optional[int] = None
+    action: str = TOOL_KIND
+    text: str = ""
 
     def __post_init__(self) -> None:
         if not self.stages:
@@ -103,12 +109,17 @@ class SequencePattern:
                   str(st.get("contiguity", "next")))
             for i, st in enumerate(spec.get("pattern") or []))
         on_match = spec.get("on_match") or {}
+        within = spec.get("within")
+        within_ms = None if within is None else int(within)
+        if on_match.get("kind") == SUBMIT_KIND:
+            if not on_match.get("text"):
+                raise ValidationError(f"cep pattern {name} has on_match.kind submit without a text",
+                                      f"/cep/{name}/on_match/text")
+            return SequencePattern(name, stages, "", ts_key, within_ms, SUBMIT_KIND, str(on_match["text"]))
         if "tool" not in on_match:
             raise ValidationError(f"cep pattern {name} has on_match.kind tool without a tool id",
                                   f"/cep/{name}/on_match/tool")
-        within = spec.get("within")
-        return SequencePattern(name, stages, str(on_match["tool"]), ts_key,
-                               None if within is None else int(within))
+        return SequencePattern(name, stages, str(on_match["tool"]), ts_key, within_ms)
 
     def timestamp(self, turn: Turn) -> int:
         """The event time of ``turn`` under this pattern's ``ts``."""
@@ -146,21 +157,22 @@ class SequencePattern:
         """The ``on_match.kind: tool`` arguments: the pattern name and the conversation key."""
         return {"pattern": self.name, "key": conversation_id}
 
+    def derived_turn_id(self, turn_id: str) -> str:
+        """The ``on_match.kind: submit`` turn's id: fixed by the triggering turn and the pattern, so a
+        redelivered trigger injects the same turn, which is then a duplicate."""
+        return f"{turn_id}/cep/{self.name}"
 
-def _has_tool_action(spec: Mapping[str, Any]) -> bool:
-    return (spec.get("on_match") or {}).get("kind") == TOOL_KIND
+    def derived_text(self, key: str) -> str:
+        return self.text.replace("{key}", key)
 
 
 def compile_patterns(specs: Optional[Sequence[Mapping[str, Any]]]) -> List[SequencePattern]:
-    """The ``cep:`` entries evaluated in-turn: those with ``on_match.kind: tool``."""
-    return [SequencePattern.from_spec(s) for s in specs or [] if _has_tool_action(s)]
-
-
-def without_tool_actions(specs: Optional[Sequence[Mapping[str, Any]]]) -> List[Mapping[str, Any]]:
-    """The ``cep:`` entries :func:`compile_patterns` leaves to stream-level wiring."""
-    return [s for s in specs or [] if not _has_tool_action(s)]
+    """The ``cep:`` entries with an action, ``tool`` or ``submit``. One with none does nothing."""
+    return [SequencePattern.from_spec(s) for s in specs or []
+            if (s.get("on_match") or {}).get("kind") in (TOOL_KIND, SUBMIT_KIND)]
 
 
 def turns_of(log: Sequence[Event]) -> List[Turn]:
-    """The conversation's turns in log order, as the fold sees them."""
-    return [Turn.from_event(e) for e in log if e.type == "turn_received"]
+    """The conversation's turns in log order, as the fold sees them, without the turns a pattern injected."""
+    return [Turn.from_event(e) for e in log
+            if e.type == "turn_received" and DERIVED_KEY not in dict(e.metadata or {})]

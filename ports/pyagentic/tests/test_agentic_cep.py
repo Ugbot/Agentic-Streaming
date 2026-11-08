@@ -17,7 +17,6 @@ from agentic.cep import (
     compile_patterns,
     event_time_ms,
     turns_of,
-    without_tool_actions,
 )
 from agentic.cep import Turn as CepTurn
 from agentic.events import InMemoryEventLog
@@ -145,13 +144,16 @@ def test_missing_or_bad_timestamp_is_a_validation_error():
         event_time_ms({"event_time_ms": "later"})
 
 
-def test_compile_keeps_only_tool_actions_for_the_in_turn_fold():
+def test_compile_keeps_the_tool_and_submit_actions():
     tool_rule = {"name": "a", "pattern": [{"stage": "s"}], "on_match": {"kind": "tool", "tool": "t"}}
+    submit_rule = {"name": "s", "pattern": [{"stage": "s"}], "on_match": {"kind": "submit", "text": "x {key}"}}
     other_rule = {"name": "b", "pattern": [{"stage": "s"}], "on_match": {"kind": "emit", "event": "x"}}
-    compiled = compile_patterns([tool_rule, other_rule])
-    assert [p.name for p in compiled] == ["a"]
-    assert without_tool_actions([tool_rule, other_rule]) == [other_rule]
+    compiled = compile_patterns([tool_rule, submit_rule, other_rule])
+    assert [(p.name, p.action) for p in compiled] == [("a", "tool"), ("s", "submit")]
+    assert compiled[1].derived_text("k1") == "x k1"
     assert compile_patterns(None) == []
+    with pytest.raises(ValidationError, match="without a text"):
+        compile_patterns([{"name": "c", "pattern": [{"stage": "s"}], "on_match": {"kind": "submit"}}])
     with pytest.raises(ValidationError, match="without a tool id"):
         compile_patterns([{"name": "c", "pattern": [{"stage": "s"}], "on_match": {"kind": "tool"}}])
     with pytest.raises(ValidationError, match="keyed by"):

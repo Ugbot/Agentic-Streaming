@@ -483,8 +483,12 @@ class LocalRuntime(Runtime):
         gate.enter(ticket)
         try:
             result = engine.handle(turn)
+            # A turn a pattern injects runs next, still as this conversation's single writer.
+            derived = [{"turn_id": d.turn_id, "status": engine.handle(d)["status"]} for d in engine.derived_turns(turn)]
         finally:
             gate.leave()
+        if derived:
+            result["runtime_detail"]["derived_turns"] = derived
         if self.degradations:
             result["runtime_detail"]["degraded"] = list(self.degradations)
         ir.validate_result(result)

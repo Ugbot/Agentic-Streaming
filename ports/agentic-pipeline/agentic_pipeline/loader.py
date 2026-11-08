@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from agentic import ir
-from agentic.cep import without_tool_actions
 
 from . import backends
 from .backends import CoreBackend, Event, TurnResult
@@ -102,7 +101,8 @@ def legacy_features(spec: Dict[str, Any]) -> List[str]:
 def _legacy_cep(patterns: Any) -> List[str]:
     """The core runs a pattern in the turn when it invokes a tool on plain text conditions. It leaves
     every other action to stream wiring it does not have, so such a rule would never fire."""
-    needs = [f"cep on_match {(p.get('on_match') or {}).get('kind', 'none')}" for p in without_tool_actions(patterns)]
+    needs = [f"cep on_match {(p.get('on_match') or {}).get('kind', 'none')}" for p in patterns or []
+             if (p.get("on_match") or {}).get("kind") != "tool"]
     for pattern in patterns or []:
         for stage in pattern.get("pattern") or []:
             for key, value in (stage.get("where") or {}).items():
