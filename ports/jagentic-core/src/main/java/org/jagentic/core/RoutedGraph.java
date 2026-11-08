@@ -288,7 +288,16 @@ public final class RoutedGraph {
       ctx.record(EventType.TURN_FAILED, p);
     }
     return new TurnResult(ctx.conversationId, ctx.turnId, TurnStatus.FAILED, routedPath(ctx), null,
-        error, ctx.calls, ctx.segment(), stateOrEmpty(ctx));
+        redacted(ctx, error), ctx.calls, ctx.segment(), stateOrEmpty(ctx));
+  }
+
+  /**
+   * The error as the log has it. A result leaves the process, to a caller and to a results topic, so
+   * it is redacted as the log is.
+   */
+  private static TurnError redacted(AgentContext ctx, TurnError error) {
+    return error == null || error.message() == null ? error
+        : new TurnError(error.errorClass(), ctx.redactor.apply(error.message()));
   }
 
   private static boolean endedOnTheLog(AgentContext ctx) {
@@ -478,6 +487,9 @@ public final class RoutedGraph {
       Map<String, Object> approval = map("tool", parked.tool(), "index", parked.index());
       approval.put("approved", approved);
       resumed.put("approval", approval);
+      if (parked.intent() != null) {
+        resumed.put("approval_intent", parked.intent()); // the call the approver was shown, and no other
+      }
     }
     ctx.replayOverAndResume(prior.events());
     Event turn = original(signal, prior, ctx);
@@ -665,6 +677,9 @@ public final class RoutedGraph {
       p.put("until", e.until);
       p.put("tool", e.tool);
       p.put("index", e.index);
+      if (e.intent != null) {
+        p.put("intent", e.intent); // the approval is for this call and no other
+      }
       ctx.record(EventType.TURN_SUSPENDED, p);
       return finish(ctx, TurnStatus.SUSPENDED, path, null, null, null);
     }
@@ -822,8 +837,8 @@ public final class RoutedGraph {
     }
     ctx.store.putAttribute(ctx.conversationId, PHASE_ATTR,
         status == TurnStatus.SUSPENDED ? "suspended" : "done");
-    TurnResult result = new TurnResult(ctx.conversationId, ctx.turnId, status, path, reply, error,
-        ctx.calls, ctx.segment(), stateOrEmpty(ctx));
+    TurnResult result = new TurnResult(ctx.conversationId, ctx.turnId, status, path, reply,
+        redacted(ctx, error), ctx.calls, ctx.segment(), stateOrEmpty(ctx));
     for (AgentListener l : listeners) {
       l.onTurnEnd(result, ctx);
     }

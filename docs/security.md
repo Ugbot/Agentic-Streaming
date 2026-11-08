@@ -42,7 +42,7 @@ read `X-Forwarded-*`, so nothing a proxy passes on changes who it thinks is call
 | --- | --- |
 | `AGENTIC_OIDC_ISSUER` | the exact `iss`. Setting it selects OIDC |
 | `AGENTIC_OIDC_AUDIENCE` | the `aud` a token must name. Required |
-| `AGENTIC_OIDC_JWKS_URL` | default `<issuer>/protocol/openid-connect/certs` |
+| `AGENTIC_OIDC_JWKS_URL` | default `<issuer>/protocol/openid-connect/certs`. Must be `https`, except on loopback |
 | `AGENTIC_OIDC_TENANT_CLAIM` | default `tenant` |
 | `AGENTIC_OIDC_ROLES_CLAIM` | default `realm_access.roles`, dotted for a nested claim |
 | `AGENTIC_GATEWAY_STATIC_TOKENS` | `token=subject\|tenant\|role,role;...`, local development only. Needs `AGENTIC_GATEWAY_ALLOW_STATIC_TOKENS=true`, works on loopback only, and refuses a token under 16 characters |
@@ -50,7 +50,9 @@ read `X-Forwarded-*`, so nothing a proxy passes on changes who it thinks is call
 
 A token is checked against the issuer's JWKS, then for issuer, audience, expiry and not-before. Only
 RS256, PS256 and ES256 are accepted, so `alg: none` and an HMAC made with the public key both fail.
-`OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403.
+`OidcAuthenticatorTest` signs a token for each of these and more. A token with no tenant gets a 403,
+and so does one whose tenant claim is not a string. Expiry and not-before allow 60 seconds of clock
+skew. A `typ` other than `JWT` is refused, which includes RFC 9068's `at+jwt`.
 
 **A request body cannot say who is calling.** `user_id`, `principal` and `tenant` in a body are not
 read. The principal comes from the token.
@@ -58,10 +60,15 @@ read. The principal comes from the token.
 **Tenancy.** The runtime's conversation key is `<tenant>/<conversation_id>`, each part encoded, so
 another tenant cannot name a conversation at all. Within a tenant, only the subject that started a
 conversation can add a turn or read it, and a reader role can read it. Everyone else gets the 404 that
-a conversation with no turns gets, every read.
+a conversation with no turns gets, every read. A first turn still running, which a Flink job's log
+does not show yet, is held for its sender by the gateway. That hold is in one gateway process, so two
+gateways in front of one job can each let a different subject start the same conversation: the
+runtime checks the tenant, not the subject.
 
 **Approvals.** A resume comes with the approver's token, and the runtime checks it against
-`policies.approvers`. A refusal is a 403 and `signal_refused` on the log.
+`policies.approvers`. A refusal is a 403 and `signal_refused` on the log. A resume of a turn the
+conversation does not have is the 404 of no conversation, and a refused signal from someone who is
+neither the owner nor a reader gets the refusal and nothing else of the conversation.
 
 **In front of Flink** the gateway writes turns to the input topic with the verified principal and
 reads answers from the results topic. A conversation is read from that topic, so it shows no further
@@ -128,6 +135,8 @@ enough.
   turn suspends before the call and an approver answers `approved` true or false, which is
   `injected-text-reaches-the-human-gate`. A timer or a CEP pattern has nobody to ask, so such a tool is
   refused there. Without this block an allowed tool runs when a model asks for it, injected or not.
+  An approval is for the call it was asked about: the same tool, index and arguments. A re-run that
+  asks the model again and gets another call at that index waits for a new approval.
 - Tool results go into the prompt between `<untrusted>` tags, with any such tag inside defused, and
   the system prompt says what that means. This helps a model. It is not a boundary.
 
@@ -239,11 +248,12 @@ document that writes the secret itself is rejected when loaded. A `kind: http` t
 the older Python engine's peer use it. Python's canonical engine has no HTTP peers.
 
 **Redaction** runs before the log and the journal are written, in all five runtimes. Credentials are
-always covered: fields such as `password`, `token`, `api_key` and `authorization`, and text shaped like
-a bearer token, an OpenAI or AWS key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
+always covered: a field with `password`, `secret`, `token`, `api_key`, `authorization`, `cookie` or the
+like as a word of its name (so `access_token`, `client_secret` and `x-api-key`, but not `max_tokens`),
+and text shaped like a bearer token, an OpenAI, AWS, GitHub, Slack, Stripe or Google key, or a JWT. `policies.redact` adds your own `fields` and `patterns`
 for personal data. It finds what the patterns describe and nothing else, so it narrows what is recorded
 and does not promise it is clean. The reply the caller receives is not redacted, and neither is a
-results topic's `reply` field.
+results topic's `reply` field. A failed turn's `error` is redacted in the result as on the log.
 
 **Deletion on an immutable log is crypto-shredding.** Set `AGENTIC_KEY_VAULT_DIR` and every conversation
 gets its own AES-256-GCM data key: `text`, `reply`, `args`, `result`, `messages`, `signal`, `error` and
@@ -261,6 +271,8 @@ What this leaves out, plainly:
   deletion request is not honoured there. Keep those topics on a short retention.
 - **What stays readable:** the owner's identifier, tenant, tool ids, paths, event types and times. That
   is how ownership works, and it is personal data if a subject is. Use an opaque subject.
+- **A turn's `metadata` is not sealed,** because timers and patterns read it. A caller's `metadata`
+  on `POST /agent` goes to the log as it was sent, so keep personal data out of it.
 - **A journal intent is a digest of the arguments,** so low-entropy arguments can be guessed from one
   after an erasure.
 - `FileKeyVault` deletes files, which does not scrub a disk, a snapshot or a backup, and every process

@@ -625,8 +625,13 @@ public final class GraphBuilder {
       McpCommands.check(command);
       try {
         McpStdioClient client = new McpStdioClient(command);
-        client.register(tools, m.getOrDefault("name", "mcp") + "_",
-            Deadlines.timeoutOf(m, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), (String) m.get("effect"));
+        try {
+          client.register(tools, m.getOrDefault("name", "mcp") + "_",
+              Deadlines.timeoutOf(m, Deadlines.DEFAULT_TOOL_TIMEOUT_MS), (String) m.get("effect"));
+        } catch (RuntimeException e) {
+          client.close();
+          throw e;
+        }
       } catch (java.io.IOException e) {
         throw new java.io.UncheckedIOException(e);
       }

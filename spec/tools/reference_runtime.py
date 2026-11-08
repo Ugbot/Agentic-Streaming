@@ -1134,11 +1134,19 @@ def _class_of(exc: Exception) -> str:
     return "validation" if isinstance(exc, ValidationFailure) else "tool"
 
 
-_SECRET_FIELDS = {"password", "passwd", "secret", "token", "api_key", "apikey", "authorization", "credential",
-                  "credentials", "private_key"}
+# A whole word of a field's name, so access_token and x-api-key are credentials and max_tokens is not.
+_SECRET_FIELDS = {"password", "passwd", "passphrase", "secret", "token", "api_key", "apikey", "authorization",
+                  "credential", "credentials", "private_key", "cookie"}
 _SECRET_SHAPES = [re.compile(p) for p in (
     r"(?i)\bbearer\s+[a-z0-9._~+/=-]{8,}", r"\bsk-[A-Za-z0-9_-]{16,}", r"\bAKIA[0-9A-Z]{16}\b",
-    r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")]
+    r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}",
+    r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})", r"\bxox[abprs]-[A-Za-z0-9-]{10,}",
+    r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}", r"\bAIza[0-9A-Za-z_-]{35}")]
+
+
+def _secret_field(field: str) -> bool:
+    name = "_" + re.sub(r"[^a-z0-9]+", "_", re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", field).lower()).strip("_") + "_"
+    return any(f"_{f}_" in name for f in _SECRET_FIELDS)
 
 
 def redact(value: Any, spec: Dict[str, Any]) -> Any:
@@ -1148,8 +1156,9 @@ def redact(value: Any, spec: Dict[str, Any]) -> Any:
             value = pattern.sub("[redacted]", value)
         return value
     if isinstance(value, dict):
-        named = _SECRET_FIELDS | {str(f).lower() for f in spec.get("fields") or []}
-        return {k: "[redacted]" if str(k).lower() in named else redact(v, spec) for k, v in value.items()}
+        named = {str(f).lower() for f in spec.get("fields") or []}
+        return {k: "[redacted]" if _secret_field(str(k)) or str(k).lower() in named else redact(v, spec)
+                for k, v in value.items()}
     if isinstance(value, list):
         return [redact(v, spec) for v in value]
     return value

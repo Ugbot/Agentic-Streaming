@@ -86,6 +86,21 @@ class KafkaPipelineJobTest {
     }
   }
 
+  /**
+   * A principal with no subject threw IllegalArgumentException out of the decoder, which failed the
+   * task, and the restarted task read the same record: one bad record stopped the job for good.
+   */
+  @Test
+  void aPrincipalWithNoSubjectIsAMalformedRecordNotAPoisonPill() {
+    for (String bad :
+        List.of(
+            "{\"conversation_id\":\"c\",\"turn_id\":\"t\",\"text\":\"hi\",\"principal\":{}}",
+            "{\"conversation_id\":\"c\",\"turn_id\":\"t\",\"text\":\"hi\",\"principal\":{\"subject\":\"\"}}",
+            "{\"conversation_id\":\"c\",\"turn_id\":\"t\",\"text\":\"hi\",\"principal\":{\"tenant\":\"acme\"}}")) {
+      assertThrows(KafkaPipelineJob.MalformedRecord.class, () -> KafkaPipelineJob.decode(bad), bad);
+    }
+  }
+
   @Test
   void aTombstoneDoesNotReachTheDecoderAsNull() throws Exception {
     assertEquals("", new KafkaPipelineJob.RecordValue().deserialize(null));
