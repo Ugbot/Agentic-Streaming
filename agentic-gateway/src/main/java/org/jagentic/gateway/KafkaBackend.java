@@ -128,21 +128,21 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
   @Override
   public CompletionStage<TurnResult> submit(Event event) {
     String wait = waitKey(event.conversationId(), event.turnId());
-    CompletableFuture<TurnResult> answer = new CompletableFuture<>();
-    waiting.put(wait, answer);
+    // Callers of one turn share one answer: a second must not take the first one's place.
+    CompletableFuture<TurnResult> answer = waiting.computeIfAbsent(wait, k -> new CompletableFuture<>());
     try {
       producer.send(new ProducerRecord<>(inputTopic, event.conversationId(), JSON.writeValueAsBytes(record(event))),
           (meta, failed) -> {
             if (failed != null) {
-              waiting.remove(wait);
+              waiting.remove(wait, answer);
               answer.completeExceptionally(failed);
             }
           });
     } catch (IOException e) {
-      waiting.remove(wait);
+      waiting.remove(wait, answer);
       answer.completeExceptionally(e);
     }
-    return answer.whenComplete((r, e) -> waiting.remove(wait));
+    return answer.whenComplete((r, e) -> waiting.remove(wait, answer));
   }
 
   private static Map<String, Object> record(Event event) {

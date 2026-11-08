@@ -70,4 +70,24 @@ class KafkaBackendTest {
       assertTrue(backend.conversation("beta/c1").toCompletableFuture().get().isEmpty());
     }
   }
+
+  /** Two callers sending the same turn_id at once overwrote each other's waiter, and the first got a 504. */
+  @Test
+  void twoCallersOfOneTurnBothGetItsAnswer() throws Exception {
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, null, new StringSerializer(), new ByteArraySerializer());
+    MockConsumer<String, byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
+    consumer.assign(List.of(RESULTS));
+    consumer.updateBeginningOffsets(new HashMap<>(Map.of(RESULTS, 0L)));
+    try (KafkaBackend backend = new KafkaBackend(producer, consumer, "turns")) {
+      Event event = new Event("acme/c1", "t1", "alice", "hello", Map.of(), null, Principal.of("alice", "acme"));
+      CompletableFuture<TurnResult> first = backend.submit(event).toCompletableFuture();
+      CompletableFuture<TurnResult> second = backend.submit(event).toCompletableFuture();
+      byte[] body = JSON.writeValueAsBytes(result("acme/c1", "t1", 0));
+      consumer.schedulePollTask(() ->
+          consumer.addRecord(new ConsumerRecord<>("turns.results", 0, 0L, "acme/c1", body)));
+      assertEquals(TurnStatus.COMPLETED, second.get(5, TimeUnit.SECONDS).status);
+      assertEquals(TurnStatus.COMPLETED, first.get(5, TimeUnit.SECONDS).status);
+    }
+  }
 }
