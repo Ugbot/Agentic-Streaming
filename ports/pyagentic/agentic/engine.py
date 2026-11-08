@@ -755,7 +755,7 @@ class Engine:
         tools = [{"name": s.id, "description": s.description} for s in self.tools.ids().values()
                  if s.id in declared]
         listing = ", ".join(f"{t['name']}: {t['description']}" for t in tools)
-        system = f"{spec.get('prompt', '')}\n{REACT_SYSTEM}{listing}\n{RULE}".strip()
+        system = f"{self._prompt_of(path)}\n{REACT_SYSTEM}{listing}\n{RULE}".strip()
         messages = [{"role": "system", "content": system}]
         messages += [{"role": m.role, "content": m.text} for m in transcript(ctx.history, self.context)]
         messages.append({"role": "user", "content": ctx.text})
@@ -770,6 +770,13 @@ class Engine:
             observed = mark("tool:" + tool_id, str(result))
             messages.append({"role": "user", "content": f"Result of {tool_id}: {observed}"})
         return f"[{path}] (stopped after {limit} steps)"
+
+    def _prompt_of(self, path: str) -> str:
+        """The path's prompt, then the prompt of each skill it names, in order."""
+        skills = {s["name"]: s for s in self.doc.get("skills") or []}
+        parts = [self.paths[path].get("prompt", "")]
+        parts += [skills[name].get("prompt", "") for name in self.paths[path].get("skills") or []]
+        return "\n".join(p for p in parts if p)
 
     def _chat(self, client: ChatClient, messages: List[Dict[str, str]], tools: List[Dict[str, str]]) -> Dict[str, Any]:
         """One model call under `policies.retry`. Only the call is retried, so a tool the model
