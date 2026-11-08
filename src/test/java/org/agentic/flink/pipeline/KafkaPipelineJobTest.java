@@ -266,4 +266,62 @@ class KafkaPipelineJobTest {
     assertEquals("turn_failure", run.failures().get(0).path("kind").asText());
     assertEquals("t1", run.failures().get(0).path("result").path("turn_id").asText());
   }
+
+  /**
+   * Anything that could write the input topic could claim any principal. With the gateway's public
+   * keys in the job, a record whose principal the gateway did not sign for that turn is a turn
+   * failed with class policy, the job carries on, and a signed one runs.
+   */
+  @Test
+  void anUnsignedPrincipalOnTheTopicIsRefusedAndTheJobCarriesOn() throws Exception {
+    java.security.KeyPair keys =
+        java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+    org.jagentic.core.identity.PrincipalSeal.Signer gateway =
+        new org.jagentic.core.identity.PrincipalSeal.Signer(
+            keys.getPrivate(), java.time.Duration.ofMinutes(5));
+    Map<String, Object> spec =
+        new java.util.LinkedHashMap<>(
+            FlinkPipelineRunner.loadYaml(RepoRoot.examplePipeline("banking.yaml")));
+    spec.put(
+        org.jagentic.core.identity.Identity.SPEC_KEY,
+        Map.of(
+            "keys",
+            new org.jagentic.core.identity.PrincipalSeal.Verifier(List.of(keys.getPublic()))
+                .pem()));
+    String cid = "acme/c-" + UUID.randomUUID();
+    org.jagentic.core.Principal alice = org.jagentic.core.Principal.of("alice", "acme");
+    org.jagentic.core.Event good =
+        new org.jagentic.core.Event(
+            cid, "t2", "alice", "what is my balance?", Map.of(), null, alice);
+    String proof = gateway.sign(good, java.time.Instant.now());
+    String claimed =
+        "{\"conversation_id\":\""
+            + cid
+            + "\",\"turn_id\":\"t1\",\"text\":\"what is my balance?\","
+            + "\"principal\":{\"subject\":\"alice\",\"tenant\":\"acme\"}}";
+    String signed =
+        "{\"conversation_id\":\""
+            + cid
+            + "\",\"turn_id\":\"t2\",\"text\":\"what is my balance?\","
+            + "\"principal\":{\"subject\":\"alice\",\"tenant\":\"acme\"},"
+            + "\"principal_proof\":\""
+            + proof
+            + "\"}";
+    Run run = run(spec, List.of(claimed, signed));
+    assertEquals(2, run.results().size(), run.results().toString());
+    assertEquals("failed", run.results().get(0).path("status").asText());
+    assertEquals("policy", run.results().get(0).path("error").path("class").asText());
+    assertEquals(0, run.results().get(0).path("events").size(), "nothing is appended");
+    assertEquals("completed", run.results().get(1).path("status").asText());
+  }
+
+  @Test
+  void aKafkaJobMustBeToldWhoMayClaimAPrincipal() {
+    Map<String, Object> spec = Map.of("spec_version", "agentic/v1");
+    assertThrows(
+        IllegalStateException.class, () -> KafkaPipelineJob.identity(spec, Map.of(), "turns"));
+    assertEquals(
+        spec,
+        KafkaPipelineJob.identity(spec, Map.of("AGENTIC_IDENTITY", "unauthenticated"), "turns"));
+  }
 }
