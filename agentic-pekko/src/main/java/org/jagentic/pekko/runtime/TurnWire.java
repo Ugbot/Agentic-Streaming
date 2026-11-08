@@ -46,7 +46,9 @@ public final class TurnWire {
   public static Event parseVouched(String json, Supplier<String> fallbackTurnId) {
     Event event = parse(json, fallbackTurnId);
     try {
-      return event.withPrincipal(org.jagentic.core.Principal.fromMap(JSON.readValue(json, OBJECT).get("principal")));
+      Map<String, Object> m = JSON.readValue(json, OBJECT);
+      Event vouched = event.withPrincipal(org.jagentic.core.Principal.fromMap(m.get("principal")));
+      return m.get("principal_proof") instanceof String proof ? vouched.withPrincipalProof(proof) : vouched;
     } catch (java.io.IOException | IllegalArgumentException e) {
       throw new MalformedTurn("principal is malformed", e);
     }

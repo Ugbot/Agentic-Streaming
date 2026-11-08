@@ -8,8 +8,30 @@ not use it for real payments.**
 
 An event can carry a `Principal` (`subject`, `tenant`, `roles`, `issuer`). Beside one, `user_id` means
 nothing: the turn runs as the principal, and it is recorded on `turn_received`, `tool_intent` and
-`tool_refused`. Whatever delivers the event vouches for it, so **anyone who can write to the input
-topic can claim any principal**. Keep that topic to trusted producers.
+`tool_refused`. Whatever delivers the event vouches for it, unless the runtime is given the gateway's
+keys, below.
+
+**Signed principals.** The gateway holds an Ed25519 private key (`AGENTIC_PRINCIPAL_SIGNING_KEY`, a
+PKCS#8 PEM) and signs every turn and signal it delivers: the principal, the conversation key and turn
+id, a SHA-256 digest of the text, metadata and signal, an expiry (`AGENTIC_PRINCIPAL_TTL_SECONDS`,
+default 300) and a random id. The proof travels as `principal_proof`. A runtime given the public keys
+(`AGENTIC_PRINCIPAL_KEYS`, a PEM file of one or more, so a new key can be added before the gateway
+uses it) refuses an unsigned, forged, expired, replayed or mismatched principal as a turn failed with
+class `policy`, nothing appended, and carries on; a signed approval cannot answer a later question on
+the same turn. Key distribution: make the pair with `openssl genpkey -algorithm ed25519 -out gw.pem`
+and `openssl pkey -in gw.pem -pubout -out gw.pub`; the private key goes only to gateway hosts, as a
+mounted secret, and the public key to every runtime. The Flink job puts the public keys into the job
+it submits, so every TaskManager checks with them. On Pekko the Kafka front door checks, and so does
+each node that has `AGENTIC_PRINCIPAL_KEYS` set; set it on every node. A turn already on the log that
+arrives again late is the same turn; a signal that arrives after its expiry is refused.
+
+**No gateway.** A Kafka front door (the Flink job, Pekko's `KafkaStreamApp`) will not start until told
+which it is: with `AGENTIC_IDENTITY=unauthenticated` it believes the principal on each record and says
+so in its log, and **anyone who can write to the input topic can claim any principal**. Either way,
+**Kafka ACLs on the input topic are still required**: a signature stops a writer claiming someone
+else, not writing turns at all. `SignedPrincipalAttackTest`, `GatewaySigningTest`,
+`KafkaPipelineJobTest#anUnsignedPrincipalOnTheTopicIsRefusedAndTheJobCarriesOn` and
+`SignedPrincipalKafkaTest` prove it. Python has no Kafka or HTTP front door, so it has no verifier.
 
 Only an authenticated principal named by `policies.approvers` can resume a suspended turn or settle
 an unknown outcome. Nobody can if the block is absent. A refused signal is `signal_refused` on the log
@@ -77,7 +99,8 @@ neither the owner nor a reader gets the refusal and nothing else of the conversa
 **In front of Flink** the gateway writes turns to the input topic with the verified principal and
 reads answers from the results topic. A conversation is read from that topic, so it shows no further
 back than the topic's retention, and an answer the job does not give in time is a 504: redeliver the
-same `turn_id`. Anything else that can write the input topic can claim any principal.
+same `turn_id`. With the signing key set, each record carries the gateway's proof, and a job given
+the public key believes no other principal.
 `GatewayOverFlinkTest` proves the path over a real Flink job, through a stop-with-savepoint, using the
 in-process session in place of topics. `KafkaBackend` itself is proved against Kafka's mock client.
 

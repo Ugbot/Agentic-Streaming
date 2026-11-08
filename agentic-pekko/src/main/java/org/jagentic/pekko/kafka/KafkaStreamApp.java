@@ -3,6 +3,7 @@ package org.jagentic.pekko.kafka;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -25,6 +26,11 @@ import org.apache.pekko.kafka.javadsl.Consumer;
 import org.apache.pekko.kafka.javadsl.Producer;
 
 import org.jagentic.core.Event;
+import org.jagentic.core.TurnError;
+import org.jagentic.core.TurnResult;
+import org.jagentic.core.TurnStatus;
+import org.jagentic.core.identity.Identity;
+import org.jagentic.core.identity.PrincipalSeal;
 import org.jagentic.pekko.runtime.ConversationManager;
 import org.jagentic.pekko.runtime.PekkoRuntime;
 import org.jagentic.pekko.runtime.TurnWire;
@@ -40,6 +46,11 @@ import org.jagentic.pekko.runtime.TurnWire;
  * dedupes even when the producer never set an id. A record that is not a valid turn is answered
  * with an error document (see {@link #malformed}) and committed, so one bad record cannot wedge the
  * partition.
+ *
+ * <p>{@link #run} will not start until told who may claim a principal: {@code AGENTIC_PRINCIPAL_KEYS}
+ * (the gateway's public keys; a record's {@code principal_proof} must verify) or {@code
+ * AGENTIC_IDENTITY=unauthenticated} (the record is believed, and the log says so). Kafka ACLs on the
+ * input topic are needed either way.
  */
 public final class KafkaStreamApp {
 
@@ -58,12 +69,13 @@ public final class KafkaStreamApp {
             .withGroupId(groupId)
             .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
+    PrincipalSeal.Verifier keys = identity(System.getenv(), inTopic);
     ProducerSettings<String, String> producerSettings =
         ProducerSettings.create(system, new StringSerializer(), new StringSerializer())
             .withBootstrapServers(bootstrap);
 
     return Consumer.committableSource(consumerSettings, Subscriptions.topics(inTopic))
-        .mapAsync(parallelism, msg -> answer(system, msg.record(), outTopic, timeout)
+        .mapAsync(parallelism, msg -> answer(system, msg.record(), outTopic, timeout, keys)
             .thenApply(record -> ProducerMessage.single(record, msg.committableOffset())))
         .via(Producer.flexiFlow(producerSettings))
         .map(results -> results.passThrough())
@@ -71,10 +83,23 @@ public final class KafkaStreamApp {
         .run(system);
   }
 
-  /** One request record → one result record. Exposed so the mapping is testable without a broker. */
+  /**
+   * Who may claim a principal on {@code topic}: the gateway's public keys from {@code
+   * AGENTIC_PRINCIPAL_KEYS}, or null with {@code AGENTIC_IDENTITY=unauthenticated}, which is logged.
+   * With neither the front door does not start.
+   */
+  static PrincipalSeal.Verifier identity(Map<String, String> env, String topic) {
+    return Identity.forFrontDoor(env, topic);
+  }
+
+  /**
+   * As {@link #answer(ActorSystem, ConsumerRecord, String, Duration)}, believing a record's principal
+   * only with the gateway's proof for that turn when {@code keys} is set. Anything else is answered
+   * as a turn failed with class policy, the entity is not asked, and the stream carries on.
+   */
   public static CompletionStage<ProducerRecord<String, String>> answer(
       ActorSystem<ConversationManager.Command> system, ConsumerRecord<String, String> in,
-      String outTopic, Duration timeout) {
+      String outTopic, Duration timeout, PrincipalSeal.Verifier keys) {
     Event event;
     try {
       event = TurnWire.parseVouched(in.value(), () -> turnId(in));
@@ -82,8 +107,24 @@ public final class KafkaStreamApp {
       return CompletableFuture.completedFuture(
           new ProducerRecord<>(outTopic, in.key(), TurnWire.write(malformed(in, e))));
     }
+    if (keys != null) {
+      String problem = keys.problem(event, java.time.Instant.now(), false);
+      if (problem != null) {
+        Map<String, Object> refused = new TurnResult(event.conversationId(), event.turnId(), TurnStatus.FAILED,
+            null, null, new TurnError(TurnError.ErrorClass.POLICY, problem), List.of(), List.of(), Map.of()).toMap();
+        return CompletableFuture.completedFuture(
+            new ProducerRecord<>(outTopic, event.conversationId(), TurnWire.write(refused)));
+      }
+    }
     return PekkoRuntime.ask(system, event, timeout)
         .thenApply(reply -> new ProducerRecord<>(outTopic, reply.conversationId(), TurnWire.write(reply)));
+  }
+
+  /** One request record → one result record. Exposed so the mapping is testable without a broker. */
+  public static CompletionStage<ProducerRecord<String, String>> answer(
+      ActorSystem<ConversationManager.Command> system, ConsumerRecord<String, String> in,
+      String outTopic, Duration timeout) {
+    return answer(system, in, outTopic, timeout, null);
   }
 
   /**

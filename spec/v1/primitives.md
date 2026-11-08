@@ -634,8 +634,12 @@ ran before it compensates. A refused undo is a failed undo: `compensation_failed
 
 A `Principal` is who a turn or a signal is authenticated as: `subject`, and optionally `tenant`,
 `roles` and `issuer`. Whatever puts it on the event vouches for it: a gateway from a verified token,
-a topic only trusted producers can write to, or the program embedding the runtime. A runtime
-cannot tell a true one from a false one, so the boundary is whoever may deliver events.
+a topic only trusted producers can write to, or the program embedding the runtime. Without more, a
+runtime cannot tell a true one from a false one, so the boundary is whoever may deliver events. A
+binding may be given its gateway's public keys: then it believes a principal only with the gateway's
+signature over it, the conversation, the turn id and a digest of what the turn says, and refuses
+anything else with class `policy` and nothing appended. The Java bindings do; the conformance
+fixtures run without keys.
 
 Beside a principal, `user_id` is the principal's `subject`, whatever the caller claimed, so a name in
 a request body never reaches the log, a tool's arguments or a brain. Without a principal, `user_id` is

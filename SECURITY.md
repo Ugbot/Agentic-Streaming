@@ -52,8 +52,10 @@ this code (report those upstream; a dependency bump here is welcome as a pull re
   same goes for the egress settings. These are environment variables on the host, not document keys.
 - **Text is not trusted.** User text, tool results, retrieved passages and model output can say
   anything. They cannot grant a tool: that is the tool policy, and it is not a filter.
-- **Whoever delivers an event vouches for its principal.** Anyone who can write to the input topic
-  can claim any identity, so keep that topic to trusted producers.
+- **Whoever delivers an event vouches for its principal,** unless the runtime has the gateway's
+  public keys (`AGENTIC_PRINCIPAL_KEYS`), when only a principal the gateway signed for that turn is
+  believed. In the unauthenticated mode anyone who can write to the input topic can claim any
+  identity. Kafka ACLs on that topic are required in both.
 
 ## Security posture
 

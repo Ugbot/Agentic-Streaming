@@ -73,18 +73,30 @@ public final class Identity {
    * @param topic the input topic, named in the warning
    */
   public static Map<String, Object> forTopic(Map<String, Object> spec, Map<String, String> env, String topic) {
+    PrincipalSeal.Verifier keys = forFrontDoor(env, topic);
+    if (keys == null) {
+      return spec;
+    }
+    Map<String, Object> out = new LinkedHashMap<>(spec);
+    out.put(SPEC_KEY, Map.of("keys", keys.pem()));
+    return out;
+  }
+
+  /**
+   * For a front door that reads a topic: the gateway's keys, or null in the unauthenticated mode,
+   * which this logs. Throws when the operator chose neither.
+   */
+  public static PrincipalSeal.Verifier forFrontDoor(Map<String, String> env, String topic) {
     PrincipalSeal.Verifier keys = fromSettings(env::get);
     if (keys != null) {
-      Map<String, Object> out = new LinkedHashMap<>(spec);
-      out.put(SPEC_KEY, Map.of("keys", keys.pem()));
-      return out;
+      return keys;
     }
     if ("unauthenticated".equalsIgnoreCase(String.valueOf(env.get("AGENTIC_IDENTITY")).strip())) {
       System.err.println("WARNING: identity is unauthenticated. AGENTIC_IDENTITY=unauthenticated: the principal"
           + " on each record of " + topic + " is believed as written, so anything that can write " + topic
           + " can claim any principal. Restrict who may write it with Kafka ACLs, or put the gateway in"
           + " front and set AGENTIC_PRINCIPAL_KEYS.");
-      return spec;
+      return null;
     }
     throw new IllegalStateException("say who may claim a principal on " + topic + ": set AGENTIC_PRINCIPAL_KEYS"
         + " to the gateway's public keys, or AGENTIC_IDENTITY=unauthenticated for a deployment with no gateway");
