@@ -24,6 +24,7 @@ from typing import Any, Callable, Deque, Dict, Iterator, List, Mapping, Optional
 
 from jsonschema import Draft202012Validator
 
+from . import classifier
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
 from .errors import CorruptLog, LogUnavailable, ToolError, ToolRefused, TransientError, ValidationError
@@ -39,19 +40,19 @@ from .journal import (
     EffectJournal,
     Entry,
     InMemoryEffectJournal,
-    JournalKey,
     JournalDivergence,
+    JournalKey,
     intent_of,
     model_intent_of,
 )
 from .limits import Limits, Violation, who
-from .opa import Both, from_environment
-from .redact import Redactor
-from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem, owner_problem
 from .llm import DEFAULT_MAX_ITERATIONS, REACT_SYSTEM, ChatClient, make_chat_client
+from .opa import Both, from_environment
+from .policy import ASK_A_PERSON, DENY, DocumentToolPolicy, ToolPolicy, ToolRequest, approver_problem, owner_problem
+from .redact import Redactor
 from .retrieval import KnowledgeBase, Passage
-from .untrusted import RULE, mark
 from .tools import ToolCall, ToolRegistry, ToolSpec, idempotency_key
+from .untrusted import RULE, mark
 from .workflow_timers import WorkflowTimers
 
 LOG = logging.getLogger(__name__)
@@ -353,6 +354,9 @@ class Engine:
         path_scoped = {name for path in self.paths.values() for name in path.get("guardrails") or []}
         self.global_guardrails = [g for g in self.guardrails if g.get("name") not in path_scoped]
         self.named_guardrails = {g["name"]: g for g in self.guardrails if g.get("name")}
+        for i, rail in enumerate(self.guardrails):
+            if rail.get("kind") == "classifier" and "x-python" not in rail:
+                classifier.check_rail(rail, f"/guardrails/{i}")
         retrieval = doc.get("retrieval") or {}
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
         self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4))
@@ -908,6 +912,10 @@ class Engine:
                 reason = self.bindings.guardrails[custom](text or "")
                 if reason is not None:
                     return str(reason) or rail.get("reason", "denied")
+                continue
+            if rail["kind"] == "classifier":
+                if classifier.blocks(rail, text or ""):
+                    return str(rail.get("reason", "denied"))
                 continue
             if rail["kind"] != "regex":
                 raise ValidationError(f"guardrail kind {rail['kind']!r} is not available in this runtime")
