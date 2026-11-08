@@ -152,6 +152,40 @@ def transcript(log: Iterable[Event], context: Optional[Mapping[str, Any]] = None
     return retain_window(messages, context)
 
 
+def tokens_of(text: str) -> int:
+    """A cheap, deterministic estimate: about four characters a token, at least one."""
+    return max(1, (len(text) + 3) // 4)
+
+
+def fit_tokens(messages: Sequence[T], context: Optional[Mapping[str, Any]]) -> List[T]:
+    """What the model sees of `messages` (each with `.text`, and `.role`) under `context.max_tokens`.
+
+    Without `max_tokens`, all of it. With it, the newest messages that fit, stopping at the first that
+    does not. Under `compaction: moscow` what the user said ranks before the agent's replies: the user's
+    messages that fit, newest first, then the replies that fit in what is left. Order is kept either way.
+    The log is never compacted, only this view of it (`primitives.md`, Context window)."""
+    budget = (context or {}).get("max_tokens")
+    if not budget:
+        return list(messages)
+    ranks = [range(len(messages) - 1, -1, -1)]
+    if (context or {}).get("compaction") == "moscow":
+        newest = list(ranks[0])
+        ranks = [[i for i in newest if getattr(messages[i], "role", "") == "user"],
+                 [i for i in newest if getattr(messages[i], "role", "") != "user"]]
+    left = int(budget)
+    kept = set()
+    for rank in ranks:
+        for i in rank:
+            cost = tokens_of(str(getattr(messages[i], "text", "")))
+            if cost > left:
+                if len(ranks) == 1:
+                    break
+                continue
+            kept.add(i)
+            left -= cost
+    return [m for i, m in enumerate(messages) if i in kept]
+
+
 class EventLog(ABC):
     """Append-only, per-conversation ordered log. `append` assigns the dense sequence."""
 

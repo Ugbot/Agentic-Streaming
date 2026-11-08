@@ -28,7 +28,7 @@ from . import classifier
 from .bindings import Bindings
 from .cep import SequencePattern, compile_patterns, event_time_ms, turns_of
 from .errors import CorruptLog, LogUnavailable, ToolError, ToolRefused, TransientError, ValidationError
-from .events import ChatMessage, Event, EventLog, Turn, reduce_state, transcript
+from .events import ChatMessage, Event, EventLog, Turn, fit_tokens, reduce_state, transcript
 from .journal import (
     LLM,
     READ,
@@ -757,7 +757,8 @@ class Engine:
         listing = ", ".join(f"{t['name']}: {t['description']}" for t in tools)
         system = f"{self._prompt_of(path)}\n{REACT_SYSTEM}{listing}\n{RULE}".strip()
         messages = [{"role": "system", "content": system}]
-        messages += [{"role": m.role, "content": m.text} for m in transcript(ctx.history, self.context)]
+        history = fit_tokens(transcript(ctx.history, self.context), self.context)
+        messages += [{"role": m.role, "content": m.text} for m in history]
         messages.append({"role": "user", "content": ctx.text})
         limit = max(1, int(spec.get("max_iterations", DEFAULT_MAX_ITERATIONS)))
         for _ in range(limit):
