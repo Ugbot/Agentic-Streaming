@@ -78,6 +78,12 @@ class ModelServer:
     def _wrap(self, content: str) -> Dict[str, Any]:
         if self.shape == "ollama":
             return {"message": {"role": "assistant", "content": content}}
+        if self.shape == "anthropic":
+            return {"type": "message", "role": "assistant", "stop_reason": "end_turn",
+                    "content": [{"type": "text", "text": content}]}
+        if self.shape == "gemini":
+            return {"candidates": [{"content": {"role": "model", "parts": [{"text": content}]},
+                                    "finishReason": "STOP"}]}
         return {"choices": [{"message": {"role": "assistant", "content": content}}]}
 
     def close(self) -> None:

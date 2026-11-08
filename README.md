@@ -88,8 +88,8 @@ Outside the fixtures, unit tests, the gateway tests and two live labs (`tools/ke
   the journal. A run that reached a `non_idempotent` tool is replayed instead, so that tool is not
   repeated.
 - **A real model has only been exercised against a local stand-in server.** A document can declare
-  `provider: ollama`, `openai`, `anthropic` or `gemini` on Flink and Pekko, and `ollama` or `openai`
-  in the `agentic` Python package. No live provider has been called; the stubs check each provider's
+  `provider: ollama`, `openai`, `anthropic` or `gemini` on Flink, Pekko and the `agentic` Python
+  package. No live provider has been called; the stubs check each provider's
   documented wire format, so a change on the provider's side would not show.
 - **A rollback followed by a timer coming due stops the turn.** Calls are matched by index, so a
   timer that was not due on the first run and is on the re-run shifts them. Nothing is repeated, but

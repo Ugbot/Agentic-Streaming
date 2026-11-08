@@ -68,8 +68,11 @@ Every tool and model call goes through an effect journal (`agentic/journal.py`):
 `LocalRuntime.recover_incomplete()` to re-drive every partial turn on the log.
 
 `brain: llm` runs the scripted `stub` provider, or a real client (`agentic/llm.py`): `openai`, for
-anything speaking its format, and `ollama`. `llm.model` is required and an `openai` key comes from
-`OPENAI_API_KEY`. Both are proven against a local HTTP server, not against a live model.
+anything speaking its format, `ollama`, `anthropic` (Claude, on the Messages API) and `gemini`.
+`llm.model` is required, except for `anthropic`, which defaults to `claude-sonnet-5-5`. Keys come
+from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `GEMINI_API_KEY`, travel in a header, and are kept off
+the log, the journal and any error. `temperature` and `max_tokens` are sent only when declared. All
+four are proven against a local HTTP server speaking the provider's format, not against a live model.
 
 ## Layout
 

@@ -802,7 +802,8 @@ class Engine:
         answer: Mapping[str, Any] = live[0] if live else entry.result
         if fresh:
             self.limits.charge_model(who(ctx.turn), self.clock(), len(request) + len(ctx.text) + len(str(answer)))
-        model = {"model": self.llm["model"]} if self.llm.get("model") else {}
+        name = self.chat_client.model if self.chat_client is not None else self.llm.get("model")
+        model = {"model": name} if name else {}
         self._append(ctx, "llm_called", {"index": index, **model, **answer})
         return answer
 
