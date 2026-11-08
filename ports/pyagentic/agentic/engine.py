@@ -359,7 +359,7 @@ class Engine:
                 classifier.check_rail(rail, f"/guardrails/{i}")
         retrieval = doc.get("retrieval") or {}
         dim = (doc.get("embeddings") or {}).get("dim", retrieval.get("dim", 256))
-        self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4))
+        self.kb = KnowledgeBase(retrieval.get("kb") or [], dim, retrieval.get("top_k", 4), retrieval.get("vector_store"))
         self.timers = WorkflowTimers(doc.get("timers") or [], self.clock)
         self._schema_validators: Dict[int, Draft202012Validator] = {}
         # A test seam: called as (`event`, type, before|after) around every append and as
