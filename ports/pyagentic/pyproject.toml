@@ -88,3 +88,9 @@ files = ["agentic"]
 [[tool.mypy.overrides]]
 module = ["yaml", "jsonschema", "jsonschema.*"]
 ignore_missing_imports = true
+
+# The MCP SDK is optional, needs a newer Python than mypy checks against, and is used through `Any`.
+[[tool.mypy.overrides]]
+module = ["mcp", "mcp.*"]
+ignore_missing_imports = true
+follow_imports = "skip"

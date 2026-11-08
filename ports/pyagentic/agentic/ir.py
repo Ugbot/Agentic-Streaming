@@ -12,7 +12,7 @@ import copy
 import json
 from importlib import resources
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -128,7 +128,7 @@ def _cross_field_problems(doc: Document) -> Iterator[Tuple[str, str]]:
     registered = _registered_ids(doc)
     if registered is None:
         return
-    known = set(registered)
+    known = _Known(registered, doc)
 
     for name, path in paths.items():
         for i, tool in enumerate(path.get("tools") or []):
@@ -176,6 +176,41 @@ def _cross_field_problems(doc: Document) -> Iterator[Tuple[str, str]]:
     embeddings = doc.get("embeddings") or {}
     if "dim" in retrieval and "dim" in embeddings and retrieval["dim"] != embeddings["dim"]:
         yield "/retrieval/dim", f"retrieval.dim {retrieval['dim']} disagrees with embeddings.dim {embeddings['dim']}"
+
+
+class _Known:
+    """The tool ids a document declares. An `mcp:` server that lists no tools offers whatever it says when
+    it starts, under its name: those ids are checked when the runtime deploys it (`named_tools`)."""
+
+    def __init__(self, ids: Sequence[str], doc: Document) -> None:
+        self.ids = set(ids)
+        self.prefixes = tuple(f"{s.get('name', 'mcp')}_" for s in doc.get("mcp") or [] if not s.get("tools"))
+
+    def __contains__(self, tool: object) -> bool:
+        return tool in self.ids or (isinstance(tool, str) and tool.startswith(self.prefixes))
+
+
+def named_tools(doc: Mapping[str, Any]) -> Iterator[Tuple[str, str]]:
+    """Every tool id a document refers to, with its pointer: paths, triggers, skills, saga, compensations
+    and timers."""
+    for name, path in doc["agent"]["paths"].items():
+        for i, tool in enumerate(path.get("tools") or []):
+            yield f"/agent/paths/{name}/tools/{i}", tool
+        for keyword, tool in (path.get("tool_triggers") or {}).items():
+            yield f"/agent/paths/{name}/tool_triggers/{keyword}", tool
+    for i, skill in enumerate(doc.get("skills") or []):
+        for j, tool in enumerate(skill.get("tools") or []):
+            yield f"/skills/{i}/tools/{j}", tool
+    for i, step in enumerate((doc.get("saga") or {}).get("steps") or []):
+        yield f"/saga/steps/{i}/tool", step["tool"]
+        if step.get("compensate_with") is not None:
+            yield f"/saga/steps/{i}/compensate_with", step["compensate_with"]
+    for i, tool in enumerate(doc.get("tools") or []):
+        if tool.get("compensation") is not None:
+            yield f"/tools/{i}/compensation", tool["compensation"]
+    for i, timer in enumerate(doc.get("timers") or []):
+        if timer.get("tool") is not None:
+            yield f"/timers/{i}/tool", timer["tool"]
 
 
 def _registered_ids(doc: Document) -> Optional[List[str]]:

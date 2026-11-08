@@ -13,16 +13,18 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import partial
 from importlib.metadata import entry_points
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
-from . import ir
+from . import ir, mcp
 from .bindings import Bindings
 from .engine import Clock, Engine, Sleep, wall_clock_ms
 from .errors import CapabilityError, LogUnavailable, RuntimeNotAvailableError, ValidationError
 from .events import EventLog, FileEventLog, InMemoryEventLog, Turn
 from .journal import EffectJournal, FileEffectJournal, InMemoryEffectJournal
 from .tools import DEFAULT_EFFECT, ToolRegistry, ToolSpec, ToolWorld
+from .untrusted import describe
 from .workflow_timers import ManualClock
 
 ENTRY_POINT_GROUP = "agentic.runtimes"
@@ -285,6 +287,7 @@ class LocalRuntime(Runtime):
         self._gates_guard = threading.Lock()
         self._workers: Optional[ThreadPoolExecutor] = None
         self._tails: Dict[str, "Future[Dict[str, Any]]"] = {}
+        self._mcp_servers: List[mcp.McpServer] = []
         self._closed = False
 
     def capabilities(self) -> Dict[str, str]:
@@ -312,10 +315,37 @@ class LocalRuntime(Runtime):
             self.tools.bind_function(tool_id, fn)
         for name, fn in bindings.peers.items():
             self.tools.bind_peer(name, fn)
+        self._start_mcp(doc)
         self.doc = doc
         self.bindings = bindings
         self.engine = Engine(doc, self.tools, self.log, bindings, self.clock, self.sleep, self.rng, self.journal)
         self.engine.recover()
+
+    def _start_mcp(self, doc: Mapping[str, Any]) -> None:
+        """Start each `mcp:` server the operator allows and register its tools as `<name>_<tool>`. A tool
+        a path names must then exist, which the document alone could not show."""
+        for i, entry in enumerate(doc.get("mcp") or []):
+            if str(entry.get("transport", "stdio")).lower() != "stdio":
+                raise ValidationError(f"mcp transport {entry.get('transport')!r} is not supported; use stdio",
+                                      f"/mcp/{i}/transport")
+            command = mcp.command_of(entry)
+            mcp.check_command(command)
+            server = mcp.McpServer(command)
+            self._mcp_servers.append(server)
+            prefix = f"{entry.get('name', 'mcp')}_"
+            for listed in server.tools():
+                tool_id = prefix + listed["name"]
+                if tool_id in self.tools.ids():
+                    raise ValidationError(f"mcp tool {tool_id} would replace a tool already registered", f"/mcp/{i}")
+                self.tools.declare(ToolSpec(id=tool_id, kind="mcp", effect=entry.get("effect", DEFAULT_EFFECT),
+                                            timeout_ms=entry.get("timeout_ms"),
+                                            description=describe("mcp:" + listed["name"], listed["description"])))
+                self.tools.bind_mcp(tool_id, partial(server.call, listed["name"]))
+        if doc.get("mcp"):
+            known = set(self.tools.ids())
+            for pointer, tool in ir.named_tools(doc):
+                if tool not in known:
+                    raise ValidationError(f"{tool!r} is not a tool any server or declaration offers", pointer)
 
     def _open_log(self, doc: Mapping[str, Any]) -> EventLog:
         if self._explicit_log is not None:
@@ -513,6 +543,9 @@ class LocalRuntime(Runtime):
 
     def _release_stores(self) -> None:
         """Close what this runtime opened. What was passed in as `log=` or `journal=` is the caller's."""
+        servers, self._mcp_servers = self._mcp_servers, []
+        for server in servers:
+            server.close()
         if self.log is not None and self.log is not self._explicit_log:
             self.log.close()
         if self.journal is not None and self.journal is not self._explicit_journal:

@@ -151,6 +151,7 @@ class ToolRegistry:
         self._specs: Dict[str, ToolSpec] = {}
         self._functions: Dict[str, ToolFn] = {}
         self._peers: Dict[str, PeerFn] = {}
+        self._mcp: Dict[str, Callable[[Mapping[str, Any], float], Any]] = {}
         self._validators: Dict[str, Draft202012Validator] = {}
 
     def declare(self, spec: ToolSpec) -> None:
@@ -165,6 +166,10 @@ class ToolRegistry:
 
     def bind_peer(self, name: str, fn: PeerFn) -> None:
         self._peers[name] = fn
+
+    def bind_mcp(self, tool_id: str, fn: Callable[[Mapping[str, Any], float], Any]) -> None:
+        """`fn(args, timeout_s)` calls the tool on its MCP server."""
+        self._mcp[tool_id] = fn
 
     def has_function(self, tool_id: str) -> bool:
         return tool_id in self._functions
@@ -219,6 +224,8 @@ class ToolRegistry:
             return self._execute_peer(spec, args, call)
         if kind == "http":
             return self._execute_http(spec, args, call)
+        if kind == "mcp" and spec.id in self._mcp:
+            return self._mcp[spec.id](args, (spec.timeout_ms or DEFAULT_TOOL_TIMEOUT_MS) / 1000.0)
         raise ValidationError(f"tool {spec.id!r} has kind {kind!r}, which this runtime cannot execute")
 
     def _execute_failing(self, spec: ToolSpec) -> Any:
