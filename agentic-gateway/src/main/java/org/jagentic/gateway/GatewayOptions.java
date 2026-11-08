@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import org.jagentic.core.identity.PrincipalSeal;
 import org.jagentic.gateway.auth.Authenticator;
 import org.jagentic.gateway.auth.OidcAuthenticator;
 import org.jagentic.gateway.auth.StaticTokens;
@@ -17,16 +18,21 @@ import org.jagentic.gateway.auth.StaticTokens;
  * a TLS proxy in front of it, or with static tokens at all.
  */
 public record GatewayOptions(String host, int port, Authenticator authenticator, Set<String> readerRoles,
-                             Duration timeout) {
+                             Duration timeout, PrincipalSeal.Signer signer) {
 
   /** A gateway on loopback with this authenticator: what a test or an embedding program starts. */
   public static GatewayOptions loopback(Authenticator authenticator) {
-    return new GatewayOptions("127.0.0.1", 0, authenticator, Set.of(), Duration.ofSeconds(30));
+    return new GatewayOptions("127.0.0.1", 0, authenticator, Set.of(), Duration.ofSeconds(30), null);
   }
 
   /** The same options letting these roles read any conversation of their tenant. */
   public GatewayOptions withReaderRoles(String... roles) {
-    return new GatewayOptions(host, port, authenticator, Set.of(roles), timeout);
+    return new GatewayOptions(host, port, authenticator, Set.of(roles), timeout, signer);
+  }
+
+  /** The same options signing every principal it delivers, so a runtime with the public keys believes it. */
+  public GatewayOptions withSigner(PrincipalSeal.Signer s) {
+    return new GatewayOptions(host, port, authenticator, readerRoles, timeout, s);
   }
 
   public static GatewayOptions fromEnvironment(Map<String, String> env) {
@@ -68,7 +74,26 @@ public record GatewayOptions(String host, int port, Authenticator authenticator,
     String readers = env.getOrDefault("AGENTIC_GATEWAY_READER_ROLES", "");
     return new GatewayOptions(host, Integer.parseInt(env.getOrDefault("AGENTIC_GATEWAY_PORT", "8080")),
         authenticator, readers.isBlank() ? Set.of() : Set.of(readers.split("\\s*,\\s*")),
-        Duration.ofSeconds(Long.parseLong(env.getOrDefault("AGENTIC_GATEWAY_TIMEOUT_SECONDS", "30"))));
+        Duration.ofSeconds(Long.parseLong(env.getOrDefault("AGENTIC_GATEWAY_TIMEOUT_SECONDS", "30"))),
+        signer(env));
+  }
+
+  /**
+   * {@code AGENTIC_PRINCIPAL_SIGNING_KEY}: a PEM file with the gateway's Ed25519 private key
+   * (PKCS#8). Only the gateway hosts hold it; runtimes get the public key. {@code
+   * AGENTIC_PRINCIPAL_TTL_SECONDS} is how long a signature is good for, 300 by default.
+   */
+  private static PrincipalSeal.Signer signer(Map<String, String> env) {
+    String file = env.get("AGENTIC_PRINCIPAL_SIGNING_KEY");
+    if (file == null || file.isBlank()) {
+      return null;
+    }
+    Duration ttl = Duration.ofSeconds(Long.parseLong(env.getOrDefault("AGENTIC_PRINCIPAL_TTL_SECONDS", "300")));
+    try {
+      return PrincipalSeal.Signer.fromFile(java.nio.file.Path.of(file.strip()), ttl);
+    } catch (java.io.IOException e) {
+      throw new IllegalArgumentException("AGENTIC_PRINCIPAL_SIGNING_KEY cannot be read: " + file, e);
+    }
   }
 
   /**

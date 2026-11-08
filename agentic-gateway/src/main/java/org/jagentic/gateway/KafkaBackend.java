@@ -38,8 +38,10 @@ import org.jagentic.core.TurnResult;
  * topic. The results topic read from its start is also how a conversation is read, so a conversation
  * shows no further back than that topic's retention.
  *
- * <p>The gateway is the only thing that should be able to write the input topic: whatever does can
- * claim any principal. A turn the job has not answered in time is a 504, and redelivering the same
+ * <p>With {@code AGENTIC_PRINCIPAL_SIGNING_KEY} each record carries {@code principal_proof}, the
+ * gateway's signature over its principal and that turn, and a job given the public key believes no
+ * principal without one. Without it, whatever can write the input topic can claim any principal, so
+ * Kafka ACLs on that topic are required either way. A turn the job has not answered in time is a 504, and redelivering the same
  * {@code turn_id} is safe.
  */
 public final class KafkaBackend implements TurnBackend, AutoCloseable {
@@ -145,6 +147,9 @@ public final class KafkaBackend implements TurnBackend, AutoCloseable {
     }
     if (event.principal() != null) {
       m.put("principal", event.principal().toMap());
+    }
+    if (event.principalProof() != null) {
+      m.put("principal_proof", event.principalProof());
     }
     return m;
   }
